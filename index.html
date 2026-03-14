@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradeQuote — AI-Powered Quote Generator</title>
+
+  <!-- Anti-flash: set theme before anything renders -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('tq_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <style>
+    /* Light palette (default) */
+    :root {
+      --tq-bg: #f5f3ef;
+      --tq-surface: #ffffff;
+      --tq-card: #f9f8f6;
+      --tq-border: #e0ddd6;
+      --tq-accent: #c4872a;
+      --tq-accent-dark: #a06b1e;
+      --tq-text: #1a1a1a;
+      --tq-muted: #666666;
+      --tq-confirmed: #4ade80;
+      --tq-unconfirmed: #fbbf24;
+      --tq-error: #f87171;
+    }
+
+    /* Dark palette */
+    [data-theme="dark"] {
+      --tq-bg: #0f0f0f;
+      --tq-surface: #1a1a1a;
+      --tq-card: #222222;
+      --tq-border: #333333;
+      --tq-accent: #e8a838;
+      --tq-accent-dark: #c4872a;
+      --tq-text: #f0ede8;
+      --tq-muted: #999999;
+      --tq-confirmed: #4ade80;
+      --tq-unconfirmed: #fbbf24;
+      --tq-error: #f87171;
+    }
+
+    body {
+      background-color: var(--tq-bg);
+      color: var(--tq-text);
+      font-family: 'IBM Plex Sans', sans-serif;
+    }
+  </style>
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'tq-bg': 'var(--tq-bg)',
+            'tq-surface': 'var(--tq-surface)',
+            'tq-card': 'var(--tq-card)',
+            'tq-border': 'var(--tq-border)',
+            'tq-accent': 'var(--tq-accent)',
+            'tq-accent-dark': 'var(--tq-accent-dark)',
+            'tq-text': 'var(--tq-text)',
+            'tq-muted': 'var(--tq-muted)',
+            'tq-confirmed': 'var(--tq-confirmed)',
+            'tq-unconfirmed': 'var(--tq-unconfirmed)',
+            'tq-error': 'var(--tq-error)',
+          },
+          fontFamily: {
+            heading: ['"Barlow Condensed"', 'sans-serif'],
+            body: ['"IBM Plex Sans"', 'sans-serif'],
+            mono: ['"IBM Plex Mono"', 'monospace'],
+          },
+        },
+      },
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- jsPDF + html2canvas (CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
