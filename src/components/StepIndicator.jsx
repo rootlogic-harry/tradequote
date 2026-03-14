@@ -1,7 +1,7 @@
 import React from 'react';
 import { STEPS } from '../constants.js';
 
-export default function StepIndicator({ currentStep, dispatch, onSettingsClick, theme, toggleTheme, currentView, onViewChange }) {
+export default function StepIndicator({ currentStep, dispatch, onSettingsClick, theme, toggleTheme, currentView, onViewChange, onBackToQuote }) {
   return (
     <div className="bg-tq-surface border-b border-tq-border sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -12,39 +12,55 @@ export default function StepIndicator({ currentStep, dispatch, onSettingsClick, 
           <span className="text-xs text-tq-muted font-mono">v0.1.1</span>
         </div>
 
-        <div className={`flex items-center gap-1 sm:gap-2 ${currentView === 'saved' ? 'opacity-40' : ''}`}>
-          {STEPS.map((step) => {
-            const isCompleted = step.number < currentStep;
-            const isCurrent = step.number === currentStep;
-            return (
-              <div key={step.number} className="flex items-center">
-                <div
-                  className={`
-                    w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-medium
-                    ${isCurrent
-                      ? 'bg-tq-accent text-tq-bg'
-                      : isCompleted
-                        ? 'bg-tq-confirmed/20 text-tq-confirmed'
-                        : 'bg-tq-card text-tq-muted border border-tq-border'
-                    }
-                  `}
-                >
-                  {isCompleted ? '\u2713' : step.number}
+        {/* RAMS breadcrumb or step circles */}
+        {currentView === 'rams' ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onBackToQuote}
+              className="text-tq-muted hover:text-tq-accent text-xs font-heading uppercase tracking-wide"
+            >
+              TRADEQUOTE
+            </button>
+            <span className="text-tq-muted text-xs">&rsaquo;</span>
+            <span className="text-tq-accent text-xs font-heading font-bold uppercase tracking-wide">
+              RAMS
+            </span>
+          </div>
+        ) : (
+          <div className={`flex items-center gap-1 sm:gap-2 ${currentView === 'saved' ? 'opacity-40' : ''}`}>
+            {STEPS.map((step) => {
+              const isCompleted = step.number < currentStep;
+              const isCurrent = step.number === currentStep;
+              return (
+                <div key={step.number} className="flex items-center">
+                  <div
+                    className={`
+                      w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-medium
+                      ${isCurrent
+                        ? 'bg-tq-accent text-tq-bg'
+                        : isCompleted
+                          ? 'bg-tq-confirmed/20 text-tq-confirmed'
+                          : 'bg-tq-card text-tq-muted border border-tq-border'
+                      }
+                    `}
+                  >
+                    {isCompleted ? '\u2713' : step.number}
+                  </div>
+                  <span
+                    className={`hidden sm:inline ml-1.5 text-xs font-body ${
+                      isCurrent ? 'text-tq-text' : 'text-tq-muted'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                  {step.number < STEPS.length && (
+                    <div className="w-4 sm:w-8 h-px bg-tq-border mx-1" />
+                  )}
                 </div>
-                <span
-                  className={`hidden sm:inline ml-1.5 text-xs font-body ${
-                    isCurrent ? 'text-tq-text' : 'text-tq-muted'
-                  }`}
-                >
-                  {step.label}
-                </span>
-                {step.number < STEPS.length && (
-                  <div className="w-4 sm:w-8 h-px bg-tq-border mx-1" />
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           {onViewChange && (
@@ -55,7 +71,7 @@ export default function StepIndicator({ currentStep, dispatch, onSettingsClick, 
                   ? 'text-tq-accent'
                   : 'text-tq-muted hover:text-tq-accent'
               }`}
-              title={currentView === 'saved' ? 'Back to editor' : 'Saved quotes'}
+              title={currentView === 'saved' ? 'Back to editor' : 'Saved jobs'}
             >
               {'\uD83D\uDCC1'}
             </button>

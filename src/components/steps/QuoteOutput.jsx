@@ -5,7 +5,7 @@ import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveQuote } from '../../utils/savedQuotesDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams }) {
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos, extraPhotos = [] } = state;
 
@@ -693,6 +693,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [savedJobId, setSavedJobId] = useState(null);
 
   useEffect(() => {
     if (!saved) return;
@@ -704,8 +705,9 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     setSaving(true);
     setSaveError(null);
     try {
-      await saveQuote(state);
+      const id = await saveQuote(state);
       setSaved(true);
+      setSavedJobId(id);
       showToast?.('Quote saved', 'success');
     } catch (err) {
       console.error('Failed to save quote:', err);
@@ -757,6 +759,16 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             }`}
           >
             {saving ? 'Saving...' : saved ? 'Saved \u2713' : saveError || 'Save Quote'}
+          </button>
+        )}
+        {!isReadOnly && onCreateRams && (
+          <button
+            onClick={() => onCreateRams(savedJobId)}
+            disabled={!savedJobId}
+            className="border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={savedJobId ? 'Create RAMS for this job' : 'Save the quote first to create a RAMS'}
+          >
+            Create RAMS
           </button>
         )}
         {onBack ? (

@@ -9,6 +9,8 @@ import ReviewEdit from './components/steps/ReviewEdit.jsx';
 import QuoteOutput from './components/steps/QuoteOutput.jsx';
 import SavedQuotes from './components/SavedQuotes.jsx';
 import SavedQuoteViewer from './components/SavedQuoteViewer.jsx';
+import RamsEditor from './components/rams/RamsEditor.jsx';
+import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
 import { getSavedQuote, saveDraft, loadDraft, clearDraft } from './utils/savedQuotesDB.js';
 
@@ -22,6 +24,8 @@ export default function App() {
   const [theme, setTheme] = useState(getStoredTheme);
   const [currentView, setCurrentView] = useState('editor');
   const [viewingQuote, setViewingQuote] = useState(null);
+  const [ramsSubView, setRamsSubView] = useState('edit'); // 'edit' | 'output'
+  const [activeJobId, setActiveJobId] = useState(null); // ID of saved job for RAMS linking
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -85,7 +89,9 @@ export default function App() {
 
   const handleViewChange = (view) => {
     setCurrentView(view);
-    if (view === 'editor') setViewingQuote(null);
+    if (view === 'editor') {
+      setViewingQuote(null);
+    }
   };
 
   const handleViewQuote = async (quoteSummary) => {
@@ -104,7 +110,73 @@ export default function App() {
     showToast('Quote loaded for editing', 'success');
   };
 
+  // RAMS: Create from current quote
+  const handleCreateRams = (jobId) => {
+    dispatch({ type: 'CREATE_RAMS' });
+    setActiveJobId(jobId || null);
+    setCurrentView('rams');
+    setRamsSubView('edit');
+    showToast('RAMS created from quote', 'success');
+  };
+
+  // RAMS: Create from saved job
+  const handleCreateRamsFromSaved = (savedJob) => {
+    // Restore the quote state first so CREATE_RAMS can pull job details
+    const snapshot = savedJob.quoteSnapshot || savedJob.snapshot;
+    if (snapshot) {
+      dispatch({ type: 'RESTORE_DRAFT', draft: { ...snapshot, step: 5 } });
+    }
+    // Small delay to let state settle, then create RAMS
+    setTimeout(() => {
+      dispatch({ type: 'CREATE_RAMS' });
+      setActiveJobId(savedJob.id);
+      setCurrentView('rams');
+      setRamsSubView('edit');
+      setViewingQuote(null);
+      showToast('RAMS created from saved quote', 'success');
+    }, 50);
+  };
+
+  // RAMS: View from saved job
+  const handleViewRams = (savedJob) => {
+    dispatch({ type: 'RESTORE_RAMS', rams: savedJob.ramsSnapshot });
+    setActiveJobId(savedJob.id);
+    setCurrentView('rams');
+    setRamsSubView('edit');
+    setViewingQuote(null);
+  };
+
+  // Back to quote from RAMS
+  const handleBackToQuote = () => {
+    setCurrentView('editor');
+    setRamsSubView('edit');
+  };
+
   const renderContent = () => {
+    // RAMS view
+    if (currentView === 'rams' && state.rams) {
+      if (ramsSubView === 'output') {
+        return (
+          <RamsOutput
+            rams={state.rams}
+            profile={state.profile}
+            dispatch={dispatch}
+            showToast={showToast}
+            onBackToEditor={() => setRamsSubView('edit')}
+            jobId={activeJobId}
+          />
+        );
+      }
+      return (
+        <RamsEditor
+          rams={state.rams}
+          dispatch={dispatch}
+          onPreview={() => setRamsSubView('output')}
+        />
+      );
+    }
+
+    // Saved quotes view
     if (currentView === 'saved') {
       if (viewingQuote) {
         return (
@@ -115,8 +187,16 @@ export default function App() {
           />
         );
       }
-      return <SavedQuotes onViewQuote={handleViewQuote} />;
+      return (
+        <SavedQuotes
+          onViewQuote={handleViewQuote}
+          onCreateRams={handleCreateRamsFromSaved}
+          onViewRams={handleViewRams}
+        />
+      );
     }
+
+    // Editor view
     return renderStep();
   };
 
@@ -131,7 +211,14 @@ export default function App() {
       case 4:
         return <ReviewEdit state={state} dispatch={dispatch} />;
       case 5:
-        return <QuoteOutput state={state} dispatch={dispatch} showToast={showToast} />;
+        return (
+          <QuoteOutput
+            state={state}
+            dispatch={dispatch}
+            showToast={showToast}
+            onCreateRams={handleCreateRams}
+          />
+        );
       default:
         return null;
     }
@@ -147,6 +234,7 @@ export default function App() {
         toggleTheme={toggleTheme}
         currentView={currentView}
         onViewChange={handleViewChange}
+        onBackToQuote={handleBackToQuote}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-6">

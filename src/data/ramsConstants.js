@@ -1,0 +1,61 @@
+export const WORK_TYPES = [
+  'plumbing',
+  'electrical',
+  'carpentry',
+  'roofing',
+  'plastering',
+  'bricklaying',
+  'painting',
+  'tiling',
+  'groundworks',
+  'demolition',
+  'scaffolding',
+  'general_building',
+];
+
+export const WORK_TYPE_LABELS = {
+  plumbing: 'Plumbing',
+  electrical: 'Electrical',
+  carpentry: 'Carpentry & Joinery',
+  roofing: 'Roofing',
+  plastering: 'Plastering & Rendering',
+  bricklaying: 'Bricklaying & Stonework',
+  painting: 'Painting & Decorating',
+  tiling: 'Tiling',
+  groundworks: 'Groundworks & Drainage',
+  demolition: 'Demolition',
+  scaffolding: 'Scaffolding & Access',
+  general_building: 'General Building',
+};
+
+export const HAZARD_CATEGORIES = [
+  'Working at Height',
+  'Manual Handling',
+  'Electrical',
+  'Fire',
+  'Confined Spaces',
+  'Excavation',
+  'Demolition',
+  'Asbestos',
+  'Noise',
+  'Vibration',
+  'Dust & Fumes',
+  'Chemical',
+  'Plant & Machinery',
+  'Slips, Trips & Falls',
+  'Falling Objects',
+  'Hot Works',
+  'Underground Services',
+  'Overhead Services',
+  'Traffic Management',
+  'Lone Working',
+  'Weather',
+  'Public Protection',
+];
+
+export const RISK_LEVELS = [
+  { max: 6, label: 'Low', color: '#4ade80' },
+  { max: 12, label: 'Medium', color: '#fbbf24' },
+  { max: 19, label: 'High', color: '#fb923c' },
+  { max: 25, label: 'Extreme', color: '#f87171' },
+];

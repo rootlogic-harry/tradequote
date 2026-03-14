@@ -1,6 +1,9 @@
 import { DEFAULT_DAY_RATE } from './constants.js';
 import { buildQuotePayload } from './utils/quoteBuilder.js';
 import { buildDiff } from './utils/diffTracking.js';
+import { calculateRiskRating, generateRamsId } from './utils/ramsBuilder.js';
+import { COMPANY_DEFAULTS, COMMON_PPE, DEFAULT_RISK_ASSESSMENTS } from './data/ramsDefaults.js';
+import { WORK_STAGES_TEMPLATES } from './data/ramsTemplates.js';
 
 const STORAGE_KEY = 'tq_state';
 
@@ -70,6 +73,7 @@ export const initialState = {
   diffs: [],
   quotePayload: null,
   quoteSequence: 1,
+  rams: null,
 };
 
 export function reducer(state, action) {
@@ -263,6 +267,117 @@ function reducerCore(state, action) {
         quotePayload: null,
       };
     }
+
+    case 'CREATE_RAMS': {
+      const { profile, jobDetails, photos, extraPhotos = [] } = state;
+      // Collect photos
+      const ramsPhotos = [];
+      if (photos.overview) ramsPhotos.push({ label: 'Overview', data: photos.overview.data });
+      if (photos.closeup) ramsPhotos.push({ label: 'Close-up', data: photos.closeup.data });
+      if (photos.sideProfile) ramsPhotos.push({ label: 'Side Profile', data: photos.sideProfile.data });
+      if (photos.access) ramsPhotos.push({ label: 'Access & Approach', data: photos.access.data });
+      extraPhotos.forEach((p, i) => {
+        ramsPhotos.push({ label: p.label || `Extra ${i + 1}`, data: p.data });
+      });
+
+      return {
+        ...state,
+        rams: {
+          id: generateRamsId(),
+          status: 'draft',
+          jobNumber: jobDetails.quoteReference || '',
+          siteAddress: jobDetails.siteAddress || '',
+          company: profile.companyName || '',
+          client: jobDetails.clientName || '',
+          foreman: profile.fullName || '',
+          documentDate: new Date().toISOString().split('T')[0],
+          commencementDate: '',
+          projectedCompletionDate: '',
+          workTypes: [],
+          workStages: [],
+          methodDescription: '',
+          riskAssessments: DEFAULT_RISK_ASSESSMENTS.map(ra => ({ ...ra, existingControls: [...ra.existingControls] })),
+          ppeRequirements: COMMON_PPE.filter(p => p.defaultSelected).map(p => p.id),
+          employeesOnJob: [],
+          communicatedEmployees: [],
+          contactTitle: COMPANY_DEFAULTS.contactTitle || '',
+          contactName: profile.fullName || '',
+          contactNumber: profile.phone || '',
+          workplaceAccess: COMPANY_DEFAULTS.workplaceAccess || '',
+          workplaceLighting: COMPANY_DEFAULTS.workplaceLighting || '',
+          specialControlMeasures: '',
+          wasteManagement: COMPANY_DEFAULTS.wasteManagement || '',
+          hazardousMaterials: COMPANY_DEFAULTS.hazardousMaterials || '',
+          photos: ramsPhotos,
+        },
+      };
+    }
+
+    case 'UPDATE_RAMS':
+      return {
+        ...state,
+        rams: { ...state.rams, ...action.updates },
+      };
+
+    case 'SET_RAMS_WORK_TYPES': {
+      const workTypes = action.workTypes;
+      const workStages = [];
+      workTypes.forEach(wt => {
+        const template = WORK_STAGES_TEMPLATES[wt];
+        if (template) {
+          workStages.push(...template.map(s => ({ type: wt, stage: s })));
+        }
+      });
+      return {
+        ...state,
+        rams: { ...state.rams, workTypes, workStages },
+      };
+    }
+
+    case 'ADD_RAMS_RISK': {
+      return {
+        ...state,
+        rams: {
+          ...state.rams,
+          riskAssessments: [...state.rams.riskAssessments, action.risk],
+        },
+      };
+    }
+
+    case 'UPDATE_RAMS_RISK': {
+      const riskAssessments = state.rams.riskAssessments.map(ra =>
+        ra.id === action.id
+          ? {
+              ...ra,
+              ...action.updates,
+              riskRating: calculateRiskRating(
+                action.updates.likelihood ?? ra.likelihood,
+                action.updates.consequence ?? ra.consequence
+              ),
+            }
+          : ra
+      );
+      return {
+        ...state,
+        rams: { ...state.rams, riskAssessments },
+      };
+    }
+
+    case 'REMOVE_RAMS_RISK': {
+      return {
+        ...state,
+        rams: {
+          ...state.rams,
+          riskAssessments: state.rams.riskAssessments.filter(ra => ra.id !== action.id),
+        },
+      };
+    }
+
+    case 'CLEAR_RAMS':
+      return { ...state, rams: null };
+
+    case 'RESTORE_RAMS':
+      return { ...state, rams: action.rams };
 
     default:
       return state;
