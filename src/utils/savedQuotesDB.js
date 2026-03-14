@@ -1,6 +1,7 @@
 const DB_NAME = 'tradequote_saved';
 const STORE_NAME = 'quotes';
-const DB_VERSION = 1;
+const DRAFTS_STORE_NAME = 'drafts';
+const DB_VERSION = 2;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -10,14 +11,17 @@ function openDB() {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(DRAFTS_STORE_NAME)) {
+        db.createObjectStore(DRAFTS_STORE_NAME, { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
 
-function tx(db, mode) {
-  return db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
+function tx(db, storeName, mode) {
+  return db.transaction(storeName, mode).objectStore(storeName);
 }
 
 function req(idbRequest) {
@@ -55,27 +59,63 @@ export async function saveQuote(state) {
   };
 
   const db = await openDB();
-  await req(tx(db, 'readwrite').put(record));
+  await req(tx(db, STORE_NAME, 'readwrite').put(record));
   db.close();
   return id;
 }
 
 export async function listSavedQuotes() {
   const db = await openDB();
-  const records = await req(tx(db, 'readonly').getAll());
+  const records = await req(tx(db, STORE_NAME, 'readonly').getAll());
   db.close();
   return records.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
 export async function getSavedQuote(id) {
   const db = await openDB();
-  const record = await req(tx(db, 'readonly').get(id));
+  const record = await req(tx(db, STORE_NAME, 'readonly').get(id));
   db.close();
   return record;
 }
 
 export async function deleteSavedQuote(id) {
   const db = await openDB();
-  await req(tx(db, 'readwrite').delete(id));
+  await req(tx(db, STORE_NAME, 'readwrite').delete(id));
+  db.close();
+}
+
+// Draft persistence
+const DRAFT_KEY = 'current_draft';
+
+export async function saveDraft(state) {
+  const { step, profile, jobDetails, photos, extraPhotos, reviewData, diffs, quoteSequence, aiRawResponse } = state;
+  const record = {
+    id: DRAFT_KEY,
+    savedAt: new Date().toISOString(),
+    step,
+    profile,
+    jobDetails,
+    photos,
+    extraPhotos,
+    reviewData,
+    diffs,
+    quoteSequence,
+    aiRawResponse,
+  };
+  const db = await openDB();
+  await req(tx(db, DRAFTS_STORE_NAME, 'readwrite').put(record));
+  db.close();
+}
+
+export async function loadDraft() {
+  const db = await openDB();
+  const record = await req(tx(db, DRAFTS_STORE_NAME, 'readonly').get(DRAFT_KEY));
+  db.close();
+  return record || null;
+}
+
+export async function clearDraft() {
+  const db = await openDB();
+  await req(tx(db, DRAFTS_STORE_NAME, 'readwrite').delete(DRAFT_KEY));
   db.close();
 }

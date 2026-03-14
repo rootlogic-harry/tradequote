@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LOADING_MESSAGES } from '../../constants.js';
 
-export default function AIAnalysis({ state, dispatch }) {
+export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
   const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
@@ -49,9 +49,18 @@ export default function AIAnalysis({ state, dispatch }) {
         {LOADING_MESSAGES[messageIndex]}
       </p>
 
-      <p className="text-tq-muted text-sm">
+      <p className="text-tq-muted text-sm mb-6">
         This usually takes 15–30 seconds
       </p>
+
+      {cancelAnalysis && (
+        <button
+          onClick={cancelAnalysis}
+          className="border border-tq-border text-tq-muted font-heading uppercase text-sm tracking-wide px-6 py-2 rounded hover:text-tq-text hover:border-tq-text transition-colors"
+        >
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

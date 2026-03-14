@@ -4,7 +4,7 @@ import { formatCurrency, formatDate, calculateValidUntil } from '../../utils/quo
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveQuote } from '../../utils/savedQuotesDB.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast }) {
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos } = state;
 
@@ -97,9 +97,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly }) {
 
       const clientClean = jobDetails.clientName.replace(/[^a-zA-Z0-9]/g, '-');
       pdf.save(`Quote-${jobDetails.quoteReference}-${clientClean}.pdf`);
+      showToast?.('PDF downloaded', 'success');
     } catch (err) {
       console.error('PDF generation failed:', err);
-      alert('PDF generation failed. Please try again.');
+      showToast?.('PDF generation failed. Please try again.', 'error');
     }
   };
 
@@ -551,9 +552,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      showToast?.('Word document downloaded', 'success');
     } catch (err) {
       console.error('Word export failed:', err);
-      alert('Word export failed. Please try again.');
+      showToast?.('Word export failed. Please try again.', 'error');
     }
   };
 
@@ -587,6 +589,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly }) {
     try {
       await saveQuote(state);
       setSaved(true);
+      showToast?.('Quote saved', 'success');
     } catch (err) {
       console.error('Failed to save quote:', err);
       setSaveError('Failed to save');

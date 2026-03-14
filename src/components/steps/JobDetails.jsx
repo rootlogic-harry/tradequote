@@ -115,7 +115,7 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
   "additionalNotes": "string"
 }`;
 
-export default function JobDetails({ state, dispatch }) {
+export default function JobDetails({ state, dispatch, abortRef }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
   const fileInputRefs = useRef({});
@@ -200,7 +200,11 @@ export default function JobDetails({ state, dispatch }) {
         text: `Site address: ${jobDetails.siteAddress}${jobDetails.briefNotes ? `\nTradesman notes: ${jobDetails.briefNotes}` : ''}`,
       });
 
-      const response = await fetch('http://localhost:3001/v1/messages', {
+      const controller = new AbortController();
+      if (abortRef) abortRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -208,6 +212,7 @@ export default function JobDetails({ state, dispatch }) {
           'anthropic-version': '2023-06-01',
           'anthropic-dangerous-direct-browser-access': 'true',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 4000,
@@ -220,6 +225,8 @@ export default function JobDetails({ state, dispatch }) {
           ],
         }),
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errText = await response.text();
@@ -255,9 +262,17 @@ export default function JobDetails({ state, dispatch }) {
         normalised,
       });
     } catch (err) {
+      let errorMessage;
+      if (err.name === 'AbortError') {
+        errorMessage = 'Analysis was cancelled.';
+      } else if (err instanceof TypeError) {
+        errorMessage = 'Network error — check your internet connection and try again.';
+      } else {
+        errorMessage = err.message;
+      }
       dispatch({
         type: 'ANALYSIS_ERROR',
-        error: err.message,
+        error: errorMessage,
       });
     }
   };

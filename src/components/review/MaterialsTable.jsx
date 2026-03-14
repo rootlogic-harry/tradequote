@@ -50,12 +50,16 @@ export default function MaterialsTable({ materials, dispatch }) {
     });
   };
 
+  const inputClass = "w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none";
+
   return (
     <div>
       <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
         Materials
       </h4>
-      <table className="w-full text-sm">
+
+      {/* Desktop table */}
+      <table className="hidden sm:table w-full text-sm">
         <thead>
           <tr className="border-b border-tq-border text-tq-muted text-xs">
             <th className="text-left px-2 py-1">Description</th>
@@ -72,21 +76,21 @@ export default function MaterialsTable({ materials, dispatch }) {
                 <input
                   value={mat.description}
                   onChange={(e) => updateMaterial(i, 'description', e.target.value)}
-                  className="w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none"
+                  className={inputClass}
                 />
               </td>
               <td className="px-2 py-1">
                 <input
                   value={mat.quantity}
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
-                  className="w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none"
+                  className={inputClass}
                 />
               </td>
               <td className="px-2 py-1">
                 <BlurNumberInput
                   value={mat.unitCost}
                   onCommit={(v) => updateMaterial(i, 'unitCost', v)}
-                  className="w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm font-mono outline-none"
+                  className={`${inputClass} font-mono`}
                 />
               </td>
               <td className="px-2 py-1 text-right font-mono text-tq-text">
@@ -104,6 +108,53 @@ export default function MaterialsTable({ materials, dispatch }) {
           ))}
         </tbody>
       </table>
+
+      {/* Mobile cards */}
+      <div className="sm:hidden space-y-3">
+        {materials.map((mat, i) => (
+          <div key={mat.id || i} className="border border-tq-border rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <input
+                value={mat.description}
+                onChange={(e) => updateMaterial(i, 'description', e.target.value)}
+                className="flex-1 bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none font-medium"
+                placeholder="Description"
+              />
+              <button
+                onClick={() => removeMaterial(i)}
+                className="text-tq-muted hover:text-tq-error text-sm ml-2"
+              >
+                {'\u00D7'}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs text-tq-muted mb-0.5">Qty</label>
+                <input
+                  value={mat.quantity}
+                  onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
+                  className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm text-tq-text outline-none focus:border-tq-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-tq-muted mb-0.5">Unit {'\u00A3'}</label>
+                <BlurNumberInput
+                  value={mat.unitCost}
+                  onCommit={(v) => updateMaterial(i, 'unitCost', v)}
+                  className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm font-mono text-tq-text outline-none focus:border-tq-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-tq-muted mb-0.5">Total</label>
+                <div className="px-2 py-1 text-sm font-mono text-tq-text">
+                  {'\u00A3'}{(mat.totalCost || 0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <button
         onClick={addMaterial}
         className="text-tq-accent text-xs mt-2 hover:text-tq-accent-dark"

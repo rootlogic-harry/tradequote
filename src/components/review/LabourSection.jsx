@@ -38,7 +38,7 @@ export default function LabourSection({ labourEstimate, dispatch }) {
         Labour
       </h4>
 
-      <div className="grid grid-cols-3 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
         <div>
           <label className="block text-xs text-tq-muted mb-1">Days</label>
           <NumericInput

@@ -1,0 +1,10 @@
+{
+  "name": "TradeQuote",
+  "short_name": "TradeQuote",
+  "description": "AI-powered quote generator for dry stone walling professionals",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#e8a838",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

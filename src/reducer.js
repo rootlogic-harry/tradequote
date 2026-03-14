@@ -1,5 +1,6 @@
 import { DEFAULT_DAY_RATE } from './constants.js';
 import { buildQuotePayload } from './utils/quoteBuilder.js';
+import { buildDiff } from './utils/diffTracking.js';
 
 const STORAGE_KEY = 'tq_state';
 
@@ -21,7 +22,14 @@ function loadState() {
 
 export function getInitialState() {
   const saved = loadState();
-  if (saved) return saved;
+  if (saved) {
+    // Backfill API key from env if session state has it empty
+    const envKey = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+    if (!saved.profile?.apiKey && envKey) {
+      saved.profile = { ...saved.profile, apiKey: envKey };
+    }
+    return saved;
+  }
   return initialState;
 }
 
@@ -38,7 +46,7 @@ export const initialState = {
     vatNumber: '',
     dayRate: DEFAULT_DAY_RATE,
     accreditations: 'DSWA Professional Member',
-    apiKey: '',
+    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY || '',
   },
   jobDetails: {
     clientName: '',
@@ -182,6 +190,20 @@ function reducerCore(state, action) {
       };
 
     case 'GENERATE_QUOTE': {
+      // Generate labour diff
+      const labour = state.reviewData.labourEstimate;
+      const extraDiffs = [];
+      if (labour.aiEstimatedDays != null) {
+        extraDiffs.push(buildDiff('labour_days', 'Estimated Days', labour.aiEstimatedDays, labour.estimatedDays));
+      }
+      // Generate material diffs
+      (state.reviewData.materials || []).forEach(mat => {
+        if (mat.aiUnitCost != null) {
+          extraDiffs.push(buildDiff('material_unit_cost', mat.description, mat.aiUnitCost, mat.unitCost));
+        }
+      });
+
+      const allDiffs = [...state.diffs, ...extraDiffs];
       const reviewDataWithRaw = {
         ...state.reviewData,
         aiRawResponse: state.aiRawResponse,
@@ -190,11 +212,12 @@ function reducerCore(state, action) {
         state.profile,
         state.jobDetails,
         reviewDataWithRaw,
-        state.diffs
+        allDiffs
       );
       console.log('TradeQuote Payload:', JSON.stringify(payload, null, 2));
       return {
         ...state,
+        diffs: allDiffs,
         quotePayload: payload,
         step: 5,
       };
@@ -228,6 +251,16 @@ function reducerCore(state, action) {
         diffs: [],
         quotePayload: null,
         quoteSequence: nextSeq,
+      };
+    }
+
+    case 'RESTORE_DRAFT': {
+      return {
+        ...state,
+        ...action.draft,
+        isAnalysing: false,
+        analysisError: null,
+        quotePayload: null,
       };
     }
 
