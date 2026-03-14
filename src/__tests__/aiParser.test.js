@@ -262,6 +262,26 @@ describe('normalizeAIResponse', () => {
     expect(result.materials[0].aiTotalCost).toBe(510);
   });
 
+  test('defaults unit to "Item" when not provided by AI', () => {
+    const result = normalizeAIResponse(validAIResponse);
+    result.materials.forEach(m => {
+      expect(m.unit).toBe('Item');
+    });
+  });
+
+  test('preserves unit when provided by AI', () => {
+    const input = {
+      ...validAIResponse,
+      materials: [
+        { description: 'Dismantling', quantity: '1.2', unit: 'm²', unitCost: 220, totalCost: 264 },
+        { description: 'Replacement stone', quantity: '0.35', unit: 't', unitCost: 185, totalCost: 64.75 },
+      ],
+    };
+    const result = normalizeAIResponse(input);
+    expect(result.materials[0].unit).toBe('m²');
+    expect(result.materials[1].unit).toBe('t');
+  });
+
   test('sets aiEstimatedDays on labourEstimate', () => {
     const result = normalizeAIResponse(validAIResponse);
     expect(result.labourEstimate.aiEstimatedDays).toBe(3);

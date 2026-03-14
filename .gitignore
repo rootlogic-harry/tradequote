@@ -17,5 +17,8 @@ dist/
 # Test coverage
 coverage/
 
+# MCP config (local)
+.mcp.json
+
 # Logs
 npm-debug.log*

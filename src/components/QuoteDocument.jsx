@@ -119,7 +119,8 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             <tr className="border-b border-gray-200 text-gray-500 text-xs">
               <th className="text-left py-1">Description</th>
               <th className="text-left py-1">Qty</th>
-              <th className="text-right py-1">Unit Cost</th>
+              <th className="text-left py-1">Unit</th>
+              <th className="text-right py-1">Rate</th>
               <th className="text-right py-1">Total</th>
             </tr>
           </thead>
@@ -128,12 +129,13 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
               <tr key={mat.id} className="border-b border-gray-100">
                 <td className="py-1">{mat.description}</td>
                 <td className="py-1">{mat.quantity}</td>
+                <td className="py-1">{mat.unit || '\u2014'}</td>
                 <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(mat.unitCost)}</td>
                 <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(mat.totalCost)}</td>
               </tr>
             ))}
             <tr className="border-b border-gray-100">
-              <td className="py-1" colSpan={2}>
+              <td className="py-1" colSpan={3}>
                 Labour — {labourEstimate?.description || `${labour.days} days \u00D7 ${labour.workers} workers`}
               </td>
               <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(labour.dayRate)}/day</td>
@@ -141,7 +143,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             </tr>
             {additionalCosts.map((cost) => (
               <tr key={cost.id} className="border-b border-gray-100">
-                <td className="py-1" colSpan={3}>{cost.label}</td>
+                <td className="py-1" colSpan={4}>{cost.label}</td>
                 <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(cost.amount)}</td>
               </tr>
             ))}
@@ -164,6 +166,24 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             <span>{formatCurrency(totals.total)}</span>
           </div>
         </div>
+      </div>
+
+      {/* Notes & Conditions */}
+      <div className="mb-8">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          Notes &amp; Conditions
+        </h2>
+        <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+          {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : [
+            'This costing is based on visible damage as observed during site inspection. Should additional damage be found upon dismantling, a supplementary cost will be agreed in writing before proceeding.',
+            'All works to be carried out using traditional lime mortar techniques compatible with the existing construction. No cement-based mortars will be used.',
+            'The client is responsible for confirming whether Listed Building Consent or other consents are required prior to commencement of works.',
+            'This quotation is valid for 30 days from the date of issue.',
+            'Payment terms: 50% deposit upon instruction, balance on satisfactory completion.',
+          ]).map((note, i) => (
+            <li key={i} className="pl-1">{note}</li>
+          ))}
+        </ol>
       </div>
 
       {/* Footer */}

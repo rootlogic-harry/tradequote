@@ -45,10 +45,12 @@ export default function MaterialsTable({ materials, dispatch }) {
       type: 'UPDATE_MATERIALS',
       materials: [
         ...materials,
-        { id: `mat-new-${Date.now()}`, description: '', quantity: '', unitCost: 0, totalCost: 0 },
+        { id: `mat-new-${Date.now()}`, description: '', quantity: '', unit: 'Item', unitCost: 0, totalCost: 0 },
       ],
     });
   };
+
+  const UNIT_OPTIONS = ['m\u00B2', 't', 'Item', 'lin.m', 'Nr'];
 
   const inputClass = "w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none";
 
@@ -64,7 +66,8 @@ export default function MaterialsTable({ materials, dispatch }) {
           <tr className="border-b border-tq-border text-tq-muted text-xs">
             <th className="text-left px-2 py-1">Description</th>
             <th className="text-left px-2 py-1 w-20">Qty</th>
-            <th className="text-left px-2 py-1 w-24">Unit {'\u00A3'}</th>
+            <th className="text-left px-2 py-1 w-20">Unit</th>
+            <th className="text-left px-2 py-1 w-24">Rate {'\u00A3'}</th>
             <th className="text-right px-2 py-1 w-24">Total</th>
             <th className="w-8"></th>
           </tr>
@@ -85,6 +88,15 @@ export default function MaterialsTable({ materials, dispatch }) {
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
                   className={inputClass}
                 />
+              </td>
+              <td className="px-2 py-1">
+                <select
+                  value={mat.unit || 'Item'}
+                  onChange={(e) => updateMaterial(i, 'unit', e.target.value)}
+                  className="bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none cursor-pointer"
+                >
+                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
               </td>
               <td className="px-2 py-1">
                 <BlurNumberInput
@@ -127,7 +139,7 @@ export default function MaterialsTable({ materials, dispatch }) {
                 {'\u00D7'}
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div>
                 <label className="block text-xs text-tq-muted mb-0.5">Qty</label>
                 <input
@@ -137,7 +149,17 @@ export default function MaterialsTable({ materials, dispatch }) {
                 />
               </div>
               <div>
-                <label className="block text-xs text-tq-muted mb-0.5">Unit {'\u00A3'}</label>
+                <label className="block text-xs text-tq-muted mb-0.5">Unit</label>
+                <select
+                  value={mat.unit || 'Item'}
+                  onChange={(e) => updateMaterial(i, 'unit', e.target.value)}
+                  className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm text-tq-text outline-none focus:border-tq-accent cursor-pointer"
+                >
+                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-tq-muted mb-0.5">Rate {'\u00A3'}</label>
                 <BlurNumberInput
                   value={mat.unitCost}
                   onCommit={(v) => updateMaterial(i, 'unitCost', v)}

@@ -164,10 +164,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const monoTxt = (text, opts = {}) => txt(text, { ...opts, font: MONO_FONT });
 
       // Table column widths in twips (A4 usable width ~9360 twips = 6.5in)
-      const COL_DESC = 4200;  // ~45%
-      const COL_QTY = 1400;   // ~15%
-      const COL_UNIT = 1880;  // ~20%
-      const COL_TOTAL = 1880; // ~20%
+      const COL_DESC = 3500;  // ~37%
+      const COL_QTY = 1100;   // ~12%
+      const COL_UNIT_COL = 1060; // ~11%
+      const COL_RATE = 1800;  // ~19%
+      const COL_TOTAL = 1900; // ~20%
 
       // Build main document children
       const children = [];
@@ -338,9 +339,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               width: { size: COL_QTY, type: WidthType.DXA },
             }),
             new TableCell({
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('Unit Cost', { bold: true, size: 20, color: '666666' })] })],
+              children: [new Paragraph({ children: [txt('Unit', { bold: true, size: 20, color: '666666' })] })],
               borders: lightBorder,
-              width: { size: COL_UNIT, type: WidthType.DXA },
+              width: { size: COL_UNIT_COL, type: WidthType.DXA },
+            }),
+            new TableCell({
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('Rate', { bold: true, size: 20, color: '666666' })] })],
+              borders: lightBorder,
+              width: { size: COL_RATE, type: WidthType.DXA },
             }),
             new TableCell({
               children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('Total', { bold: true, size: 20, color: '666666' })] })],
@@ -367,9 +373,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 width: { size: COL_QTY, type: WidthType.DXA },
               }),
               new TableCell({
+                children: [new Paragraph({ children: [txt(mat.unit || '\u2014', { size: 22 })] })],
+                borders: lightBorder,
+                width: { size: COL_UNIT_COL, type: WidthType.DXA },
+              }),
+              new TableCell({
                 children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(mat.unitCost), { size: 22 })] })],
                 borders: lightBorder,
-                width: { size: COL_UNIT, type: WidthType.DXA },
+                width: { size: COL_RATE, type: WidthType.DXA },
               }),
               new TableCell({
                 children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(mat.totalCost), { size: 22 })] })],
@@ -390,12 +401,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               children: [new Paragraph({ children: [txt(`Labour \u2014 ${labourDesc}`, { size: 22 })] })],
               borders: lightBorder,
               width: { size: COL_DESC, type: WidthType.DXA },
-              columnSpan: 2,
+              columnSpan: 3,
             }),
             new TableCell({
               children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(`${formatCurrency(labour.dayRate)}/day`, { size: 22 })] })],
               borders: lightBorder,
-              width: { size: COL_UNIT, type: WidthType.DXA },
+              width: { size: COL_RATE, type: WidthType.DXA },
             }),
             new TableCell({
               children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(totals.labourTotal), { size: 22 })] })],
@@ -415,7 +426,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 children: [new Paragraph({ children: [txt(cost.label, { size: 22 })] })],
                 borders: lightBorder,
                 width: { size: COL_DESC, type: WidthType.DXA },
-                columnSpan: 3,
+                columnSpan: 4,
               }),
               new TableCell({
                 children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(cost.amount), { size: 22 })] })],
@@ -470,6 +481,33 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
         })
       );
+
+      // Notes & Conditions
+      const defaultNotes = [
+        'This costing is based on visible damage as observed during site inspection. Should additional damage be found upon dismantling, a supplementary cost will be agreed in writing before proceeding.',
+        'All works to be carried out using traditional lime mortar techniques compatible with the existing construction. No cement-based mortars will be used.',
+        'The client is responsible for confirming whether Listed Building Consent or other consents are required prior to commencement of works.',
+        'This quotation is valid for 30 days from the date of issue.',
+        'Payment terms: 50% deposit upon instruction, balance on satisfactory completion.',
+      ];
+      const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : defaultNotes;
+
+      children.push(
+        new Paragraph({
+          children: [txt('NOTES & CONDITIONS', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
+          spacing: { before: 400, after: 120 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' } },
+        }),
+      );
+
+      notes.forEach((note, i) => {
+        children.push(new Paragraph({
+          children: [txt(`${i + 1}. ${note}`, { size: 20 })],
+          spacing: { after: 80 },
+        }));
+      });
+
+      children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
 
       // Footer
       children.push(

@@ -88,10 +88,11 @@ export function normalizeAIResponse(parsed) {
     confirmed: false,
   }));
 
-  // Materials: add id, aiUnitCost, aiTotalCost
+  // Materials: add id, aiUnitCost, aiTotalCost, default unit
   data.materials = data.materials.map((m, i) => ({
     ...m,
     id: `mat-${i}`,
+    unit: m.unit || 'Item',
     aiUnitCost: m.unitCost,
     aiTotalCost: m.totalCost,
   }));

@@ -63,7 +63,28 @@ MEASUREMENT INSTRUCTIONS:
 - Report all measurements in millimetres.
 
 KNOWN CALIBRATION NOTES:
-[Empty at prototype stage. Updated monthly from aggregated diff data in production.]
+Source: Professional waller quote data, March 2026, West Yorkshire / Cumbria.
+These are verified rates from accepted quotes — use as baseline for the region.
+
+Rubble stone wall repair (gritstone/sandstone/slate, lime mortar):
+- Dismantling: £200–£240 per m² (careful removal, sorting salvageable stone)
+- Rebuilding: £360–£400 per m² (random rubble technique, NHL 3.5 lime mortar)
+- Repointing: £100–£120 per m² (raked to 20mm, hydraulic lime, flush finish)
+- Replacement stone supply: £170–£200 per tonne (matched rubble, gritstone/sandstone)
+- Stone consumption: ~0.3 tonnes per m² of wall face
+- Hydraulic lime mortar (NHL 3.5): £80–£100 per batch (small-to-medium job)
+- Preliminaries & site survey: £150–£200 flat
+- Core/hearting consolidation: £130–£170 flat
+- Making good & photographic record: £80–£110 flat
+- Waste disposal & site clearance: £100–£140 flat
+- Temporary propping (Strongboy supports): £200–£250 when required
+
+Typical repointing area is 1.5–2× the rebuilt area (extends to surround).
+Fixed baseline costs (prelims + core + mortar + making good + waste) run £550–£700
+regardless of wall area.
+
+ALWAYS generate these as separate line items with Qty, Unit (m², t, or Item), and
+Rate. Never lump costs together.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 
@@ -94,6 +115,7 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
     {
       "description": "string",
       "quantity": "string",
+      "unit": "string (e.g. 'm²', 't', 'Item')",
       "unitCost": number,
       "totalCost": number
     }

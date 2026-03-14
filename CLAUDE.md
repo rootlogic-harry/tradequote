@@ -226,7 +226,7 @@ normalizeAIResponse(parsed: object) → NormalisedResponse
 // Does NOT mutate the original parsed object.
 // For each measurement adds: id (unique string), aiValue (= displayValue, immutable),
 //   value (editable, starts = aiValue), confirmed: false
-// For each material adds: id, aiUnitCost (= unitCost), aiTotalCost (= totalCost)
+// For each material adds: id, unit (defaults to 'Item'), aiUnitCost (= unitCost), aiTotalCost (= totalCost)
 // For labourEstimate adds: aiEstimatedDays (= estimatedDays, immutable)
 // For scheduleOfWorks adds: id to each step
 // Defaults siteConditions if missing: accessDifficulty:'normal', foundationCondition:'sound', etc.
@@ -510,7 +510,26 @@ MEASUREMENT INSTRUCTIONS:
 - Report all measurements in millimetres.
 
 KNOWN CALIBRATION NOTES:
-[Empty at prototype stage. Updated monthly from aggregated diff data in production.]
+Source: Professional waller quote data, March 2026, West Yorkshire / Cumbria.
+These are verified rates from accepted quotes — use as baseline for the region.
+
+Rubble stone wall repair (gritstone/sandstone/slate, lime mortar):
+- Dismantling: £200–£240 per m²
+- Rebuilding: £360–£400 per m²
+- Repointing: £100–£120 per m²
+- Replacement stone supply: £170–£200 per tonne
+- Stone consumption: ~0.3 tonnes per m² of wall face
+- Hydraulic lime mortar (NHL 3.5): £80–£100 per batch
+- Preliminaries & site survey: £150–£200 flat
+- Core/hearting consolidation: £130–£170 flat
+- Making good & photographic record: £80–£110 flat
+- Waste disposal & site clearance: £100–£140 flat
+- Temporary propping (Strongboy supports): £200–£250 when required
+
+Typical repointing area is 1.5–2× the rebuilt area.
+Fixed baseline costs (prelims + core + mortar + making good + waste) run £550–£700.
+
+ALWAYS generate separate line items with Qty, Unit (m², t, or Item), and Rate.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 
@@ -541,6 +560,7 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
     {
       "description": "string",
       "quantity": "string",
+      "unit": "string (e.g. 'm²', 't', 'Item')",
       "unitCost": number,
       "totalCost": number
     }
@@ -612,9 +632,9 @@ Numbered list. Each step: editable title (bold) and description (paragraph). Add
 ### Right column — Cost Breakdown
 
 **Materials table:**
-| Description | Qty | Unit Cost | Total | |
-|---|---|---|---|---|
-| editable | editable | editable £ | auto-calc | ✕ |
+| Description | Qty | Unit | Rate £ | Total | |
+|---|---|---|---|---|---|
+| editable | editable | dropdown (m², t, Item, lin.m, Nr) | editable £ | auto-calc | ✕ |
 
 "+ Add material" button appends blank row.
 
@@ -684,7 +704,10 @@ Clean list.
 Numbered. Bold titles. Paragraphs.
 
 **Section 4: Cost Breakdown**
-Itemised materials table, then Labour, then Additional Costs, then Subtotal / VAT / TOTAL (large, prominent).
+Itemised materials table (Description, Qty, Unit, Rate, Total), then Labour, then Additional Costs, then Subtotal / VAT / TOTAL (large, prominent).
+
+**Section 5: Notes & Conditions**
+Numbered list of standard terms. Defaults to 5 standard notes covering: damage-contingency clause, lime mortar technique, Listed Building Consent responsibility, 30-day validity, 50/50 payment terms. Editable via `reviewData.notes`.
 
 **Footer:**
 - *"This quote is valid for 30 days from the date issued."*
