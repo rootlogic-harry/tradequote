@@ -3,6 +3,7 @@ import QuoteDocument from '../QuoteDocument.jsx';
 import { formatCurrency, formatDate, calculateValidUntil } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveQuote } from '../../utils/savedQuotesDB.js';
+import useDragReorder from '../../hooks/useDragReorder.js';
 
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast }) {
   const quoteRef = useRef(null);
@@ -19,18 +20,42 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     allPhotos.push({ label: p.label || `Extra ${i + 1}`, data: p.data });
   });
 
-  // Photo selection — all selected by default
-  const [selectedPhotoIndices, setSelectedPhotoIndices] = useState(() => allPhotos.map((_, i) => i));
+  // Photo order — controls display sequence (indices into allPhotos)
+  const [photoOrder, setPhotoOrder] = useState(() => allPhotos.map((_, i) => i));
+  // Photo selection — Set for O(1) toggle, decoupled from order
+  const [selectedPhotoIndices, setSelectedPhotoIndices] = useState(() => new Set(allPhotos.map((_, i) => i)));
 
   const togglePhoto = (index) => {
-    setSelectedPhotoIndices(prev =>
-      prev.includes(index)
-        ? prev.filter(i => i !== index)
-        : [...prev, index].sort((a, b) => a - b)
-    );
+    setSelectedPhotoIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
   };
 
-  const filteredPhotos = allPhotos.filter((_, i) => selectedPhotoIndices.includes(i));
+  // Derive filteredPhotos: respect order, then filter by selection
+  const filteredPhotos = photoOrder
+    .filter(i => selectedPhotoIndices.has(i))
+    .map(i => allPhotos[i]);
+
+  // Drag-to-reorder hook
+  const { dragState, getItemProps, getDragHandleProps } = useDragReorder({
+    items: photoOrder,
+    onReorder: setPhotoOrder,
+  });
+
+  // Compute position number for each selected photo (in display order)
+  const orderBadges = {};
+  let pos = 1;
+  for (const idx of photoOrder) {
+    if (selectedPhotoIndices.has(idx)) {
+      orderBadges[idx] = pos++;
+    }
+  }
 
   const handleDownloadPDF = async () => {
     const element = quoteRef.current;
@@ -755,25 +780,52 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         Note: When sending via email, attach your downloaded PDF or Word document before sending.
       </p>
 
-      {/* Photo selection grid */}
+      {/* Photo selection & reorder grid */}
       {allPhotos.length > 0 && (
         <div className="mb-6">
           <h3 className="text-sm font-heading font-bold text-tq-text mb-3 uppercase tracking-wide">
             Photos to Include ({filteredPhotos.length}/{allPhotos.length})
+            <span className="font-normal text-tq-muted ml-2 normal-case tracking-normal">
+              Drag to reorder
+            </span>
           </h3>
           <div className="flex gap-3 flex-wrap">
-            {allPhotos.map((photo, i) => {
-              const isSelected = selectedPhotoIndices.includes(i);
+            {photoOrder.map((photoIdx, orderPos) => {
+              const photo = allPhotos[photoIdx];
+              if (!photo) return null;
+              const isSelected = selectedPhotoIndices.has(photoIdx);
+              const isDragged = dragState.dragIndex === orderPos;
+              const isDropTarget = dragState.isDragging && dragState.overIndex === orderPos;
+
               return (
-                <button
-                  key={i}
-                  onClick={() => togglePhoto(i)}
+                <div
+                  key={photoIdx}
+                  {...getItemProps(orderPos)}
                   className={`relative rounded border-2 transition-all ${
-                    isSelected
-                      ? 'border-tq-confirmed ring-1 ring-tq-confirmed/40'
-                      : 'border-tq-border opacity-50 grayscale'
-                  }`}
+                    isDropTarget
+                      ? 'border-tq-accent ring-2 ring-tq-accent/50'
+                      : isSelected
+                        ? 'border-tq-confirmed ring-1 ring-tq-confirmed/40'
+                        : 'border-tq-border opacity-50 grayscale'
+                  } ${isDragged ? 'opacity-50 scale-105' : ''}`}
                 >
+                  {/* Drag handle — 6-dot grip icon, top-left */}
+                  <span
+                    {...getDragHandleProps(orderPos)}
+                    className="absolute top-1 left-1 z-10 w-5 h-5 flex items-center justify-center rounded bg-black/40 text-white text-[10px] cursor-grab hover:bg-black/60 md:opacity-0 md:group-hover:opacity-100"
+                    style={{ touchAction: 'none' }}
+                    title="Drag to reorder"
+                  >
+                    ⠿
+                  </span>
+
+                  {/* Order badge — position number for selected photos */}
+                  {isSelected && orderBadges[photoIdx] != null && (
+                    <span className="absolute top-1 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full bg-tq-accent text-tq-bg flex items-center justify-center text-[10px] font-bold">
+                      {orderBadges[photoIdx]}
+                    </span>
+                  )}
+
                   <img
                     src={photo.data}
                     alt={photo.label}
@@ -782,12 +834,17 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                   <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5 rounded-b">
                     {photo.label}
                   </span>
-                  <span className={`absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                    isSelected ? 'bg-tq-confirmed text-white' : 'bg-tq-card text-tq-muted border border-tq-border'
-                  }`}>
+
+                  {/* Selection toggle — checkmark, top-right */}
+                  <button
+                    onClick={() => togglePhoto(photoIdx)}
+                    className={`absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold z-10 ${
+                      isSelected ? 'bg-tq-confirmed text-white' : 'bg-tq-card text-tq-muted border border-tq-border'
+                    }`}
+                  >
                     {isSelected ? '✓' : ''}
-                  </span>
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>

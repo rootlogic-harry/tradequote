@@ -141,6 +141,8 @@ export default function JobDetails({ state, dispatch, abortRef }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
   const fileInputRefs = useRef({});
+  const [dragOverSlot, setDragOverSlot] = useState(null); // key of slot being dragged over
+  const [dragOverExtra, setDragOverExtra] = useState(false); // extra photos drop zone
 
   const { jobDetails, photos, extraPhotos, profile } = state;
 
@@ -151,6 +153,37 @@ export default function JobDetails({ state, dispatch, abortRef }) {
   const handlePhotoUpload = async (slotKey, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const dataUrl = await resizeImage(file);
+    dispatch({
+      type: 'SET_PHOTO',
+      slot: slotKey,
+      photo: { data: dataUrl, name: file.name },
+    });
+  };
+
+  // Drag-and-drop handlers for photo slots
+  const handleSlotDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleSlotDragEnter = (slotKey, e) => {
+    e.preventDefault();
+    setDragOverSlot(slotKey);
+  };
+
+  const handleSlotDragLeave = (slotKey, e) => {
+    // Only clear if we're actually leaving the slot (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverSlot(null);
+    }
+  };
+
+  const handleSlotDrop = async (slotKey, e) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
     const dataUrl = await resizeImage(file);
     dispatch({
       type: 'SET_PHOTO',
@@ -406,12 +439,18 @@ export default function JobDetails({ state, dispatch, abortRef }) {
           return (
             <div
               key={slot.key}
-              className={`border rounded-lg p-3 ${
-                isMissing
-                  ? 'border-tq-error bg-tq-error/5'
-                  : photo
-                    ? 'border-tq-confirmed/50 bg-tq-confirmed/5'
-                    : 'border-tq-border bg-tq-card'
+              onDragOver={handleSlotDragOver}
+              onDragEnter={(e) => handleSlotDragEnter(slot.key, e)}
+              onDragLeave={(e) => handleSlotDragLeave(slot.key, e)}
+              onDrop={(e) => handleSlotDrop(slot.key, e)}
+              className={`border rounded-lg p-3 transition-all ${
+                dragOverSlot === slot.key
+                  ? 'border-tq-accent ring-2 ring-tq-accent border-solid bg-tq-accent/5'
+                  : isMissing
+                    ? 'border-tq-error bg-tq-error/5'
+                    : photo
+                      ? 'border-tq-confirmed/50 bg-tq-confirmed/5'
+                      : 'border-tq-border bg-tq-card'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -440,8 +479,10 @@ export default function JobDetails({ state, dispatch, abortRef }) {
                   </button>
                 </div>
               ) : (
-                <label className="block w-full h-32 border-2 border-dashed border-tq-border rounded cursor-pointer flex items-center justify-center hover:border-tq-accent transition-colors">
-                  <span className="text-tq-muted text-sm">Click to upload</span>
+                <label className={`block w-full h-32 border-2 rounded cursor-pointer flex items-center justify-center hover:border-tq-accent transition-colors ${
+                  dragOverSlot === slot.key ? 'border-solid border-tq-accent' : 'border-dashed border-tq-border'
+                }`}>
+                  <span className="text-tq-muted text-sm">Click or drop photo here</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -458,7 +499,27 @@ export default function JobDetails({ state, dispatch, abortRef }) {
 
       {/* Extra photos */}
       {extraPhotos.length < 10 && (
-        <div className="mb-6 flex items-center gap-3 flex-wrap">
+        <div
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+          onDragEnter={(e) => { e.preventDefault(); setDragOverExtra(true); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverExtra(false); }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setDragOverExtra(false);
+            const file = e.dataTransfer.files?.[0];
+            if (!file || !file.type.startsWith('image/') || extraPhotos.length >= 10) return;
+            const dataUrl = await resizeImage(file);
+            dispatch({
+              type: 'ADD_EXTRA_PHOTO',
+              photo: { data: dataUrl, name: file.name, label: extraPhotoLabel },
+            });
+          }}
+          className={`mb-6 flex items-center gap-3 flex-wrap p-3 rounded-lg border-2 transition-all ${
+            dragOverExtra
+              ? 'border-tq-accent ring-2 ring-tq-accent/50 border-solid bg-tq-accent/5'
+              : 'border-transparent'
+          }`}
+        >
           <select
             value={extraPhotoLabel}
             onChange={(e) => setExtraPhotoLabel(e.target.value)}
@@ -469,7 +530,7 @@ export default function JobDetails({ state, dispatch, abortRef }) {
             ))}
           </select>
           <label className="inline-flex items-center gap-2 text-sm text-tq-accent cursor-pointer hover:text-tq-accent-dark">
-            + Add more photos ({extraPhotos.length}/10)
+            + Add more photos ({extraPhotos.length}/10) — or drop here
             <input
               type="file"
               accept="image/*"
