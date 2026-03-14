@@ -97,6 +97,13 @@ export default function App() {
     }
   };
 
+  const handleEditQuote = (virtualState) => {
+    dispatch({ type: 'RESTORE_DRAFT', draft: { ...virtualState, step: 4 } });
+    setViewingQuote(null);
+    setCurrentView('editor');
+    showToast('Quote loaded for editing', 'success');
+  };
+
   const renderContent = () => {
     if (currentView === 'saved') {
       if (viewingQuote) {
@@ -104,6 +111,7 @@ export default function App() {
           <SavedQuoteViewer
             quote={viewingQuote}
             onBack={() => setViewingQuote(null)}
+            onEditQuote={handleEditQuote}
           />
         );
       }

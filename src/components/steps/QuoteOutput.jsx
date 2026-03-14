@@ -6,15 +6,31 @@ import { saveQuote } from '../../utils/savedQuotesDB.js';
 
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast }) {
   const quoteRef = useRef(null);
-  const { profile, jobDetails, reviewData, photos } = state;
+  const { profile, jobDetails, reviewData, photos, extraPhotos = [] } = state;
 
-  // Collect all available photos for appendix
+  // Collect all available photos for appendix (slots + extras)
   const allPhotos = [];
   if (photos.overview) allPhotos.push({ label: 'Overview', data: photos.overview.data });
   if (photos.closeup) allPhotos.push({ label: 'Close-up', data: photos.closeup.data });
   if (photos.sideProfile) allPhotos.push({ label: 'Side Profile', data: photos.sideProfile.data });
   if (photos.referenceCard) allPhotos.push({ label: 'Reference Card', data: photos.referenceCard.data });
   if (photos.access) allPhotos.push({ label: 'Access & Approach', data: photos.access.data });
+  extraPhotos.forEach((p, i) => {
+    allPhotos.push({ label: p.label || `Extra ${i + 1}`, data: p.data });
+  });
+
+  // Photo selection — all selected by default
+  const [selectedPhotoIndices, setSelectedPhotoIndices] = useState(() => allPhotos.map((_, i) => i));
+
+  const togglePhoto = (index) => {
+    setSelectedPhotoIndices(prev =>
+      prev.includes(index)
+        ? prev.filter(i => i !== index)
+        : [...prev, index].sort((a, b) => a - b)
+    );
+  };
+
+  const filteredPhotos = allPhotos.filter((_, i) => selectedPhotoIndices.includes(i));
 
   const handleDownloadPDF = async () => {
     const element = quoteRef.current;
@@ -45,13 +61,13 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         remainingHeight -= pageHeight;
       }
 
-      // Photo appendix pages — 2 photos per page
-      if (allPhotos.length > 0) {
+      // Photo appendix pages — 2 photos per page (filtered by selection)
+      if (filteredPhotos.length > 0) {
         const margin = 10;
         const usableWidth = pageWidth - margin * 2;
         const maxPhotoHeight = (pageHeight - 50) / 2; // space for 2 photos + labels + header
 
-        for (let i = 0; i < allPhotos.length; i += 2) {
+        for (let i = 0; i < filteredPhotos.length; i += 2) {
           pdf.addPage();
 
           // Page header
@@ -63,8 +79,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
           let yPos = 22;
 
-          for (let j = 0; j < 2 && i + j < allPhotos.length; j++) {
-            const photo = allPhotos[i + j];
+          for (let j = 0; j < 2 && i + j < filteredPhotos.length; j++) {
+            const photo = filteredPhotos[i + j];
 
             // Load image to get dimensions
             const img = new Image();
@@ -155,6 +171,44 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       // Build main document children
       const children = [];
+
+      // Logo in Word header
+      if (profile.logo) {
+        try {
+          const logoBase64 = profile.logo.split(',')[1];
+          const logoBytes = atob(logoBase64);
+          const logoArray = new Uint8Array(logoBytes.length);
+          for (let k = 0; k < logoBytes.length; k++) {
+            logoArray[k] = logoBytes.charCodeAt(k);
+          }
+          // Get logo dimensions for proportional sizing
+          const logoImg = new Image();
+          logoImg.src = profile.logo;
+          await new Promise(resolve => { logoImg.onload = resolve; logoImg.onerror = resolve; });
+          const logoAspect = logoImg.width / logoImg.height;
+          const maxLogoW = 200;
+          const maxLogoH = 80;
+          let logoW = maxLogoW;
+          let logoH = logoW / logoAspect;
+          if (logoH > maxLogoH) {
+            logoH = maxLogoH;
+            logoW = logoH * logoAspect;
+          }
+          children.push(
+            new Paragraph({
+              children: [
+                new ImageRun({
+                  data: logoArray,
+                  transformation: { width: Math.round(logoW), height: Math.round(logoH) },
+                }),
+              ],
+              spacing: { after: 100 },
+            })
+          );
+        } catch (logoErr) {
+          console.warn('Failed to add logo to Word document:', logoErr);
+        }
+      }
 
       // Header
       children.push(
@@ -445,8 +499,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       // Photo appendix — 2 photos per page, each in its own section with page breaks
       const photoPageSections = [];
 
-      if (allPhotos.length > 0) {
-        for (let i = 0; i < allPhotos.length; i += 2) {
+      if (filteredPhotos.length > 0) {
+        for (let i = 0; i < filteredPhotos.length; i += 2) {
           const pageChildren = [];
 
           // Header for each photo page
@@ -457,8 +511,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             })
           );
 
-          for (let j = 0; j < 2 && i + j < allPhotos.length; j++) {
-            const photo = allPhotos[i + j];
+          for (let j = 0; j < 2 && i + j < filteredPhotos.length; j++) {
+            const photo = filteredPhotos[i + j];
             try {
               const base64Data = photo.data.split(',')[1];
               const byteChars = atob(base64Data);
@@ -663,9 +717,49 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         Note: When sending via email, attach your downloaded PDF or Word document before sending.
       </p>
 
-      {/* Quote Document with photos */}
+      {/* Photo selection grid */}
+      {allPhotos.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-sm font-heading font-bold text-tq-text mb-3 uppercase tracking-wide">
+            Photos to Include ({filteredPhotos.length}/{allPhotos.length})
+          </h3>
+          <div className="flex gap-3 flex-wrap">
+            {allPhotos.map((photo, i) => {
+              const isSelected = selectedPhotoIndices.includes(i);
+              return (
+                <button
+                  key={i}
+                  onClick={() => togglePhoto(i)}
+                  className={`relative rounded border-2 transition-all ${
+                    isSelected
+                      ? 'border-tq-confirmed ring-1 ring-tq-confirmed/40'
+                      : 'border-tq-border opacity-50 grayscale'
+                  }`}
+                >
+                  <img
+                    src={photo.data}
+                    alt={photo.label}
+                    className="w-20 h-20 object-cover rounded"
+                  />
+                  <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5 rounded-b">
+                    {photo.label}
+                  </span>
+                  <span className={`absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                    isSelected ? 'bg-tq-confirmed text-white' : 'bg-tq-card text-tq-muted border border-tq-border'
+                  }`}>
+                    {isSelected ? '✓' : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Quote Document — showPhotos=false to prevent white band artefact in PDF;
+           photos are rendered separately in the PDF/Word appendix */}
       <div className="bg-white rounded-lg shadow-lg overflow-hidden" ref={quoteRef}>
-        <QuoteDocument state={state} />
+        <QuoteDocument state={state} showPhotos={false} />
       </div>
     </div>
   );

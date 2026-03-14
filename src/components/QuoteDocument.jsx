@@ -2,7 +2,7 @@ import React from 'react';
 import { formatCurrency, formatDate, calculateValidUntil } from '../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../utils/calculations.js';
 
-export default function QuoteDocument({ state, showPhotos = true }) {
+export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp }) {
   const { profile, jobDetails, reviewData, photos } = state;
 
   if (!reviewData) return null;
@@ -25,21 +25,26 @@ export default function QuoteDocument({ state, showPhotos = true }) {
   const totals = calculateAllTotals(materials, labour, additionalCosts, profile.vatRegistered);
   const validUntil = calculateValidUntil(jobDetails.quoteDate);
 
-  // Collect photos for the document
-  const docPhotos = [];
-  if (photos.overview) docPhotos.push({ label: 'Overview', data: photos.overview.data });
-  if (photos.closeup) docPhotos.push({ label: 'Close-up', data: photos.closeup.data });
-  if (photos.sideProfile) docPhotos.push({ label: 'Side Profile', data: photos.sideProfile.data });
-  if (photos.referenceCard) docPhotos.push({ label: 'Reference Card', data: photos.referenceCard.data });
-  if (photos.access) docPhotos.push({ label: 'Access', data: photos.access.data });
+  // Collect photos for the document — use selectedPhotos prop if provided
+  let docPhotos;
+  if (selectedPhotosProp) {
+    docPhotos = selectedPhotosProp;
+  } else {
+    docPhotos = [];
+    if (photos.overview) docPhotos.push({ label: 'Overview', data: photos.overview.data });
+    if (photos.closeup) docPhotos.push({ label: 'Close-up', data: photos.closeup.data });
+    if (photos.sideProfile) docPhotos.push({ label: 'Side Profile', data: photos.sideProfile.data });
+    if (photos.referenceCard) docPhotos.push({ label: 'Reference Card', data: photos.referenceCard.data });
+    if (photos.access) docPhotos.push({ label: 'Access', data: photos.access.data });
+  }
 
   return (
-    <div id="quote-document" className="bg-white text-gray-900 px-16 py-12 font-['IBM_Plex_Sans',sans-serif] text-sm leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div id="quote-document" className="bg-white text-gray-900 px-20 py-16 font-['IBM_Plex_Sans',sans-serif] text-sm leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">
           {profile.logo && (
-            <img src={profile.logo} alt="Logo" className="w-16 h-16 object-contain" />
+            <img src={profile.logo} alt="Logo" className="max-w-[200px] max-h-[80px] object-contain" />
           )}
           <div>
             <h1 className="text-xl font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -64,7 +69,7 @@ export default function QuoteDocument({ state, showPhotos = true }) {
       </div>
 
       {/* Section 1: Damage */}
-      <div className="mb-6">
+      <div className="mb-8">
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Description of Damage
         </h2>
@@ -72,7 +77,7 @@ export default function QuoteDocument({ state, showPhotos = true }) {
       </div>
 
       {/* Section 2: Measurements */}
-      <div className="mb-6">
+      <div className="mb-8">
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Measurements
         </h2>
@@ -89,7 +94,7 @@ export default function QuoteDocument({ state, showPhotos = true }) {
       </div>
 
       {/* Section 3: Schedule */}
-      <div className="mb-6">
+      <div className="mb-8">
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Schedule of Works
         </h2>
@@ -104,7 +109,7 @@ export default function QuoteDocument({ state, showPhotos = true }) {
       </div>
 
       {/* Section 4: Cost Breakdown */}
-      <div className="mb-6">
+      <div className="mb-8">
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Cost Breakdown
         </h2>

@@ -1,7 +1,7 @@
 import React from 'react';
 import QuoteOutput from './steps/QuoteOutput.jsx';
 
-export default function SavedQuoteViewer({ quote, onBack }) {
+export default function SavedQuoteViewer({ quote, onBack, onEditQuote }) {
   const { snapshot } = quote;
 
   // Reconstruct the state shape that QuoteOutput expects
@@ -19,11 +19,23 @@ export default function SavedQuoteViewer({ quote, onBack }) {
   };
 
   return (
-    <QuoteOutput
-      state={virtualState}
-      dispatch={() => {}}
-      onBack={onBack}
-      isReadOnly
-    />
+    <div>
+      {onEditQuote && (
+        <div className="mb-4">
+          <button
+            onClick={() => onEditQuote(virtualState)}
+            className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          >
+            Edit &amp; Re-generate
+          </button>
+        </div>
+      )}
+      <QuoteOutput
+        state={virtualState}
+        dispatch={() => {}}
+        onBack={onBack}
+        isReadOnly
+      />
+    </div>
   );
 }

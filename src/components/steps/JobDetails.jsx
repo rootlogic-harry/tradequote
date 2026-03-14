@@ -137,13 +137,16 @@ export default function JobDetails({ state, dispatch, abortRef }) {
     });
   };
 
+  const [extraPhotoLabel, setExtraPhotoLabel] = useState('Other');
+  const EXTRA_PHOTO_CATEGORIES = ['Overview', 'Close-up', 'Side Profile', 'Reference Card', 'Access', 'Other'];
+
   const handleExtraPhoto = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || extraPhotos.length >= 5) return;
+    if (!file || extraPhotos.length >= 10) return;
     const dataUrl = await resizeImage(file);
     dispatch({
       type: 'ADD_EXTRA_PHOTO',
-      photo: { data: dataUrl, name: file.name },
+      photo: { data: dataUrl, name: file.name, label: extraPhotoLabel },
     });
   };
 
@@ -277,10 +280,9 @@ export default function JobDetails({ state, dispatch, abortRef }) {
     }
   };
 
-  const requiredSlotsFilled =
-    photos.overview && photos.closeup;
+  const hasAnyPhoto = Object.values(photos).some(p => p != null) || extraPhotos.length > 0;
   const canAnalyse =
-    requiredSlotsFilled && jobDetails.siteAddress?.trim();
+    hasAnyPhoto && jobDetails.siteAddress?.trim() && profile.apiKey?.trim();
 
   const inputClass = (field) =>
     `w-full bg-tq-card border ${
@@ -299,7 +301,7 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Client / Property Name *
+            Client Name *
           </label>
           <input
             className={inputClass('clientName')}
@@ -433,10 +435,19 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       </div>
 
       {/* Extra photos */}
-      {extraPhotos.length < 5 && (
-        <div className="mb-6">
+      {extraPhotos.length < 10 && (
+        <div className="mb-6 flex items-center gap-3 flex-wrap">
+          <select
+            value={extraPhotoLabel}
+            onChange={(e) => setExtraPhotoLabel(e.target.value)}
+            className="bg-tq-card border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm focus:outline-none focus:border-tq-accent"
+          >
+            {EXTRA_PHOTO_CATEGORIES.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
           <label className="inline-flex items-center gap-2 text-sm text-tq-accent cursor-pointer hover:text-tq-accent-dark">
-            + Add more photos ({extraPhotos.length}/5)
+            + Add more photos ({extraPhotos.length}/10)
             <input
               type="file"
               accept="image/*"
@@ -452,6 +463,11 @@ export default function JobDetails({ state, dispatch, abortRef }) {
           {extraPhotos.map((p, i) => (
             <div key={i} className="relative">
               <img src={p.data} alt={`Extra ${i + 1}`} className="w-20 h-20 object-cover rounded border border-tq-border" />
+              {p.label && (
+                <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5 rounded-b">
+                  {p.label}
+                </span>
+              )}
               <button
                 onClick={() => dispatch({ type: 'REMOVE_EXTRA_PHOTO', index: i })}
                 className="absolute -top-1 -right-1 bg-tq-error text-white w-5 h-5 rounded-full flex items-center justify-center text-xs"
