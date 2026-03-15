@@ -1,7 +1,8 @@
 import React from 'react';
 import { STEPS } from '../constants.js';
+import UserSwitcher from './UserSwitcher.jsx';
 
-export default function StepIndicator({ currentStep, dispatch, onSettingsClick, theme, toggleTheme, currentView, onViewChange, onBackToQuote }) {
+export default function StepIndicator({ currentStep, dispatch, onSettingsClick, theme, toggleTheme, currentView, onViewChange, onBackToQuote, currentUser, allUsers, onSwitchUser }) {
   return (
     <div className="bg-tq-surface border-b border-tq-border sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -63,6 +64,13 @@ export default function StepIndicator({ currentStep, dispatch, onSettingsClick, 
         )}
 
         <div className="flex items-center gap-2">
+          {currentUser && (
+            <UserSwitcher
+              currentUser={currentUser}
+              allUsers={allUsers}
+              onSwitchUser={onSwitchUser}
+            />
+          )}
           {onViewChange && (
             <button
               onClick={() => onViewChange(currentView === 'saved' ? 'editor' : 'saved')}

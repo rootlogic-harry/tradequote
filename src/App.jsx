@@ -1,5 +1,5 @@
 import React, { useReducer, useState, useEffect, useRef, useCallback } from 'react';
-import { reducer, getInitialState } from './reducer.js';
+import { reducer, getInitialState, loadState } from './reducer.js';
 import { STEPS } from './constants.js';
 import StepIndicator from './components/StepIndicator.jsx';
 import ProfileSetup from './components/steps/ProfileSetup.jsx';
@@ -12,20 +12,26 @@ import SavedQuoteViewer from './components/SavedQuoteViewer.jsx';
 import RamsEditor from './components/rams/RamsEditor.jsx';
 import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
-import { getJob, saveDraft, loadDraft, clearDraft } from './utils/userDB.js';
+import UserSelector from './components/UserSelector.jsx';
+import UserSwitcher from './components/UserSwitcher.jsx';
+import { getJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB } from './utils/userDB.js';
+import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
-function getStoredTheme() {
-  try { return localStorage.getItem('tq_theme') || 'light'; } catch { return 'light'; }
+function getStoredTheme(userId) {
+  try {
+    if (userId) return localStorage.getItem('tq_theme_' + userId) || 'light';
+    return localStorage.getItem('tq_theme') || 'light';
+  } catch { return 'light'; }
 }
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [theme, setTheme] = useState(getStoredTheme);
+  const [theme, setTheme] = useState(() => getStoredTheme(null));
   const [currentView, setCurrentView] = useState('editor');
   const [viewingQuote, setViewingQuote] = useState(null);
-  const [ramsSubView, setRamsSubView] = useState('edit'); // 'edit' | 'output'
-  const [activeJobId, setActiveJobId] = useState(null); // ID of saved job for RAMS linking
+  const [ramsSubView, setRamsSubView] = useState('edit');
+  const [activeJobId, setActiveJobId] = useState(null);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -43,32 +49,144 @@ export default function App() {
   const [draftPrompt, setDraftPrompt] = useState(null);
   const draftChecked = useRef(false);
 
+  // --- Init flow: bootstrap users → list → INIT_COMPLETE ---
+  const initDone = useRef(false);
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('tq_theme', theme); } catch {}
-  }, [theme]);
+    if (initDone.current) return;
+    initDone.current = true;
+    (async () => {
+      await bootstrapUsers();
+      const users = await listUsers();
+      dispatch({ type: 'INIT_COMPLETE', users });
+    })();
+  }, []);
 
-  // WS5: Check for draft on mount
+  // --- After INIT_COMPLETE with auto-selected user, load their data ---
+  const autoLoadDone = useRef(false);
   useEffect(() => {
-    if (draftChecked.current) return;
-    draftChecked.current = true;
-    if (state.step !== 1) return;
-    loadDraft(state.currentUserId || 'default').then(draft => {
-      if (draft?.jobDetails?.clientName) {
+    if (!state.initComplete || !state.currentUserId || autoLoadDone.current) return;
+    autoLoadDone.current = true;
+    loadUserData(state.currentUserId);
+  }, [state.initComplete, state.currentUserId]);
+
+  async function loadUserData(userId) {
+    // Load profile from DB
+    const profile = await getProfile(userId);
+    const quoteSequence = await getQuoteSequence(userId);
+
+    // Load session state
+    const sessionState = loadState(userId);
+
+    // Load theme
+    const userTheme = await getTheme(userId);
+    if (userTheme) setTheme(userTheme);
+    else setTheme(getStoredTheme(userId));
+
+    // Dispatch SELECT_USER with loaded data
+    const user = state.allUsers.find(u => u.id === userId);
+    dispatch({
+      type: 'SELECT_USER',
+      userId,
+      name: user?.name || userId,
+      profile: sessionState?.profile || profile,
+      quoteSequence: sessionState?.quoteSequence || quoteSequence,
+    });
+
+    // If session state exists, restore it
+    if (sessionState && sessionState.step > 1) {
+      dispatch({ type: 'RESTORE_DRAFT', draft: sessionState });
+    }
+
+    // Store last user
+    try { sessionStorage.setItem('tq_last_user', userId); } catch {}
+
+    // Check for drafts
+    if (!draftChecked.current) {
+      draftChecked.current = true;
+      try {
+        const draft = await loadDraft(userId);
+        if (draft?.jobDetails?.clientName && (!sessionState || sessionState.step <= 1)) {
+          setDraftPrompt(draft);
+        }
+      } catch {}
+    }
+  }
+
+  // --- User selection handler ---
+  const handleSelectUser = useCallback(async (userId) => {
+    autoLoadDone.current = true;
+    draftChecked.current = false;
+    await loadUserData(userId);
+  }, [state.allUsers]);
+
+  // --- User switch handler ---
+  const handleSwitchUser = useCallback(async (userId) => {
+    // Save current profile before switching
+    if (state.currentUserId) {
+      try { await saveProfile(state.currentUserId, state.profile); } catch {}
+    }
+
+    // Reset local view state
+    setCurrentView('editor');
+    setViewingQuote(null);
+    setRamsSubView('edit');
+    setActiveJobId(null);
+    setDraftPrompt(null);
+    draftChecked.current = false;
+
+    // Load new user's data
+    const profile = await getProfile(userId);
+    const quoteSequence = await getQuoteSequence(userId);
+    const userTheme = await getTheme(userId);
+    if (userTheme) setTheme(userTheme);
+    else setTheme(getStoredTheme(userId));
+
+    const user = state.allUsers.find(u => u.id === userId);
+    dispatch({
+      type: 'SWITCH_USER',
+      userId,
+      name: user?.name || userId,
+      profile,
+      quoteSequence,
+    });
+
+    // Load session state for the new user
+    const sessionState = loadState(userId);
+    if (sessionState && sessionState.step > 1) {
+      dispatch({ type: 'RESTORE_DRAFT', draft: sessionState });
+    }
+
+    try { sessionStorage.setItem('tq_last_user', userId); } catch {}
+
+    // Check for drafts
+    try {
+      const draft = await loadDraft(userId);
+      if (draft?.jobDetails?.clientName && (!sessionState || sessionState.step <= 1)) {
         setDraftPrompt(draft);
       }
-    }).catch(() => {});
-  }, []);
+    } catch {}
+
+    showToast(`Switched to ${user?.name || userId}`, 'info');
+  }, [state.currentUserId, state.profile, state.allUsers, showToast]);
+
+  // Theme effect
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (state.currentUserId) {
+      try { localStorage.setItem('tq_theme_' + state.currentUserId, theme); } catch {}
+      setThemeDB(state.currentUserId, theme).catch(() => {});
+    }
+  }, [theme, state.currentUserId]);
 
   // WS5: Auto-save draft (debounced 5s, steps 2-4 only)
   useEffect(() => {
+    if (!state.currentUserId) return;
     if (state.step < 2 || state.step > 4) {
-      // Clear draft on step 1 or 5
-      clearDraft(state.currentUserId || 'default').catch(() => {});
+      clearDraft(state.currentUserId).catch(() => {});
       return;
     }
     const timer = setTimeout(() => {
-      saveDraft(state.currentUserId || 'default', state).catch(() => {});
+      saveDraft(state.currentUserId, state).catch(() => {});
     }, 5000);
     return () => clearTimeout(timer);
   }, [state]);
@@ -80,7 +198,9 @@ export default function App() {
   };
 
   const handleDiscardDraft = () => {
-    clearDraft(state.currentUserId || 'default').catch(() => {});
+    if (state.currentUserId) {
+      clearDraft(state.currentUserId).catch(() => {});
+    }
     setDraftPrompt(null);
     showToast('Draft discarded', 'info');
   };
@@ -96,7 +216,7 @@ export default function App() {
 
   const handleViewQuote = async (quoteSummary) => {
     try {
-      const full = await getJob(state.currentUserId || 'default', quoteSummary.id);
+      const full = await getJob(state.currentUserId, quoteSummary.id);
       setViewingQuote(full);
     } catch (err) {
       console.error('Failed to load quote:', err);
@@ -121,12 +241,10 @@ export default function App() {
 
   // RAMS: Create from saved job
   const handleCreateRamsFromSaved = (savedJob) => {
-    // Restore the quote state first so CREATE_RAMS can pull job details
     const snapshot = savedJob.quoteSnapshot || savedJob.snapshot;
     if (snapshot) {
       dispatch({ type: 'RESTORE_DRAFT', draft: { ...snapshot, step: 5 } });
     }
-    // Small delay to let state settle, then create RAMS
     setTimeout(() => {
       dispatch({ type: 'CREATE_RAMS' });
       setActiveJobId(savedJob.id);
@@ -152,6 +270,27 @@ export default function App() {
     setRamsSubView('edit');
   };
 
+  // --- Show UserSelector if init complete but no user selected ---
+  if (state.initComplete && !state.currentUserId) {
+    return (
+      <div className="min-h-screen bg-tq-bg text-tq-text font-body">
+        <UserSelector users={state.allUsers} onSelectUser={handleSelectUser} />
+        {toast && (
+          <Toast key={toast.key} message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+        )}
+      </div>
+    );
+  }
+
+  // --- Loading state before init ---
+  if (!state.initComplete) {
+    return (
+      <div className="min-h-screen bg-tq-bg flex items-center justify-center">
+        <div className="text-tq-muted text-sm font-heading">Loading...</div>
+      </div>
+    );
+  }
+
   const renderContent = () => {
     // RAMS view
     if (currentView === 'rams' && state.rams) {
@@ -164,7 +303,7 @@ export default function App() {
             showToast={showToast}
             onBackToEditor={() => setRamsSubView('edit')}
             jobId={activeJobId}
-            currentUserId={state.currentUserId || 'default'}
+            currentUserId={state.currentUserId}
           />
         );
       }
@@ -193,7 +332,7 @@ export default function App() {
           onViewQuote={handleViewQuote}
           onCreateRams={handleCreateRamsFromSaved}
           onViewRams={handleViewRams}
-          currentUserId={state.currentUserId || 'default'}
+          currentUserId={state.currentUserId}
         />
       );
     }
@@ -237,6 +376,9 @@ export default function App() {
         currentView={currentView}
         onViewChange={handleViewChange}
         onBackToQuote={handleBackToQuote}
+        currentUser={state.currentUser}
+        allUsers={state.allUsers}
+        onSwitchUser={handleSwitchUser}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-6">
