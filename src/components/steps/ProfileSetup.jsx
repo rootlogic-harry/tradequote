@@ -33,9 +33,9 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
   };
 
   const inputClass = (field) =>
-    `w-full bg-tq-card border ${
+    `w-full h-10 bg-tq-card border-1.5 ${
       errors[field] ? 'border-tq-error' : 'border-tq-border'
-    } rounded px-3 py-2 text-tq-text font-body text-sm focus:outline-none focus:border-tq-accent`;
+    } rounded px-3 py-2.5 text-tq-text font-body text-sm focus:outline-none focus:border-tq-accent`;
 
   return (
     <div className={isModal ? '' : 'max-w-2xl mx-auto'}>

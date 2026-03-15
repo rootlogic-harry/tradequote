@@ -21,13 +21,17 @@ export default function UserSwitcher({ currentUser, allUsers, onSwitchUser }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 text-tq-muted hover:text-tq-accent transition-colors text-sm font-heading"
+        className="flex items-center gap-1.5 transition-colors text-sm font-heading"
+        style={{ color: 'var(--tq-nav-muted)' }}
       >
-        <span className="w-6 h-6 rounded-full bg-tq-accent/20 text-tq-accent flex items-center justify-center text-xs font-bold">
+        <span
+          className="rounded-full flex items-center justify-center font-bold"
+          style={{ width: 28, height: 28, fontSize: 12, backgroundColor: 'var(--tq-accent)', color: 'var(--tq-nav-bg)' }}
+        >
           {currentUser.name.charAt(0).toUpperCase()}
         </span>
-        <span className="hidden sm:inline">{currentUser.name}</span>
-        <span className="text-xs">{open ? '\u25B2' : '\u25BC'}</span>
+        <span className="hidden sm:inline" style={{ color: 'var(--tq-nav-text)', fontSize: 13 }}>{currentUser.name}</span>
+        <span className="text-xs" style={{ color: 'var(--tq-nav-muted)' }}>{open ? '\u25B2' : '\u25BE'}</span>
       </button>
 
       {open && otherUsers.length > 0 && (

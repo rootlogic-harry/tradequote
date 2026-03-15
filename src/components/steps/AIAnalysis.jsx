@@ -15,11 +15,11 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
   if (state.analysisError) {
     return (
       <div className="max-w-xl mx-auto text-center py-20">
-        <div className="bg-tq-error/10 border border-tq-error/30 rounded-lg p-6">
-          <p className="text-tq-error font-heading font-bold text-lg mb-2">
+        <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--tq-error-bg)', border: '1.5px solid var(--tq-error-bd)' }}>
+          <p className="font-heading font-bold text-lg mb-2" style={{ color: 'var(--tq-error-txt)' }}>
             Analysis Failed
           </p>
-          <p className="text-tq-text text-sm mb-6">{state.analysisError}</p>
+          <p className="text-sm mb-6" style={{ color: 'var(--tq-text)' }}>{state.analysisError}</p>
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
@@ -45,7 +45,10 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
         <div className="w-16 h-16 border-4 border-tq-accent border-t-transparent rounded-full animate-spin mx-auto" />
       </div>
 
-      <p className="text-tq-text font-heading text-xl font-bold mb-3 transition-all duration-500">
+      <p
+        className="mb-3 transition-all duration-500"
+        style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 20, fontWeight: 700, color: 'var(--tq-text)' }}
+      >
         {LOADING_MESSAGES[messageIndex]}
       </p>
 

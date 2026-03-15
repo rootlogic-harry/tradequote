@@ -2,10 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { listJobs, deleteJob } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 
+const FILTERS = ['All', 'Sent', 'Accepted', 'Draft'];
+
+function StatusBadge({ status }) {
+  const styles = {
+    SENT: { bg: 'var(--tq-status-sent)', color: 'var(--tq-status-sent-txt)' },
+    ACCEPTED: { bg: 'var(--tq-status-acc)', color: 'var(--tq-status-acc-txt)' },
+    DRAFT: { bg: 'var(--tq-status-draft)', color: 'var(--tq-status-draft-txt)' },
+  };
+  const s = styles[status] || styles.DRAFT;
+  return (
+    <span
+      className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded shrink-0 inline-block"
+      style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: s.bg, color: s.color }}
+    >
+      {status}
+    </span>
+  );
+}
+
 export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId }) {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('All');
 
   useEffect(() => {
     listJobs(currentUserId)
@@ -24,9 +44,16 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
     }
   };
 
+  // All jobs are "DRAFT" since no status field exists yet
+  const getStatus = () => 'DRAFT';
+
+  const filteredQuotes = activeFilter === 'All'
+    ? quotes
+    : quotes.filter(() => getStatus().toLowerCase() === activeFilter.toLowerCase());
+
   if (loading) {
     return (
-      <div className="text-center py-20 text-tq-muted">
+      <div className="text-center py-20" style={{ color: 'var(--tq-muted)' }}>
         Loading saved jobs...
       </div>
     );
@@ -36,8 +63,8 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
     return (
       <div className="text-center py-20">
         <div className="text-4xl mb-4 opacity-30">&#128193;</div>
-        <h2 className="text-xl font-heading font-bold text-tq-text mb-2">No saved jobs yet</h2>
-        <p className="text-tq-muted text-sm">
+        <h2 className="text-xl font-heading font-bold mb-2" style={{ color: 'var(--tq-text)' }}>No saved jobs yet</h2>
+        <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
           Generate a quote and click "Save Quote" to store it here for later.
         </p>
       </div>
@@ -45,83 +72,120 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-heading font-bold text-tq-accent mb-1">
-        Saved Jobs
-      </h2>
-      <p className="text-tq-muted text-sm mb-6">
-        {quotes.length} saved job{quotes.length !== 1 ? 's' : ''}
-      </p>
+    <div className="max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h2
+          className="mb-1"
+          style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 28, color: 'var(--tq-text)' }}
+        >
+          Saved jobs
+        </h2>
+        <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+          {quotes.length} saved job{quotes.length !== 1 ? 's' : ''}
+        </p>
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {quotes.map(quote => {
+      {/* Filter tabs */}
+      <div
+        className="inline-flex rounded-lg overflow-hidden mb-6"
+        style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
+      >
+        {FILTERS.map((f) => (
+          <button
+            key={f}
+            onClick={() => setActiveFilter(f)}
+            className="px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide transition-colors"
+            style={{
+              backgroundColor: activeFilter === f ? 'var(--tq-surface)' : 'transparent',
+              color: activeFilter === f ? 'var(--tq-text)' : 'var(--tq-muted)',
+            }}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {/* Job rows */}
+      <div className="space-y-2">
+        {filteredQuotes.map(quote => {
           const hasRams = quote.hasRams || !!quote.ramsSnapshot;
-          const ramsStatus = hasRams ? 'RAMS Draft' : 'No RAMS';
-          const ramsColor = hasRams ? 'text-tq-confirmed' : 'text-tq-muted';
+          const status = getStatus();
 
           return (
             <div
               key={quote.id}
-              className="bg-tq-surface border border-tq-border rounded-lg p-4 flex flex-col"
+              className="flex items-center rounded-lg transition-colors"
+              style={{
+                backgroundColor: status === 'DRAFT' ? 'var(--tq-card)' : 'var(--tq-card)',
+                border: status === 'ACCEPTED' ? '1.5px solid var(--tq-confirmed-bd)' : '1px solid var(--tq-border)',
+                borderRadius: 10,
+                padding: '16px 20px',
+                opacity: status === 'DRAFT' ? 0.9 : 1,
+              }}
             >
-              <div className="flex items-center justify-between mb-1">
-                <div className="font-mono text-tq-accent font-bold text-sm">
-                  {quote.quoteReference}
+              {/* Left: name, status, metadata */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--tq-text)' }}>
+                    {quote.clientName || 'Unnamed client'}
+                  </span>
+                  <StatusBadge status={status} />
                 </div>
-                <span className={`text-[10px] font-heading font-bold uppercase tracking-wide px-2 py-0.5 rounded ${
-                  hasRams ? 'bg-tq-confirmed/20 text-tq-confirmed' : 'bg-tq-card text-tq-muted'
-                }`}>
-                  {ramsStatus}
-                </span>
-              </div>
-              <div className="font-heading font-bold text-tq-text mb-0.5">
-                {quote.clientName || 'Unnamed client'}
-              </div>
-              <div className="text-tq-muted text-sm mb-2 truncate">
-                {quote.siteAddress || 'No address'}
-              </div>
-              <div className="flex items-center justify-between text-sm mb-3">
-                <span className="text-tq-muted">
-                  {quote.quoteDate ? formatDate(quote.quoteDate) : '\u2014'}
-                </span>
-                <span className="font-mono font-bold text-tq-text">
-                  {formatCurrency(quote.totalAmount)}
-                </span>
+                <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
+                  {quote.quoteReference}
+                  {quote.siteAddress ? ` · ${quote.siteAddress}` : ''}
+                  {quote.quoteDate ? ` · ${formatDate(quote.quoteDate)}` : ''}
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 mt-auto">
+              {/* Middle: amount */}
+              <div
+                className="mx-4 shrink-0 hidden sm:block"
+                style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}
+              >
+                {formatCurrency(quote.totalAmount)}
+              </div>
+
+              {/* Right: action buttons */}
+              <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => onViewQuote(quote)}
-                  className="flex-1 bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                  className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                  style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-text)' }}
                 >
-                  View Quote
+                  View
                 </button>
                 {hasRams && onViewRams ? (
                   <button
                     onClick={() => onViewRams(quote)}
-                    className="flex-1 border border-tq-confirmed text-tq-confirmed hover:bg-tq-confirmed/10 font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                    style={{ border: '1px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                   >
-                    View RAMS
+                    RAMS
                   </button>
                 ) : onCreateRams ? (
                   <button
                     onClick={() => onCreateRams(quote)}
-                    className="flex-1 border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                    style={{ border: '1px solid var(--tq-accent)', color: 'var(--tq-accent)' }}
                   >
-                    Create RAMS
+                    RAMS
                   </button>
                 ) : null}
                 {confirmDeleteId === quote.id ? (
                   <>
                     <button
                       onClick={() => handleDelete(quote.id)}
-                      className="bg-red-600 hover:bg-red-700 text-white font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                      style={{ backgroundColor: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)', border: '1px solid var(--tq-error-bd)' }}
                     >
                       Confirm
                     </button>
                     <button
                       onClick={() => setConfirmDeleteId(null)}
-                      className="border border-tq-border text-tq-muted hover:text-tq-text font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                      style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)' }}
                     >
                       Cancel
                     </button>
@@ -129,7 +193,8 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 ) : (
                   <button
                     onClick={() => setConfirmDeleteId(quote.id)}
-                    className="border border-tq-border text-tq-muted hover:text-red-400 font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
+                    style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)' }}
                   >
                     Delete
                   </button>

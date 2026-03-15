@@ -336,10 +336,14 @@ export default function JobDetails({ state, dispatch, abortRef }) {
   const canAnalyse =
     hasAnyPhoto && jobDetails.siteAddress?.trim();
 
+  // Count missing required photos for CTA label
+  const filledCount = Object.values(photos).filter(p => p != null).length + extraPhotos.length;
+  const neededPhotos = canAnalyse ? 0 : Math.max(0, 1 - filledCount);
+
   const inputClass = (field) =>
-    `w-full bg-tq-card border ${
+    `w-full bg-tq-card border-1.5 ${
       errors[field] ? 'border-tq-error' : 'border-tq-border'
-    } rounded px-3 py-2 text-tq-text font-body text-sm focus:outline-none focus:border-tq-accent`;
+    } rounded px-3 py-2.5 text-tq-text font-body text-sm focus:outline-none focus:border-tq-accent`;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -414,13 +418,19 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       </div>
 
       {/* Reference card banner */}
-      <div className="bg-tq-accent/10 border border-tq-accent/30 rounded-lg p-4 mb-6">
-        <p className="text-tq-accent font-heading font-bold text-sm">
-          📐 Using your TradeQuote Reference Card?
-        </p>
-        <p className="text-tq-text text-sm mt-1">
-          Place it flat against the wall in Slot 4. The AI uses its known 148×210mm dimensions to calculate real measurements.
-        </p>
+      <div
+        className="flex items-start gap-3 rounded-lg p-4 mb-6"
+        style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)', borderRadius: 10 }}
+      >
+        <span className="text-2xl shrink-0">📐</span>
+        <div>
+          <p className="font-heading font-bold text-sm" style={{ color: 'var(--tq-accent)' }}>
+            Using your TradeQuote Reference Card?
+          </p>
+          <p className="text-sm mt-1" style={{ color: 'var(--tq-text)' }}>
+            Place it flat against the wall in Slot 4. The AI uses its known 148×210mm dimensions to calculate real measurements.
+          </p>
+        </div>
       </div>
 
       {/* Photo slots */}
@@ -429,9 +439,29 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       </h3>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {PHOTO_SLOTS.map((slot) => {
+        {PHOTO_SLOTS.map((slot, slotIndex) => {
           const photo = photos[slot.key];
           const isMissing = photoWarnings.missingSlots?.includes(slot.key);
+          const isReference = slot.key === 'referenceCard';
+          const isRequired = slotIndex === 0 || slotIndex === 1; // overview, closeup
+          const isRecommended = slotIndex === 2 || slotIndex === 4; // sideProfile, access
+          const slotNum = slotIndex + 1;
+
+          // Number circle colors
+          const circleStyle = isReference
+            ? { backgroundColor: '#c07e12', color: '#ffffff' }
+            : isRequired
+              ? { backgroundColor: '#1a1714', color: '#f5f0e8' }
+              : { backgroundColor: '#7a6f5e', color: '#f5f0e8' };
+
+          // Card border
+          const cardBorder = isReference
+            ? '2px solid #e8a838'
+            : '1.5px solid var(--tq-border)';
+
+          // Header bg for reference slot
+          const headerBg = isReference ? '#fdf6e8' : 'var(--tq-card)';
+          const headerBorder = isReference ? '#fae8b8' : 'var(--tq-border-soft)';
 
           return (
             <div
@@ -440,55 +470,85 @@ export default function JobDetails({ state, dispatch, abortRef }) {
               onDragEnter={(e) => handleSlotDragEnter(slot.key, e)}
               onDragLeave={(e) => handleSlotDragLeave(slot.key, e)}
               onDrop={(e) => handleSlotDrop(slot.key, e)}
-              className={`border rounded-lg p-3 transition-all ${
-                dragOverSlot === slot.key
-                  ? 'border-tq-accent ring-2 ring-tq-accent border-solid bg-tq-accent/5'
-                  : isMissing
-                    ? 'border-tq-error bg-tq-error/5'
-                    : photo
-                      ? 'border-tq-confirmed/50 bg-tq-confirmed/5'
-                      : 'border-tq-border bg-tq-card'
-              }`}
+              className="overflow-hidden transition-all"
+              style={{
+                backgroundColor: 'var(--tq-card)',
+                border: dragOverSlot === slot.key ? '2px solid var(--tq-accent)' : cardBorder,
+                borderRadius: 10,
+              }}
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-heading font-bold text-tq-text">
-                  {slot.label}
-                  {slot.required && <span className="text-tq-accent ml-1">*</span>}
+              {/* Card header */}
+              <div
+                className="flex items-center gap-2 px-3.5 py-3"
+                style={{ backgroundColor: headerBg, borderBottom: `1px solid ${headerBorder}` }}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full shrink-0"
+                  style={{ width: 22, height: 22, fontSize: 11, fontWeight: 700, ...circleStyle }}
+                >
+                  {slotNum}
                 </span>
+                <span className="text-sm font-heading font-bold flex-1" style={{ color: 'var(--tq-text)' }}>
+                  {slot.label}
+                </span>
+                {isRequired && (
+                  <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-accent)', fontWeight: 600 }}>Required</span>
+                )}
+                {isRecommended && (
+                  <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-muted)', fontWeight: 600 }}>Recommended</span>
+                )}
+                {isReference && (
+                  <span className="text-[10px] uppercase tracking-wide" style={{ color: '#c07e12', fontWeight: 600 }}>Required</span>
+                )}
                 {photo && (
-                  <span className="text-tq-confirmed text-xs">✓ Uploaded</span>
+                  <span className="text-xs" style={{ color: 'var(--tq-confirmed-txt)' }}>✓</span>
                 )}
               </div>
-              <p className="text-xs text-tq-muted mb-3">{slot.instruction}</p>
 
-              {photo ? (
-                <div className="relative">
-                  <img
-                    src={photo.data}
-                    alt={slot.label}
-                    className="w-full h-32 object-cover rounded"
-                  />
-                  <button
-                    onClick={() => dispatch({ type: 'SET_PHOTO', slot: slot.key, photo: null })}
-                    className="absolute top-1 right-1 bg-tq-bg/80 text-tq-error w-6 h-6 rounded-full flex items-center justify-center text-sm hover:bg-tq-bg"
+              {/* Card body: drop zone or image */}
+              <div className="p-3">
+                {photo ? (
+                  <div className="relative">
+                    <img
+                      src={photo.data}
+                      alt={slot.label}
+                      className="w-full h-28 object-cover rounded"
+                    />
+                    <button
+                      onClick={() => dispatch({ type: 'SET_PHOTO', slot: slot.key, photo: null })}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-sm"
+                      style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: '#ffffff' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    className="flex flex-col items-center justify-center cursor-pointer rounded transition-colors"
+                    style={{
+                      minHeight: 110,
+                      border: isReference
+                        ? '2px dashed #e8c870'
+                        : dragOverSlot === slot.key
+                          ? '2px dashed var(--tq-accent)'
+                          : '2px dashed var(--tq-border)',
+                      backgroundColor: isReference ? '#fef8ee' : 'transparent',
+                    }}
                   >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <label className={`block w-full h-32 border-2 rounded cursor-pointer flex items-center justify-center hover:border-tq-accent transition-colors ${
-                  dragOverSlot === slot.key ? 'border-solid border-tq-accent' : 'border-dashed border-tq-border'
-                }`}>
-                  <span className="text-tq-muted text-sm">Click or drop photo here</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handlePhotoUpload(slot.key, e)}
-                  />
-                </label>
-              )}
-              {isMissing && <p className="text-tq-error text-xs mt-1">Required photo missing</p>}
+                    <span className="text-2xl mb-1 opacity-30">📷</span>
+                    <span className="text-xs" style={{ color: 'var(--tq-muted)' }}>Click or drop photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handlePhotoUpload(slot.key, e)}
+                    />
+                  </label>
+                )}
+                {isMissing && (
+                  <p className="text-xs mt-2" style={{ color: 'var(--tq-error-txt)' }}>Required photo missing</p>
+                )}
+              </div>
             </div>
           );
         })}
@@ -573,13 +633,18 @@ export default function JobDetails({ state, dispatch, abortRef }) {
         <button
           disabled={!canAnalyse}
           onClick={handleAnalyse}
-          className={`font-heading font-bold uppercase tracking-wide px-8 py-3 rounded transition-colors ${
-            canAnalyse
-              ? 'bg-tq-accent hover:bg-tq-accent-dark text-tq-bg'
-              : 'bg-tq-card text-tq-muted cursor-not-allowed'
-          }`}
+          className="font-heading font-bold uppercase tracking-wide px-8 py-3 rounded transition-colors"
+          style={{
+            backgroundColor: canAnalyse ? 'var(--tq-accent)' : 'var(--tq-surface)',
+            color: canAnalyse ? '#ffffff' : 'var(--tq-muted)',
+            opacity: canAnalyse ? 1 : 0.45,
+            cursor: canAnalyse ? 'pointer' : 'not-allowed',
+          }}
         >
-          Analyse Job
+          {canAnalyse
+            ? 'ANALYSE JOB'
+            : `ANALYSE JOB — ${neededPhotos > 0 ? `${neededPhotos} PHOTO${neededPhotos !== 1 ? 'S' : ''} NEEDED` : 'ADD SITE ADDRESS'}`
+          }
         </button>
       </div>
     </div>

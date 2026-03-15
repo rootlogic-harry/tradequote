@@ -129,33 +129,8 @@ export default function ReviewEdit({ state, dispatch }) {
           )}
         </h3>
 
-        {/* Desktop: table */}
-        <div className="overflow-x-auto hidden sm:block">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-tq-border text-tq-muted text-xs">
-                <th className="text-left px-3 py-1">Item</th>
-                <th className="text-left px-3 py-1">AI Value</th>
-                <th className="text-left px-3 py-1">Your Value</th>
-                <th className="text-center px-3 py-1">Status</th>
-                <th className="text-right px-3 py-1">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {measurements.map((m) => (
-                <MeasurementRow
-                  key={m.id}
-                  measurement={m}
-                  dispatch={dispatch}
-                  variant="row"
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile: cards */}
-        <div className="sm:hidden space-y-3">
+        {/* Measurement cards */}
+        <div className="space-y-3">
           {measurements.map((m) => (
             <MeasurementRow
               key={m.id}
@@ -226,35 +201,35 @@ export default function ReviewEdit({ state, dispatch }) {
       <LabourSection labourEstimate={labourEstimate} dispatch={dispatch} />
 
       {/* Financial Summary */}
-      <div className="bg-tq-card border border-tq-border rounded p-4">
+      <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-tq-muted">Materials</span>
+            <span style={{ color: 'var(--tq-muted)' }}>Materials</span>
             <span className="font-mono">{formatCurrency(totals.materialsSubtotal)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-tq-muted">Labour</span>
+            <span style={{ color: 'var(--tq-muted)' }}>Labour</span>
             <span className="font-mono">{formatCurrency(totals.labourTotal)}</span>
           </div>
           {totals.additionalCostsTotal > 0 && (
             <div className="flex justify-between">
-              <span className="text-tq-muted">Additional costs</span>
+              <span style={{ color: 'var(--tq-muted)' }}>Additional costs</span>
               <span className="font-mono">{formatCurrency(totals.additionalCostsTotal)}</span>
             </div>
           )}
-          <div className="border-t border-tq-border pt-2 flex justify-between">
-            <span className="text-tq-muted">Subtotal (ex VAT)</span>
+          <div className="pt-2 flex justify-between" style={{ borderTop: '1px solid var(--tq-border-soft)' }}>
+            <span style={{ color: 'var(--tq-muted)' }}>Subtotal (ex VAT)</span>
             <span className="font-mono font-medium">{formatCurrency(totals.subtotal)}</span>
           </div>
           {profile.vatRegistered && (
             <div className="flex justify-between">
-              <span className="text-tq-muted">VAT (20%)</span>
+              <span style={{ color: 'var(--tq-muted)' }}>VAT (20%)</span>
               <span className="font-mono">{formatCurrency(totals.vatAmount)}</span>
             </div>
           )}
-          <div className="border-t border-tq-border pt-2 flex justify-between text-lg">
+          <div className="pt-2 flex justify-between text-lg" style={{ borderTop: '2px solid var(--tq-text)' }}>
             <span className="font-heading font-bold">TOTAL</span>
-            <span className="font-mono font-bold text-tq-accent">{formatCurrency(totals.total)}</span>
+            <span className="font-mono font-bold" style={{ color: 'var(--tq-accent)' }}>{formatCurrency(totals.total)}</span>
           </div>
         </div>
       </div>
@@ -263,12 +238,29 @@ export default function ReviewEdit({ state, dispatch }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-heading font-bold text-tq-accent mb-1">
-        Review & Edit
-      </h2>
-      <p className="text-tq-muted text-sm mb-6">
-        Review the AI analysis. Confirm or edit every measurement before generating your quote.
-      </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-heading font-bold mb-1" style={{ color: 'var(--tq-text)' }}>
+            Review & Edit
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            Review the AI analysis. Confirm or edit every measurement before generating your quote.
+          </p>
+        </div>
+        {unconfirmedCount > 0 && (
+          <div
+            className="shrink-0 text-center rounded-lg px-3 py-2"
+            style={{ backgroundColor: 'var(--tq-unconf-bg)', border: '1.5px solid var(--tq-unconf-bd)' }}
+          >
+            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 20, fontWeight: 600, color: 'var(--tq-unconf-txt)' }}>
+              {unconfirmedCount}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-unconf-txt)', fontWeight: 600 }}>
+              TO CONFIRM
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Reference card status banner */}
       <div
@@ -322,21 +314,21 @@ export default function ReviewEdit({ state, dispatch }) {
 
       {/* Generate Quote CTA */}
       <div className="mt-8 flex flex-col items-end">
-        {!allConfirmed && (
-          <p className="text-tq-unconfirmed text-sm mb-2">
-            {unconfirmedCount} measurement{unconfirmedCount !== 1 ? 's' : ''} to confirm before generating
-          </p>
-        )}
         <button
           disabled={!generateEnabled}
           onClick={() => dispatch({ type: 'GENERATE_QUOTE' })}
-          className={`font-heading font-bold uppercase tracking-wide px-10 py-3 rounded text-lg transition-colors ${
-            generateEnabled
-              ? 'bg-tq-accent hover:bg-tq-accent-dark text-tq-bg'
-              : 'bg-tq-card text-tq-muted cursor-not-allowed'
-          }`}
+          className="font-heading font-bold uppercase tracking-wide px-10 py-3 rounded text-lg transition-colors"
+          style={{
+            backgroundColor: generateEnabled ? 'var(--tq-accent)' : 'var(--tq-surface)',
+            color: generateEnabled ? '#ffffff' : 'var(--tq-muted)',
+            opacity: generateEnabled ? 1 : 0.6,
+            cursor: generateEnabled ? 'pointer' : 'not-allowed',
+          }}
         >
-          Generate Quote
+          {generateEnabled
+            ? 'GENERATE QUOTE'
+            : `GENERATE QUOTE — ${unconfirmedCount} UNCONFIRMED`
+          }
         </button>
       </div>
     </div>

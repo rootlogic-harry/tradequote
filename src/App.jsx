@@ -15,7 +15,7 @@ import Toast from './components/Toast.jsx';
 import UserSelector from './components/UserSelector.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
 import Dashboard from './components/Dashboard.jsx';
-import Sidebar from './components/Sidebar.jsx';
+// Sidebar import removed — nav is now in StepIndicator
 import LandingPage from './components/LandingPage.jsx';
 import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, migrateFromLegacyDB } from './utils/userDB.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
@@ -40,12 +40,10 @@ export default function App() {
   const [ramsSubView, setRamsSubView] = useState('edit');
   const [activeJobId, setActiveJobId] = useState(null);
 
-  // Sidebar state
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-
   // Incomplete jobs state
   const [incompleteJobs, setIncompleteJobs] = useState([]);
   const [savedJobCount, setSavedJobCount] = useState(0);
+  const [savedJobs, setSavedJobs] = useState([]);
 
   // Pending draft for dashboard (replaces draftPrompt modal)
   const [pendingDraft, setPendingDraft] = useState(null);
@@ -90,10 +88,12 @@ export default function App() {
     try {
       const jobs = await listJobs(userId);
       setSavedJobCount(jobs.length);
+      setSavedJobs(jobs);
       const incomplete = jobs.filter(j => !j.hasRams && !j.ramsNotRequired);
       setIncompleteJobs(incomplete);
     } catch {
       setIncompleteJobs([]);
+      setSavedJobs([]);
     }
   }, []);
 
@@ -179,7 +179,6 @@ export default function App() {
     setRamsSubView('edit');
     setActiveJobId(null);
     setPendingDraft(null);
-    setSidebarCollapsed(true);
     draftChecked.current = false;
 
     // Load new user's data
@@ -263,7 +262,6 @@ export default function App() {
     }
     dispatch({ type: 'NEW_QUOTE' });
     setCurrentView('editor');
-    setSidebarCollapsed(true);
   };
 
   const handleResumeDraft = () => {
@@ -394,14 +392,10 @@ export default function App() {
     );
   }
 
-  // Build current quote summary for sidebar
-  const currentQuoteSummary = (currentView === 'editor' && state.step >= 2) ? {
-    reference: state.jobDetails?.quoteReference || '',
-    clientName: state.jobDetails?.clientName || '',
-    step: state.step,
-  } : null;
-
-  const showSidebar = currentView !== 'dashboard';
+  const handleGoToSaved = () => {
+    setCurrentView('saved');
+    setViewingQuote(null);
+  };
 
   const renderContent = () => {
     // Dashboard view
@@ -417,6 +411,7 @@ export default function App() {
           onResumeJob={handleResumeJob}
           onMarkRamsNotRequired={handleMarkRamsNotRequired}
           onCreateRamsFromSaved={handleCreateRamsFromSaved}
+          savedJobs={savedJobs}
         />
       );
     }
@@ -514,34 +509,15 @@ export default function App() {
         currentUser={state.currentUser}
         allUsers={state.allUsers}
         onSwitchUser={handleSwitchUser}
-        showStepper={currentView !== 'dashboard'}
-        onToggleSidebar={showSidebar ? () => setSidebarCollapsed(c => !c) : null}
+        onGoToDashboard={handleGoToDashboard}
+        onStartNewQuote={handleStartNewQuote}
+        onGoToSaved={handleGoToSaved}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        {showSidebar && (
-          <Sidebar
-            currentView={currentView}
-            onNavigate={handleViewChange}
-            onStartNewQuote={handleStartNewQuote}
-            onGoToDashboard={handleGoToDashboard}
-            incompleteJobs={incompleteJobs}
-            onResumeJob={handleResumeJob}
-            onMarkRamsNotRequired={handleMarkRamsNotRequired}
-            currentQuoteSummary={currentQuoteSummary}
-            isCollapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed(c => !c)}
-            onCreateRamsFromSaved={handleCreateRamsFromSaved}
-            savedJobCount={savedJobCount}
-          />
-        )}
-
-        {/* Main content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
-            {renderContent()}
-          </div>
+      {/* Main content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+          {renderContent()}
         </div>
       </div>
 

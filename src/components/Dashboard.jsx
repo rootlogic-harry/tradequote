@@ -1,5 +1,17 @@
 import React from 'react';
-import { formatCurrency } from '../utils/quoteBuilder.js';
+import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function todayFormatted() {
+  const d = new Date();
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 export default function Dashboard({
   userName,
@@ -11,122 +23,153 @@ export default function Dashboard({
   onResumeJob,
   onMarkRamsNotRequired,
   onCreateRamsFromSaved,
+  savedJobs = [],
 }) {
-  const hasIncompleteWork = currentDraft || (incompleteJobs && incompleteJobs.length > 0);
+  // Stat calculations
+  const thisMonthTotal = savedJobs.reduce((sum, j) => sum + (j.totalAmount || 0), 0);
+  const recentJobs = savedJobs.slice(0, 5);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Welcome */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-heading font-bold text-tq-accent mb-1">
-          Welcome back{userName ? `, ${userName}` : ''}
-        </h1>
-        <p className="text-tq-muted text-sm">
-          What would you like to do?
-        </p>
-      </div>
-
-      {/* Action Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-        {/* Start New Quote */}
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Header row */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1
+            className="mb-1"
+            style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 32, color: 'var(--tq-text)' }}
+          >
+            {getGreeting()}{userName ? `, ${userName}` : ''}
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            {todayFormatted()}
+          </p>
+        </div>
         <button
           onClick={onStartNewQuote}
-          className="bg-tq-surface border border-tq-border rounded-lg p-6 text-left hover:border-tq-accent transition-colors group"
+          className="shrink-0 rounded transition-colors"
+          style={{
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontWeight: 700,
+            fontSize: 15,
+            backgroundColor: 'var(--tq-accent)',
+            color: '#ffffff',
+            padding: '10px 20px',
+          }}
         >
-          <div className="text-3xl mb-3 opacity-70 group-hover:opacity-100 transition-opacity">+</div>
-          <h2 className="font-heading font-bold text-tq-text text-lg mb-1">Start New Quote</h2>
-          <p className="text-tq-muted text-sm">Begin a fresh quote from job details</p>
+          + NEW QUOTE
         </button>
+      </div>
 
-        {/* View Saved Jobs */}
-        <button
-          onClick={onViewJobs}
-          className="bg-tq-surface border border-tq-border rounded-lg p-6 text-left hover:border-tq-accent transition-colors group"
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+        <div
+          className="rounded-lg p-4"
+          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
         >
-          <div className="text-3xl mb-3 opacity-70 group-hover:opacity-100 transition-opacity">&#128193;</div>
-          <h2 className="font-heading font-bold text-tq-text text-lg mb-1">View Saved Jobs</h2>
-          <p className="text-tq-muted text-sm">Browse and manage your completed quotes</p>
-        </button>
+          <div className="text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em' }}>This month</div>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 26, fontWeight: 500, color: 'var(--tq-text)' }}>
+            {formatCurrency(thisMonthTotal)}
+          </div>
+          <div className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>
+            {savedJobs.length} quote{savedJobs.length !== 1 ? 's' : ''} total
+          </div>
+        </div>
 
-        {/* Quick Stats Card */}
-        <div className="bg-tq-surface border border-tq-border rounded-lg p-6">
-          <div className="text-3xl mb-3 opacity-70">&#128200;</div>
-          <h2 className="font-heading font-bold text-tq-text text-lg mb-1">Quick Stats</h2>
-          <p className="text-tq-muted text-sm">
-            {incompleteJobs?.length || 0} job{(incompleteJobs?.length || 0) !== 1 ? 's' : ''} needing attention
-          </p>
+        <div
+          className="rounded-lg p-4"
+          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
+        >
+          <div className="text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em' }}>Awaiting response</div>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 26, fontWeight: 500, color: 'var(--tq-text)' }}>0</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>quotes sent</div>
+        </div>
+
+        <div
+          className="rounded-lg p-4"
+          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
+        >
+          <div className="text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em' }}>Accepted</div>
+          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 26, fontWeight: 500, color: 'var(--tq-text)' }}>0</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>this month</div>
         </div>
       </div>
 
-      {/* Incomplete Work Section */}
-      {hasIncompleteWork && (
-        <div>
-          <h2 className="text-xl font-heading font-bold text-tq-text mb-4">
-            Incomplete Work
+      {/* Current draft banner */}
+      {currentDraft && (
+        <div
+          className="rounded-lg p-4 flex items-center justify-between mb-6"
+          style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)' }}
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: 'var(--tq-status-draft)', color: 'var(--tq-status-draft-txt)' }}
+              >
+                Draft
+              </span>
+              <span className="font-heading font-bold text-tq-text truncate">
+                {currentDraft.jobDetails?.clientName || 'Untitled'}
+              </span>
+            </div>
+            <p className="text-sm truncate" style={{ color: 'var(--tq-muted)' }}>
+              {currentDraft.jobDetails?.siteAddress || 'No address'}
+              {currentDraft.step ? ` — Step ${currentDraft.step}` : ''}
+            </p>
+          </div>
+          <button
+            onClick={onResumeDraft}
+            className="ml-4 font-heading font-bold uppercase tracking-wide text-xs px-4 py-2 rounded transition-colors whitespace-nowrap"
+            style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff' }}
+          >
+            Resume
+          </button>
+        </div>
+      )}
+
+      {/* Incomplete jobs (needs RAMS) */}
+      {incompleteJobs && incompleteJobs.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-heading font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--tq-muted)' }}>
+            Needs Attention
           </h2>
-
-          <div className="space-y-3">
-            {/* Current Draft */}
-            {currentDraft && (
-              <div className="bg-tq-surface border border-tq-accent/40 rounded-lg p-4 flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-heading font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-tq-accent/20 text-tq-accent">
-                      Draft
-                    </span>
-                    <span className="font-heading font-bold text-tq-text truncate">
-                      {currentDraft.jobDetails?.clientName || 'Untitled'}
-                    </span>
-                  </div>
-                  <p className="text-tq-muted text-sm truncate">
-                    {currentDraft.jobDetails?.siteAddress || 'No address'}
-                    {currentDraft.step ? ` — Step ${currentDraft.step}` : ''}
-                  </p>
-                </div>
-                <button
-                  onClick={onResumeDraft}
-                  className="ml-4 bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-4 py-2 rounded transition-colors whitespace-nowrap"
-                >
-                  Resume
-                </button>
-              </div>
-            )}
-
-            {/* Incomplete Jobs (missing RAMS) */}
-            {incompleteJobs?.map(job => (
+          <div className="space-y-2">
+            {incompleteJobs.map(job => (
               <div
                 key={job.id}
-                className="bg-tq-surface border border-tq-border rounded-lg p-4 flex items-center justify-between"
+                className="rounded-lg p-4 flex items-center justify-between"
+                style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-heading font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                    <span
+                      className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded"
+                      style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: 'var(--tq-status-sent)', color: 'var(--tq-status-sent-txt)' }}
+                    >
                       Needs RAMS
                     </span>
-                    <span className="font-mono text-tq-accent text-sm font-bold">
+                    <span className="font-mono text-sm font-bold" style={{ color: 'var(--tq-accent)' }}>
                       {job.quoteReference}
                     </span>
                   </div>
-                  <div className="font-heading font-bold text-tq-text truncate">
+                  <div className="font-heading font-bold truncate" style={{ color: 'var(--tq-text)' }}>
                     {job.clientName || 'Unnamed client'}
                   </div>
-                  <p className="text-tq-muted text-sm truncate">
-                    {job.siteAddress || 'No address'}
-                    {job.totalAmount ? ` — ${formatCurrency(job.totalAmount)}` : ''}
-                  </p>
                 </div>
                 <div className="ml-4 flex gap-2 flex-shrink-0">
                   <button
                     onClick={() => onCreateRamsFromSaved(job)}
-                    className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors whitespace-nowrap"
+                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors whitespace-nowrap"
+                    style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff' }}
                   >
                     Create RAMS
                   </button>
                   <button
                     onClick={() => onMarkRamsNotRequired(job.id)}
-                    className="border border-tq-border text-tq-muted hover:text-tq-text font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors whitespace-nowrap"
+                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors whitespace-nowrap"
+                    style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)' }}
                   >
-                    No RAMS Needed
+                    Not Needed
                   </button>
                 </div>
               </div>
@@ -134,6 +177,67 @@ export default function Dashboard({
           </div>
         </div>
       )}
+
+      {/* Recent jobs card */}
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
+      >
+        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid var(--tq-border-soft)' }}>
+          <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--tq-text)' }}>
+            RECENT JOBS
+          </span>
+          <button
+            onClick={onViewJobs}
+            className="text-xs"
+            style={{ color: 'var(--tq-accent)', fontWeight: 500 }}
+          >
+            View all &rarr;
+          </button>
+        </div>
+
+        {recentJobs.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm" style={{ color: 'var(--tq-muted)' }}>
+            No jobs yet. Start a new quote to get going.
+          </div>
+        ) : (
+          <div>
+            {recentJobs.map((job) => (
+              <div
+                key={job.id}
+                className="flex items-center gap-4 px-5 py-3"
+                style={{ borderBottom: '1px solid var(--tq-border-soft)' }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
+                    {job.clientName || 'Unnamed'}
+                  </div>
+                  <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
+                    {job.quoteReference}{job.siteAddress ? ` · ${job.siteAddress}` : ''}
+                  </div>
+                </div>
+                <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--tq-text)' }}>
+                  {formatCurrency(job.totalAmount || 0)}
+                </div>
+                <div className="text-xs hidden sm:block" style={{ color: 'var(--tq-muted)', minWidth: 80 }}>
+                  {job.quoteDate ? formatDate(job.quoteDate) : '\u2014'}
+                </div>
+                <span
+                  className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded shrink-0"
+                  style={{
+                    fontFamily: 'Barlow Condensed, sans-serif',
+                    fontWeight: 700,
+                    backgroundColor: 'var(--tq-status-draft)',
+                    color: 'var(--tq-status-draft-txt)',
+                  }}
+                >
+                  DRAFT
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

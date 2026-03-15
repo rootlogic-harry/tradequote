@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-function NumericInput({ value: propValue, onChange, step, className }) {
+function NumericInput({ value: propValue, onChange, step, className, style }) {
   const [local, setLocal] = useState(String(propValue ?? ''));
 
   useEffect(() => {
@@ -15,6 +15,7 @@ function NumericInput({ value: propValue, onChange, step, className }) {
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => onChange(parseFloat(local) || 0)}
       className={className}
+      style={style}
     />
   );
 }
@@ -30,50 +31,84 @@ export default function LabourSection({ labourEstimate, dispatch }) {
     });
   };
 
-  const inputClass = "w-full bg-tq-card border border-tq-border rounded px-2 py-1.5 text-sm font-mono text-tq-text focus:outline-none focus:border-tq-accent";
+  const inputStyle = {
+    fontFamily: 'IBM Plex Mono, monospace',
+    fontSize: 16,
+    fontWeight: 500,
+    textAlign: 'center',
+    backgroundColor: 'var(--tq-card)',
+    border: '1.5px solid var(--tq-border)',
+    borderRadius: 6,
+    color: 'var(--tq-text)',
+    width: '100%',
+    padding: '6px 4px',
+  };
 
   return (
     <div>
-      <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
+      <h4 className="font-heading font-bold text-sm uppercase tracking-wide mb-3" style={{ color: 'var(--tq-muted)' }}>
         Labour
       </h4>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-        <div>
-          <label className="block text-xs text-tq-muted mb-1">Days</label>
-          <NumericInput
-            value={estimatedDays}
-            step="0.5"
-            onChange={(v) => update('estimatedDays', v)}
-            className={inputClass}
-          />
-          {aiEstimatedDays != null && aiEstimatedDays !== estimatedDays && (
-            <p className="text-xs text-tq-muted mt-0.5">AI: {aiEstimatedDays} days</p>
-          )}
+      {/* Calculator layout */}
+      <div
+        className="rounded-lg p-3"
+        style={{ backgroundColor: 'var(--tq-surface)', borderRadius: 8 }}
+      >
+        <div className="flex items-end gap-2">
+          {/* Days */}
+          <div className="flex-1 text-center">
+            <label className="block mb-1" style={{ fontSize: 10, color: 'var(--tq-muted)', textTransform: 'uppercase' }}>Days</label>
+            <NumericInput
+              value={estimatedDays}
+              step="0.5"
+              onChange={(v) => update('estimatedDays', v)}
+              className="focus:outline-none focus:border-tq-accent"
+              style={inputStyle}
+            />
+          </div>
+          {/* × */}
+          <span className="pb-2 text-sm" style={{ color: 'var(--tq-muted)' }}>×</span>
+          {/* Workers */}
+          <div className="flex-1 text-center">
+            <label className="block mb-1" style={{ fontSize: 10, color: 'var(--tq-muted)', textTransform: 'uppercase' }}>Workers</label>
+            <NumericInput
+              value={numberOfWorkers}
+              onChange={(v) => update('numberOfWorkers', v)}
+              className="focus:outline-none focus:border-tq-accent"
+              style={inputStyle}
+            />
+          </div>
+          {/* × */}
+          <span className="pb-2 text-sm" style={{ color: 'var(--tq-muted)' }}>×</span>
+          {/* Day Rate */}
+          <div className="flex-1 text-center">
+            <label className="block mb-1" style={{ fontSize: 10, color: 'var(--tq-muted)', textTransform: 'uppercase' }}>Day Rate</label>
+            <NumericInput
+              value={dayRate}
+              onChange={(v) => update('dayRate', v)}
+              className="focus:outline-none focus:border-tq-accent"
+              style={inputStyle}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-xs text-tq-muted mb-1">Workers</label>
-          <NumericInput
-            value={numberOfWorkers}
-            onChange={(v) => update('numberOfWorkers', v)}
-            className={inputClass}
-          />
-        </div>
+        {aiEstimatedDays != null && aiEstimatedDays !== estimatedDays && (
+          <p className="text-xs mt-2" style={{ color: 'var(--tq-muted)' }}>AI suggested: {aiEstimatedDays} days</p>
+        )}
 
-        <div>
-          <label className="block text-xs text-tq-muted mb-1">Day Rate</label>
-          <NumericInput
-            value={dayRate}
-            onChange={(v) => update('dayRate', v)}
-            className={inputClass}
-          />
+        {/* Labour total */}
+        <div
+          className="flex justify-between items-center mt-3 pt-3"
+          style={{ borderTop: '1px solid var(--tq-border)' }}
+        >
+          <span className="text-xs uppercase tracking-wide" style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, color: 'var(--tq-muted)' }}>
+            LABOUR TOTAL
+          </span>
+          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}>
+            {'\u00A3'}{labourTotal.toFixed(2)}
+          </span>
         </div>
-      </div>
-
-      <div className="flex justify-between items-center text-sm">
-        <span className="text-tq-muted">Labour total</span>
-        <span className="font-mono font-medium text-tq-text">{'\u00A3'}{labourTotal.toFixed(2)}</span>
       </div>
     </div>
   );

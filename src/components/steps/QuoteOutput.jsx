@@ -730,19 +730,22 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       <div className="flex flex-wrap gap-3 mb-6">
         <button
           onClick={handleDownloadPDF}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff' }}
         >
           Download PDF
         </button>
         <button
           onClick={handleDownloadDocx}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent' }}
         >
           Download Word
         </button>
         <button
           onClick={handleEmail}
-          className="border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent' }}
         >
           Send via Email
         </button>
@@ -813,13 +816,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 <div
                   key={photoIdx}
                   {...getItemProps(orderPos)}
-                  className={`relative rounded border-2 transition-all ${
-                    isDropTarget
-                      ? 'border-tq-accent ring-2 ring-tq-accent/50'
+                  className={`relative rounded-lg transition-all ${isDragged ? 'opacity-50 scale-105' : ''}`}
+                  style={{
+                    border: isDropTarget
+                      ? '2px solid var(--tq-accent)'
                       : isSelected
-                        ? 'border-tq-confirmed ring-1 ring-tq-confirmed/40'
-                        : 'border-tq-border opacity-50 grayscale'
-                  } ${isDragged ? 'opacity-50 scale-105' : ''}`}
+                        ? '2px solid var(--tq-accent)'
+                        : '2px solid var(--tq-border)',
+                    opacity: isSelected ? 1 : 0.6,
+                  }}
                 >
                   {/* Drag handle — 6-dot grip icon, top-left */}
                   <span

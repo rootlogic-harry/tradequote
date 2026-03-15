@@ -22,34 +22,101 @@
   </script>
 
   <style>
-    /* Light palette (default) */
-    :root {
-      --tq-bg: #f5f3ef;
-      --tq-surface: #ffffff;
-      --tq-card: #f9f8f6;
-      --tq-border: #e0ddd6;
-      --tq-accent: #c4872a;
-      --tq-accent-dark: #a06b1e;
-      --tq-text: #1a1a1a;
-      --tq-muted: #666666;
-      --tq-confirmed: #4ade80;
-      --tq-unconfirmed: #fbbf24;
-      --tq-error: #f87171;
+    /* ── Light theme ── */
+    :root,
+    [data-theme="light"] {
+      --tq-bg:          #f5f1eb;
+      --tq-surface:     #ede8de;
+      --tq-card:        #ffffff;
+      --tq-border:      #d4cfc4;
+      --tq-border-soft: #e8e3da;
+
+      --tq-text:        #1a1714;
+      --tq-muted:       #7a6f5e;
+      --tq-hint:        #9a8f7e;
+
+      --tq-accent:      #c07e12;
+      --tq-accent-dk:   #a06010;
+      --tq-accent-bg:   #fef8ee;
+      --tq-accent-bd:   #e8c870;
+
+      --tq-nav-bg:      #1a1714;
+      --tq-nav-text:    #f5f0e8;
+      --tq-nav-muted:   #8a8070;
+      --tq-nav-active:  #2d2a24;
+
+      --tq-confirmed-bg:  #f0faf4;
+      --tq-confirmed-bd:  #6dbf8a;
+      --tq-confirmed-txt: #1a6b35;
+
+      --tq-unconf-bg:   #fef8ee;
+      --tq-unconf-bd:   #fac750;
+      --tq-unconf-txt:  #a06010;
+
+      --tq-error-bg:    #fef0f0;
+      --tq-error-bd:    #f09090;
+      --tq-error-txt:   #a02020;
+
+      --tq-status-sent:     #fef3e0;
+      --tq-status-sent-txt: #a06010;
+      --tq-status-acc:      #e6f5ec;
+      --tq-status-acc-txt:  #1a6b35;
+      --tq-status-draft:    #ede9e0;
+      --tq-status-draft-txt:#7a6f5e;
+
+      /* legacy compat aliases */
+      --tq-accent-dark: var(--tq-accent-dk);
+      --tq-confirmed:   var(--tq-confirmed-bd);
+      --tq-unconfirmed: var(--tq-unconf-bd);
+      --tq-error:       var(--tq-error-txt);
     }
 
-    /* Dark palette */
+    /* ── Dark theme ── */
     [data-theme="dark"] {
-      --tq-bg: #0f0f0f;
-      --tq-surface: #1a1a1a;
-      --tq-card: #222222;
-      --tq-border: #333333;
-      --tq-accent: #e8a838;
-      --tq-accent-dark: #c4872a;
-      --tq-text: #f0ede8;
-      --tq-muted: #999999;
-      --tq-confirmed: #4ade80;
-      --tq-unconfirmed: #fbbf24;
-      --tq-error: #f87171;
+      --tq-bg:          #18170f;
+      --tq-surface:     #201e13;
+      --tq-card:        #27251a;
+      --tq-border:      #3d3a28;
+      --tq-border-soft: #302e20;
+
+      --tq-text:        #f5f0e8;
+      --tq-muted:       #8a8070;
+      --tq-hint:        #6a6050;
+
+      --tq-accent:      #e8a838;
+      --tq-accent-dk:   #c8881a;
+      --tq-accent-bg:   #2a2010;
+      --tq-accent-bd:   #6a5020;
+
+      --tq-nav-bg:      #0f0e09;
+      --tq-nav-text:    #f5f0e8;
+      --tq-nav-muted:   #6a6050;
+      --tq-nav-active:  #1e1c12;
+
+      --tq-confirmed-bg:  #0f2018;
+      --tq-confirmed-bd:  #2a6040;
+      --tq-confirmed-txt: #6dbf8a;
+
+      --tq-unconf-bg:   #28200a;
+      --tq-unconf-bd:   #8a6020;
+      --tq-unconf-txt:  #e8a838;
+
+      --tq-error-bg:    #280e0e;
+      --tq-error-bd:    #8a2020;
+      --tq-error-txt:   #f09090;
+
+      --tq-status-sent:     #28200a;
+      --tq-status-sent-txt: #e8a838;
+      --tq-status-acc:      #0f2018;
+      --tq-status-acc-txt:  #6dbf8a;
+      --tq-status-draft:    #201e13;
+      --tq-status-draft-txt:#8a8070;
+
+      /* legacy compat aliases */
+      --tq-accent-dark: var(--tq-accent-dk);
+      --tq-confirmed:   var(--tq-confirmed-bd);
+      --tq-unconfirmed: var(--tq-unconf-bd);
+      --tq-error:       var(--tq-error-txt);
     }
 
     body {
@@ -78,13 +145,40 @@
             'tq-surface': 'var(--tq-surface)',
             'tq-card': 'var(--tq-card)',
             'tq-border': 'var(--tq-border)',
+            'tq-border-soft': 'var(--tq-border-soft)',
             'tq-accent': 'var(--tq-accent)',
+            'tq-accent-dk': 'var(--tq-accent-dk)',
             'tq-accent-dark': 'var(--tq-accent-dark)',
+            'tq-accent-bg': 'var(--tq-accent-bg)',
+            'tq-accent-bd': 'var(--tq-accent-bd)',
             'tq-text': 'var(--tq-text)',
             'tq-muted': 'var(--tq-muted)',
+            'tq-hint': 'var(--tq-hint)',
+            'tq-nav-bg': 'var(--tq-nav-bg)',
+            'tq-nav-text': 'var(--tq-nav-text)',
+            'tq-nav-muted': 'var(--tq-nav-muted)',
+            'tq-nav-active': 'var(--tq-nav-active)',
             'tq-confirmed': 'var(--tq-confirmed)',
+            'tq-confirmed-bg': 'var(--tq-confirmed-bg)',
+            'tq-confirmed-bd': 'var(--tq-confirmed-bd)',
+            'tq-confirmed-txt': 'var(--tq-confirmed-txt)',
             'tq-unconfirmed': 'var(--tq-unconfirmed)',
+            'tq-unconf-bg': 'var(--tq-unconf-bg)',
+            'tq-unconf-bd': 'var(--tq-unconf-bd)',
+            'tq-unconf-txt': 'var(--tq-unconf-txt)',
             'tq-error': 'var(--tq-error)',
+            'tq-error-bg': 'var(--tq-error-bg)',
+            'tq-error-bd': 'var(--tq-error-bd)',
+            'tq-error-txt': 'var(--tq-error-txt)',
+            'tq-status-sent': 'var(--tq-status-sent)',
+            'tq-status-sent-txt': 'var(--tq-status-sent-txt)',
+            'tq-status-acc': 'var(--tq-status-acc)',
+            'tq-status-acc-txt': 'var(--tq-status-acc-txt)',
+            'tq-status-draft': 'var(--tq-status-draft)',
+            'tq-status-draft-txt': 'var(--tq-status-draft-txt)',
+          },
+          borderWidth: {
+            '1.5': '1.5px',
           },
           fontFamily: {
             heading: ['"Barlow Condensed"', 'sans-serif'],
@@ -99,7 +193,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700;800&family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <!-- jsPDF + html2canvas (CDN) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
