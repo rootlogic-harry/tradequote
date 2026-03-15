@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
 
-export default function ProfileSetup({ state, dispatch, isModal, onClose }) {
+export default function ProfileSetup({ state, dispatch, isModal, onClose, onProfileComplete }) {
   const [errors, setErrors] = useState({});
   const { profile } = state;
 
@@ -24,6 +24,8 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose }) {
     if (result.valid) {
       if (isModal && onClose) {
         onClose();
+      } else if (onProfileComplete) {
+        onProfileComplete();
       } else {
         dispatch({ type: 'SET_STEP', step: 2 });
       }

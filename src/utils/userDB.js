@@ -107,6 +107,18 @@ export async function updateJobRams(userId, jobId, ramsSnapshot) {
   }
 }
 
+export async function setRamsNotRequired(userId, jobId, value) {
+  const res = await fetch(`/api/users/${userId}/jobs/${jobId}/rams-not-required`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || `Failed to update rams-not-required for job ${jobId}`);
+  }
+}
+
 // --- Drafts ---
 
 export async function saveDraft(userId, state) {

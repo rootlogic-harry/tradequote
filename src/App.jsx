@@ -14,7 +14,9 @@ import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
 import UserSelector from './components/UserSelector.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
-import { getJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, migrateFromLegacyDB } from './utils/userDB.js';
+import Dashboard from './components/Dashboard.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, migrateFromLegacyDB } from './utils/userDB.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
 function getStoredTheme(userId) {
@@ -28,10 +30,20 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [theme, setTheme] = useState(() => getStoredTheme(null));
-  const [currentView, setCurrentView] = useState('editor');
+  const [currentView, setCurrentView] = useState('dashboard');
   const [viewingQuote, setViewingQuote] = useState(null);
   const [ramsSubView, setRamsSubView] = useState('edit');
   const [activeJobId, setActiveJobId] = useState(null);
+
+  // Sidebar state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+
+  // Incomplete jobs state
+  const [incompleteJobs, setIncompleteJobs] = useState([]);
+  const [savedJobCount, setSavedJobCount] = useState(0);
+
+  // Pending draft for dashboard (replaces draftPrompt modal)
+  const [pendingDraft, setPendingDraft] = useState(null);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -45,8 +57,6 @@ export default function App() {
     abortRef.current?.abort();
   }, []);
 
-  // WS5: Draft resume modal
-  const [draftPrompt, setDraftPrompt] = useState(null);
   const draftChecked = useRef(false);
 
   // --- Init flow: bootstrap users → list → INIT_COMPLETE ---
@@ -68,6 +78,25 @@ export default function App() {
     autoLoadDone.current = true;
     loadUserData(state.currentUserId);
   }, [state.initComplete, state.currentUserId]);
+
+  // --- Fetch incomplete jobs whenever user or view changes ---
+  const fetchIncompleteJobs = useCallback(async (userId) => {
+    if (!userId) return;
+    try {
+      const jobs = await listJobs(userId);
+      setSavedJobCount(jobs.length);
+      const incomplete = jobs.filter(j => !j.hasRams && !j.ramsNotRequired);
+      setIncompleteJobs(incomplete);
+    } catch {
+      setIncompleteJobs([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.currentUserId && (currentView === 'dashboard' || currentView === 'saved')) {
+      fetchIncompleteJobs(state.currentUserId);
+    }
+  }, [state.currentUserId, currentView, fetchIncompleteJobs]);
 
   async function loadUserData(userId) {
     // Migrate legacy data on first selection (idempotent)
@@ -95,7 +124,7 @@ export default function App() {
       quoteSequence: sessionState?.quoteSequence || quoteSequence,
     });
 
-    // If session state exists, restore it
+    // If session state exists with active work, restore it but stay on dashboard
     if (sessionState && sessionState.step > 1) {
       dispatch({ type: 'RESTORE_DRAFT', draft: sessionState });
     }
@@ -103,16 +132,26 @@ export default function App() {
     // Store last user
     try { sessionStorage.setItem('tq_last_user', userId); } catch {}
 
-    // Check for drafts
+    // Check for drafts — store as pendingDraft for dashboard display
     if (!draftChecked.current) {
       draftChecked.current = true;
       try {
         const draft = await loadDraft(userId);
         if (draft?.jobDetails?.clientName && (!sessionState || sessionState.step <= 1)) {
-          setDraftPrompt(draft);
+          setPendingDraft(draft);
         }
       } catch {}
     }
+
+    // Determine landing: if no profile, go to Step 1 for setup; otherwise dashboard
+    if (!profile?.companyName) {
+      setCurrentView('editor');
+    } else {
+      setCurrentView('dashboard');
+    }
+
+    // Fetch jobs for dashboard
+    fetchIncompleteJobs(userId);
   }
 
   // --- User selection handler ---
@@ -130,11 +169,12 @@ export default function App() {
     }
 
     // Reset local view state
-    setCurrentView('editor');
+    setCurrentView('dashboard');
     setViewingQuote(null);
     setRamsSubView('edit');
     setActiveJobId(null);
-    setDraftPrompt(null);
+    setPendingDraft(null);
+    setSidebarCollapsed(true);
     draftChecked.current = false;
 
     // Load new user's data
@@ -165,12 +205,20 @@ export default function App() {
     try {
       const draft = await loadDraft(userId);
       if (draft?.jobDetails?.clientName && (!sessionState || sessionState.step <= 1)) {
-        setDraftPrompt(draft);
+        setPendingDraft(draft);
       }
     } catch {}
 
+    // Landing
+    if (!profile?.companyName) {
+      setCurrentView('editor');
+    } else {
+      setCurrentView('dashboard');
+    }
+
+    fetchIncompleteJobs(userId);
     showToast(`Switched to ${user?.name || userId}`, 'info');
-  }, [state.currentUserId, state.profile, state.allUsers, showToast]);
+  }, [state.currentUserId, state.profile, state.allUsers, showToast, fetchIncompleteJobs]);
 
   // Theme effect
   useEffect(() => {
@@ -194,22 +242,55 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [state]);
 
+  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+
+  // --- Dashboard handlers ---
+  const handleGoToDashboard = () => {
+    setCurrentView('dashboard');
+    setViewingQuote(null);
+    fetchIncompleteJobs(state.currentUserId);
+  };
+
+  const handleStartNewQuote = () => {
+    // Save current work as draft first if in-progress
+    if (state.currentUserId && state.step >= 2 && state.step <= 4) {
+      saveDraft(state.currentUserId, state).catch(() => {});
+    }
+    dispatch({ type: 'NEW_QUOTE' });
+    setCurrentView('editor');
+    setSidebarCollapsed(true);
+  };
+
   const handleResumeDraft = () => {
-    dispatch({ type: 'RESTORE_DRAFT', draft: draftPrompt });
-    setDraftPrompt(null);
+    if (pendingDraft) {
+      dispatch({ type: 'RESTORE_DRAFT', draft: pendingDraft });
+      setPendingDraft(null);
+    }
+    setCurrentView('editor');
     showToast('Draft restored', 'success');
   };
 
-  const handleDiscardDraft = () => {
-    if (state.currentUserId) {
-      clearDraft(state.currentUserId).catch(() => {});
+  const handleResumeJob = (job) => {
+    const snapshot = job.quoteSnapshot || job.snapshot;
+    if (snapshot) {
+      dispatch({ type: 'RESTORE_DRAFT', draft: { ...snapshot, step: 4 } });
     }
-    setDraftPrompt(null);
-    showToast('Draft discarded', 'info');
+    setActiveJobId(job.id);
+    setCurrentView('editor');
+    showToast(`Resumed: ${job.clientName || 'Job'}`, 'success');
   };
 
-  const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
+  const handleMarkRamsNotRequired = async (jobId) => {
+    try {
+      await setRamsNotRequired(state.currentUserId, jobId, true);
+      setIncompleteJobs(prev => prev.filter(j => j.id !== jobId));
+      showToast('Marked as complete (no RAMS needed)', 'success');
+    } catch (err) {
+      showToast('Failed to update job', 'error');
+    }
+  };
 
+  // --- View handlers ---
   const handleViewChange = (view) => {
     setCurrentView(view);
     if (view === 'editor') {
@@ -273,6 +354,15 @@ export default function App() {
     setRamsSubView('edit');
   };
 
+  // Profile complete callback (first-time setup -> dashboard)
+  const handleProfileComplete = () => {
+    if (state.currentUserId) {
+      saveProfile(state.currentUserId, state.profile).catch(() => {});
+    }
+    setCurrentView('dashboard');
+    showToast('Profile saved', 'success');
+  };
+
   // --- Show UserSelector if init complete but no user selected ---
   if (state.initComplete && !state.currentUserId) {
     return (
@@ -294,7 +384,33 @@ export default function App() {
     );
   }
 
+  // Build current quote summary for sidebar
+  const currentQuoteSummary = (currentView === 'editor' && state.step >= 2) ? {
+    reference: state.jobDetails?.quoteReference || '',
+    clientName: state.jobDetails?.clientName || '',
+    step: state.step,
+  } : null;
+
+  const showSidebar = currentView !== 'dashboard';
+
   const renderContent = () => {
+    // Dashboard view
+    if (currentView === 'dashboard') {
+      return (
+        <Dashboard
+          userName={state.currentUser?.name}
+          onStartNewQuote={handleStartNewQuote}
+          onViewJobs={() => setCurrentView('saved')}
+          incompleteJobs={incompleteJobs}
+          currentDraft={pendingDraft || (state.step >= 2 && state.step <= 4 ? state : null)}
+          onResumeDraft={pendingDraft ? handleResumeDraft : () => setCurrentView('editor')}
+          onResumeJob={handleResumeJob}
+          onMarkRamsNotRequired={handleMarkRamsNotRequired}
+          onCreateRamsFromSaved={handleCreateRamsFromSaved}
+        />
+      );
+    }
+
     // RAMS view
     if (currentView === 'rams' && state.rams) {
       if (ramsSubView === 'output') {
@@ -347,7 +463,13 @@ export default function App() {
   const renderStep = () => {
     switch (state.step) {
       case 1:
-        return <ProfileSetup state={state} dispatch={dispatch} />;
+        return (
+          <ProfileSetup
+            state={state}
+            dispatch={dispatch}
+            onProfileComplete={handleProfileComplete}
+          />
+        );
       case 2:
         return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} />;
       case 3:
@@ -369,7 +491,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-tq-bg text-tq-text font-body">
+    <div className="min-h-screen bg-tq-bg text-tq-text font-body flex flex-col">
       <StepIndicator
         currentStep={state.step}
         dispatch={dispatch}
@@ -382,10 +504,35 @@ export default function App() {
         currentUser={state.currentUser}
         allUsers={state.allUsers}
         onSwitchUser={handleSwitchUser}
+        showStepper={currentView !== 'dashboard'}
+        onToggleSidebar={showSidebar ? () => setSidebarCollapsed(c => !c) : null}
       />
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {renderContent()}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        {showSidebar && (
+          <Sidebar
+            currentView={currentView}
+            onNavigate={handleViewChange}
+            onStartNewQuote={handleStartNewQuote}
+            onGoToDashboard={handleGoToDashboard}
+            incompleteJobs={incompleteJobs}
+            onResumeJob={handleResumeJob}
+            onMarkRamsNotRequired={handleMarkRamsNotRequired}
+            currentQuoteSummary={currentQuoteSummary}
+            isCollapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+            onCreateRamsFromSaved={handleCreateRamsFromSaved}
+            savedJobCount={savedJobCount}
+          />
+        )}
+
+        {/* Main content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+            {renderContent()}
+          </div>
+        </div>
       </div>
 
       {/* Profile modal */}
@@ -407,34 +554,6 @@ export default function App() {
               isModal
               onClose={() => setShowProfileModal(false)}
             />
-          </div>
-        </div>
-      )}
-
-      {/* WS5: Draft resume modal */}
-      {draftPrompt && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-tq-surface rounded-lg max-w-md w-full p-6 border border-tq-border">
-            <h2 className="text-lg font-heading font-bold text-tq-accent mb-3">
-              Resume Draft?
-            </h2>
-            <p className="text-tq-text text-sm mb-6">
-              Resume your in-progress quote for <strong>{draftPrompt.jobDetails.clientName}</strong>?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleDiscardDraft}
-                className="px-5 py-2 rounded border border-tq-border text-tq-text font-heading uppercase text-sm hover:bg-tq-card"
-              >
-                Discard
-              </button>
-              <button
-                onClick={handleResumeDraft}
-                className="px-5 py-2 rounded bg-tq-accent text-tq-bg font-heading uppercase text-sm font-bold hover:bg-tq-accent-dark"
-              >
-                Resume
-              </button>
-            </div>
           </div>
         </div>
       )}

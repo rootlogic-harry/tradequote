@@ -2,19 +2,45 @@ import React from 'react';
 import { STEPS } from '../constants.js';
 import UserSwitcher from './UserSwitcher.jsx';
 
-export default function StepIndicator({ currentStep, dispatch, onSettingsClick, theme, toggleTheme, currentView, onViewChange, onBackToQuote, currentUser, allUsers, onSwitchUser }) {
+export default function StepIndicator({
+  currentStep,
+  dispatch,
+  onSettingsClick,
+  theme,
+  toggleTheme,
+  currentView,
+  onViewChange,
+  onBackToQuote,
+  currentUser,
+  allUsers,
+  onSwitchUser,
+  showStepper = true,
+  onToggleSidebar,
+}) {
   return (
     <div className="bg-tq-surface border-b border-tq-border sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {/* Hamburger for mobile sidebar */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="md:hidden text-tq-muted hover:text-tq-accent text-xl transition-colors"
+              title="Toggle navigation"
+            >
+              &#9776;
+            </button>
+          )}
           <h1 className="text-xl font-heading font-bold text-tq-accent tracking-wide">
             TRADEQUOTE
           </h1>
           <span className="text-xs text-tq-muted font-mono">v0.1.1</span>
         </div>
 
-        {/* RAMS breadcrumb or step circles */}
-        {currentView === 'rams' ? (
+        {/* RAMS breadcrumb, step circles, or nothing (dashboard) */}
+        {!showStepper ? (
+          <div />
+        ) : currentView === 'rams' ? (
           <div className="flex items-center gap-2">
             <button
               onClick={onBackToQuote}
@@ -70,19 +96,6 @@ export default function StepIndicator({ currentStep, dispatch, onSettingsClick, 
               allUsers={allUsers}
               onSwitchUser={onSwitchUser}
             />
-          )}
-          {onViewChange && (
-            <button
-              onClick={() => onViewChange(currentView === 'saved' ? 'editor' : 'saved')}
-              className={`transition-colors text-lg ${
-                currentView === 'saved'
-                  ? 'text-tq-accent'
-                  : 'text-tq-muted hover:text-tq-accent'
-              }`}
-              title={currentView === 'saved' ? 'Back to editor' : 'Saved jobs'}
-            >
-              {'\uD83D\uDCC1'}
-            </button>
           )}
           <button
             onClick={toggleTheme}

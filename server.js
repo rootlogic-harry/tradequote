@@ -74,6 +74,11 @@ async function initDB() {
       ON CONFLICT (id) DO NOTHING;
     `);
 
+    // Add rams_not_required column if missing
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rams_not_required BOOLEAN DEFAULT FALSE;
+    `);
+
     console.log('Database schema initialised, default users bootstrapped.');
   } finally {
     client.release();
@@ -257,7 +262,8 @@ app.get('/api/users/:id/jobs', async (req, res) => {
       `SELECT id, saved_at AS "savedAt", client_name AS "clientName",
               site_address AS "siteAddress", quote_reference AS "quoteReference",
               quote_date AS "quoteDate", total_amount AS "totalAmount",
-              has_rams AS "hasRams", quote_snapshot AS "quoteSnapshot",
+              has_rams AS "hasRams", rams_not_required AS "ramsNotRequired",
+              quote_snapshot AS "quoteSnapshot",
               rams_snapshot AS "ramsSnapshot"
        FROM jobs WHERE user_id = $1 ORDER BY saved_at DESC`,
       [req.params.id]
@@ -316,7 +322,8 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
       `SELECT id, saved_at AS "savedAt", client_name AS "clientName",
               site_address AS "siteAddress", quote_reference AS "quoteReference",
               quote_date AS "quoteDate", total_amount AS "totalAmount",
-              has_rams AS "hasRams", quote_snapshot AS "quoteSnapshot",
+              has_rams AS "hasRams", rams_not_required AS "ramsNotRequired",
+              quote_snapshot AS "quoteSnapshot",
               rams_snapshot AS "ramsSnapshot"
        FROM jobs WHERE id = $1 AND user_id = $2`,
       [req.params.jobId, req.params.id]
@@ -355,6 +362,26 @@ app.put('/api/users/:id/jobs/:jobId/rams', async (req, res) => {
     await pool.query(
       'UPDATE jobs SET rams_snapshot = $1, has_rams = $2 WHERE id = $3 AND user_id = $4',
       [JSON.stringify(req.body), !!req.body, req.params.jobId, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id/jobs/:jobId/rams-not-required', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
+      [req.params.jobId, req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: `Job ${req.params.jobId} not found` });
+    }
+    const value = !!req.body.value;
+    await pool.query(
+      'UPDATE jobs SET rams_not_required = $1 WHERE id = $2 AND user_id = $3',
+      [value, req.params.jobId, req.params.id]
     );
     res.json({ ok: true });
   } catch (err) {
