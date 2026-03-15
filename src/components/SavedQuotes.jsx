@@ -8,7 +8,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
-    listJobs(currentUserId || 'default')
+    listJobs(currentUserId)
       .then(setQuotes)
       .catch(err => console.error('Failed to load saved quotes:', err))
       .finally(() => setLoading(false));
@@ -16,7 +16,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
 
   const handleDelete = async (id) => {
     try {
-      await deleteJob(currentUserId || 'default', id);
+      await deleteJob(currentUserId, id);
       setQuotes(prev => prev.filter(q => q.id !== id));
       setConfirmDeleteId(null);
     } catch (err) {

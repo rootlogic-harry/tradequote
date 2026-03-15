@@ -398,7 +398,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
     }
     setSaving(true);
     try {
-      await updateJobRams(currentUserId || 'default', jobId, rams);
+      await updateJobRams(currentUserId, jobId, rams);
       showToast?.('RAMS saved', 'success');
     } catch (err) {
       console.error('Failed to save RAMS:', err);

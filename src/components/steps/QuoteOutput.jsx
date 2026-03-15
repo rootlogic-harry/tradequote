@@ -705,7 +705,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     setSaving(true);
     setSaveError(null);
     try {
-      const id = await saveQuote(state.currentUserId || 'default', state);
+      const id = await saveQuote(state.currentUserId, state);
       setSaved(true);
       setSavedJobId(id);
       showToast?.('Quote saved', 'success');
