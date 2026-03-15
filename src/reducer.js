@@ -5,38 +5,35 @@ import { calculateRiskRating, generateRamsId } from './utils/ramsBuilder.js';
 import { COMPANY_DEFAULTS, COMMON_PPE, DEFAULT_RISK_ASSESSMENTS } from './data/ramsDefaults.js';
 import { WORK_STAGES_TEMPLATES } from './data/ramsTemplates.js';
 
-const STORAGE_KEY = 'tq_state';
+function storageKey(userId) {
+  return userId ? 'tq_session_' + userId : 'tq_state';
+}
 
 function saveState(state) {
   try {
-    // Don't persist transient loading state
     const toSave = { ...state, isAnalysing: false, analysisError: null };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    sessionStorage.setItem(storageKey(state.currentUserId), JSON.stringify(toSave));
   } catch { /* quota exceeded — ignore */ }
 }
 
-function loadState() {
+export function loadState(userId) {
   try {
-    const saved = sessionStorage.getItem(STORAGE_KEY);
+    const saved = sessionStorage.getItem(storageKey(userId));
     if (!saved) return null;
     return JSON.parse(saved);
   } catch { return null; }
 }
 
 export function getInitialState() {
-  const saved = loadState();
-  if (saved) {
-    // Backfill API key from env if session state has it empty
-    const envKey = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
-    if (!saved.profile?.apiKey && envKey) {
-      saved.profile = { ...saved.profile, apiKey: envKey };
-    }
-    return saved;
-  }
+  // Don't auto-load session state — wait for user selection
   return initialState;
 }
 
 export const initialState = {
+  currentUserId: null,
+  currentUser: null,
+  allUsers: [],
+  initComplete: false,
   step: 1,
   profile: {
     companyName: '',
@@ -378,6 +375,45 @@ function reducerCore(state, action) {
 
     case 'RESTORE_RAMS':
       return { ...state, rams: action.rams };
+
+    case 'INIT_COMPLETE': {
+      const lastUser = (() => {
+        try { return sessionStorage.getItem('tq_last_user'); } catch { return null; }
+      })();
+      if (lastUser) {
+        const user = action.users.find(u => u.id === lastUser);
+        if (user) {
+          return {
+            ...state,
+            allUsers: action.users,
+            initComplete: true,
+            currentUserId: user.id,
+            currentUser: { id: user.id, name: user.name },
+          };
+        }
+      }
+      return { ...state, allUsers: action.users, initComplete: true };
+    }
+
+    case 'SELECT_USER':
+      return {
+        ...state,
+        currentUserId: action.userId,
+        currentUser: { id: action.userId, name: action.name },
+        profile: action.profile ? { ...state.profile, ...action.profile } : state.profile,
+        quoteSequence: action.quoteSequence || state.quoteSequence,
+      };
+
+    case 'SWITCH_USER':
+      return {
+        ...initialState,
+        allUsers: state.allUsers,
+        initComplete: true,
+        currentUserId: action.userId,
+        currentUser: { id: action.userId, name: action.name },
+        profile: action.profile ? { ...initialState.profile, ...action.profile } : initialState.profile,
+        quoteSequence: action.quoteSequence || 1,
+      };
 
     default:
       return state;
