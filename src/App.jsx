@@ -16,6 +16,7 @@ import UserSelector from './components/UserSelector.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import LandingPage from './components/LandingPage.jsx';
 import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, migrateFromLegacyDB } from './utils/userDB.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
@@ -28,6 +29,10 @@ function getStoredTheme(userId) {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
+  const [showLanding, setShowLanding] = useState(() => {
+    try { return !sessionStorage.getItem('tq_last_user'); }
+    catch { return true; }
+  });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [theme, setTheme] = useState(() => getStoredTheme(null));
   const [currentView, setCurrentView] = useState('dashboard');
@@ -362,6 +367,11 @@ export default function App() {
     setCurrentView('dashboard');
     showToast('Profile saved', 'success');
   };
+
+  // --- Show landing page for new visitors ---
+  if (showLanding) {
+    return <LandingPage onGetStarted={() => setShowLanding(false)} onLogIn={() => setShowLanding(false)} />;
+  }
 
   // --- Show UserSelector if init complete but no user selected ---
   if (state.initComplete && !state.currentUserId) {
