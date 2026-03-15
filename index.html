@@ -15,8 +15,9 @@
   <!-- Anti-flash: set theme before anything renders -->
   <script>
     (function() {
-      var t = localStorage.getItem('tq_theme') || 'light';
-      document.documentElement.setAttribute('data-theme', t);
+      var userId = sessionStorage.getItem('tq_last_user');
+      var theme = userId ? localStorage.getItem('tq_theme_' + userId) : null;
+      document.documentElement.setAttribute('data-theme', theme || 'light');
     })();
   </script>
 
