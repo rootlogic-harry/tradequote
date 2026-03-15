@@ -262,13 +262,10 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       if (abortRef) abortRef.current = controller;
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/anthropic/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': profile.apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
         },
         signal: controller.signal,
         body: JSON.stringify({
@@ -337,7 +334,7 @@ export default function JobDetails({ state, dispatch, abortRef }) {
 
   const hasAnyPhoto = Object.values(photos).some(p => p != null) || extraPhotos.length > 0;
   const canAnalyse =
-    hasAnyPhoto && jobDetails.siteAddress?.trim() && profile.apiKey?.trim();
+    hasAnyPhoto && jobDetails.siteAddress?.trim();
 
   const inputClass = (field) =>
     `w-full bg-tq-card border ${

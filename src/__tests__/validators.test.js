@@ -18,7 +18,6 @@ describe('validateProfile', () => {
     address: '12 High Street, Skipton',
     dayRate: 400,
     vatRegistered: false,
-    apiKey: 'sk-ant-api03-test',
   };
 
   test('accepts a valid profile', () => {
@@ -90,12 +89,6 @@ describe('validateProfile', () => {
   test('does not require vatNumber when not VAT registered', () => {
     const result = validateProfile({ ...validProfile, vatRegistered: false, vatNumber: '' });
     expect(result.valid).toBe(true);
-  });
-
-  test('fails when apiKey is missing', () => {
-    const result = validateProfile({ ...validProfile, apiKey: '' });
-    expect(result.valid).toBe(false);
-    expect(result.errors.apiKey).toBeDefined();
   });
 
   test('accumulates multiple errors', () => {

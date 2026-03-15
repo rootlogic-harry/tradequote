@@ -179,20 +179,6 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose }) {
           />
         </div>
 
-        <div className="sm:col-span-2">
-          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Anthropic API Key *
-          </label>
-          <input
-            type="password"
-            className={inputClass('apiKey')}
-            value={profile.apiKey}
-            onChange={(e) => update('apiKey', e.target.value)}
-            placeholder="sk-ant-api03-..."
-          />
-          {errors.apiKey && <p className="text-tq-error text-xs mt-1">{errors.apiKey}</p>}
-          <p className="text-tq-muted text-xs mt-1">Required for AI analysis. Never logged or stored outside this session.</p>
-        </div>
       </div>
 
       <div className="mt-6 flex justify-end">

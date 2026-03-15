@@ -46,7 +46,6 @@ export const initialState = {
     vatNumber: '',
     dayRate: DEFAULT_DAY_RATE,
     accreditations: 'DSWA Professional Member',
-    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY || '',
   },
   jobDetails: {
     clientName: '',

@@ -23,8 +23,6 @@ export function validateProfile(profile) {
     errors.vatNumber = 'VAT number is required when VAT registered';
   }
 
-  if (!profile.apiKey?.trim()) errors.apiKey = 'Anthropic API key is required';
-
   return { valid: Object.keys(errors).length === 0, errors };
 }
 

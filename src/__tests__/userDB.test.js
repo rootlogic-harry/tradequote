@@ -1,4 +1,11 @@
-import 'fake-indexeddb/auto';
+/**
+ * Unit tests for userDB.js and userRegistry.js (fetch-based)
+ *
+ * These tests mock the global fetch to verify correct API calls
+ * without requiring a running server.
+ */
+
+import { jest } from '@jest/globals';
 import {
   getProfile, saveProfile,
   getSetting, setSetting,
@@ -13,171 +20,145 @@ import {
   bootstrapUsers, listUsers, getUser, addUser, deleteUser,
 } from '../utils/userRegistry.js';
 
-// Reset IndexedDB between tests
-beforeEach(async () => {
-  const dbs = await indexedDB.databases();
-  for (const db of dbs) {
-    indexedDB.deleteDatabase(db.name);
-  }
+// Mock fetch globally
+let fetchMock;
+beforeEach(() => {
+  fetchMock = jest.fn();
+  global.fetch = fetchMock;
+  // Suppress localStorage errors in test env
+  global.localStorage = { setItem: jest.fn(), removeItem: jest.fn() };
+  global.sessionStorage = { removeItem: jest.fn() };
 });
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+function mockResponse(data, ok = true, status = 200) {
+  return Promise.resolve({
+    ok,
+    status,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  });
+}
 
 // --- User Registry ---
 
 describe('userRegistry', () => {
-  test('bootstrapUsers creates mark and harry', async () => {
-    await bootstrapUsers();
+  test('listUsers calls GET /api/users', async () => {
+    fetchMock.mockReturnValue(mockResponse([
+      { id: 'harry', name: 'Harry' },
+      { id: 'mark', name: 'Mark' },
+    ]));
     const users = await listUsers();
-    expect(users).toHaveLength(2);
-    expect(users.map(u => u.id).sort()).toEqual(['harry', 'mark']);
-  });
-
-  test('bootstrapUsers is idempotent', async () => {
-    await bootstrapUsers();
-    await bootstrapUsers();
-    const users = await listUsers();
+    expect(fetchMock).toHaveBeenCalledWith('/api/users');
     expect(users).toHaveLength(2);
   });
 
-  test('getUser returns user or null', async () => {
-    await bootstrapUsers();
-    const mark = await getUser('mark');
-    expect(mark.name).toBe('Mark');
-    const nobody = await getUser('nobody');
-    expect(nobody).toBeNull();
+  test('getUser calls GET /api/users/:id', async () => {
+    fetchMock.mockReturnValue(mockResponse({ id: 'mark', name: 'Mark' }));
+    const user = await getUser('mark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark');
+    expect(user.name).toBe('Mark');
   });
 
-  test('addUser and deleteUser', async () => {
-    await addUser({ id: 'test', name: 'Test', createdAt: new Date().toISOString() });
-    let users = await listUsers();
-    expect(users).toHaveLength(1);
+  test('getUser returns null on 404', async () => {
+    fetchMock.mockReturnValue(mockResponse(null, false, 404));
+    const user = await getUser('nobody');
+    expect(user).toBeNull();
+  });
+
+  test('addUser calls POST /api/users', async () => {
+    fetchMock.mockReturnValue(mockResponse({ id: 'test', name: 'Test' }));
+    await addUser({ id: 'test', name: 'Test' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/users', expect.objectContaining({
+      method: 'POST',
+    }));
+  });
+
+  test('deleteUser calls DELETE /api/users/:id', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
     await deleteUser('test');
-    users = await listUsers();
-    expect(users).toHaveLength(0);
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/test', expect.objectContaining({
+      method: 'DELETE',
+    }));
   });
 
-  test('listUsers returns sorted by name', async () => {
-    await addUser({ id: 'z', name: 'Zara', createdAt: new Date().toISOString() });
-    await addUser({ id: 'a', name: 'Alice', createdAt: new Date().toISOString() });
-    const users = await listUsers();
-    expect(users[0].name).toBe('Alice');
-    expect(users[1].name).toBe('Zara');
+  test('bootstrapUsers is a no-op', async () => {
+    await bootstrapUsers();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-// --- User Isolation ---
-
-describe('user isolation', () => {
-  test('jobs saved for user A are not visible to user B', async () => {
-    const state = makeFakeState('Client A');
-    await saveJob('alice', state);
-    const aliceJobs = await listJobs('alice');
-    const bobJobs = await listJobs('bob');
-    expect(aliceJobs).toHaveLength(1);
-    expect(bobJobs).toHaveLength(0);
-  });
-
-  test('drafts are isolated per user', async () => {
-    const state = makeFakeState('Draft A');
-    await saveDraft('alice', state);
-    const aliceDraft = await loadDraft('alice');
-    const bobDraft = await loadDraft('bob');
-    expect(aliceDraft).not.toBeNull();
-    expect(bobDraft).toBeNull();
-  });
-});
-
-// --- Profile CRUD ---
+// --- Profile ---
 
 describe('profile', () => {
-  test('save and get profile', async () => {
+  test('getProfile calls GET and returns data', async () => {
     const profile = { companyName: 'Test Co', fullName: 'Mark' };
-    await saveProfile('mark', profile);
+    fetchMock.mockReturnValue(mockResponse(profile));
     const loaded = await getProfile('mark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/profile');
     expect(loaded).toEqual(profile);
   });
 
-  test('getProfile returns null when no profile saved', async () => {
+  test('getProfile returns null on failure', async () => {
+    fetchMock.mockReturnValue(mockResponse(null, false, 404));
     const loaded = await getProfile('nobody');
     expect(loaded).toBeNull();
   });
 
-  test('saveProfile overwrites previous', async () => {
-    await saveProfile('mark', { companyName: 'Old' });
-    await saveProfile('mark', { companyName: 'New' });
-    const loaded = await getProfile('mark');
-    expect(loaded.companyName).toBe('New');
+  test('saveProfile calls PUT', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await saveProfile('mark', { companyName: 'Test' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/profile', expect.objectContaining({
+      method: 'PUT',
+    }));
   });
 });
 
-// --- Jobs ---
+// --- Settings ---
 
-describe('jobs', () => {
-  test('save, list, get, delete job', async () => {
-    const state = makeFakeState('Client X');
-    const id = await saveJob('mark', state);
-    expect(typeof id).toBe('string');
-
-    const jobs = await listJobs('mark');
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0].clientName).toBe('Client X');
-
-    const job = await getJob('mark', id);
-    expect(job.clientName).toBe('Client X');
-    expect(job.quoteSnapshot).toBeDefined();
-
-    await deleteJob('mark', id);
-    const after = await listJobs('mark');
-    expect(after).toHaveLength(0);
+describe('settings', () => {
+  test('getSetting calls GET', async () => {
+    fetchMock.mockReturnValue(mockResponse('dark'));
+    const val = await getSetting('mark', 'theme');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/settings/theme');
+    expect(val).toBe('dark');
   });
 
-  test('listJobs returns most recent first', async () => {
-    await saveJob('mark', makeFakeState('First'));
-    // Small delay to ensure different savedAt
-    await new Promise(r => setTimeout(r, 10));
-    await saveJob('mark', makeFakeState('Second'));
-    const jobs = await listJobs('mark');
-    expect(jobs[0].clientName).toBe('Second');
-    expect(jobs[1].clientName).toBe('First');
+  test('getSetting returns null when unset', async () => {
+    fetchMock.mockReturnValue(mockResponse(null, false));
+    const val = await getSetting('mark', 'missing');
+    expect(val).toBeNull();
   });
 
-  test('updateJobRams links RAMS to job', async () => {
-    const id = await saveJob('mark', makeFakeState('Test'));
-    const rams = { id: 'rams-1', status: 'draft' };
-    await updateJobRams('mark', id, rams);
-    const job = await getJob('mark', id);
-    expect(job.hasRams).toBe(true);
-    expect(job.ramsSnapshot).toEqual(rams);
-  });
-
-  test('updateJobRams throws for missing job', async () => {
-    await expect(updateJobRams('mark', 'nonexistent', {}))
-      .rejects.toThrow('Job nonexistent not found');
-  });
-
-  test('getJob returns null for missing job', async () => {
-    const job = await getJob('mark', 'nonexistent');
-    expect(job).toBeNull();
+  test('setSetting calls PUT', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await setSetting('mark', 'theme', 'dark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/settings/theme', expect.objectContaining({
+      method: 'PUT',
+    }));
   });
 });
 
-// --- Drafts ---
+// --- Theme ---
 
-describe('drafts', () => {
-  test('save, load, clear draft', async () => {
-    const state = makeFakeState('Draft Client');
-    await saveDraft('mark', state);
-    const draft = await loadDraft('mark');
-    expect(draft).not.toBeNull();
-    expect(draft.jobDetails.clientName).toBe('Draft Client');
-
-    await clearDraft('mark');
-    const cleared = await loadDraft('mark');
-    expect(cleared).toBeNull();
+describe('theme', () => {
+  test('getTheme calls GET /api/users/:id/theme', async () => {
+    fetchMock.mockReturnValue(mockResponse(null));
+    const theme = await getTheme('mark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/theme');
+    expect(theme).toBeNull();
   });
 
-  test('loadDraft returns null when no draft', async () => {
-    const draft = await loadDraft('mark');
-    expect(draft).toBeNull();
+  test('setTheme calls PUT and writes to localStorage', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await setTheme('mark', 'dark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/theme', expect.objectContaining({
+      method: 'PUT',
+    }));
+    expect(global.localStorage.setItem).toHaveBeenCalledWith('tq_theme_mark', 'dark');
   });
 });
 
@@ -185,98 +166,130 @@ describe('drafts', () => {
 
 describe('quoteSequence', () => {
   test('getQuoteSequence defaults to 1', async () => {
+    fetchMock.mockReturnValue(mockResponse(1));
     const seq = await getQuoteSequence('mark');
     expect(seq).toBe(1);
   });
 
-  test('incrementQuoteSequence returns incremented value', async () => {
+  test('incrementQuoteSequence returns next value', async () => {
+    fetchMock.mockReturnValue(mockResponse(2));
     const val = await incrementQuoteSequence('mark');
     expect(val).toBe(2);
-    const val2 = await incrementQuoteSequence('mark');
-    expect(val2).toBe(3);
-    const current = await getQuoteSequence('mark');
-    expect(current).toBe(3);
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/quote-sequence/increment', expect.objectContaining({
+      method: 'POST',
+    }));
   });
 });
 
-// --- Theme ---
+// --- Jobs ---
 
-describe('theme', () => {
-  test('getTheme returns null by default', async () => {
-    const theme = await getTheme('mark');
-    expect(theme).toBeNull();
+describe('jobs', () => {
+  test('saveJob calls POST and returns id', async () => {
+    fetchMock.mockReturnValue(mockResponse({ id: 'sq-123' }));
+    const id = await saveJob('mark', makeFakeState('Client'));
+    expect(id).toBe('sq-123');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs', expect.objectContaining({
+      method: 'POST',
+    }));
   });
 
-  test('setTheme and getTheme', async () => {
-    await setTheme('mark', 'dark');
-    const theme = await getTheme('mark');
-    expect(theme).toBe('dark');
+  test('listJobs calls GET', async () => {
+    fetchMock.mockReturnValue(mockResponse([{ id: 'sq-1', clientName: 'A' }]));
+    const jobs = await listJobs('mark');
+    expect(jobs).toHaveLength(1);
+  });
+
+  test('getJob calls GET with jobId', async () => {
+    fetchMock.mockReturnValue(mockResponse({ id: 'sq-1', clientName: 'A' }));
+    const job = await getJob('mark', 'sq-1');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-1');
+    expect(job.clientName).toBe('A');
+  });
+
+  test('getJob returns null on failure', async () => {
+    fetchMock.mockReturnValue(mockResponse(null, false));
+    const job = await getJob('mark', 'missing');
+    expect(job).toBeNull();
+  });
+
+  test('deleteJob calls DELETE', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await deleteJob('mark', 'sq-1');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-1', expect.objectContaining({
+      method: 'DELETE',
+    }));
+  });
+
+  test('updateJobRams calls PUT', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await updateJobRams('mark', 'sq-1', { id: 'rams-1' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-1/rams', expect.objectContaining({
+      method: 'PUT',
+    }));
+  });
+
+  test('updateJobRams throws on 404', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Job nonexistent not found' }, false, 404));
+    await expect(updateJobRams('mark', 'nonexistent', {}))
+      .rejects.toThrow('Job nonexistent not found');
+  });
+});
+
+// --- Drafts ---
+
+describe('drafts', () => {
+  test('loadDraft calls GET', async () => {
+    fetchMock.mockReturnValue(mockResponse(null));
+    const draft = await loadDraft('mark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/drafts');
+    expect(draft).toBeNull();
+  });
+
+  test('saveDraft calls PUT', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await saveDraft('mark', makeFakeState('Draft'));
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/drafts', expect.objectContaining({
+      method: 'PUT',
+    }));
+  });
+
+  test('clearDraft calls DELETE', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await clearDraft('mark');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/drafts', expect.objectContaining({
+      method: 'DELETE',
+    }));
   });
 });
 
 // --- GDPR ---
 
-describe('deleteUserData', () => {
-  test('removes database entirely', async () => {
-    await saveProfile('mark', { companyName: 'Test' });
-    await saveJob('mark', makeFakeState('Job'));
+describe('GDPR', () => {
+  test('deleteUserData calls API and cleans storage', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
     await deleteUserData('mark');
-
-    // After deletion, opening DB should give empty stores
-    const profile = await getProfile('mark');
-    expect(profile).toBeNull();
-    const jobs = await listJobs('mark');
-    expect(jobs).toHaveLength(0);
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/data', expect.objectContaining({
+      method: 'DELETE',
+    }));
+    expect(global.localStorage.removeItem).toHaveBeenCalledWith('tq_theme_mark');
+    expect(global.sessionStorage.removeItem).toHaveBeenCalledWith('tq_session_mark');
   });
-});
 
-describe('exportUserData', () => {
-  test('exports all data as JSON', async () => {
-    await saveProfile('mark', { companyName: 'Export Co' });
-    await saveJob('mark', makeFakeState('Export Job'));
-    await saveDraft('mark', makeFakeState('Export Draft'));
-    await setSetting('mark', 'theme', 'dark');
-
+  test('exportUserData calls GET', async () => {
+    const exportData = { userId: 'mark', exportedAt: '2026-03-15', profile: [], jobs: [], drafts: [], settings: [] };
+    fetchMock.mockReturnValue(mockResponse(exportData));
     const data = await exportUserData('mark');
     expect(data.userId).toBe('mark');
-    expect(data.exportedAt).toBeDefined();
-    expect(data.profile).toHaveLength(1);
-    expect(data.jobs).toHaveLength(1);
-    expect(data.drafts).toHaveLength(1);
-    expect(data.settings).toHaveLength(1);
   });
 });
 
 // --- Migration ---
 
 describe('migrateFromLegacyDB', () => {
-  test('migrates jobs and drafts from legacy DB', async () => {
-    // Set up legacy DB
-    await setupLegacyDB([
-      { id: 'job-1', clientName: 'Legacy Client', savedAt: new Date().toISOString() },
-    ], [
-      { id: 'current_draft', jobDetails: { clientName: 'Legacy Draft' }, savedAt: new Date().toISOString() },
-    ]);
-
-    const migrated = await migrateFromLegacyDB('mark');
-    expect(migrated).toBe(true);
-
-    const jobs = await listJobs('mark');
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0].clientName).toBe('Legacy Client');
-
-    const draft = await loadDraft('mark');
-    expect(draft).not.toBeNull();
-  });
-
-  test('migration is idempotent', async () => {
-    await setupLegacyDB([
-      { id: 'job-1', clientName: 'Legacy', savedAt: new Date().toISOString() },
-    ], []);
-
-    await migrateFromLegacyDB('mark');
-    const secondRun = await migrateFromLegacyDB('mark');
-    expect(secondRun).toBe(false);
+  test('is a no-op returning false', async () => {
+    const result = await migrateFromLegacyDB('mark');
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -284,7 +297,6 @@ describe('migrateFromLegacyDB', () => {
 
 function makeFakeState(clientName) {
   return {
-    step: 2,
     profile: { companyName: 'Test Co', fullName: 'Tester' },
     jobDetails: {
       clientName,
@@ -302,33 +314,4 @@ function makeFakeState(clientName) {
     aiRawResponse: null,
     rams: null,
   };
-}
-
-function setupLegacyDB(jobs, drafts) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('tradequote_saved', 3);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains('quotes')) {
-        db.createObjectStore('quotes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('drafts')) {
-        db.createObjectStore('drafts', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('jobs')) {
-        db.createObjectStore('jobs', { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => {
-      const db = request.result;
-      const tx = db.transaction(['jobs', 'drafts'], 'readwrite');
-      const jobsStore = tx.objectStore('jobs');
-      const draftsStore = tx.objectStore('drafts');
-      for (const job of jobs) jobsStore.put(job);
-      for (const draft of drafts) draftsStore.put(draft);
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
-    };
-    request.onerror = () => reject(request.error);
-  });
 }
