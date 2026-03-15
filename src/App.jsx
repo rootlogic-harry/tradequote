@@ -14,7 +14,7 @@ import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
 import UserSelector from './components/UserSelector.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
-import { getJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB } from './utils/userDB.js';
+import { getJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, migrateFromLegacyDB } from './utils/userDB.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
 function getStoredTheme(userId) {
@@ -70,6 +70,9 @@ export default function App() {
   }, [state.initComplete, state.currentUserId]);
 
   async function loadUserData(userId) {
+    // Migrate legacy data on first selection (idempotent)
+    try { await migrateFromLegacyDB(userId); } catch {}
+
     // Load profile from DB
     const profile = await getProfile(userId);
     const quoteSequence = await getQuoteSequence(userId);
