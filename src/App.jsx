@@ -12,7 +12,7 @@ import SavedQuoteViewer from './components/SavedQuoteViewer.jsx';
 import RamsEditor from './components/rams/RamsEditor.jsx';
 import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
-import { getSavedQuote, saveDraft, loadDraft, clearDraft } from './utils/savedQuotesDB.js';
+import { getJob, saveDraft, loadDraft, clearDraft } from './utils/userDB.js';
 
 function getStoredTheme() {
   try { return localStorage.getItem('tq_theme') || 'light'; } catch { return 'light'; }
@@ -53,7 +53,7 @@ export default function App() {
     if (draftChecked.current) return;
     draftChecked.current = true;
     if (state.step !== 1) return;
-    loadDraft().then(draft => {
+    loadDraft(state.currentUserId || 'default').then(draft => {
       if (draft?.jobDetails?.clientName) {
         setDraftPrompt(draft);
       }
@@ -64,11 +64,11 @@ export default function App() {
   useEffect(() => {
     if (state.step < 2 || state.step > 4) {
       // Clear draft on step 1 or 5
-      clearDraft().catch(() => {});
+      clearDraft(state.currentUserId || 'default').catch(() => {});
       return;
     }
     const timer = setTimeout(() => {
-      saveDraft(state).catch(() => {});
+      saveDraft(state.currentUserId || 'default', state).catch(() => {});
     }, 5000);
     return () => clearTimeout(timer);
   }, [state]);
@@ -80,7 +80,7 @@ export default function App() {
   };
 
   const handleDiscardDraft = () => {
-    clearDraft().catch(() => {});
+    clearDraft(state.currentUserId || 'default').catch(() => {});
     setDraftPrompt(null);
     showToast('Draft discarded', 'info');
   };
@@ -96,7 +96,7 @@ export default function App() {
 
   const handleViewQuote = async (quoteSummary) => {
     try {
-      const full = await getSavedQuote(quoteSummary.id);
+      const full = await getJob(state.currentUserId || 'default', quoteSummary.id);
       setViewingQuote(full);
     } catch (err) {
       console.error('Failed to load quote:', err);
@@ -164,6 +164,7 @@ export default function App() {
             showToast={showToast}
             onBackToEditor={() => setRamsSubView('edit')}
             jobId={activeJobId}
+            currentUserId={state.currentUserId || 'default'}
           />
         );
       }
@@ -192,6 +193,7 @@ export default function App() {
           onViewQuote={handleViewQuote}
           onCreateRams={handleCreateRamsFromSaved}
           onViewRams={handleViewRams}
+          currentUserId={state.currentUserId || 'default'}
         />
       );
     }

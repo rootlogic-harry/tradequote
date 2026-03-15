@@ -3,7 +3,7 @@ import RamsDocument from '../RamsDocument.jsx';
 import { getRiskLevel } from '../../utils/ramsBuilder.js';
 import { WORK_TYPE_LABELS } from '../../data/ramsConstants.js';
 import { COMMON_PPE } from '../../data/ramsDefaults.js';
-import { updateJobRams } from '../../utils/savedQuotesDB.js';
+import { updateJobRams } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 
 function formatDateSimple(iso) {
@@ -12,7 +12,7 @@ function formatDateSimple(iso) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-export default function RamsOutput({ rams, profile, dispatch, showToast, onBackToEditor, jobId }) {
+export default function RamsOutput({ rams, profile, dispatch, showToast, onBackToEditor, jobId, currentUserId }) {
   const ramsRef = useRef(null);
 
   // Photo selection & reorder
@@ -398,7 +398,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
     }
     setSaving(true);
     try {
-      await updateJobRams(jobId, rams);
+      await updateJobRams(currentUserId || 'default', jobId, rams);
       showToast?.('RAMS saved', 'success');
     } catch (err) {
       console.error('Failed to save RAMS:', err);

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import QuoteDocument from '../QuoteDocument.jsx';
 import { formatCurrency, formatDate, calculateValidUntil } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
-import { saveQuote } from '../../utils/savedQuotesDB.js';
+import { saveJob as saveQuote } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams }) {
@@ -705,7 +705,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     setSaving(true);
     setSaveError(null);
     try {
-      const id = await saveQuote(state);
+      const id = await saveQuote(state.currentUserId || 'default', state);
       setSaved(true);
       setSavedJobId(id);
       showToast?.('Quote saved', 'success');

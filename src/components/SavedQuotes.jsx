@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { listSavedQuotes, deleteSavedQuote } from '../utils/savedQuotesDB.js';
+import { listJobs, deleteJob } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 
-export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams }) {
+export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId }) {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
-    listSavedQuotes()
+    listJobs(currentUserId || 'default')
       .then(setQuotes)
       .catch(err => console.error('Failed to load saved quotes:', err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentUserId]);
 
   const handleDelete = async (id) => {
     try {
-      await deleteSavedQuote(id);
+      await deleteJob(currentUserId || 'default', id);
       setQuotes(prev => prev.filter(q => q.id !== id));
       setConfirmDeleteId(null);
     } catch (err) {
