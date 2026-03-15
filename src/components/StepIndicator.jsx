@@ -30,14 +30,28 @@ export default function StepIndicator({
       style={{ backgroundColor: 'var(--tq-nav-bg)', height: 52, minHeight: 52 }}
     >
       <div className="h-full max-w-full mx-auto px-4 flex items-center justify-between">
-        {/* Left: Brand */}
-        <button
-          onClick={onGoToDashboard}
-          className="flex items-center gap-0 shrink-0"
-          style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 800, fontSize: 20, letterSpacing: '0.04em', color: 'var(--tq-accent)' }}
-        >
-          TRADEQUOTE
-        </button>
+        {/* Left: Brand + Home */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 800, fontSize: 20, letterSpacing: '0.04em', color: 'var(--tq-accent)' }}
+          >
+            TRADEQUOTE
+          </span>
+          <button
+            onClick={onGoToDashboard}
+            className="flex items-center justify-center rounded transition-colors"
+            style={{
+              width: 30,
+              height: 30,
+              backgroundColor: currentView === 'dashboard' ? 'var(--tq-nav-active)' : 'transparent',
+              color: currentView === 'dashboard' ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
+              fontSize: 16,
+            }}
+            title="Dashboard"
+          >
+            &#8962;
+          </button>
+        </div>
 
         {/* Centre */}
         <div className="flex items-center gap-1 mx-4">
