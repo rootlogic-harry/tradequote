@@ -483,7 +483,7 @@ app.post('/api/anthropic/messages', (req, res) => {
 
 app.use(express.static(join(__dirname, 'dist')));
 
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'Not found' });
   }
