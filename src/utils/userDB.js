@@ -119,6 +119,18 @@ export async function setRamsNotRequired(userId, jobId, value) {
   }
 }
 
+export async function updateJobStatus(userId, jobId, status, meta = {}) {
+  const res = await fetch(`/api/users/${userId}/jobs/${jobId}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, ...meta }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || `Failed to update status for job ${jobId}`);
+  }
+}
+
 // --- Drafts ---
 
 export async function saveDraft(userId, state) {

@@ -79,6 +79,16 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rams_not_required BOOLEAN DEFAULT FALSE;
     `);
 
+    // Add quote lifecycle columns
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'draft';
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS declined_at TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS decline_reason TEXT;
+    `);
+
     console.log('Database schema initialised, default users bootstrapped.');
   } finally {
     client.release();
@@ -264,7 +274,10 @@ app.get('/api/users/:id/jobs', async (req, res) => {
               quote_date AS "quoteDate", total_amount AS "totalAmount",
               has_rams AS "hasRams", rams_not_required AS "ramsNotRequired",
               quote_snapshot AS "quoteSnapshot",
-              rams_snapshot AS "ramsSnapshot"
+              rams_snapshot AS "ramsSnapshot",
+              status, sent_at AS "sentAt", expires_at AS "expiresAt",
+              accepted_at AS "acceptedAt", declined_at AS "declinedAt",
+              decline_reason AS "declineReason"
        FROM jobs WHERE user_id = $1 ORDER BY saved_at DESC`,
       [req.params.id]
     );
@@ -324,7 +337,10 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
               quote_date AS "quoteDate", total_amount AS "totalAmount",
               has_rams AS "hasRams", rams_not_required AS "ramsNotRequired",
               quote_snapshot AS "quoteSnapshot",
-              rams_snapshot AS "ramsSnapshot"
+              rams_snapshot AS "ramsSnapshot",
+              status, sent_at AS "sentAt", expires_at AS "expiresAt",
+              accepted_at AS "acceptedAt", declined_at AS "declinedAt",
+              decline_reason AS "declineReason"
        FROM jobs WHERE id = $1 AND user_id = $2`,
       [req.params.jobId, req.params.id]
     );
@@ -382,6 +398,32 @@ app.put('/api/users/:id/jobs/:jobId/rams-not-required', async (req, res) => {
     await pool.query(
       'UPDATE jobs SET rams_not_required = $1 WHERE id = $2 AND user_id = $3',
       [value, req.params.jobId, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
+  try {
+    const { status, sentAt, expiresAt, acceptedAt, declinedAt, declineReason } = req.body;
+    if (!['sent', 'accepted', 'declined'].includes(status)) {
+      return res.status(400).json({ error: `Invalid status: ${status}. Must be sent, accepted, or declined.` });
+    }
+    const { rows } = await pool.query(
+      'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
+      [req.params.jobId, req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: `Job ${req.params.jobId} not found` });
+    }
+    await pool.query(
+      `UPDATE jobs SET status = $1, sent_at = $2, expires_at = $3,
+       accepted_at = $4, declined_at = $5, decline_reason = $6
+       WHERE id = $7 AND user_id = $8`,
+      [status, sentAt || null, expiresAt || null, acceptedAt || null,
+       declinedAt || null, declineReason || null, req.params.jobId, req.params.id]
     );
     res.json({ ok: true });
   } catch (err) {

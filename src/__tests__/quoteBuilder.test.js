@@ -3,6 +3,7 @@ import {
   formatCurrency,
   formatDate,
   calculateValidUntil,
+  calculateExpiresAt,
   buildDiffsPayload,
   buildQuotePayload,
 } from '../utils/quoteBuilder.js';
@@ -165,6 +166,20 @@ describe('calculateValidUntil', () => {
 
   test('handles leap year (Feb → March in leap year)', () => {
     expect(calculateValidUntil('2028-02-01')).toBe('2028-03-02');
+  });
+});
+
+// --- calculateExpiresAt ---
+
+describe('calculateExpiresAt', () => {
+  test('adds 30 days to sentAt', () => {
+    const sentAt = '2026-03-16T12:00:00.000Z';
+    const result = calculateExpiresAt(sentAt);
+    // 30 days after March 16 = April 15
+    const resultDate = new Date(result);
+    const sentDate = new Date(sentAt);
+    const diffDays = Math.round((resultDate - sentDate) / (1000 * 60 * 60 * 24));
+    expect(diffDays).toBe(30);
   });
 });
 

@@ -15,9 +15,11 @@ import Toast from './components/Toast.jsx';
 import UserSelector from './components/UserSelector.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
 import Dashboard from './components/Dashboard.jsx';
+import StatusModal from './components/StatusModal.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import LandingPage from './components/LandingPage.jsx';
-import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, migrateFromLegacyDB } from './utils/userDB.js';
+import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB } from './utils/userDB.js';
+import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
 function getStoredTheme(userId) {
@@ -89,6 +91,7 @@ export default function App() {
       const jobs = await listJobs(userId);
       setSavedJobCount(jobs.length);
       setSavedJobs(jobs);
+      dispatch({ type: 'JOBS_UPDATED', jobs });
       const incomplete = jobs.filter(j => !j.hasRams && !j.ramsNotRequired);
       setIncompleteJobs(incomplete);
     } catch {
@@ -293,6 +296,29 @@ export default function App() {
     }
   };
 
+  // --- Status lifecycle handler ---
+  const handleStatusConfirm = async (jobId, targetStatus, meta) => {
+    try {
+      await updateJobStatus(state.currentUserId, jobId, targetStatus, meta);
+      const jobs = await listJobs(state.currentUserId);
+      dispatch({ type: 'JOBS_UPDATED', jobs });
+      setSavedJobs(jobs);
+      dispatch({ type: 'CLOSE_STATUS_MODAL' });
+      if (targetStatus === 'sent') {
+        const expiry = new Date(meta.expiresAt);
+        const formatted = expiry.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+        showToast(`Quote marked as sent \u00b7 expires ${formatted}`, 'success');
+      } else if (targetStatus === 'accepted') {
+        showToast("Quote accepted \u2014 don\u2019t forget to create a RAMS", 'success');
+      } else if (targetStatus === 'declined') {
+        showToast('Quote recorded as declined', 'info');
+      }
+      fetchIncompleteJobs(state.currentUserId);
+    } catch (err) {
+      showToast('Failed to update status', 'error');
+    }
+  };
+
   // --- View handlers ---
   const handleViewChange = (view) => {
     setCurrentView(view);
@@ -412,6 +438,10 @@ export default function App() {
           onMarkRamsNotRequired={handleMarkRamsNotRequired}
           onCreateRamsFromSaved={handleCreateRamsFromSaved}
           savedJobs={savedJobs}
+          recentJobs={state.recentJobs}
+          dispatch={dispatch}
+          onViewJob={handleViewQuote}
+          onViewRams={handleViewRams}
         />
       );
     }
@@ -457,6 +487,8 @@ export default function App() {
           onCreateRams={handleCreateRamsFromSaved}
           onViewRams={handleViewRams}
           currentUserId={state.currentUserId}
+          recentJobs={state.recentJobs}
+          dispatch={dispatch}
         />
       );
     }
@@ -542,6 +574,16 @@ export default function App() {
             />
           </div>
         </div>
+      )}
+
+      {/* Status lifecycle modal */}
+      {state.statusModal?.open && (
+        <StatusModal
+          modal={state.statusModal}
+          job={state.recentJobs.find(j => j.id === state.statusModal.jobId)}
+          onConfirm={handleStatusConfirm}
+          onCancel={() => dispatch({ type: 'CLOSE_STATUS_MODAL' })}
+        />
       )}
 
       {/* WS6: Toast */}

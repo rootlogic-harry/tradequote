@@ -48,6 +48,12 @@ export function calculateValidUntil(isoDate) {
   return `${y}-${m}-${d}`;
 }
 
+export function calculateExpiresAt(sentAt) {
+  const date = new Date(sentAt);
+  date.setDate(date.getDate() + 30);
+  return date.toISOString();
+}
+
 export function buildDiffsPayload(diffs, context) {
   return diffs.map(diff => enrichDiffWithContext(diff, context));
 }

@@ -70,6 +70,8 @@ export const initialState = {
   quotePayload: null,
   quoteSequence: 1,
   rams: null,
+  statusModal: { open: false, jobId: null, targetStatus: null },
+  recentJobs: [],
 };
 
 export function reducer(state, action) {
@@ -374,6 +376,15 @@ function reducerCore(state, action) {
 
     case 'RESTORE_RAMS':
       return { ...state, rams: action.rams };
+
+    case 'OPEN_STATUS_MODAL':
+      return { ...state, statusModal: { open: true, jobId: action.jobId, targetStatus: action.targetStatus } };
+
+    case 'CLOSE_STATUS_MODAL':
+      return { ...state, statusModal: { open: false, jobId: null, targetStatus: null } };
+
+    case 'JOBS_UPDATED':
+      return { ...state, recentJobs: action.jobs };
 
     case 'INIT_COMPLETE': {
       const lastUser = (() => {

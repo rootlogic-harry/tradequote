@@ -29,46 +29,33 @@ export default function StepIndicator({
       className="sticky top-0 z-40"
       style={{ backgroundColor: 'var(--tq-nav-bg)', height: 52, minHeight: 52 }}
     >
-      <div className="h-full max-w-full mx-auto px-4 flex items-center justify-between">
-        {/* Left: Brand + Home */}
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="h-full max-w-full mx-auto px-4 flex items-center">
+        {/* Left: Brand */}
+        <div className="flex items-center shrink-0">
           <span
-            style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 800, fontSize: 20, letterSpacing: '0.04em', color: 'var(--tq-accent)' }}
+            style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 22, letterSpacing: '0.05em', color: 'var(--tq-accent)', cursor: 'pointer' }}
+            onClick={onGoToDashboard}
           >
             TRADEQUOTE
           </span>
-          <button
-            onClick={onGoToDashboard}
-            className="flex items-center justify-center rounded transition-colors"
-            style={{
-              width: 30,
-              height: 30,
-              backgroundColor: currentView === 'dashboard' ? 'var(--tq-nav-active)' : 'transparent',
-              color: currentView === 'dashboard' ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
-              fontSize: 16,
-            }}
-            title="Dashboard"
-          >
-            &#8962;
-          </button>
         </div>
 
-        {/* Centre */}
-        <div className="flex items-center gap-1 mx-4">
+        {/* Nav links / step breadcrumb — left-aligned after logo */}
+        <div className="flex items-center gap-1 ml-8">
           {isRams ? (
             /* RAMS breadcrumb */
             <div className="flex items-center gap-2">
               <button
                 onClick={onBackToQuote}
                 className="text-xs uppercase tracking-wide"
-                style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 500, color: 'var(--tq-nav-muted)' }}
+                style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 500, color: 'var(--tq-nav-muted)' }}
               >
                 TRADEQUOTE
               </button>
               <span style={{ color: 'var(--tq-nav-muted)' }} className="text-xs">&rsaquo;</span>
               <span
                 className="text-xs uppercase tracking-wide"
-                style={{ fontFamily: 'Barlow, sans-serif', fontWeight: 700, color: 'var(--tq-accent)' }}
+                style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, color: 'var(--tq-accent)' }}
               >
                 RAMS
               </span>
@@ -79,7 +66,6 @@ export default function StepIndicator({
               {STEPS.map((step) => {
                 const isCompleted = step.number < currentStep;
                 const isCurrent = step.number === currentStep;
-                const isFuture = step.number > currentStep;
                 return (
                   <div key={step.number} className="flex items-center">
                     {/* Circle */}
@@ -153,6 +139,12 @@ export default function StepIndicator({
             </div>
           )}
         </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Vertical divider */}
+        <div className="hidden sm:block mx-3" style={{ width: 1, height: 24, backgroundColor: 'var(--tq-border)' }} />
 
         {/* Right: user + theme + settings */}
         <div className="flex items-center gap-2 shrink-0">
