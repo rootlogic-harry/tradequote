@@ -151,12 +151,8 @@ export default function App() {
       } catch {}
     }
 
-    // Determine landing: if no profile, go to Step 1 for setup; otherwise dashboard
-    if (!profile?.companyName) {
-      setCurrentView('editor');
-    } else {
-      setCurrentView('dashboard');
-    }
+    // Always land on dashboard first
+    setCurrentView('dashboard');
 
     // Fetch jobs for dashboard
     fetchIncompleteJobs(userId);
@@ -216,12 +212,8 @@ export default function App() {
       }
     } catch {}
 
-    // Landing
-    if (!profile?.companyName) {
-      setCurrentView('editor');
-    } else {
-      setCurrentView('dashboard');
-    }
+    // Always land on dashboard first
+    setCurrentView('dashboard');
 
     fetchIncompleteJobs(userId);
     showToast(`Switched to ${user?.name || userId}`, 'info');
