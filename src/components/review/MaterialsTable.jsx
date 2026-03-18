@@ -61,12 +61,13 @@ export default function MaterialsTable({ materials, dispatch }) {
       </h4>
 
       {/* Desktop table */}
-      <table className="hidden sm:table w-full text-sm">
+      <div className="hidden sm:block overflow-x-auto">
+      <table className="w-full text-sm" style={{ minWidth: 580 }}>
         <thead>
           <tr className="border-b border-tq-border text-tq-muted text-xs">
-            <th className="text-left px-2 py-1">Description</th>
-            <th className="text-left px-2 py-1 w-20">Qty</th>
-            <th className="text-left px-2 py-1 w-20">Unit</th>
+            <th className="text-left px-2 py-1" style={{ minWidth: 260 }}>Description</th>
+            <th className="text-left px-2 py-1 w-16">Qty</th>
+            <th className="text-left px-2 py-1 w-16">Unit</th>
             <th className="text-left px-2 py-1 w-24">Rate {'\u00A3'}</th>
             <th className="text-right px-2 py-1 w-24">Total</th>
             <th className="w-8"></th>
@@ -120,6 +121,7 @@ export default function MaterialsTable({ materials, dispatch }) {
           ))}
         </tbody>
       </table>
+      </div>
 
       {/* Mobile cards */}
       <div className="sm:hidden space-y-3">

@@ -18,10 +18,8 @@ export default function StepIndicator({
   onStartNewQuote,
   onGoToSaved,
 }) {
-  // Derive mode from currentView
   const isEditor = currentView === 'editor';
   const isRams = currentView === 'rams';
-  const showNavLinks = !isEditor || currentStep <= 1;
   const showSteps = isEditor && currentStep > 1;
 
   return (
@@ -30,7 +28,7 @@ export default function StepIndicator({
       style={{ backgroundColor: 'var(--tq-nav-bg)', height: 52, minHeight: 52 }}
     >
       <div className="h-full max-w-full mx-auto px-4 flex items-center">
-        {/* Left: Brand */}
+        {/* Left: Brand — always links to dashboard */}
         <div className="flex items-center shrink-0">
           <span
             style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 22, letterSpacing: '0.05em', color: 'var(--tq-accent)', cursor: 'pointer' }}
@@ -40,18 +38,39 @@ export default function StepIndicator({
           </span>
         </div>
 
-        {/* Nav links / step breadcrumb — left-aligned after logo */}
-        <div className="flex items-center gap-1 ml-8">
-          {isRams ? (
-            /* RAMS breadcrumb */
-            <div className="flex items-center gap-2">
+        {/* Nav links — always visible on desktop */}
+        <div className="hidden sm:flex items-center gap-1 ml-8">
+          {[
+            { key: 'dashboard', label: 'Dashboard', action: onGoToDashboard },
+            { key: 'new', label: 'New Quote', action: onStartNewQuote },
+            { key: 'saved', label: 'Saved Jobs', action: onGoToSaved },
+          ].map(({ key, label, action }) => {
+            const isActive =
+              (key === 'dashboard' && currentView === 'dashboard') ||
+              (key === 'saved' && currentView === 'saved') ||
+              (key === 'new' && isEditor);
+            return (
               <button
-                onClick={onBackToQuote}
-                className="text-xs uppercase tracking-wide"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 500, color: 'var(--tq-nav-muted)' }}
+                key={key}
+                onClick={action}
+                className="px-3 py-1.5 rounded text-xs transition-colors"
+                style={{
+                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  fontWeight: isActive ? 500 : 400,
+                  backgroundColor: isActive ? 'var(--tq-nav-active)' : 'transparent',
+                  color: isActive ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
+                }}
               >
-                TRADEQUOTE
+                {label}
               </button>
+            );
+          })}
+        </div>
+
+        {/* Centre: step breadcrumb or RAMS breadcrumb (when applicable) */}
+        <div className="flex items-center gap-1 ml-4">
+          {isRams ? (
+            <div className="hidden sm:flex items-center gap-2">
               <span style={{ color: 'var(--tq-nav-muted)' }} className="text-xs">&rsaquo;</span>
               <span
                 className="text-xs uppercase tracking-wide"
@@ -61,14 +80,13 @@ export default function StepIndicator({
               </span>
             </div>
           ) : showSteps ? (
-            /* Step breadcrumb (editor, step 2-5) */
-            <div className="hidden sm:flex items-center">
+            <div className="hidden md:flex items-center">
+              <span style={{ color: 'var(--tq-nav-muted)', marginRight: 8 }} className="text-xs">&rsaquo;</span>
               {STEPS.map((step) => {
                 const isCompleted = step.number < currentStep;
                 const isCurrent = step.number === currentStep;
                 return (
                   <div key={step.number} className="flex items-center">
-                    {/* Circle */}
                     <div
                       className="flex items-center justify-center rounded-full font-mono"
                       style={{
@@ -86,9 +104,8 @@ export default function StepIndicator({
                     >
                       {isCompleted ? '\u2713' : step.number}
                     </div>
-                    {/* Label */}
                     <span
-                      className="hidden md:inline ml-1.5 text-xs"
+                      className="hidden lg:inline ml-1.5 text-xs"
                       style={{
                         fontFamily: 'IBM Plex Sans, sans-serif',
                         color: isCurrent ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
@@ -97,47 +114,17 @@ export default function StepIndicator({
                     >
                       {step.label}
                     </span>
-                    {/* Connector */}
                     {step.number < STEPS.length && (
                       <div
                         className="mx-1.5"
-                        style={{ width: 24, height: 1, backgroundColor: '#3a3630' }}
+                        style={{ width: 16, height: 1, backgroundColor: '#3a3630' }}
                       />
                     )}
                   </div>
                 );
               })}
             </div>
-          ) : (
-            /* Navigation links (dashboard, saved, or profile setup) */
-            <div className="hidden sm:flex items-center gap-1">
-              {[
-                { key: 'dashboard', label: 'Dashboard', action: onGoToDashboard },
-                { key: 'new', label: 'New Quote', action: onStartNewQuote },
-                { key: 'saved', label: 'Saved Jobs', action: onGoToSaved },
-              ].map(({ key, label, action }) => {
-                const isActive =
-                  (key === 'dashboard' && currentView === 'dashboard') ||
-                  (key === 'saved' && currentView === 'saved') ||
-                  (key === 'new' && isEditor && currentStep <= 1);
-                return (
-                  <button
-                    key={key}
-                    onClick={action}
-                    className="px-3 py-1.5 rounded text-xs transition-colors"
-                    style={{
-                      fontFamily: 'IBM Plex Sans, sans-serif',
-                      fontWeight: isActive ? 500 : 400,
-                      backgroundColor: isActive ? 'var(--tq-nav-active)' : 'transparent',
-                      color: isActive ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* Spacer */}

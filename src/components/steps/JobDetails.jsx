@@ -66,25 +66,39 @@ KNOWN CALIBRATION NOTES:
 Source: Professional waller quote data, March 2026, West Yorkshire / Cumbria.
 These are verified rates from accepted quotes — use as baseline for the region.
 
-Rubble stone wall repair (gritstone/sandstone/slate, lime mortar):
-- Dismantling: £200–£240 per m² (careful removal, sorting salvageable stone)
-- Rebuilding: £360–£400 per m² (random rubble technique, NHL 3.5 lime mortar)
-- Repointing: £100–£120 per m² (raked to 20mm, hydraulic lime, flush finish)
+IMPORTANT — MATERIALS vs LABOUR DISTINCTION:
+The "materials" array must ONLY contain physical supplies and expenses — things you
+buy or hire. All labour activities (dismantling, rebuilding, repointing, site survey,
+making good, core consolidation) are covered by the daily labour rate and must NOT
+appear as material line items.
+
+MATERIALS (include in "materials" array):
 - Replacement stone supply: £170–£200 per tonne (matched rubble, gritstone/sandstone)
 - Stone consumption: ~0.3 tonnes per m² of wall face
-- Hydraulic lime mortar (NHL 3.5): £80–£100 per batch (small-to-medium job)
-- Preliminaries & site survey: £150–£200 flat
-- Core/hearting consolidation: £130–£170 flat
-- Making good & photographic record: £80–£110 flat
-- Waste disposal & site clearance: £100–£140 flat
+- Natural stone (facing/coping): price varies by type
+- Hydraulic lime mortar (NHL 3.5): £80–£100 per batch
+- Mortar & sand: price varies
+- Mobile scaffolding hire: £50–£60 per day
 - Temporary propping (Strongboy supports): £200–£250 when required
+- Tool and equipment hire: £100–£200 per job
+- Waste disposal & tipping fees: £100–£140 flat
+- Accommodation: if overnight stays required
+- Travel and fuel expenses: mileage/fuel costs
+
+LABOUR (covered by daily rate — do NOT put in materials):
+- Dismantling: £200–£240 per m²
+- Rebuilding: £360–£400 per m²
+- Repointing: £100–£120 per m²
+- Preliminaries & site survey
+- Core/hearting consolidation
+- Making good & photographic record
+These are all labour activities performed by the waller and are accounted for
+in the estimatedDays × numberOfWorkers × dayRate calculation.
 
 Typical repointing area is 1.5–2× the rebuilt area (extends to surround).
-Fixed baseline costs (prelims + core + mortar + making good + waste) run £550–£700
-regardless of wall area.
 
-ALWAYS generate these as separate line items with Qty, Unit (m², t, or Item), and
-Rate. Never lump costs together.
+Generate material line items with Qty, Unit (t, Item, Nr, days), and Rate.
+Never include labour activities as materials.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 
