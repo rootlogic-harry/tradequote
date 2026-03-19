@@ -50,7 +50,7 @@ export default function MaterialsTable({ materials, dispatch }) {
     });
   };
 
-  const UNIT_OPTIONS = ['m\u00B2', 't', 'Item', 'lin.m', 'Nr'];
+  const UNIT_OPTIONS = ['m\u00B2', 't', 'Item', 'lin.m', 'Nr', 'days'];
 
   const inputClass = "w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none";
 

@@ -4,6 +4,7 @@ import { formatCurrency, formatDate, calculateValidUntil } from '../../utils/quo
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveJob as saveQuote } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
+import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams }) {
   const quoteRef = useRef(null);
@@ -508,14 +509,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       );
 
       // Notes & Conditions
-      const defaultNotes = [
-        'This costing is based on visible damage as observed during site inspection. Should additional damage be found upon dismantling, a supplementary cost will be agreed in writing before proceeding.',
-        'All works to be carried out using traditional lime mortar techniques compatible with the existing construction. No cement-based mortars will be used.',
-        'The client is responsible for confirming whether Listed Building Consent or other consents are required prior to commencement of works.',
-        'This quotation is valid for 30 days from the date of issue.',
-        'Payment terms: 50% deposit upon instruction, balance on satisfactory completion.',
-      ];
-      const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : defaultNotes;
+      const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
 
       children.push(
         new Paragraph({
@@ -772,6 +766,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             title={savedJobId ? 'Create RAMS for this job' : 'Save the quote first to create a RAMS'}
           >
             Create RAMS
+          </button>
+        )}
+        {!isReadOnly && !onBack && (
+          <button
+            onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })}
+            className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          >
+            Back to Review
           </button>
         )}
         {onBack ? (

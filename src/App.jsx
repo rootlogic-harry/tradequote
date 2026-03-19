@@ -18,6 +18,8 @@ import Dashboard from './components/Dashboard.jsx';
 import StatusModal from './components/StatusModal.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import LandingPage from './components/LandingPage.jsx';
+import { runAnalysis } from './utils/analyseJob.js';
+import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
 import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
@@ -240,6 +242,24 @@ export default function App() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [state]);
+
+  // Retry analysis: watch for retryCount increments (set by RETRY_ANALYSIS)
+  const lastRetryCount = useRef(state.retryCount || 0);
+  useEffect(() => {
+    const currentRetry = state.retryCount || 0;
+    if (currentRetry > lastRetryCount.current && state.isAnalysing) {
+      lastRetryCount.current = currentRetry;
+      runAnalysis({
+        photos: state.photos,
+        extraPhotos: state.extraPhotos,
+        jobDetails: state.jobDetails,
+        profile: state.profile,
+        systemPrompt: SYSTEM_PROMPT,
+        abortRef,
+        dispatch,
+      });
+    }
+  }, [state.retryCount]);
 
   const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 

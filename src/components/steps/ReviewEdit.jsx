@@ -7,6 +7,7 @@ import LivePreview from '../review/LivePreview.jsx';
 import { allMeasurementsConfirmed, countUnconfirmedMeasurements, canGenerateQuote } from '../../utils/validators.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { formatCurrency } from '../../utils/quoteBuilder.js';
+import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 
 function AccordionSection({ title, isOpen, onToggle, children }) {
   return (
@@ -120,14 +121,33 @@ export default function ReviewEdit({ state, dispatch }) {
       </div>
 
       <div>
-        <h3 className="text-lg font-heading font-bold text-tq-text mb-2">
-          Measurements
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-heading font-bold text-tq-text">
+            Measurements
+            {unconfirmedCount > 0 && (
+              <span className="text-tq-unconfirmed text-sm font-body ml-2">
+                ({unconfirmedCount} to confirm)
+              </span>
+            )}
+          </h3>
           {unconfirmedCount > 0 && (
-            <span className="text-tq-unconfirmed text-sm font-body ml-2">
-              ({unconfirmedCount} to confirm)
-            </span>
+            <button
+              onClick={() => dispatch({ type: 'CONFIRM_ALL_MEASUREMENTS' })}
+              className="uppercase tracking-wide rounded"
+              style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontWeight: 700,
+                fontSize: 11,
+                backgroundColor: 'var(--tq-accent)',
+                color: '#ffffff',
+                padding: '4px 10px',
+                borderRadius: 6,
+              }}
+            >
+              CONFIRM ALL ({unconfirmedCount})
+            </button>
           )}
-        </h3>
+        </div>
 
         {/* Measurement cards */}
         <div className="space-y-3">
@@ -189,8 +209,8 @@ export default function ReviewEdit({ state, dispatch }) {
           <button onClick={() => addAdditionalCost('Accommodation')} className="text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
             + Accommodation
           </button>
-          <button onClick={() => addAdditionalCost('Site clearance')} className="text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
-            + Site clearance
+          <button onClick={() => addAdditionalCost('Skip hire')} className="text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
+            + Skip hire
           </button>
           <button onClick={() => addAdditionalCost()} className="text-xs text-tq-accent hover:text-tq-accent-dark">
             + Add cost
@@ -208,7 +228,12 @@ export default function ReviewEdit({ state, dispatch }) {
             <span className="font-mono">{formatCurrency(totals.materialsSubtotal)}</span>
           </div>
           <div className="flex justify-between">
-            <span style={{ color: 'var(--tq-muted)' }}>Labour</span>
+            <span style={{ color: 'var(--tq-muted)' }}>
+              Labour
+              <span className="text-xs ml-1" style={{ color: 'var(--tq-muted)', opacity: 0.7 }}>
+                ({labour.days}d × {labour.workers}w × {formatCurrency(labour.dayRate)})
+              </span>
+            </span>
             <span className="font-mono">{formatCurrency(totals.labourTotal)}</span>
           </div>
           {totals.additionalCostsTotal > 0 && (
@@ -232,6 +257,50 @@ export default function ReviewEdit({ state, dispatch }) {
             <span className="font-mono font-bold" style={{ color: 'var(--tq-accent)' }}>{formatCurrency(totals.total)}</span>
           </div>
         </div>
+      </div>
+
+      {/* Notes & Conditions Editor */}
+      <div>
+        <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
+          Notes & Conditions
+        </h4>
+        {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => {
+          const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
+          return (
+            <div key={i} className="flex items-start gap-2 mb-2">
+              <span className="text-xs text-tq-muted mt-1.5 shrink-0">{i + 1}.</span>
+              <textarea
+                value={note}
+                onChange={(e) => {
+                  const updated = [...notes];
+                  updated[i] = e.target.value;
+                  dispatch({ type: 'UPDATE_NOTES', notes: updated });
+                }}
+                rows={2}
+                className="flex-1 bg-transparent border-b border-tq-border text-xs text-tq-text outline-none focus:border-tq-accent resize-none"
+              />
+              <button
+                onClick={() => {
+                  const updated = notes.filter((_, idx) => idx !== i);
+                  dispatch({ type: 'UPDATE_NOTES', notes: updated });
+                }}
+                className="text-tq-muted hover:text-tq-error text-sm shrink-0"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+        <button
+          onClick={() => {
+            const notes = reviewData.notes && reviewData.notes.length > 0 ? [...reviewData.notes] : [...DEFAULT_NOTES];
+            notes.push('');
+            dispatch({ type: 'UPDATE_NOTES', notes });
+          }}
+          className="text-xs text-tq-accent hover:text-tq-accent-dark"
+        >
+          + Add note
+        </button>
       </div>
     </div>
   );
@@ -327,7 +396,17 @@ export default function ReviewEdit({ state, dispatch }) {
         >
           {generateEnabled
             ? 'GENERATE QUOTE'
-            : `GENERATE QUOTE — ${unconfirmedCount} UNCONFIRMED`
+            : `GENERATE QUOTE — ${
+                unconfirmedCount > 0
+                  ? `${unconfirmedCount} UNCONFIRMED`
+                  : !materials || materials.length === 0
+                    ? 'NO MATERIALS'
+                    : !labour.days || labour.days <= 0
+                      ? 'NO LABOUR DAYS'
+                      : !labour.dayRate || labour.dayRate <= 0
+                        ? 'NO DAY RATE'
+                        : 'INCOMPLETE'
+              }`
           }
         </button>
       </div>

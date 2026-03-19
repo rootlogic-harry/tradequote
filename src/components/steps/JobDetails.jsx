@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
-import { parseAIResponse, validateAIResponse, normalizeAIResponse } from '../../utils/aiParser.js';
+import { runAnalysis } from '../../utils/analyseJob.js';
 
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
@@ -29,7 +29,7 @@ function resizeImage(file, maxSize = 2048) {
   });
 }
 
-const SYSTEM_PROMPT = `You are an expert dry stone waller with over 20 years of experience and £500k+ annual
+export const SYSTEM_PROMPT = `You are an expert dry stone waller with over 20 years of experience and £500k+ annual
 turnover. You are a Professional Member of the Dry Stone Walling Association of Great
 Britain (DSWA). You are highly skilled at assessing wall damage from photographs,
 estimating scope of work, and producing accurate, professional quotes.
@@ -48,7 +48,6 @@ DOMAIN KNOWLEDGE:
 - Material tonnage: a typical double-faced dry stone wall requires approximately
   1 tonne of stone per sq m of wall face (both faces combined). Gritstone runs
   heavier (~1.1-1.2t/sqm), limestone lighter (~0.9t/sqm).
-- Always include site clearance as a line item when scattered stone is visible
 - Always assess the standing sections either side of the breach — unstable abutting
   stonework typically requires taking back 300-600mm before rebuilding
 
@@ -86,19 +85,39 @@ MATERIALS (include in "materials" array):
 - Travel and fuel expenses: mileage/fuel costs
 
 LABOUR (covered by daily rate — do NOT put in materials):
-- Dismantling: £200–£240 per m²
-- Rebuilding: £360–£400 per m²
-- Repointing: £100–£120 per m²
-- Preliminaries & site survey
-- Core/hearting consolidation
-- Making good & photographic record
-These are all labour activities performed by the waller and are accounted for
-in the estimatedDays × numberOfWorkers × dayRate calculation.
+The following are all labour activities. They must NEVER appear as line items
+in the "materials" array. They are accounted for ONLY through the
+estimatedDays × numberOfWorkers × dayRate calculation.
+
+Use these benchmarks to estimate labour DAYS only:
+- Dismantling: an experienced waller dismantles ~6 m² per day
+- Rebuilding to DSWA standards: ~3 m² per day for 2 wallers
+- Repointing: ~8–10 m² per day for 1 waller
+- Site clearance of scattered stone: included in dismantling time
+- Preliminaries & site survey: typically half a day
+- Core/hearting consolidation: included in rebuild time
+- Making good & photographic record: typically half a day
+
+These benchmarks are for estimating days of work. They have NO per-m² price.
+Do NOT create material line items for dismantling, rebuilding, repointing,
+site clearance, making good, core consolidation, or any other walling activity.
+
+ESTIMATING LABOUR DAYS:
+Calculate total days from the benchmarks above. Example for a 6 m² gritstone
+rebuild: ~1 day dismantling + ~2 days rebuilding for 2 wallers + ~0.5 day
+preliminaries + ~0.5 day making good = ~2 days for 2 wallers (4 man-days).
+Always round UP to the nearest half-day. Show this working in calculationBasis.
 
 Typical repointing area is 1.5–2× the rebuilt area (extends to surround).
 
 Generate material line items with Qty, Unit (t, Item, Nr, days), and Rate.
-Never include labour activities as materials.
+
+CRITICAL RULE — MATERIALS ARRAY MUST NOT CONTAIN:
+- Any line item for dismantling, rebuilding, repointing, or site clearance
+- Any line item with a per-m² rate for walling work
+- Any item that describes work a waller performs (as opposed to a physical
+  supply purchased or equipment hired)
+If in doubt, ask: "Is this something I BUY or HIRE?" If no, it is labour.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 
@@ -230,120 +249,15 @@ export default function JobDetails({ state, dispatch, abortRef }) {
 
     dispatch({ type: 'ANALYSIS_START' });
 
-    try {
-      const imageContent = [];
-      for (const slot of PHOTO_SLOTS) {
-        const photo = photos[slot.key];
-        if (photo) {
-          imageContent.push({
-            type: 'text',
-            text: `--- Photo: ${slot.label} ---`,
-          });
-          const base64Data = photo.data.split(',')[1];
-          imageContent.push({
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: 'image/jpeg',
-              data: base64Data,
-            },
-          });
-        }
-      }
-
-      for (let i = 0; i < extraPhotos.length; i++) {
-        imageContent.push({
-          type: 'text',
-          text: `--- Additional Photo ${i + 1} ---`,
-        });
-        const base64Data = extraPhotos[i].data.split(',')[1];
-        imageContent.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: 'image/jpeg',
-            data: base64Data,
-          },
-        });
-      }
-
-      imageContent.push({
-        type: 'text',
-        text: `Site address: ${jobDetails.siteAddress}${jobDetails.briefNotes ? `\nTradesman notes: ${jobDetails.briefNotes}` : ''}`,
-      });
-
-      const controller = new AbortController();
-      if (abortRef) abortRef.current = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-      const response = await fetch('/api/anthropic/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          system: SYSTEM_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: imageContent,
-            },
-          ],
-        }),
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API error ${response.status}: ${errText}`);
-      }
-
-      const data = await response.json();
-      const rawText = data.content?.[0]?.text || '';
-      const parsed = parseAIResponse(rawText);
-
-      if (!parsed) {
-        dispatch({
-          type: 'ANALYSIS_ERROR',
-          error: 'AI returned an unreadable response. Try again or enter details manually.',
-        });
-        return;
-      }
-
-      const validation = validateAIResponse(parsed);
-      if (!validation.valid) {
-        console.warn('AI response validation warnings:', validation.errors);
-      }
-
-      const normalised = normalizeAIResponse(parsed);
-      normalised.referenceCardDetected = parsed.referenceCardDetected;
-      normalised.stoneType = parsed.stoneType;
-      normalised.additionalCosts = [];
-      normalised.labourEstimate.dayRate = profile.dayRate;
-
-      dispatch({
-        type: 'ANALYSIS_SUCCESS',
-        rawResponse: rawText,
-        normalised,
-      });
-    } catch (err) {
-      let errorMessage;
-      if (err.name === 'AbortError') {
-        errorMessage = 'Analysis was cancelled.';
-      } else if (err instanceof TypeError) {
-        errorMessage = 'Network error — check your internet connection and try again.';
-      } else {
-        errorMessage = err.message;
-      }
-      dispatch({
-        type: 'ANALYSIS_ERROR',
-        error: errorMessage,
-      });
-    }
+    runAnalysis({
+      photos,
+      extraPhotos,
+      jobDetails,
+      profile,
+      systemPrompt: SYSTEM_PROMPT,
+      abortRef,
+      dispatch,
+    });
   };
 
   const hasAnyPhoto = Object.values(photos).some(p => p != null) || extraPhotos.length > 0;

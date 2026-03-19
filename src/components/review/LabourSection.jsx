@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../utils/quoteBuilder.js';
 
 function NumericInput({ value: propValue, onChange, step, className, style }) {
   const [local, setLocal] = useState(String(propValue ?? ''));
@@ -74,7 +75,8 @@ export default function LabourSection({ labourEstimate, dispatch }) {
             <label className="block mb-1" style={{ fontSize: 10, color: 'var(--tq-muted)', textTransform: 'uppercase' }}>Workers</label>
             <NumericInput
               value={numberOfWorkers}
-              onChange={(v) => update('numberOfWorkers', v)}
+              step="1"
+              onChange={(v) => update('numberOfWorkers', Math.max(1, Math.round(v)))}
               className="focus:outline-none focus:border-tq-accent"
               style={inputStyle}
             />
@@ -106,7 +108,7 @@ export default function LabourSection({ labourEstimate, dispatch }) {
             LABOUR TOTAL
           </span>
           <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}>
-            {'\u00A3'}{labourTotal.toFixed(2)}
+            {formatCurrency(labourTotal)}
           </span>
         </div>
       </div>

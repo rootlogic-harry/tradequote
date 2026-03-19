@@ -23,8 +23,24 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
     dispatch({ type: 'EDIT_MEASUREMENT', id });
   };
 
+  // Confidence badge helper
+  const confidenceBadge = confidence && confidence !== 'high' ? (
+    <span
+      className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ml-1"
+      style={{
+        backgroundColor: confidence === 'low' ? '#dc2626' : '#d97706',
+        color: '#ffffff',
+        fontFamily: 'Barlow Condensed, sans-serif',
+        fontWeight: 700,
+      }}
+    >
+      {confidence}
+    </span>
+  ) : null;
+
   // Card-based layout (used for both mobile and desktop now)
   if (confirmed) {
+    const wasEdited = measurement.value !== measurement.aiValue;
     return (
       <div
         className="rounded-lg"
@@ -39,6 +55,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold" style={{ color: 'var(--tq-confirmed-txt)', fontSize: 12 }}>
             {item}
+            {confidenceBadge}
           </span>
           <span
             className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
@@ -58,7 +75,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
         </div>
         {/* Footer */}
         <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--tq-confirmed-txt)', fontSize: 11 }}>
-          <span>Accepted AI suggestion</span>
+          <span>{wasEdited ? `Edited from AI (was: ${measurement.aiValue})` : 'Accepted AI suggestion'}</span>
           <span>·</span>
           <button onClick={handleEdit} className="underline" style={{ color: 'var(--tq-confirmed-txt)' }}>Edit</button>
         </div>
@@ -81,6 +98,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold" style={{ color: 'var(--tq-unconf-txt)', fontSize: 12 }}>
           {item}
+          {confidenceBadge}
         </span>
         <span
           className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
@@ -108,6 +126,9 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
           color: 'var(--tq-text)',
         }}
       />
+      {confidence === 'low' && (
+        <p className="text-xs mt-1" style={{ color: '#dc2626', fontSize: 11 }}>Verify on-site — low confidence estimate</p>
+      )}
       {/* Confirm button */}
       <div className="flex items-center justify-between mt-2">
         <span className="text-xs" style={{ color: 'var(--tq-muted)', fontSize: 11 }}>

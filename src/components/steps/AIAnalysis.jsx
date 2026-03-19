@@ -28,7 +28,7 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
               Back
             </button>
             <button
-              onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
+              onClick={() => dispatch({ type: 'RETRY_ANALYSIS' })}
               className="px-6 py-2 rounded bg-tq-accent text-tq-bg font-heading uppercase text-sm hover:bg-tq-accent-dark"
             >
               Retry

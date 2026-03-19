@@ -70,6 +70,7 @@ export const initialState = {
   quotePayload: null,
   quoteSequence: 1,
   rams: null,
+  retryCount: 0,
   statusModal: { open: false, jobId: null, targetStatus: null },
   recentJobs: [],
 };
@@ -126,6 +127,9 @@ function reducerCore(state, action) {
         step: 4,
       };
 
+    case 'ANALYSIS_CANCEL':
+      return { ...state, isAnalysing: false, analysisError: null, step: 2 };
+
     case 'ANALYSIS_ERROR':
       return {
         ...state,
@@ -139,10 +143,34 @@ function reducerCore(state, action) {
           ? { ...m, value: action.value, confirmed: true }
           : m
       );
+      // Deduplicate: remove any existing diff for the same (fieldType, fieldLabel)
+      const filteredDiffs = state.diffs.filter(
+        d => !(d.fieldType === action.diff.fieldType && d.fieldLabel === action.diff.fieldLabel)
+      );
       return {
         ...state,
         reviewData: { ...state.reviewData, measurements },
-        diffs: [...state.diffs, action.diff],
+        diffs: [...filteredDiffs, action.diff],
+      };
+    }
+
+    case 'CONFIRM_ALL_MEASUREMENTS': {
+      const measurements = state.reviewData.measurements.map(m =>
+        m.confirmed ? m : { ...m, confirmed: true }
+      );
+      // Build diffs for each newly confirmed measurement, deduplicating
+      const newDiffs = state.reviewData.measurements
+        .filter(m => !m.confirmed)
+        .map(m => buildDiff('measurement', m.item, m.aiValue, m.value));
+      // Remove existing diffs that match any new diff's (fieldType, fieldLabel)
+      const newDiffKeys = new Set(newDiffs.map(d => `${d.fieldType}::${d.fieldLabel}`));
+      const filteredDiffs = state.diffs.filter(
+        d => !newDiffKeys.has(`${d.fieldType}::${d.fieldLabel}`)
+      );
+      return {
+        ...state,
+        reviewData: { ...state.reviewData, measurements },
+        diffs: [...filteredDiffs, ...newDiffs],
       };
     }
 
@@ -189,6 +217,27 @@ function reducerCore(state, action) {
       return {
         ...state,
         reviewData: { ...state.reviewData, damageDescription: action.value },
+      };
+
+    case 'RETRY_ANALYSIS':
+      return {
+        ...state,
+        isAnalysing: true,
+        analysisError: null,
+        retryCount: (state.retryCount || 0) + 1,
+      };
+
+    case 'BACK_TO_REVIEW':
+      return {
+        ...state,
+        step: 4,
+        quotePayload: null,
+      };
+
+    case 'UPDATE_NOTES':
+      return {
+        ...state,
+        reviewData: { ...state.reviewData, notes: action.notes },
       };
 
     case 'GENERATE_QUOTE': {

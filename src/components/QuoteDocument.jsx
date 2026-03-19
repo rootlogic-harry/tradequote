@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatCurrency, formatDate, calculateValidUntil } from '../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../utils/calculations.js';
+import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 
 export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp }) {
   const { profile, jobDetails, reviewData, photos } = state;
@@ -39,7 +40,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   }
 
   return (
-    <div id="quote-document" className="bg-white text-gray-900 px-20 py-16 font-['IBM_Plex_Sans',sans-serif] text-base leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div id="quote-document" className="bg-white text-gray-900 px-20 py-16 font-['IBM_Plex_Sans',sans-serif] text-lg leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">
@@ -47,16 +48,16 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             <img src={profile.logo} alt="Logo" className="max-w-[200px] max-h-[80px] object-contain" />
           )}
           <div>
-            <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               {profile.companyName}
             </h1>
-            <p className="text-gray-500 text-sm">Dry Stone Walling</p>
+            <p className="text-gray-500 text-base">Dry Stone Walling</p>
             {profile.accreditations && (
-              <p className="text-gray-500 text-sm">{profile.accreditations}</p>
+              <p className="text-gray-500 text-base">{profile.accreditations}</p>
             )}
           </div>
         </div>
-        <div className="text-right text-sm text-gray-600">
+        <div className="text-right text-base text-gray-600">
           <p>{formatDate(jobDetails.quoteDate)}</p>
           <p>{profile.phone}</p>
           <p>{profile.email}</p>
@@ -64,26 +65,26 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       </div>
 
       {/* Reference line */}
-      <div className="bg-gray-50 px-4 py-2 rounded mb-6 text-sm font-medium">
+      <div className="bg-gray-50 px-4 py-2 rounded mb-6 text-base font-medium">
         Quote ref: {jobDetails.quoteReference} — {jobDetails.clientName}, {jobDetails.siteAddress}
       </div>
 
       {/* Section 1: Damage */}
       <div className="mb-8">
-        <h2 className="text-base font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Description of Damage
         </h2>
-        <p className="text-base text-gray-700 whitespace-pre-wrap">{damageDescription}</p>
+        <p className="text-lg text-gray-700 whitespace-pre-wrap">{damageDescription}</p>
       </div>
 
       {/* Section 2: Measurements */}
       <div className="mb-8">
-        <h2 className="text-base font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Measurements
         </h2>
         <ul className="space-y-1">
           {measurements.map((m) => (
-            <li key={m.id} className="flex items-center gap-2 text-base">
+            <li key={m.id} className="flex items-center gap-2 text-lg">
               <span className="text-gray-700">{m.item}:</span>
               <span className="font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                 {m.confirmed ? m.value : <em className="text-amber-500">(unconfirmed)</em>}
@@ -95,14 +96,14 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Section 3: Schedule */}
       <div className="mb-8">
-        <h2 className="text-base font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Schedule of Works
         </h2>
         <ol className="space-y-3">
           {scheduleOfWorks.map((step, i) => (
             <li key={step.id || i}>
-              <p className="font-bold text-base text-gray-800">{i + 1}. {step.title}</p>
-              <p className="text-base text-gray-600 ml-5">{step.description}</p>
+              <p className="font-bold text-lg text-gray-800">{i + 1}. {step.title}</p>
+              <p className="text-lg text-gray-600 ml-5">{step.description}</p>
             </li>
           ))}
         </ol>
@@ -110,13 +111,13 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Section 4: Cost Breakdown */}
       <div className="mb-8">
-        <h2 className="text-base font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Cost Breakdown
         </h2>
 
-        <table className="w-full text-base mb-4">
+        <table className="w-full text-lg mb-4">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500 text-sm">
+            <tr className="border-b border-gray-200 text-gray-500 text-base">
               <th className="text-left py-1">Description</th>
               <th className="text-left py-1">Qty</th>
               <th className="text-left py-1">Unit</th>
@@ -150,7 +151,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           </tbody>
         </table>
 
-        <div className="space-y-1 text-base text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <div className="space-y-1 text-lg text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
           <div className="flex justify-end gap-8">
             <span className="text-gray-500">Subtotal (ex VAT)</span>
             <span>{formatCurrency(totals.subtotal)}</span>
@@ -161,7 +162,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
               <span>{formatCurrency(totals.vatAmount)}</span>
             </div>
           )}
-          <div className="flex justify-end gap-8 border-t border-gray-300 pt-2 text-xl font-bold">
+          <div className="flex justify-end gap-8 border-t border-gray-300 pt-2 text-2xl font-bold">
             <span>TOTAL</span>
             <span>{formatCurrency(totals.total)}</span>
           </div>
@@ -170,24 +171,18 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Notes & Conditions */}
       <div className="mb-8">
-        <h2 className="text-base font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Notes &amp; Conditions
         </h2>
-        <ol className="list-decimal list-inside space-y-1 text-base text-gray-600">
-          {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : [
-            'This costing is based on visible damage as observed during site inspection. Should additional damage be found upon dismantling, a supplementary cost will be agreed in writing before proceeding.',
-            'All works to be carried out using traditional lime mortar techniques compatible with the existing construction. No cement-based mortars will be used.',
-            'The client is responsible for confirming whether Listed Building Consent or other consents are required prior to commencement of works.',
-            'This quotation is valid for 30 days from the date of issue.',
-            'Payment terms: 50% deposit upon instruction, balance on satisfactory completion.',
-          ]).map((note, i) => (
+        <ol className="list-decimal list-inside space-y-1 text-lg text-gray-600">
+          {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => (
             <li key={i} className="pl-1">{note}</li>
           ))}
         </ol>
       </div>
 
       {/* Footer */}
-      <div className="border-t-2 border-gray-200 pt-4 mt-8 text-sm text-gray-500">
+      <div className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500">
         <p className="mb-1">This quote is valid for 30 days from the date issued (until {formatDate(validUntil)}).</p>
         {profile.vatRegistered && profile.vatNumber && (
           <p className="mb-1">VAT No: {profile.vatNumber}</p>
@@ -199,14 +194,14 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       {/* Photos — full size (only when showPhotos is true) */}
       {showPhotos && docPhotos.length > 0 && (
         <div className="mt-8 border-t border-gray-200 pt-4">
-          <h2 className="text-base font-bold uppercase tracking-wide text-gray-700 mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Site Photographs
           </h2>
           <div className="space-y-6">
             {docPhotos.map((p, i) => (
               <div key={i}>
                 <img src={p.data} alt={p.label} className="w-full rounded" />
-                <p className="text-sm text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
+                <p className="text-base text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
               </div>
             ))}
           </div>
