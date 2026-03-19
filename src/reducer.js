@@ -435,6 +435,9 @@ function reducerCore(state, action) {
     case 'JOBS_UPDATED':
       return { ...state, recentJobs: action.jobs };
 
+    case 'DELETE_JOB':
+      return { ...state, recentJobs: state.recentJobs.filter(j => j.id !== action.id) };
+
     case 'INIT_COMPLETE': {
       const lastUser = (() => {
         try { return sessionStorage.getItem('tq_last_user'); } catch { return null; }

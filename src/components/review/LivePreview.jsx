@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import QuoteDocument from '../QuoteDocument.jsx';
 
 export default function LivePreview({ state }) {
   const [overlayOpen, setOverlayOpen] = useState(false);
+
+  // Debounce state updates to avoid jank during rapid typing
+  const [deferredState, setDeferredState] = useState(state);
+  useEffect(() => {
+    const timer = setTimeout(() => setDeferredState(state), 300);
+    return () => clearTimeout(timer);
+  }, [state]);
 
   return (
     <>
@@ -12,7 +19,7 @@ export default function LivePreview({ state }) {
           Live Preview
         </h3>
         <div className="bg-white rounded-lg shadow-lg max-h-[600px] overflow-y-auto">
-          <QuoteDocument state={state} />
+          <QuoteDocument state={deferredState} />
         </div>
       </div>
 
@@ -40,7 +47,7 @@ export default function LivePreview({ state }) {
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="bg-white">
-              <QuoteDocument state={state} />
+              <QuoteDocument state={deferredState} />
             </div>
           </div>
         </div>

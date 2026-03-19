@@ -58,10 +58,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     }
   }
 
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [generatingDocx, setGeneratingDocx] = useState(false);
+
   const handleDownloadPDF = async () => {
     const element = quoteRef.current;
     if (!element) return;
 
+    setGeneratingPDF(true);
     try {
       const canvas = await window.html2canvas(element, {
         scale: 2,
@@ -143,10 +147,13 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     } catch (err) {
       console.error('PDF generation failed:', err);
       showToast?.('PDF generation failed. Please try again.', 'error');
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
   const handleDownloadDocx = async () => {
+    setGeneratingDocx(true);
     try {
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
               WidthType, AlignmentType, HeadingLevel, BorderStyle, ImageRun,
@@ -667,6 +674,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     } catch (err) {
       console.error('Word export failed:', err);
       showToast?.('Word export failed. Please try again.', 'error');
+    } finally {
+      setGeneratingDocx(false);
     }
   };
 
@@ -724,17 +733,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       <div className="flex flex-wrap gap-3 mb-6">
         <button
           onClick={handleDownloadPDF}
-          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          disabled={generatingPDF}
+          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff' }}
         >
-          Download PDF
+          {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
         </button>
         <button
           onClick={handleDownloadDocx}
-          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          disabled={generatingDocx}
+          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent' }}
         >
-          Download Word
+          {generatingDocx ? 'Generating Word...' : 'Download Word'}
         </button>
         <button
           onClick={handleEmail}
