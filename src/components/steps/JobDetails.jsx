@@ -84,6 +84,15 @@ MATERIALS (include in "materials" array):
 - Accommodation: if overnight stays required
 - Travel and fuel expenses: mileage/fuel costs
 
+PLANT HIRE (include in "materials" array when the job requires them):
+- Hiab / lorry-mounted crane hire: £350–£500 per day
+- Mini digger hire (1.5t): £120–£180 per day
+- Cement mixer hire: £40–£60 per day
+- Plant trailer hire: £60–£80 per day
+- Generator hire: £50–£80 per day
+Include plant hire as separate material line items with quantity in days.
+Only include items the job genuinely requires based on scope and access.
+
 LABOUR (covered by daily rate — do NOT put in materials):
 The following are all labour activities. They must NEVER appear as line items
 in the "materials" array. They are accounted for ONLY through the
@@ -119,15 +128,43 @@ CRITICAL RULE — MATERIALS ARRAY MUST NOT CONTAIN:
   supply purchased or equipment hired)
 If in doubt, ask: "Is this something I BUY or HIRE?" If no, it is labour.
 
+DAMAGE DESCRIPTION FORMAT:
+The damageDescription must be structured as numbered sections, one per damaged
+component or area. Each section starts with a numbered header line in the format:
+  1 — Component Name
+followed by a detailed paragraph describing that component's damage, dimensions,
+construction style, and structural observations. Example:
+
+  1 — Sandstone Gate Pier
+  The principal sandstone gate pier, measuring approximately 300mm x 300mm x 1350mm,
+  has suffered significant structural displacement...
+
+  2 — Brick Retaining Wall
+  The brick retaining wall adjacent to the gate entrance extends approximately 2400mm...
+
+Use an em dash (—) between the number and title. Include specific dimensions,
+stone types, mortar conditions, and structural observations in each section.
+If there is only one damaged component, still use "1 — [component name]".
+
+SCHEDULE OF WORKS DETAIL:
+Each schedule step description must include:
+- Specific dimensions of the work area
+- Material specifications (e.g. "NHL 3.5 hydraulic lime mortar", "matched sandstone rubble")
+- Construction techniques (e.g. "bedded and set plumb on a cement and lime mortar bed")
+- Stone coursing or bond pattern details where applicable
+- Mortar types where applicable
+Do NOT use vague descriptions like "Rebuild wall section". Specify exactly what is
+being rebuilt, with what materials, to what dimensions, using what technique.
+
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 
 {
   "referenceCardDetected": boolean,
   "referenceCardNote": "string",
   "stoneType": "sandstone | gritstone | limestone | slate | unknown",
-  "damageDescription": "string — detailed narrative: stone type, construction style,
-    extent of collapse, condition of standing sections either side, structural
-    observations",
+  "damageDescription": "string — numbered sections (1 — Component Name\\n paragraph),
+    one per damaged component, with dimensions, stone types, mortar conditions,
+    and structural observations",
   "measurements": [
     {
       "item": "string",
@@ -141,7 +178,7 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
     {
       "stepNumber": number,
       "title": "string",
-      "description": "string — professional, specific, DSWA-aligned"
+      "description": "string — include dimensions, material specs, techniques, mortar types"
     }
   ],
   "materials": [

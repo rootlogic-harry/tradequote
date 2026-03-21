@@ -77,7 +77,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth;
+      const margin = 15;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+      const imgWidth = usableWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
       let position = 0;
@@ -86,15 +89,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       while (remainingHeight > 0) {
         if (position > 0) pdf.addPage();
 
-        pdf.addImage(imgData, 'JPEG', 0, -position, imgWidth, imgHeight);
-        position += pageHeight;
-        remainingHeight -= pageHeight;
+        pdf.addImage(imgData, 'JPEG', margin, margin - position, imgWidth, imgHeight);
+        position += usableHeight;
+        remainingHeight -= usableHeight;
       }
 
       // Photo appendix pages — 2 photos per page (filtered by selection)
       if (filteredPhotos.length > 0) {
-        const margin = 10;
-        const usableWidth = pageWidth - margin * 2;
+        const photoMargin = 15;
+        const usableWidth = pageWidth - photoMargin * 2;
         const maxPhotoHeight = (pageHeight - 50) / 2; // space for 2 photos + labels + header
 
         for (let i = 0; i < filteredPhotos.length; i += 2) {
@@ -103,9 +106,9 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           // Page header
           pdf.setFontSize(10);
           pdf.setTextColor(120, 120, 120);
-          pdf.text('Site Photographs — ' + jobDetails.siteAddress, margin, 12);
+          pdf.text('Site Photographs — ' + jobDetails.siteAddress, photoMargin, 12);
           pdf.setDrawColor(200, 200, 200);
-          pdf.line(margin, 15, pageWidth - margin, 15);
+          pdf.line(photoMargin, 15, pageWidth - photoMargin, 15);
 
           let yPos = 22;
 
@@ -127,14 +130,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             }
 
             // Centre horizontally
-            const xPos = margin + (usableWidth - drawWidth) / 2;
+            const xPos = photoMargin + (usableWidth - drawWidth) / 2;
 
             pdf.addImage(photo.data, 'JPEG', xPos, yPos, drawWidth, drawHeight);
 
             // Caption
             pdf.setFontSize(8);
             pdf.setTextColor(100, 100, 100);
-            pdf.text(photo.label + ' — ' + jobDetails.siteAddress, margin, yPos + drawHeight + 5);
+            pdf.text(photo.label + ' — ' + jobDetails.siteAddress, photoMargin, yPos + drawHeight + 5);
 
             yPos += drawHeight + 15;
           }
@@ -291,11 +294,46 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           spacing: { before: 300, after: 120 },
           border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' } },
         }),
-        new Paragraph({
-          children: [txt(damageDescription || '', { size: 22 })],
-          spacing: { after: 300 },
-        }),
       );
+
+      // Parse description: detect numbered section headers (e.g. "1 — Component Name")
+      const descText = damageDescription || '';
+      const descLines = descText.split('\n');
+      const descHeaderPattern = /^\d+\s*[—–-]\s*(.+)$/;
+      let hasHeaders = descLines.some(l => descHeaderPattern.test(l));
+
+      if (hasHeaders) {
+        let bodyBuf = [];
+        const flushDescBody = () => {
+          const content = bodyBuf.join('\n').trim();
+          if (content) {
+            children.push(new Paragraph({
+              children: [txt(content, { size: 22 })],
+              spacing: { after: 120 },
+            }));
+          }
+          bodyBuf = [];
+        };
+        for (const line of descLines) {
+          if (descHeaderPattern.test(line)) {
+            flushDescBody();
+            children.push(new Paragraph({
+              children: [txt(line, { bold: true, size: 22 })],
+              spacing: { before: 200, after: 60 },
+            }));
+          } else {
+            bodyBuf.push(line);
+          }
+        }
+        flushDescBody();
+      } else {
+        children.push(new Paragraph({
+          children: [txt(descText, { size: 22 })],
+          spacing: { after: 300 },
+        }));
+      }
+
+      children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
 
       // Measurements
       children.push(
@@ -390,8 +428,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         })
       );
 
-      // Material rows
-      materials.forEach(mat => {
+      // Material rows (filter empty/£0 rows)
+      materials.filter(mat => mat.description?.trim() && mat.totalCost > 0).forEach(mat => {
         tableRows.push(
           new TableRow({
             children: [
@@ -554,6 +592,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         new Paragraph({
           children: [txt(`${profile.fullName} \u2014 ${profile.accreditations || ''}`, { size: 20, color: '888888' })],
         }),
+      );
+
+      if (profile.address) {
+        children.push(new Paragraph({
+          children: [txt(profile.address, { size: 20, color: '888888' })],
+        }));
+      }
+
+      children.push(
         new Paragraph({
           children: [txt(`Quote prepared with AI assistance \u2014 all figures reviewed and confirmed by ${profile.fullName}.`, { size: 20, italics: true, color: '888888' })],
           spacing: { after: 200 },
