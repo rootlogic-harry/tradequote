@@ -17,6 +17,7 @@ export default function StepIndicator({
   onGoToDashboard,
   onStartNewQuote,
   onGoToSaved,
+  quoteMode,
 }) {
   const isEditor = currentView === 'editor';
   const isRams = currentView === 'rams';
@@ -163,6 +164,19 @@ export default function StepIndicator({
             ) : showSteps ? (
               <div className="hidden md:flex items-center">
                 <span style={{ color: 'var(--tq-nav-muted)', marginRight: 8 }} className="text-xs">&rsaquo;</span>
+                {quoteMode === 'quick' && (
+                  <span
+                    className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded mr-2"
+                    style={{
+                      fontFamily: 'Barlow Condensed, sans-serif',
+                      fontWeight: 700,
+                      backgroundColor: 'var(--tq-accent)',
+                      color: '#ffffff',
+                    }}
+                  >
+                    QUICK
+                  </span>
+                )}
                 {STEPS.map((step) => {
                   const isCompleted = step.number < currentStep;
                   const isCurrent = step.number === currentStep;
@@ -276,6 +290,19 @@ export default function StepIndicator({
               </div>
             );
           })}
+          {quoteMode === 'quick' && (
+            <span
+              className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
+              style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontWeight: 700,
+                backgroundColor: 'var(--tq-accent)',
+                color: '#ffffff',
+              }}
+            >
+              QUICK
+            </span>
+          )}
           <span
             className="text-xs ml-1 truncate"
             style={{ fontFamily: 'IBM Plex Sans, sans-serif', fontWeight: 500, color: 'var(--tq-text)' }}

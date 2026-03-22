@@ -279,6 +279,14 @@ export default function App() {
     setCurrentView('editor');
   };
 
+  const handleStartQuickQuote = () => {
+    if (state.currentUserId && state.step >= 2 && state.step <= 4) {
+      saveDraft(state.currentUserId, state).catch(() => {});
+    }
+    dispatch({ type: 'NEW_QUOTE', mode: 'quick' });
+    setCurrentView('editor');
+  };
+
   const handleResumeDraft = () => {
     if (pendingDraft) {
       dispatch({ type: 'RESTORE_DRAFT', draft: pendingDraft });
@@ -442,6 +450,7 @@ export default function App() {
         <Dashboard
           userName={state.currentUser?.name}
           onStartNewQuote={handleStartNewQuote}
+          onStartQuickQuote={handleStartQuickQuote}
           onViewJobs={() => setCurrentView('saved')}
           incompleteJobs={incompleteJobs}
           currentDraft={pendingDraft || (state.step >= 2 && state.step <= 4 ? state : null)}
@@ -556,6 +565,7 @@ export default function App() {
         onGoToDashboard={handleGoToDashboard}
         onStartNewQuote={handleStartNewQuote}
         onGoToSaved={handleGoToSaved}
+        quoteMode={state.quoteMode}
       />
 
       {/* Main content */}

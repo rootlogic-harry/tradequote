@@ -826,7 +826,16 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             Create RAMS
           </button>
         )}
-        {!isReadOnly && !onBack && (
+        {!isReadOnly && state.quoteMode === 'quick' && (
+          <button
+            onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })}
+            className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+            style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent' }}
+          >
+            Full Review & Edit
+          </button>
+        )}
+        {!isReadOnly && state.quoteMode !== 'quick' && !onBack && (
           <button
             onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })}
             className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"

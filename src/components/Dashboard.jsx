@@ -25,6 +25,7 @@ function isThisMonth(dateStr) {
 export default function Dashboard({
   userName,
   onStartNewQuote,
+  onStartQuickQuote,
   onViewJobs,
   incompleteJobs,
   currentDraft,
@@ -79,20 +80,37 @@ export default function Dashboard({
             {todayFormatted()}
           </p>
         </div>
-        <button
-          onClick={onStartNewQuote}
-          className="shrink-0 rounded transition-colors"
-          style={{
-            fontFamily: 'Barlow Condensed, sans-serif',
-            fontWeight: 700,
-            fontSize: 15,
-            backgroundColor: 'var(--tq-accent)',
-            color: '#ffffff',
-            padding: '10px 20px',
-          }}
-        >
-          + NEW QUOTE
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={onStartQuickQuote}
+            className="rounded transition-colors"
+            style={{
+              fontFamily: 'Barlow Condensed, sans-serif',
+              fontWeight: 700,
+              fontSize: 15,
+              border: '1.5px solid var(--tq-accent)',
+              color: 'var(--tq-accent)',
+              backgroundColor: 'transparent',
+              padding: '10px 20px',
+            }}
+          >
+            QUICK QUOTE
+          </button>
+          <button
+            onClick={onStartNewQuote}
+            className="rounded transition-colors"
+            style={{
+              fontFamily: 'Barlow Condensed, sans-serif',
+              fontWeight: 700,
+              fontSize: 15,
+              backgroundColor: 'var(--tq-accent)',
+              color: '#ffffff',
+              padding: '10px 20px',
+            }}
+          >
+            + NEW QUOTE
+          </button>
+        </div>
       </div>
 
       {/* Stat cards — 4 cards */}

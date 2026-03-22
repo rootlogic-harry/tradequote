@@ -68,6 +68,7 @@ export const initialState = {
   reviewData: null,
   diffs: [],
   quotePayload: null,
+  quoteMode: 'standard',  // 'standard' | 'quick'
   quoteSequence: 1,
   rams: null,
   retryCount: 0,
@@ -118,14 +119,52 @@ function reducerCore(state, action) {
         step: 3,
       };
 
-    case 'ANALYSIS_SUCCESS':
+    case 'ANALYSIS_SUCCESS': {
+      const reviewData = action.normalised;
+
+      if (state.quoteMode === 'quick') {
+        // Auto-confirm all measurements
+        const measurements = reviewData.measurements.map(m => ({ ...m, confirmed: true }));
+        const measurementDiffs = reviewData.measurements.map(m =>
+          buildDiff('measurement', m.item, m.aiValue, m.value)
+        );
+
+        // Build labour + material diffs (same as GENERATE_QUOTE)
+        const labour = reviewData.labourEstimate;
+        const extraDiffs = [];
+        if (labour.aiEstimatedDays != null) {
+          extraDiffs.push(buildDiff('labour_days', 'Estimated Days', labour.aiEstimatedDays, labour.estimatedDays));
+        }
+        (reviewData.materials || []).forEach(mat => {
+          if (mat.aiUnitCost != null) {
+            extraDiffs.push(buildDiff('material_unit_cost', mat.description, mat.aiUnitCost, mat.unitCost));
+          }
+        });
+
+        const allDiffs = [...measurementDiffs, ...extraDiffs];
+        const confirmedReviewData = { ...reviewData, measurements, aiRawResponse: action.rawResponse };
+        const payload = buildQuotePayload(state.profile, state.jobDetails, confirmedReviewData, allDiffs);
+
+        return {
+          ...state,
+          isAnalysing: false,
+          aiRawResponse: action.rawResponse,
+          reviewData: { ...reviewData, measurements },
+          diffs: allDiffs,
+          quotePayload: payload,
+          step: 5,
+        };
+      }
+
+      // Standard mode — unchanged
       return {
         ...state,
         isAnalysing: false,
         aiRawResponse: action.rawResponse,
-        reviewData: action.normalised,
+        reviewData,
         step: 4,
       };
+    }
 
     case 'ANALYSIS_CANCEL':
       return { ...state, isAnalysing: false, analysisError: null, step: 2 };
@@ -232,6 +271,7 @@ function reducerCore(state, action) {
         ...state,
         step: 4,
         quotePayload: null,
+        quoteMode: 'standard',
       };
 
     case 'UPDATE_NOTES':
@@ -279,6 +319,7 @@ function reducerCore(state, action) {
       const year = new Date().getFullYear();
       return {
         ...state,
+        quoteMode: action.mode || 'standard',
         step: 2,
         jobDetails: {
           clientName: '',

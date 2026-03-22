@@ -359,6 +359,7 @@ All state lives in a single reducer in `App.jsx`. No component-level state excep
   reviewData: null,       // normalised AI response + user edits
   diffs: [],              // accumulates on each measurement confirmation
   quotePayload: null,     // assembled at Generate Quote
+  quoteMode: 'standard',  // 'standard' | 'quick'
 }
 ```
 
@@ -381,13 +382,15 @@ UPDATE_ADDITIONAL_COSTS additionalCosts
 UPDATE_SCHEDULE         schedule
 UPDATE_DAMAGE_DESCRIPTION value
 GENERATE_QUOTE          (builds context, enriches diffs, assembles payload, step → 5)
-NEW_QUOTE               (reset to step 2, retain profile, increment reference)
+NEW_QUOTE               (reset to step 2, retain profile, increment reference, optional mode)
+BACK_TO_REVIEW          (step → 4, clear payload, reset quoteMode to standard)
 ```
 
 ---
 
 ## Application Flow
 
+**Standard mode (Full Quote):**
 ```
 Step 1: Profile Setup
 Step 2: Job Details + Photo Upload
@@ -395,6 +398,16 @@ Step 3: AI Analysis (loading — auto-advances to Step 4 on success)
 Step 4: Review & Edit
 Step 5: Quote Output + PDF
 ```
+
+**Quick Quote mode:**
+```
+Step 1: Profile Setup
+Step 2: Job Details + Photo Upload
+Step 3: AI Analysis (loading — auto-advances to Step 5 on success)
+Step 5: Quote Output + PDF (all measurements auto-confirmed)
+```
+
+Quick Quote skips Step 4 entirely — AI analyses, auto-confirms everything, builds the quote payload inline in `ANALYSIS_SUCCESS`, and lands on Step 5. A "Full Review & Edit" button on Step 5 dispatches `BACK_TO_REVIEW` which sets `quoteMode` back to `'standard'` and returns to Step 4 with all data intact. Dashboard shows both "QUICK QUOTE" and "+ NEW QUOTE" buttons. StepIndicator shows a "QUICK" badge when in quick mode.
 
 ---
 
