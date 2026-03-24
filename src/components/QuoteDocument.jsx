@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCurrency, formatDate, calculateValidUntil } from '../utils/quoteBuilder.js';
+import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 
@@ -24,7 +24,6 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   };
 
   const totals = calculateAllTotals(materials, labour, additionalCosts, profile.vatRegistered);
-  const validUntil = calculateValidUntil(jobDetails.quoteDate);
 
   // Collect photos for the document — use selectedPhotos prop if provided
   let docPhotos;
@@ -225,15 +224,12 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Footer */}
       <div className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500">
-        <p className="mb-1">This quote is valid for 30 days from the date issued (until {formatDate(validUntil)}).</p>
         {profile.vatRegistered && profile.vatNumber && (
           <p className="mb-1">VAT No: {profile.vatNumber}</p>
         )}
-        <p className="mb-1">{profile.fullName} — {profile.accreditations}</p>
-        {profile.address && (
-          <p className="mb-1">{profile.address}</p>
+        {profile.companyName && (
+          <p className="mb-1">{profile.companyName}{profile.address ? `, ${profile.address}` : ''}</p>
         )}
-        <p className="italic">Quote prepared with AI assistance — all figures reviewed and confirmed by {profile.fullName}.</p>
       </div>
 
       {/* Photos — full size (only when showPhotos is true) */}

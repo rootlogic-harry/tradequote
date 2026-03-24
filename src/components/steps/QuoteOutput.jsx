@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import QuoteDocument from '../QuoteDocument.jsx';
-import { formatCurrency, formatDate, calculateValidUntil } from '../../utils/quoteBuilder.js';
+import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveJob as saveQuote } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
@@ -173,8 +173,6 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         dayRate: labourEstimate?.dayRate || profile.dayRate,
       };
       const totals = calculateAllTotals(materials, labour, additionalCosts, profile.vatRegistered);
-      const validUntil = calculateValidUntil(jobDetails.quoteDate);
-
       // Fonts
       const BODY_FONT = 'Calibri';
       const HEADING_FONT = 'Calibri';
@@ -574,38 +572,28 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
 
       // Footer
-      children.push(
-        new Paragraph({
-          children: [txt(`This quote is valid for 30 days from the date issued (until ${formatDate(validUntil)}).`, { size: 20, color: '888888' })],
-          spacing: { before: 300 },
-          border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
-        })
-      );
-
       if (profile.vatRegistered && profile.vatNumber) {
         children.push(new Paragraph({
           children: [txt(`VAT No: ${profile.vatNumber}`, { size: 20, color: '888888' })],
+          spacing: { before: 300 },
+          border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
         }));
       }
 
-      children.push(
-        new Paragraph({
-          children: [txt(`${profile.fullName} \u2014 ${profile.accreditations || ''}`, { size: 20, color: '888888' })],
-        }),
-      );
-
-      if (profile.address) {
-        children.push(new Paragraph({
-          children: [txt(profile.address, { size: 20, color: '888888' })],
-        }));
+      if (profile.companyName) {
+        const footerText = profile.address
+          ? `${profile.companyName}, ${profile.address}`
+          : profile.companyName;
+        children.push(
+          new Paragraph({
+            children: [txt(footerText, { size: 20, color: '888888' })],
+            spacing: profile.vatRegistered && profile.vatNumber ? {} : { before: 300 },
+            ...(!profile.vatRegistered || !profile.vatNumber
+              ? { border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } } }
+              : {}),
+          }),
+        );
       }
-
-      children.push(
-        new Paragraph({
-          children: [txt(`Quote prepared with AI assistance \u2014 all figures reviewed and confirmed by ${profile.fullName}.`, { size: 20, italics: true, color: '888888' })],
-          spacing: { after: 200 },
-        }),
-      );
 
       // Photo appendix — 2 photos per page, each in its own section with page breaks
       const photoPageSections = [];
@@ -731,7 +719,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       `Quote ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
     );
     const body = encodeURIComponent(
-      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nThis quote is valid for 30 days from the date issued.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
+      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
