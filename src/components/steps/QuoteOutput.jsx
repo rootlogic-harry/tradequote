@@ -159,8 +159,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     setGeneratingDocx(true);
     try {
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-              WidthType, AlignmentType, HeadingLevel, BorderStyle, ImageRun,
-              PageBreak, convertInchesToTwip, SectionType } = await import('docx');
+              WidthType, AlignmentType, BorderStyle, ImageRun,
+              convertInchesToTwip, SectionType } = await import('docx');
 
       if (!reviewData) return;
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
+import { formatCurrency } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
 
 function getGreeting() {

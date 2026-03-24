@@ -294,7 +294,10 @@ function reducerCore(state, action) {
         }
       });
 
-      const allDiffs = [...state.diffs, ...extraDiffs];
+      // Deduplicate: remove existing labour/material diffs before appending fresh ones
+      const extraDiffKeys = new Set(extraDiffs.map(d => `${d.fieldType}::${d.fieldLabel}`));
+      const baseDiffs = state.diffs.filter(d => !extraDiffKeys.has(`${d.fieldType}::${d.fieldLabel}`));
+      const allDiffs = [...baseDiffs, ...extraDiffs];
       const reviewDataWithRaw = {
         ...state.reviewData,
         aiRawResponse: state.aiRawResponse,
@@ -350,6 +353,7 @@ function reducerCore(state, action) {
       return {
         ...state,
         ...action.draft,
+        quoteMode: action.draft.quoteMode || 'standard',
         isAnalysing: false,
         analysisError: null,
         quotePayload: null,
