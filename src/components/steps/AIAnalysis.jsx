@@ -53,7 +53,7 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
       </p>
 
       <p className="text-tq-muted text-sm mb-6">
-        This usually takes 15–30 seconds
+        This usually takes 30–90 seconds depending on the number of photos
       </p>
 
       {cancelAnalysis && (

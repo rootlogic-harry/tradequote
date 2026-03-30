@@ -46,7 +46,8 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
 
     const controller = new AbortController();
     if (abortRef) abortRef.current = controller;
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    // 3 minutes — multi-image analysis can take 60-120s on Anthropic
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
 
     const response = await fetch('/api/anthropic/messages', {
       method: 'POST',
@@ -104,7 +105,11 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
     });
   } catch (err) {
     if (err.name === 'AbortError') {
-      dispatch({ type: 'ANALYSIS_CANCEL' });
+      // Show a timeout error instead of silently cancelling
+      dispatch({
+        type: 'ANALYSIS_ERROR',
+        error: 'Analysis timed out — the AI is taking longer than expected. Try again with fewer photos, or retry.',
+      });
       return;
     }
     let errorMessage;

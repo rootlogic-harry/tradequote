@@ -10,18 +10,18 @@ function resizeImage(file, maxSize = 2048) {
       const img = new Image();
       img.onload = () => {
         let { width, height } = img;
-        if (width <= maxSize && height <= maxSize) {
-          resolve(e.target.result);
-          return;
+        // Always re-encode to JPEG to ensure consistent compression
+        // (raw PNGs or high-quality JPEGs can be 5-10x larger)
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
         }
-        const ratio = Math.min(maxSize / width, maxSize / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.80));
       };
       img.src = e.target.result;
     };

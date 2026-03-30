@@ -83,15 +83,29 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const imgWidth = usableWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      let position = 0;
-      let remainingHeight = imgHeight;
+      // Slice the canvas into page-sized chunks to prevent overlap at page breaks
+      const pxPerMm = canvas.width / imgWidth;
+      let yOffsetMm = 0;
+      let pageNum = 0;
 
-      while (remainingHeight > 0) {
-        if (position > 0) pdf.addPage();
+      while (yOffsetMm < imgHeight) {
+        if (pageNum > 0) pdf.addPage();
 
-        pdf.addImage(imgData, 'JPEG', margin, margin - position, imgWidth, imgHeight);
-        position += usableHeight;
-        remainingHeight -= usableHeight;
+        const sliceHeightMm = Math.min(usableHeight, imgHeight - yOffsetMm);
+        const srcYPx = Math.round(yOffsetMm * pxPerMm);
+        const srcHPx = Math.round(sliceHeightMm * pxPerMm);
+
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = srcHPx;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, srcYPx, canvas.width, srcHPx, 0, 0, canvas.width, srcHPx);
+
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(sliceData, 'JPEG', margin, margin, imgWidth, sliceHeightMm);
+
+        yOffsetMm += usableHeight;
+        pageNum++;
       }
 
       // Photo appendix pages — 2 photos per page (filtered by selection)

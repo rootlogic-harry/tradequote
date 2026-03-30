@@ -528,6 +528,7 @@ app.post('/api/anthropic/messages', (req, res) => {
         'anthropic-version': '2023-06-01',
         'Content-Length': Buffer.byteLength(body),
       },
+      timeout: 150000, // 2.5 minutes — Anthropic with images can be slow
     },
     (proxyRes) => {
       res.status(proxyRes.statusCode);
@@ -536,16 +537,44 @@ app.post('/api/anthropic/messages', (req, res) => {
           res.setHeader(key, value);
         }
       }
+      proxyRes.on('error', (err) => {
+        console.error('Anthropic response stream error:', err.message);
+        if (!res.headersSent) {
+          res.status(502).json({ error: `Anthropic response error: ${err.message}` });
+        } else {
+          res.end();
+        }
+      });
       proxyRes.pipe(res);
     }
   );
 
+  proxyReq.on('timeout', () => {
+    console.error('Anthropic proxy request timed out after 150s');
+    proxyReq.destroy(new Error('Request timed out'));
+  });
+
   proxyReq.on('error', (err) => {
-    res.status(502).json({ error: `Anthropic proxy error: ${err.message}` });
+    console.error('Anthropic proxy error:', err.message);
+    if (!res.headersSent) {
+      res.status(502).json({ error: `Anthropic proxy error: ${err.message}` });
+    }
   });
 
   proxyReq.write(body);
   proxyReq.end();
+});
+
+// --- Error handler for body-parser / payload too large ---
+
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    console.error(`Payload too large on ${req.method} ${req.path}: ${err.message}`);
+    return res.status(413).json({
+      error: 'Request too large — try reducing the number or size of photos.',
+    });
+  }
+  next(err);
 });
 
 // --- Static Files + SPA Fallback ---

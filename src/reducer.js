@@ -124,13 +124,13 @@ function reducerCore(state, action) {
 
       if (state.quoteMode === 'quick') {
         // Auto-confirm all measurements
-        const measurements = reviewData.measurements.map(m => ({ ...m, confirmed: true }));
-        const measurementDiffs = reviewData.measurements.map(m =>
+        const measurements = (reviewData.measurements || []).map(m => ({ ...m, confirmed: true }));
+        const measurementDiffs = (reviewData.measurements || []).map(m =>
           buildDiff('measurement', m.item, m.aiValue, m.value)
         );
 
         // Build labour + material diffs (same as GENERATE_QUOTE)
-        const labour = reviewData.labourEstimate;
+        const labour = reviewData.labourEstimate || {};
         const extraDiffs = [];
         if (labour.aiEstimatedDays != null) {
           extraDiffs.push(buildDiff('labour_days', 'Estimated Days', labour.aiEstimatedDays, labour.estimatedDays));
