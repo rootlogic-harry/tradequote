@@ -259,49 +259,51 @@ export default function ReviewEdit({ state, dispatch }) {
         </div>
       </div>
 
-      {/* Notes & Conditions Editor */}
-      <div>
-        <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
-          Notes & Conditions
-        </h4>
-        {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => {
-          const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
-          return (
-            <div key={i} className="flex items-start gap-2 mb-2">
-              <span className="text-xs text-tq-muted mt-1.5 shrink-0">{i + 1}.</span>
-              <textarea
-                value={note}
-                onChange={(e) => {
-                  const updated = [...notes];
-                  updated[i] = e.target.value;
-                  dispatch({ type: 'UPDATE_NOTES', notes: updated });
-                }}
-                rows={2}
-                className="flex-1 bg-transparent border-b border-tq-border text-xs text-tq-text outline-none focus:border-tq-accent resize-none"
-              />
-              <button
-                onClick={() => {
-                  const updated = notes.filter((_, idx) => idx !== i);
-                  dispatch({ type: 'UPDATE_NOTES', notes: updated });
-                }}
-                className="text-tq-muted hover:text-tq-error text-sm shrink-0"
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
-        <button
-          onClick={() => {
-            const notes = reviewData.notes && reviewData.notes.length > 0 ? [...reviewData.notes] : [...DEFAULT_NOTES];
-            notes.push('');
-            dispatch({ type: 'UPDATE_NOTES', notes });
-          }}
-          className="text-xs text-tq-accent hover:text-tq-accent-dark"
-        >
-          + Add note
-        </button>
-      </div>
+      {/* Notes & Conditions Editor — hidden when disabled in profile */}
+      {state.profile.showNotesOnQuote !== false && (
+        <div>
+          <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
+            Notes & Conditions
+          </h4>
+          {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => {
+            const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
+            return (
+              <div key={i} className="flex items-start gap-2 mb-2">
+                <span className="text-xs text-tq-muted mt-1.5 shrink-0">{i + 1}.</span>
+                <textarea
+                  value={note}
+                  onChange={(e) => {
+                    const updated = [...notes];
+                    updated[i] = e.target.value;
+                    dispatch({ type: 'UPDATE_NOTES', notes: updated });
+                  }}
+                  rows={2}
+                  className="flex-1 bg-transparent border-b border-tq-border text-xs text-tq-text outline-none focus:border-tq-accent resize-none"
+                />
+                <button
+                  onClick={() => {
+                    const updated = notes.filter((_, idx) => idx !== i);
+                    dispatch({ type: 'UPDATE_NOTES', notes: updated });
+                  }}
+                  className="text-tq-muted hover:text-tq-error text-sm shrink-0"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+          <button
+            onClick={() => {
+              const notes = reviewData.notes && reviewData.notes.length > 0 ? [...reviewData.notes] : [...DEFAULT_NOTES];
+              notes.push('');
+              dispatch({ type: 'UPDATE_NOTES', notes });
+            }}
+            className="text-xs text-tq-accent hover:text-tq-accent-dark"
+          >
+            + Add note
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -315,6 +317,13 @@ export default function ReviewEdit({ state, dispatch }) {
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
             Review the AI analysis. Confirm or edit every measurement before generating your quote.
           </p>
+          <button
+            onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
+            className="text-xs mt-1 hover:underline"
+            style={{ color: 'var(--tq-accent)' }}
+          >
+            Edit job details &amp; photos
+          </button>
         </div>
         {unconfirmedCount > 0 && (
           <div
@@ -344,8 +353,8 @@ export default function ReviewEdit({ state, dispatch }) {
           : '⚠ No reference card detected — all measurements require on-site verification before the quote is issued'}
       </div>
 
-      {/* Desktop: three column layout */}
-      <div className="hidden md:grid md:grid-cols-3 gap-6">
+      {/* Desktop: three column layout — costs column wider for materials table */}
+      <div className="hidden md:grid gap-6" style={{ gridTemplateColumns: '1fr 1fr 1.4fr' }}>
         <div>{damageContent}</div>
         <div>{scheduleContent}</div>
         <div>{costsContent}</div>

@@ -124,13 +124,13 @@ export default function App() {
     if (userTheme) setTheme(userTheme);
     else setTheme(getStoredTheme(userId));
 
-    // Dispatch SELECT_USER with loaded data
+    // Dispatch SELECT_USER — always use DB profile (source of truth)
     const user = state.allUsers.find(u => u.id === userId);
     dispatch({
       type: 'SELECT_USER',
       userId,
       name: user?.name || userId,
-      profile: sessionState?.profile || profile,
+      profile: profile,
       quoteSequence: sessionState?.quoteSequence || quoteSequence,
     });
 
@@ -242,6 +242,16 @@ export default function App() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [state]);
+
+  // Auto-save profile to DB (debounced 3s) whenever profile changes
+  const profileJSON = JSON.stringify(state.profile);
+  useEffect(() => {
+    if (!state.currentUserId) return;
+    const timer = setTimeout(() => {
+      saveProfile(state.currentUserId, state.profile).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [state.currentUserId, profileJSON]);
 
   // Retry analysis: watch for retryCount increments (set by RETRY_ANALYSIS)
   const lastRetryCount = useRef(state.retryCount || 0);
@@ -592,7 +602,12 @@ export default function App() {
               state={state}
               dispatch={dispatch}
               isModal
-              onClose={() => setShowProfileModal(false)}
+              onClose={() => {
+                setShowProfileModal(false);
+                if (state.currentUserId) {
+                  saveProfile(state.currentUserId, state.profile).catch(() => {});
+                }
+              }}
             />
           </div>
         </div>

@@ -181,6 +181,18 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
           />
         </div>
 
+        <div className="sm:col-span-2 flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={profile.showNotesOnQuote !== false}
+              onChange={(e) => update('showNotesOnQuote', e.target.checked)}
+              className="w-4 h-4 accent-tq-accent"
+            />
+            <span className="text-sm text-tq-text">Show Notes & Conditions on quotes</span>
+          </label>
+        </div>
+
       </div>
 
       <div className="mt-6 flex justify-end">

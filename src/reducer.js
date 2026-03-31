@@ -46,6 +46,7 @@ export const initialState = {
     vatNumber: '',
     dayRate: DEFAULT_DAY_RATE,
     accreditations: 'DSWA Professional Member',
+    showNotesOnQuote: true,
   },
   jobDetails: {
     clientName: '',
@@ -350,9 +351,11 @@ function reducerCore(state, action) {
     }
 
     case 'RESTORE_DRAFT': {
+      // Restore job data from draft but preserve current profile (DB is source of truth)
+      const { profile: _draftProfile, ...draftData } = action.draft;
       return {
         ...state,
-        ...action.draft,
+        ...draftData,
         quoteMode: action.draft.quoteMode || 'standard',
         isAnalysing: false,
         analysisError: null,

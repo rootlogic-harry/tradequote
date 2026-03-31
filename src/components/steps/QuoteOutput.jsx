@@ -565,25 +565,27 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         })
       );
 
-      // Notes & Conditions
-      const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
+      // Notes & Conditions — respect profile toggle
+      if (profile.showNotesOnQuote !== false) {
+        const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
 
-      children.push(
-        new Paragraph({
-          children: [txt('NOTES & CONDITIONS', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
-          spacing: { before: 400, after: 120 },
-          border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' } },
-        }),
-      );
+        children.push(
+          new Paragraph({
+            children: [txt('NOTES & CONDITIONS', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
+            spacing: { before: 400, after: 120 },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' } },
+          }),
+        );
 
-      notes.forEach((note, i) => {
-        children.push(new Paragraph({
-          children: [txt(`${i + 1}. ${note}`, { size: 20 })],
-          spacing: { after: 80 },
-        }));
-      });
+        notes.forEach((note, i) => {
+          children.push(new Paragraph({
+            children: [txt(`${i + 1}. ${note}`, { size: 20 })],
+            spacing: { after: 80 },
+          }));
+        });
 
-      children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
+        children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
+      }
 
       // Footer
       if (profile.vatRegistered && profile.vatNumber) {
@@ -826,6 +828,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             title={savedJobId ? 'Create RAMS for this job' : 'Save the quote first to create a RAMS'}
           >
             Create RAMS
+          </button>
+        )}
+        {!isReadOnly && (
+          <button
+            onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
+            className="border border-tq-border text-tq-muted hover:text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          >
+            Edit Job Details
           </button>
         )}
         {!isReadOnly && state.quoteMode === 'quick' && (

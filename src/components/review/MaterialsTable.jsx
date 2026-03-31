@@ -62,54 +62,54 @@ export default function MaterialsTable({ materials, dispatch }) {
 
       {/* Desktop table */}
       <div className="hidden sm:block overflow-x-auto">
-      <table className="w-full text-sm" style={{ minWidth: 580 }}>
+      <table className="w-full text-sm" style={{ minWidth: 420 }}>
         <thead>
           <tr className="border-b border-tq-border text-tq-muted text-xs">
-            <th className="text-left px-2 py-1" style={{ minWidth: 260 }}>Description</th>
-            <th className="text-left px-2 py-1 w-16">Qty</th>
-            <th className="text-left px-2 py-1 w-16">Unit</th>
-            <th className="text-left px-2 py-1 w-24">Rate {'\u00A3'}</th>
-            <th className="text-right px-2 py-1 w-24">Total</th>
-            <th className="w-8"></th>
+            <th className="text-left px-1.5 py-1" style={{ minWidth: 140 }}>Description</th>
+            <th className="text-left px-1.5 py-1 w-14">Qty</th>
+            <th className="text-left px-1.5 py-1 w-14">Unit</th>
+            <th className="text-left px-1.5 py-1 w-20">Rate {'\u00A3'}</th>
+            <th className="text-right px-1.5 py-1 w-20">Total</th>
+            <th className="w-7"></th>
           </tr>
         </thead>
         <tbody>
           {materials.map((mat, i) => (
             <tr key={mat.id || i} className="border-b border-tq-border/50">
-              <td className="px-2 py-1">
+              <td className="px-1.5 py-1">
                 <input
                   value={mat.description}
                   onChange={(e) => updateMaterial(i, 'description', e.target.value)}
                   className={inputClass}
                 />
               </td>
-              <td className="px-2 py-1">
+              <td className="px-1.5 py-1">
                 <input
                   value={mat.quantity}
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
                   className={inputClass}
                 />
               </td>
-              <td className="px-2 py-1">
+              <td className="px-1.5 py-1">
                 <select
                   value={mat.unit || 'Item'}
                   onChange={(e) => updateMaterial(i, 'unit', e.target.value)}
-                  className="bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none cursor-pointer"
+                  className="bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none cursor-pointer w-full"
                 >
                   {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </td>
-              <td className="px-2 py-1">
+              <td className="px-1.5 py-1">
                 <BlurNumberInput
                   value={mat.unitCost}
                   onCommit={(v) => updateMaterial(i, 'unitCost', v)}
                   className={`${inputClass} font-mono`}
                 />
               </td>
-              <td className="px-2 py-1 text-right font-mono text-tq-text">
+              <td className="px-1.5 py-1 text-right font-mono text-tq-text whitespace-nowrap">
                 {'\u00A3'}{(mat.totalCost || 0).toFixed(2)}
               </td>
-              <td className="px-2 py-1 text-center">
+              <td className="px-1 py-1 text-center">
                 <button
                   onClick={() => removeMaterial(i)}
                   className="text-tq-muted hover:text-tq-error text-sm"

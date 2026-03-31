@@ -210,17 +210,19 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </div>
       </div>
 
-      {/* Notes & Conditions */}
-      <div className="mb-8">
-        <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-          Notes &amp; Conditions
-        </h2>
-        <ol className="list-decimal list-inside space-y-1 text-lg text-gray-600">
-          {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => (
-            <li key={i} className="pl-1">{note}</li>
-          ))}
-        </ol>
-      </div>
+      {/* Notes & Conditions — hidden when user disables in profile */}
+      {profile.showNotesOnQuote !== false && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Notes &amp; Conditions
+          </h2>
+          <ol className="list-decimal list-inside space-y-1 text-lg text-gray-600">
+            {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => (
+              <li key={i} className="pl-1">{note}</li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500">

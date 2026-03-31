@@ -463,7 +463,7 @@ export default function JobDetails({ state, dispatch, abortRef }) {
                   <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-muted)', fontWeight: 600 }}>Recommended</span>
                 )}
                 {isReference && (
-                  <span className="text-[10px] uppercase tracking-wide" style={{ color: '#c07e12', fontWeight: 600 }}>Required</span>
+                  <span className="text-[10px] uppercase tracking-wide" style={{ color: '#c07e12', fontWeight: 600 }}>Recommended</span>
                 )}
                 {photo && (
                   <span className="text-xs" style={{ color: 'var(--tq-confirmed-txt)' }}>✓</span>
@@ -594,7 +594,15 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       )}
 
       {/* Analyse CTA */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        {state.reviewData && (
+          <button
+            onClick={() => dispatch({ type: 'SET_STEP', step: 4 })}
+            className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-3 rounded transition-colors"
+          >
+            Back to Review
+          </button>
+        )}
         <button
           disabled={!canAnalyse}
           onClick={handleAnalyse}
@@ -606,9 +614,11 @@ export default function JobDetails({ state, dispatch, abortRef }) {
             cursor: canAnalyse ? 'pointer' : 'not-allowed',
           }}
         >
-          {canAnalyse
-            ? 'ANALYSE JOB'
-            : `ANALYSE JOB — ${neededPhotos > 0 ? `${neededPhotos} PHOTO${neededPhotos !== 1 ? 'S' : ''} NEEDED` : 'ADD SITE ADDRESS'}`
+          {state.reviewData
+            ? 'RE-ANALYSE JOB'
+            : canAnalyse
+              ? 'ANALYSE JOB'
+              : `ANALYSE JOB — ${neededPhotos > 0 ? `${neededPhotos} PHOTO${neededPhotos !== 1 ? 'S' : ''} NEEDED` : 'ADD SITE ADDRESS'}`
           }
         </button>
       </div>

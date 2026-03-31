@@ -180,10 +180,13 @@ export default function StepIndicator({
                 {STEPS.map((step) => {
                   const isCompleted = step.number < currentStep;
                   const isCurrent = step.number === currentStep;
+                  // Allow clicking completed steps (except step 3 which is just a loading screen)
+                  const canNavigate = isCompleted && step.number !== 3;
                   return (
                     <div key={step.number} className="flex items-center">
                       <div
-                        className="flex items-center justify-center rounded-full font-mono"
+                        onClick={canNavigate ? () => dispatch({ type: 'SET_STEP', step: step.number }) : undefined}
+                        className={`flex items-center justify-center rounded-full font-mono${canNavigate ? ' cursor-pointer hover:ring-1 hover:ring-tq-accent' : ''}`}
                         style={{
                           width: 18,
                           height: 18,
@@ -196,11 +199,13 @@ export default function StepIndicator({
                               : { backgroundColor: 'transparent', border: '1.5px solid #3a3630', color: 'var(--tq-nav-muted)' }
                           ),
                         }}
+                        title={canNavigate ? `Go back to ${step.label}` : undefined}
                       >
                         {isCompleted ? '\u2713' : step.number}
                       </div>
                       <span
-                        className="hidden lg:inline ml-1.5 text-xs"
+                        onClick={canNavigate ? () => dispatch({ type: 'SET_STEP', step: step.number }) : undefined}
+                        className={`hidden lg:inline ml-1.5 text-xs${canNavigate ? ' cursor-pointer hover:text-tq-accent' : ''}`}
                         style={{
                           fontFamily: 'IBM Plex Sans, sans-serif',
                           color: isCurrent ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
@@ -268,10 +273,12 @@ export default function StepIndicator({
           {STEPS.map((step) => {
             const isCompleted = step.number < currentStep;
             const isCurrent = step.number === currentStep;
+            const canNavigate = isCompleted && step.number !== 3;
             return (
               <div
                 key={step.number}
-                className="flex items-center justify-center rounded-full font-mono"
+                onClick={canNavigate ? () => dispatch({ type: 'SET_STEP', step: step.number }) : undefined}
+                className={`flex items-center justify-center rounded-full font-mono${canNavigate ? ' cursor-pointer' : ''}`}
                 style={{
                   width: 18,
                   height: 18,
