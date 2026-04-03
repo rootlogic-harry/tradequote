@@ -7,11 +7,16 @@ export async function getProfile(userId) {
 }
 
 export async function saveProfile(userId, profile) {
-  await fetch(`/api/users/${userId}/profile`, {
+  const res = await fetch(`/api/users/${userId}/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profile),
   });
+  if (!res.ok) {
+    let msg = `Profile save failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
 }
 
 // --- Settings ---
@@ -70,13 +75,26 @@ export async function incrementQuoteSequence(userId) {
 // --- Jobs ---
 
 export async function saveJob(userId, state) {
-  const res = await fetch(`/api/users/${userId}/jobs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state),
-  });
-  const data = await res.json();
-  return data.id;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(`/api/users/${userId}/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let msg = `Save failed (${res.status})`;
+      try { const data = await res.json(); msg = data.error || msg; } catch {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    if (!data.id) throw new Error('Server returned no job ID');
+    return data.id;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function listJobs(userId) {
@@ -134,11 +152,16 @@ export async function updateJobStatus(userId, jobId, status, meta = {}) {
 // --- Drafts ---
 
 export async function saveDraft(userId, state) {
-  await fetch(`/api/users/${userId}/drafts`, {
+  const res = await fetch(`/api/users/${userId}/drafts`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(state),
   });
+  if (!res.ok) {
+    let msg = `Draft save failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
 }
 
 export async function loadDraft(userId) {

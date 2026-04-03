@@ -408,8 +408,8 @@ app.put('/api/users/:id/jobs/:jobId/rams-not-required', async (req, res) => {
 app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
   try {
     const { status, sentAt, expiresAt, acceptedAt, declinedAt, declineReason } = req.body;
-    if (!['sent', 'accepted', 'declined'].includes(status)) {
-      return res.status(400).json({ error: `Invalid status: ${status}. Must be sent, accepted, or declined.` });
+    if (!['sent', 'accepted', 'declined', 'completed'].includes(status)) {
+      return res.status(400).json({ error: `Invalid status: ${status}. Must be sent, accepted, declined, or completed.` });
     }
     const { rows } = await pool.query(
       'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',

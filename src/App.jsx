@@ -244,9 +244,26 @@ export default function App() {
   }, [state]);
 
   // Auto-save profile to DB (debounced 3s) whenever profile changes
+  // Skip the first change after user load to avoid writing stale/initial profile back to DB
   const profileJSON = JSON.stringify(state.profile);
+  const profileLoadedRef = useRef(false);
+  const prevProfileJSON = useRef(profileJSON);
+  useEffect(() => {
+    // When user changes, reset the guard
+    profileLoadedRef.current = false;
+    prevProfileJSON.current = null;
+  }, [state.currentUserId]);
   useEffect(() => {
     if (!state.currentUserId) return;
+    // Skip the first render after user load (the DB profile arriving via SELECT_USER)
+    if (!profileLoadedRef.current) {
+      profileLoadedRef.current = true;
+      prevProfileJSON.current = profileJSON;
+      return;
+    }
+    // Only save if the profile actually changed from what we last saw
+    if (profileJSON === prevProfileJSON.current) return;
+    prevProfileJSON.current = profileJSON;
     const timer = setTimeout(() => {
       saveProfile(state.currentUserId, state.profile).catch(() => {});
     }, 3000);
@@ -342,6 +359,8 @@ export default function App() {
         showToast("Quote accepted \u2014 don\u2019t forget to create a RAMS", 'success');
       } else if (targetStatus === 'declined') {
         showToast('Quote recorded as declined', 'info');
+      } else if (targetStatus === 'completed') {
+        showToast('Job marked as completed', 'success');
       }
       fetchIncompleteJobs(state.currentUserId);
     } catch (err) {
@@ -551,6 +570,7 @@ export default function App() {
             dispatch={dispatch}
             showToast={showToast}
             onCreateRams={handleCreateRams}
+            onSaved={() => fetchIncompleteJobs(state.currentUserId)}
           />
         );
       default:

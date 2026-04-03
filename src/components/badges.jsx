@@ -11,6 +11,7 @@ export function StatusBadge({ status }) {
     SENT: { bg: 'var(--tq-status-sent)', color: 'var(--tq-status-sent-txt)' },
     ACCEPTED: { bg: 'var(--tq-status-acc)', color: 'var(--tq-status-acc-txt)' },
     DECLINED: { bg: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)' },
+    COMPLETED: { bg: 'var(--tq-confirmed-bg)', color: 'var(--tq-confirmed-txt)' },
     DRAFT: { bg: 'var(--tq-status-draft)', color: 'var(--tq-status-draft-txt)' },
   };
   const s = styles[status] || styles.DRAFT;

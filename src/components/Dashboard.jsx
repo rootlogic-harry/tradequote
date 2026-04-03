@@ -275,7 +275,7 @@ export default function Dashboard({
             {displayJobs.map((job) => {
               const status = getStatus(job);
               const hasRams = job.hasRams || !!job.ramsSnapshot;
-              const borderLeft = status === 'ACCEPTED'
+              const borderLeft = status === 'ACCEPTED' || status === 'COMPLETED'
                 ? '3px solid var(--tq-confirmed-bd)'
                 : status === 'DECLINED'
                   ? '3px solid var(--tq-error-bd)'
@@ -335,23 +335,32 @@ export default function Dashboard({
                       </>
                     )}
                     {status === 'ACCEPTED' && (
-                      hasRams ? (
+                      <>
+                        {hasRams ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
+                            className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap"
+                            style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-text)', backgroundColor: 'transparent' }}
+                          >
+                            View RAMS
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
+                            className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap"
+                            style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent' }}
+                          >
+                            Create RAMS
+                          </button>
+                        )}
                         <button
-                          onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
-                          className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap"
-                          style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-text)', backgroundColor: 'transparent' }}
+                          onClick={(e) => openStatusModal(e, job.id, 'completed')}
+                          className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap hidden sm:inline-block"
+                          style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)', backgroundColor: 'transparent' }}
                         >
-                          View RAMS
+                          Complete
                         </button>
-                      ) : (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
-                          className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap"
-                          style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent' }}
-                        >
-                          Create RAMS
-                        </button>
-                      )
+                      </>
                     )}
                   </div>
                 </div>

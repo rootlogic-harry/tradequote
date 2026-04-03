@@ -29,6 +29,8 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
       onConfirm(jobId, 'accepted', { acceptedAt: now });
     } else if (targetStatus === 'declined') {
       onConfirm(jobId, 'declined', { declinedAt: now, declineReason });
+    } else if (targetStatus === 'completed') {
+      onConfirm(jobId, 'completed', {});
     }
   };
 
@@ -54,6 +56,13 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
       btnBg: 'var(--tq-error-bd)',
       btnColor: '#ffffff',
       header: 'Mark quote as declined',
+    },
+    completed: {
+      bandBg: 'var(--tq-confirmed-bg)',
+      bandBd: 'var(--tq-confirmed-bd)',
+      btnBg: 'var(--tq-confirmed-bd)',
+      btnColor: '#ffffff',
+      header: 'Mark job as completed',
     },
   };
 
@@ -149,6 +158,12 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
             </>
           )}
 
+          {targetStatus === 'completed' && (
+            <p style={{ color: 'var(--tq-muted)', fontSize: 14, marginBottom: 20 }}>
+              Mark this job as completed. The work has been done and the project is finished.
+            </p>
+          )}
+
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -176,6 +191,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
               {targetStatus === 'sent' && 'CONFIRM \u2014 MARK AS SENT'}
               {targetStatus === 'accepted' && 'CONFIRM ACCEPTED'}
               {targetStatus === 'declined' && 'CONFIRM DECLINED'}
+              {targetStatus === 'completed' && 'CONFIRM COMPLETED'}
             </button>
           </div>
         </div>

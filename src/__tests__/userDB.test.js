@@ -115,6 +115,12 @@ describe('profile', () => {
       method: 'PUT',
     }));
   });
+
+  test('saveProfile throws on server error', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'DB error' }, false, 500));
+    await expect(saveProfile('mark', { companyName: 'Test' }))
+      .rejects.toThrow('DB error');
+  });
 });
 
 // --- Settings ---
@@ -193,6 +199,24 @@ describe('jobs', () => {
     }));
   });
 
+  test('saveJob throws on server error (500)', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Internal error' }, false, 500));
+    await expect(saveJob('mark', makeFakeState('Client')))
+      .rejects.toThrow('Internal error');
+  });
+
+  test('saveJob throws on 413 payload too large', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Request too large' }, false, 413));
+    await expect(saveJob('mark', makeFakeState('Client')))
+      .rejects.toThrow('Request too large');
+  });
+
+  test('saveJob throws when server returns no ID', async () => {
+    fetchMock.mockReturnValue(mockResponse({}));
+    await expect(saveJob('mark', makeFakeState('Client')))
+      .rejects.toThrow('Server returned no job ID');
+  });
+
   test('listJobs calls GET', async () => {
     fetchMock.mockReturnValue(mockResponse([{ id: 'sq-1', clientName: 'A' }]));
     const jobs = await listJobs('mark');
@@ -251,6 +275,12 @@ describe('drafts', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/drafts', expect.objectContaining({
       method: 'PUT',
     }));
+  });
+
+  test('saveDraft throws on server error', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Payload too large' }, false, 413));
+    await expect(saveDraft('mark', makeFakeState('Draft')))
+      .rejects.toThrow('Payload too large');
   });
 
   test('clearDraft calls DELETE', async () => {

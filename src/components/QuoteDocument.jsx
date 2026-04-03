@@ -81,7 +81,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   };
 
   return (
-    <div id="quote-document" className="bg-white text-gray-900 px-20 py-16 font-['IBM_Plex_Sans',sans-serif] text-lg leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div id="quote-document" className="bg-white text-gray-900 px-10 py-8 font-['IBM_Plex_Sans',sans-serif] text-lg leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">
@@ -177,12 +177,16 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
               </tr>
             ))}
             <tr className="border-b border-gray-100">
-              <td className="py-1" colSpan={3}>
-                Labour — {labourEstimate?.description || `${labour.days} days \u00D7 ${labour.workers} workers`}
+              <td className="py-1" colSpan={4}>
+                Labour
               </td>
-              <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(labour.dayRate)}/day</td>
               <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(totals.labourTotal)}</td>
             </tr>
+            {additionalCosts.length > 0 && (
+              <tr className="border-b border-gray-200">
+                <td className="py-2 font-bold text-gray-600 text-base" colSpan={5}>Additional Costs</td>
+              </tr>
+            )}
             {additionalCosts.map((cost) => (
               <tr key={cost.id} className="border-b border-gray-100">
                 <td className="py-1" colSpan={4}>{cost.label}</td>

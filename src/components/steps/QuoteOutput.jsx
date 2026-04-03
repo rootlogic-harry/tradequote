@@ -6,7 +6,7 @@ import { saveJob as saveQuote } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved }) {
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos, extraPhotos = [] } = state;
 
@@ -475,21 +475,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         );
       });
 
-      // Labour row
-      const labourDesc = labourEstimate?.description || `${labour.days} days \u00D7 ${labour.workers} workers`;
+      // Labour row — hide day rate from client-facing output
       tableRows.push(
         new TableRow({
           children: [
             new TableCell({
-              children: [new Paragraph({ children: [txt(`Labour \u2014 ${labourDesc}`, { size: 22 })] })],
+              children: [new Paragraph({ children: [txt('Labour', { size: 22 })] })],
               borders: lightBorder,
               width: { size: COL_DESC, type: WidthType.DXA },
-              columnSpan: 3,
-            }),
-            new TableCell({
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(`${formatCurrency(labour.dayRate)}/day`, { size: 22 })] })],
-              borders: lightBorder,
-              width: { size: COL_RATE, type: WidthType.DXA },
+              columnSpan: 4,
             }),
             new TableCell({
               children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(totals.labourTotal), { size: 22 })] })],
@@ -501,6 +495,20 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       );
 
       // Additional costs
+      if (additionalCosts.length > 0) {
+        tableRows.push(
+          new TableRow({
+            children: [
+              new TableCell({
+                children: [new Paragraph({ children: [txt('Additional Costs', { bold: true, size: 20, color: '555555' })] })],
+                borders: lightBorder,
+                width: { size: COL_DESC, type: WidthType.DXA },
+                columnSpan: 5,
+              }),
+            ],
+          })
+        );
+      }
       additionalCosts.forEach(cost => {
         tableRows.push(
           new TableRow({
@@ -763,9 +771,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       setSaved(true);
       setSavedJobId(id);
       showToast?.('Quote saved', 'success');
+      onSaved?.();
     } catch (err) {
       console.error('Failed to save quote:', err);
-      setSaveError('Failed to save');
+      setSaveError(err.message || 'Failed to save');
+      showToast?.(err.message || 'Failed to save quote', 'error');
     } finally {
       setSaving(false);
     }

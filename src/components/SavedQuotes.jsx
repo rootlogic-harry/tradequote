@@ -3,7 +3,7 @@ import { listJobs, deleteJob } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
 
-const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Declined'];
+const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
 
 export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch }) {
   const [localQuotes, setLocalQuotes] = useState([]);
@@ -107,7 +107,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
         {filteredQuotes.map(quote => {
           const hasRams = quote.hasRams || !!quote.ramsSnapshot;
           const status = getStatus(quote);
-          const borderLeft = status === 'ACCEPTED'
+          const borderLeft = status === 'ACCEPTED' || status === 'COMPLETED'
             ? '3px solid var(--tq-confirmed-bd)'
             : status === 'DECLINED'
               ? '3px solid var(--tq-error-bd)'
@@ -192,23 +192,32 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 )}
 
                 {status === 'ACCEPTED' && (
-                  hasRams && onViewRams ? (
+                  <>
+                    {hasRams && onViewRams ? (
+                      <button
+                        onClick={() => onViewRams(quote)}
+                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                        style={{ border: '1px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                      >
+                        View RAMS
+                      </button>
+                    ) : onCreateRams ? (
+                      <button
+                        onClick={() => onCreateRams(quote)}
+                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                        style={{ border: '1px solid var(--tq-accent)', color: 'var(--tq-accent)' }}
+                      >
+                        Create RAMS
+                      </button>
+                    ) : null}
                     <button
-                      onClick={() => onViewRams(quote)}
+                      onClick={(e) => openStatusModal(e, quote.id, 'completed')}
                       className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
-                      style={{ border: '1px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                      style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
-                      View RAMS
+                      Complete
                     </button>
-                  ) : onCreateRams ? (
-                    <button
-                      onClick={() => onCreateRams(quote)}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
-                      style={{ border: '1px solid var(--tq-accent)', color: 'var(--tq-accent)' }}
-                    >
-                      Create RAMS
-                    </button>
-                  ) : null
+                  </>
                 )}
 
                 {confirmDeleteId === quote.id ? (
