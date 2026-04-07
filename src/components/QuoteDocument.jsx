@@ -228,14 +228,9 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </div>
       )}
 
-      {/* Footer */}
-      <div className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500">
-        {profile.vatRegistered && profile.vatNumber && (
-          <p className="mb-1">VAT No: {profile.vatNumber}</p>
-        )}
-        {profile.companyName && (
-          <p className="mb-1">{profile.companyName}{profile.address ? `, ${profile.address}` : ''}</p>
-        )}
+      {/* Footer — single line */}
+      <div className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500 text-center">
+        <p>{[profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean).join(' · ')}</p>
       </div>
 
       {/* Photos — full size (only when showPhotos is true) */}

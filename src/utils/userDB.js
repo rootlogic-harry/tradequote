@@ -72,6 +72,23 @@ export async function incrementQuoteSequence(userId) {
   return res.json();
 }
 
+// --- Blob stripping (TRQ-55) ---
+
+function stripBlobFields(state) {
+  const clone = JSON.parse(JSON.stringify(state));
+  if (clone.photos) {
+    for (const key of Object.keys(clone.photos)) {
+      clone.photos[key] = null;
+    }
+  }
+  clone.extraPhotos = [];
+  if (clone.profile) {
+    clone.profile.logo = null;
+  }
+  clone.aiRawResponse = null;
+  return clone;
+}
+
 // --- Jobs ---
 
 export async function saveJob(userId, state) {
@@ -81,7 +98,7 @@ export async function saveJob(userId, state) {
     const res = await fetch(`/api/users/${userId}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state),
+      body: JSON.stringify(stripBlobFields(state)),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -155,7 +172,7 @@ export async function saveDraft(userId, state) {
   const res = await fetch(`/api/users/${userId}/drafts`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state),
+    body: JSON.stringify(stripBlobFields(state)),
   });
   if (!res.ok) {
     let msg = `Draft save failed (${res.status})`;

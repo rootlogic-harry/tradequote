@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import useDragReorder from '../../hooks/useDragReorder.js';
 
 function BlurNumberInput({ value: propValue, onCommit, className }) {
   const [local, setLocal] = useState(String(propValue ?? ''));
@@ -50,6 +51,21 @@ export default function MaterialsTable({ materials, dispatch }) {
     });
   };
 
+  // Drag-to-reorder (desktop)
+  const { dragState, getItemProps, getDragHandleProps } = useDragReorder({
+    items: materials,
+    onReorder: (reordered) => dispatch({ type: 'UPDATE_MATERIALS', materials: reordered }),
+  });
+
+  // Move item (mobile up/down)
+  const moveItem = useCallback((from, to) => {
+    if (to < 0 || to >= materials.length) return;
+    const next = [...materials];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    dispatch({ type: 'UPDATE_MATERIALS', materials: next });
+  }, [materials, dispatch]);
+
   const UNIT_OPTIONS = ['m\u00B2', 't', 'Item', 'lin.m', 'Nr', 'days'];
 
   const inputClass = "w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none";
@@ -65,6 +81,7 @@ export default function MaterialsTable({ materials, dispatch }) {
       <table className="w-full text-sm" style={{ minWidth: 420 }}>
         <thead>
           <tr className="border-b border-tq-border text-tq-muted text-xs">
+            <th className="w-7"></th>
             <th className="text-left px-1.5 py-1" style={{ minWidth: 140 }}>Description</th>
             <th className="text-left px-1.5 py-1 w-14">Qty</th>
             <th className="text-left px-1.5 py-1 w-14">Unit</th>
@@ -75,7 +92,14 @@ export default function MaterialsTable({ materials, dispatch }) {
         </thead>
         <tbody>
           {materials.map((mat, i) => (
-            <tr key={mat.id || i} className="border-b border-tq-border/50">
+            <tr
+              key={mat.id || i}
+              {...getItemProps(i)}
+              className={`border-b border-tq-border/50 ${dragState.dragIndex === i ? 'opacity-50' : ''} ${dragState.isDragging && dragState.overIndex === i ? 'border-t-2 border-t-tq-accent' : ''}`}
+            >
+              <td className="px-1 py-1 text-center" {...getDragHandleProps(i)}>
+                <span style={{ cursor: 'grab' }} className="text-tq-muted text-xs select-none">{'\u2807'}</span>
+              </td>
               <td className="px-1.5 py-1">
                 <input
                   value={mat.description}
@@ -128,6 +152,22 @@ export default function MaterialsTable({ materials, dispatch }) {
         {materials.map((mat, i) => (
           <div key={mat.id || i} className="border border-tq-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1 mr-2">
+                <button
+                  onClick={() => moveItem(i, i - 1)}
+                  disabled={i === 0}
+                  className="text-tq-muted hover:text-tq-accent text-sm disabled:opacity-30"
+                >
+                  {'\u2191'}
+                </button>
+                <button
+                  onClick={() => moveItem(i, i + 1)}
+                  disabled={i === materials.length - 1}
+                  className="text-tq-muted hover:text-tq-accent text-sm disabled:opacity-30"
+                >
+                  {'\u2193'}
+                </button>
+              </div>
               <input
                 value={mat.description}
                 onChange={(e) => updateMaterial(i, 'description', e.target.value)}

@@ -104,6 +104,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
         pdf.addImage(sliceData, 'JPEG', margin, margin, imgWidth, sliceHeightMm);
 
+        // Footer on every page
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        const footerParts = [profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean);
+        pdf.text(footerParts.join('  ·  '), pageWidth / 2, pageHeight - 8, { align: 'center' });
+
         yOffsetMm += usableHeight;
         pageNum++;
       }
@@ -155,6 +161,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
             yPos += drawHeight + 15;
           }
+
+          // Footer on photo pages
+          pdf.setFontSize(8);
+          pdf.setTextColor(150, 150, 150);
+          const photoFooterParts = [profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean);
+          pdf.text(photoFooterParts.join('  ·  '), pageWidth / 2, pageHeight - 8, { align: 'center' });
         }
       }
 
@@ -174,7 +186,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     try {
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
               WidthType, AlignmentType, BorderStyle, ImageRun,
-              convertInchesToTwip, SectionType } = await import('docx');
+              convertInchesToTwip, SectionType, Footer } = await import('docx');
 
       if (!reviewData) return;
 
@@ -217,6 +229,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const COL_UNIT_COL = 1060; // ~11%
       const COL_RATE = 1800;  // ~19%
       const COL_TOTAL = 1900; // ~20%
+      const COL_SPAN_4 = COL_DESC + COL_QTY + COL_UNIT_COL + COL_RATE; // 7460
+      const COL_SPAN_5 = COL_SPAN_4 + COL_TOTAL;                       // 9360
 
       // Build main document children
       const children = [];
@@ -482,7 +496,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             new TableCell({
               children: [new Paragraph({ children: [txt('Labour', { size: 22 })] })],
               borders: lightBorder,
-              width: { size: COL_DESC, type: WidthType.DXA },
+              width: { size: COL_SPAN_4, type: WidthType.DXA },
               columnSpan: 4,
             }),
             new TableCell({
@@ -502,7 +516,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               new TableCell({
                 children: [new Paragraph({ children: [txt('Additional Costs', { bold: true, size: 20, color: '555555' })] })],
                 borders: lightBorder,
-                width: { size: COL_DESC, type: WidthType.DXA },
+                width: { size: COL_SPAN_5, type: WidthType.DXA },
                 columnSpan: 5,
               }),
             ],
@@ -516,7 +530,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               new TableCell({
                 children: [new Paragraph({ children: [txt(cost.label, { size: 22 })] })],
                 borders: lightBorder,
-                width: { size: COL_DESC, type: WidthType.DXA },
+                width: { size: COL_SPAN_4, type: WidthType.DXA },
                 columnSpan: 4,
               }),
               new TableCell({
@@ -595,29 +609,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
       }
 
-      // Footer
-      if (profile.vatRegistered && profile.vatNumber) {
-        children.push(new Paragraph({
-          children: [txt(`VAT No: ${profile.vatNumber}`, { size: 20, color: '888888' })],
-          spacing: { before: 300 },
-          border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
-        }));
-      }
-
-      if (profile.companyName) {
-        const footerText = profile.address
-          ? `${profile.companyName}, ${profile.address}`
-          : profile.companyName;
-        children.push(
-          new Paragraph({
-            children: [txt(footerText, { size: 20, color: '888888' })],
-            spacing: profile.vatRegistered && profile.vatNumber ? {} : { before: 300 },
-            ...(!profile.vatRegistered || !profile.vatNumber
-              ? { border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } } }
-              : {}),
-          }),
-        );
-      }
+      // Footer — now rendered via section footers (not inline paragraphs)
+      const docFooterParts = [profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean);
+      const docFooter = new Footer({
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [txt(docFooterParts.join('  ·  '), { size: 16, color: '999999' })],
+        })],
+      });
 
       // Photo appendix — 2 photos per page, each in its own section with page breaks
       const photoPageSections = [];
@@ -686,6 +685,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
           photoPageSections.push({
             properties: { type: SectionType.NEXT_PAGE },
+            footers: { default: docFooter },
             children: pageChildren,
           });
         }
@@ -711,6 +711,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 },
               },
             },
+            footers: { default: docFooter },
             children,
           },
           ...photoPageSections,
