@@ -15,6 +15,7 @@ import {
   saveDraft, loadDraft, clearDraft,
   deleteUserData, exportUserData,
   migrateFromLegacyDB,
+  savePhoto, loadPhotos, deletePhotos, deletePhoto, copyPhotos,
 } from '../utils/userDB.js';
 import {
   bootstrapUsers, listUsers, getUser, addUser, deleteUser,
@@ -320,6 +321,85 @@ describe('migrateFromLegacyDB', () => {
     const result = await migrateFromLegacyDB('mark');
     expect(result).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// --- Photos ---
+
+describe('photos', () => {
+  test('savePhoto calls PUT (fire-and-forget)', () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    savePhoto('mark', 'draft', 'overview', { data: 'data:image/jpeg;base64,abc', name: 'photo.jpg' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/photos/draft/overview', expect.objectContaining({
+      method: 'PUT',
+    }));
+  });
+
+  test('savePhoto does not throw on failure', () => {
+    fetchMock.mockReturnValue(Promise.reject(new Error('Network error')));
+    // Should not throw — fire-and-forget
+    expect(() => savePhoto('mark', 'draft', 'overview', { data: 'data:abc' })).not.toThrow();
+  });
+
+  test('loadPhotos calls GET and parses response', async () => {
+    fetchMock.mockReturnValue(mockResponse([
+      { slot: 'overview', data: 'data:img1', name: 'ov.jpg', label: null },
+      { slot: 'closeup', data: 'data:img2', name: 'cu.jpg', label: null },
+      { slot: 'extra-0', data: 'data:img3', name: 'ex.jpg', label: 'Other' },
+    ]));
+    const result = await loadPhotos('mark', 'draft');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/photos/draft');
+    expect(result.photos.overview.data).toBe('data:img1');
+    expect(result.photos.closeup.data).toBe('data:img2');
+    expect(result.extraPhotos).toHaveLength(1);
+    expect(result.extraPhotos[0].data).toBe('data:img3');
+  });
+
+  test('loadPhotos returns empty on failure', async () => {
+    fetchMock.mockReturnValue(mockResponse(null, false, 500));
+    const result = await loadPhotos('mark', 'draft');
+    expect(result.photos).toEqual({});
+    expect(result.extraPhotos).toEqual([]);
+  });
+
+  test('deletePhotos calls DELETE for context', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await deletePhotos('mark', 'draft');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/photos/draft', expect.objectContaining({
+      method: 'DELETE',
+    }));
+  });
+
+  test('deletePhoto calls DELETE for specific slot', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await deletePhoto('mark', 'draft', 'overview');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/photos/draft/overview', expect.objectContaining({
+      method: 'DELETE',
+    }));
+  });
+
+  test('copyPhotos calls POST with fromContext and toContext', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await copyPhotos('mark', 'draft', 'sq-123');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/photos/copy', expect.objectContaining({
+      method: 'POST',
+    }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.fromContext).toBe('draft');
+    expect(body.toContext).toBe('sq-123');
+  });
+});
+
+describe('saveJob with photo copy', () => {
+  test('saveJob copies photos after successful save', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ id: 'sq-456' }))  // saveJob POST
+      .mockReturnValueOnce(mockResponse({ ok: true }));       // copyPhotos POST
+    const id = await saveJob('mark', makeFakeState('Client'));
+    expect(id).toBe('sq-456');
+    // Second call should be the photo copy
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/users/mark/photos/copy');
   });
 });
 

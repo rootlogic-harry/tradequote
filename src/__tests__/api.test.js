@@ -6,54 +6,18 @@
  * Run: DATABASE_URL=postgres://... node --experimental-vm-modules node_modules/.bin/jest src/__tests__/api.test.js --runInBand
  */
 
-import { app, pool } from '../../server.js';
+// Set test env before importing server (prevents auto-listen and process.exit)
+process.env.NODE_ENV = 'test';
+
+import { app, pool, dbReady } from '../../server.js';
 import http from 'http';
 
 let server;
 let baseUrl;
 
 beforeAll(async () => {
-  // Init schema
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS profiles (
-        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        data JSONB NOT NULL DEFAULT '{}'
-      );
-      CREATE TABLE IF NOT EXISTS settings (
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        key TEXT NOT NULL,
-        value JSONB,
-        PRIMARY KEY (user_id, key)
-      );
-      CREATE TABLE IF NOT EXISTS jobs (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        saved_at TIMESTAMPTZ DEFAULT NOW(),
-        client_name TEXT,
-        site_address TEXT,
-        quote_reference TEXT,
-        quote_date TEXT,
-        total_amount NUMERIC DEFAULT 0,
-        has_rams BOOLEAN DEFAULT FALSE,
-        quote_snapshot JSONB,
-        rams_snapshot JSONB
-      );
-      CREATE TABLE IF NOT EXISTS drafts (
-        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        saved_at TIMESTAMPTZ DEFAULT NOW(),
-        data JSONB NOT NULL
-      );
-    `);
-  } finally {
-    client.release();
-  }
+  // Wait for server's initDB to complete (creates all tables)
+  await dbReady;
 
   server = http.createServer(app);
   await new Promise(resolve => server.listen(0, resolve));
@@ -67,7 +31,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  // Clean all tables before each test
+  // Clean all tables before each test (order matters for FK constraints)
+  await pool.query('DELETE FROM user_photos');
   await pool.query('DELETE FROM drafts');
   await pool.query('DELETE FROM jobs');
   await pool.query('DELETE FROM settings');
@@ -122,6 +87,18 @@ describe('User CRUD', () => {
     await api('/api/users/temp', { method: 'DELETE' });
     const { data } = await api('/api/users');
     expect(data).toHaveLength(0);
+  });
+
+  test('POST /api/users requires id and name', async () => {
+    const { status } = await api('/api/users', { method: 'POST', body: { id: 'test' } });
+    expect(status).toBe(400);
+  });
+
+  test('POST /api/users upserts on conflict', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'test', name: 'Old' } });
+    await api('/api/users', { method: 'POST', body: { id: 'test', name: 'New' } });
+    const { data } = await api('/api/users/test');
+    expect(data.name).toBe('New');
   });
 });
 
@@ -263,6 +240,141 @@ describe('Jobs', () => {
     expect(markJobs).toHaveLength(1);
     expect(harryJobs).toHaveLength(0);
   });
+
+  test('GET /api/users/:id/jobs/:jobId returns null for non-existent job', async () => {
+    const { data } = await api('/api/users/mark/jobs/nonexistent');
+    expect(data).toBeNull();
+  });
+
+  test('job totalAmount is returned as number', async () => {
+    const state = makeFakeState('Amount Test');
+    state.quotePayload = { totals: { total: 3500.50 } };
+    const { data: created } = await api('/api/users/mark/jobs', { method: 'POST', body: state });
+    const { data: jobs } = await api('/api/users/mark/jobs');
+    expect(typeof jobs[0].totalAmount).toBe('number');
+    expect(jobs[0].totalAmount).toBe(3500.50);
+  });
+});
+
+// --- Job Status Lifecycle ---
+
+describe('Job Status Lifecycle', () => {
+  let jobId;
+
+  beforeEach(async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Status Test') });
+    jobId = data.id;
+  });
+
+  test('new job starts with draft status', async () => {
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.status).toBe('draft');
+  });
+
+  test('can mark job as sent with sentAt and expiresAt', async () => {
+    const sentAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'sent', sentAt, expiresAt },
+    });
+    expect(status).toBe(200);
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.status).toBe('sent');
+    expect(job.sentAt).toBeDefined();
+    expect(job.expiresAt).toBeDefined();
+  });
+
+  test('can mark job as accepted', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'accepted', acceptedAt: new Date().toISOString() },
+    });
+    expect(status).toBe(200);
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.status).toBe('accepted');
+  });
+
+  test('can mark job as declined with reason', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'declined', declinedAt: new Date().toISOString(), declineReason: 'Too expensive' },
+    });
+    expect(status).toBe(200);
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.status).toBe('declined');
+    expect(job.declineReason).toBe('Too expensive');
+  });
+
+  test('can mark job as completed', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'completed' },
+    });
+    expect(status).toBe(200);
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.status).toBe('completed');
+  });
+
+  test('rejects invalid status', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'invalid' },
+    });
+    expect(status).toBe(400);
+  });
+
+  test('returns 404 for non-existent job', async () => {
+    const { status } = await api('/api/users/mark/jobs/nonexistent/status', {
+      method: 'PUT',
+      body: { status: 'sent' },
+    });
+    expect(status).toBe(404);
+  });
+});
+
+// --- RAMS Not Required ---
+
+describe('RAMS Not Required', () => {
+  let jobId;
+
+  beforeEach(async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('RAMS NR') });
+    jobId = data.id;
+  });
+
+  test('can set rams_not_required to true', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/rams-not-required`, {
+      method: 'PUT',
+      body: { value: true },
+    });
+    expect(status).toBe(200);
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.ramsNotRequired).toBe(true);
+  });
+
+  test('can set rams_not_required back to false', async () => {
+    await api(`/api/users/mark/jobs/${jobId}/rams-not-required`, {
+      method: 'PUT',
+      body: { value: true },
+    });
+    await api(`/api/users/mark/jobs/${jobId}/rams-not-required`, {
+      method: 'PUT',
+      body: { value: false },
+    });
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.ramsNotRequired).toBe(false);
+  });
+
+  test('returns 404 for non-existent job', async () => {
+    const { status } = await api('/api/users/mark/jobs/nonexistent/rams-not-required', {
+      method: 'PUT',
+      body: { value: true },
+    });
+    expect(status).toBe(404);
+  });
 });
 
 // --- Drafts ---
@@ -290,6 +402,190 @@ describe('Drafts', () => {
     const { data } = await api('/api/users/mark/drafts');
     expect(data).toBeNull();
   });
+
+  test('PUT upserts draft (single draft per user)', async () => {
+    await api('/api/users/mark/drafts', { method: 'PUT', body: makeFakeState('First') });
+    await api('/api/users/mark/drafts', { method: 'PUT', body: makeFakeState('Second') });
+    const { data } = await api('/api/users/mark/drafts');
+    expect(data.jobDetails.clientName).toBe('Second');
+  });
+});
+
+// --- Photos ---
+
+describe('Photos', () => {
+  beforeEach(async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+  });
+
+  test('PUT creates a photo, GET retrieves it', async () => {
+    const { status } = await api('/api/users/mark/photos/draft/overview', {
+      method: 'PUT',
+      body: { data: 'data:image/jpeg;base64,abc123', name: 'wall.jpg', label: 'Overview' },
+    });
+    expect(status).toBe(200);
+
+    const { data: photos } = await api('/api/users/mark/photos/draft');
+    expect(photos).toHaveLength(1);
+    expect(photos[0].slot).toBe('overview');
+    expect(photos[0].data).toBe('data:image/jpeg;base64,abc123');
+    expect(photos[0].name).toBe('wall.jpg');
+  });
+
+  test('PUT upserts photo (replaces existing)', async () => {
+    await api('/api/users/mark/photos/draft/overview', {
+      method: 'PUT',
+      body: { data: 'data:old', name: 'old.jpg' },
+    });
+    await api('/api/users/mark/photos/draft/overview', {
+      method: 'PUT',
+      body: { data: 'data:new', name: 'new.jpg' },
+    });
+    const { data: photos } = await api('/api/users/mark/photos/draft');
+    expect(photos).toHaveLength(1);
+    expect(photos[0].data).toBe('data:new');
+  });
+
+  test('PUT rejects missing data', async () => {
+    const { status } = await api('/api/users/mark/photos/draft/overview', {
+      method: 'PUT',
+      body: { name: 'nodata.jpg' },
+    });
+    expect(status).toBe(400);
+  });
+
+  test('multiple slots in same context', async () => {
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:1' } });
+    await api('/api/users/mark/photos/draft/closeup', { method: 'PUT', body: { data: 'data:2' } });
+    await api('/api/users/mark/photos/draft/extra-0', { method: 'PUT', body: { data: 'data:3', label: 'Other' } });
+    const { data: photos } = await api('/api/users/mark/photos/draft');
+    expect(photos).toHaveLength(3);
+  });
+
+  test('GET returns empty array when no photos', async () => {
+    const { data } = await api('/api/users/mark/photos/draft');
+    expect(data).toEqual([]);
+  });
+
+  test('DELETE removes all photos for a context', async () => {
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:1' } });
+    await api('/api/users/mark/photos/draft/closeup', { method: 'PUT', body: { data: 'data:2' } });
+    await api('/api/users/mark/photos/draft', { method: 'DELETE' });
+    const { data } = await api('/api/users/mark/photos/draft');
+    expect(data).toEqual([]);
+  });
+
+  test('DELETE single slot leaves others intact', async () => {
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:1' } });
+    await api('/api/users/mark/photos/draft/closeup', { method: 'PUT', body: { data: 'data:2' } });
+    await api('/api/users/mark/photos/draft/overview', { method: 'DELETE' });
+    const { data } = await api('/api/users/mark/photos/draft');
+    expect(data).toHaveLength(1);
+    expect(data[0].slot).toBe('closeup');
+  });
+
+  test('photos are isolated by context', async () => {
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:draft' } });
+    await api('/api/users/mark/photos/sq-123/overview', { method: 'PUT', body: { data: 'data:job' } });
+    const { data: draftPhotos } = await api('/api/users/mark/photos/draft');
+    const { data: jobPhotos } = await api('/api/users/mark/photos/sq-123');
+    expect(draftPhotos).toHaveLength(1);
+    expect(draftPhotos[0].data).toBe('data:draft');
+    expect(jobPhotos).toHaveLength(1);
+    expect(jobPhotos[0].data).toBe('data:job');
+  });
+
+  test('photos are isolated per user', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'harry', name: 'Harry' } });
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:mark' } });
+    const { data: harryPhotos } = await api('/api/users/harry/photos/draft');
+    expect(harryPhotos).toEqual([]);
+  });
+
+  test('POST /photos/copy copies photos between contexts', async () => {
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:1', name: 'ov.jpg' } });
+    await api('/api/users/mark/photos/draft/closeup', { method: 'PUT', body: { data: 'data:2', name: 'cu.jpg' } });
+    await api('/api/users/mark/photos/draft/extra-0', { method: 'PUT', body: { data: 'data:3', label: 'Other' } });
+
+    const { status } = await api('/api/users/mark/photos/copy', {
+      method: 'POST',
+      body: { fromContext: 'draft', toContext: 'sq-456' },
+    });
+    expect(status).toBe(200);
+
+    const { data: copied } = await api('/api/users/mark/photos/sq-456');
+    expect(copied).toHaveLength(3);
+    const slots = copied.map(p => p.slot).sort();
+    expect(slots).toEqual(['closeup', 'extra-0', 'overview']);
+  });
+
+  test('POST /photos/copy replaces existing target photos', async () => {
+    // Create old target photos
+    await api('/api/users/mark/photos/sq-old/overview', { method: 'PUT', body: { data: 'data:old' } });
+    // Create source photos
+    await api('/api/users/mark/photos/draft/closeup', { method: 'PUT', body: { data: 'data:new' } });
+
+    await api('/api/users/mark/photos/copy', {
+      method: 'POST',
+      body: { fromContext: 'draft', toContext: 'sq-old' },
+    });
+
+    const { data } = await api('/api/users/mark/photos/sq-old');
+    expect(data).toHaveLength(1);
+    expect(data[0].slot).toBe('closeup');
+    expect(data[0].data).toBe('data:new');
+  });
+
+  test('POST /photos/copy rejects missing parameters', async () => {
+    const { status: s1 } = await api('/api/users/mark/photos/copy', {
+      method: 'POST',
+      body: { fromContext: 'draft' },
+    });
+    expect(s1).toBe(400);
+    const { status: s2 } = await api('/api/users/mark/photos/copy', {
+      method: 'POST',
+      body: { toContext: 'sq-1' },
+    });
+    expect(s2).toBe(400);
+  });
+
+  test('source photos preserved after copy', async () => {
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:src' } });
+    await api('/api/users/mark/photos/copy', {
+      method: 'POST',
+      body: { fromContext: 'draft', toContext: 'sq-789' },
+    });
+    // Source still intact
+    const { data } = await api('/api/users/mark/photos/draft');
+    expect(data).toHaveLength(1);
+    expect(data[0].data).toBe('data:src');
+  });
+});
+
+// --- CASCADE Deletes ---
+
+describe('CASCADE Deletes', () => {
+  test('deleting user cascades to photos', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'temp', name: 'Temp' } });
+    await api('/api/users/temp/photos/draft/overview', { method: 'PUT', body: { data: 'data:x' } });
+    await api('/api/users/temp', { method: 'DELETE' });
+
+    // Re-create user to verify photos are gone
+    await api('/api/users', { method: 'POST', body: { id: 'temp', name: 'Temp' } });
+    const { data } = await api('/api/users/temp/photos/draft');
+    expect(data).toEqual([]);
+  });
+
+  test('deleting job does not delete photos (photos use context-based cleanup)', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data: created } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Job') });
+    await api('/api/users/mark/photos/sq-test/overview', { method: 'PUT', body: { data: 'data:y' } });
+    await api(`/api/users/mark/jobs/${created.id}`, { method: 'DELETE' });
+    // Photos are NOT cascade-deleted by job deletion (they use user_id FK, not job FK)
+    // The app handles this cleanup at the application layer
+    const { data } = await api('/api/users/mark/photos/sq-test');
+    expect(data).toHaveLength(1);
+  });
 });
 
 // --- GDPR ---
@@ -299,10 +595,11 @@ describe('GDPR', () => {
     await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
   });
 
-  test('DELETE /api/users/:id/data removes all user data', async () => {
+  test('DELETE /api/users/:id/data removes all user data including photos', async () => {
     await api('/api/users/mark/profile', { method: 'PUT', body: { companyName: 'Test' } });
     await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Job') });
     await api('/api/users/mark/drafts', { method: 'PUT', body: makeFakeState('Draft') });
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:gdpr' } });
 
     await api('/api/users/mark/data', { method: 'DELETE' });
 
@@ -312,17 +609,112 @@ describe('GDPR', () => {
     expect(jobs).toHaveLength(0);
     const { data: draft } = await api('/api/users/mark/drafts');
     expect(draft).toBeNull();
+    const { data: photos } = await api('/api/users/mark/photos/draft');
+    expect(photos).toEqual([]);
   });
 
-  test('GET /api/users/:id/export returns all data', async () => {
+  test('GET /api/users/:id/export returns all data including photo metadata', async () => {
     await api('/api/users/mark/profile', { method: 'PUT', body: { companyName: 'Export' } });
     await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Export Job') });
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:export', name: 'export.jpg' } });
 
     const { data } = await api('/api/users/mark/export');
     expect(data.userId).toBe('mark');
     expect(data.exportedAt).toBeDefined();
     expect(data.profile).toHaveLength(1);
     expect(data.jobs).toHaveLength(1);
+    expect(data.photos).toHaveLength(1);
+    expect(data.photos[0].slot).toBe('overview');
+    expect(data.photos[0].context).toBe('draft');
+  });
+});
+
+// --- End-to-End Workflows ---
+
+describe('E2E: Full Quote Lifecycle', () => {
+  test('draft → job → photos copied → status sent → accepted → completed', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+
+    // 1. Save draft with photos
+    await api('/api/users/mark/drafts', { method: 'PUT', body: makeFakeState('E2E Client') });
+    await api('/api/users/mark/photos/draft/overview', { method: 'PUT', body: { data: 'data:e2e-ov', name: 'ov.jpg' } });
+    await api('/api/users/mark/photos/draft/closeup', { method: 'PUT', body: { data: 'data:e2e-cu', name: 'cu.jpg' } });
+
+    // 2. Load draft — verify it exists
+    const { data: draft } = await api('/api/users/mark/drafts');
+    expect(draft.jobDetails.clientName).toBe('E2E Client');
+
+    // 3. Load photos
+    const { data: draftPhotos } = await api('/api/users/mark/photos/draft');
+    expect(draftPhotos).toHaveLength(2);
+
+    // 4. Save as job
+    const { data: created } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('E2E Client') });
+    const jobId = created.id;
+
+    // 5. Copy photos draft → job
+    await api('/api/users/mark/photos/copy', {
+      method: 'POST',
+      body: { fromContext: 'draft', toContext: jobId },
+    });
+
+    // 6. Verify job photos
+    const { data: jobPhotos } = await api(`/api/users/mark/photos/${jobId}`);
+    expect(jobPhotos).toHaveLength(2);
+
+    // 7. Clear draft
+    await api('/api/users/mark/drafts', { method: 'DELETE' });
+    await api('/api/users/mark/photos/draft', { method: 'DELETE' });
+    const { data: clearedDraft } = await api('/api/users/mark/drafts');
+    expect(clearedDraft).toBeNull();
+
+    // 8. Status lifecycle: draft → sent → accepted → completed
+    await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'sent', sentAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() },
+    });
+    let { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.status).toBe('sent');
+
+    await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'accepted', acceptedAt: new Date().toISOString() },
+    });
+    ({ data: job } = await api(`/api/users/mark/jobs/${jobId}`));
+    expect(job.status).toBe('accepted');
+
+    await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'completed' },
+    });
+    ({ data: job } = await api(`/api/users/mark/jobs/${jobId}`));
+    expect(job.status).toBe('completed');
+  });
+
+  test('delete job also needs manual photo cleanup', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data: created } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Cleanup') });
+    const jobId = created.id;
+
+    // Photos for the job
+    await api(`/api/users/mark/photos/${jobId}/overview`, { method: 'PUT', body: { data: 'data:cleanup' } });
+
+    // Delete job
+    await api(`/api/users/mark/jobs/${jobId}`, { method: 'DELETE' });
+
+    // App-level cleanup: delete photos for that context
+    await api(`/api/users/mark/photos/${jobId}`, { method: 'DELETE' });
+    const { data } = await api(`/api/users/mark/photos/${jobId}`);
+    expect(data).toEqual([]);
+  });
+});
+
+// --- SPA Fallback ---
+
+describe('SPA Fallback', () => {
+  test('unknown API route returns 404', async () => {
+    const { status } = await api('/api/nonexistent');
+    expect(status).toBe(404);
   });
 });
 

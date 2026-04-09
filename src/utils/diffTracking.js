@@ -29,7 +29,7 @@ export function buildDiff(fieldType, fieldLabel, aiValue, confirmedValue) {
     aiValue,
     confirmedValue,
     wasEdited,
-    editMagnitude: isNumeric && editMagnitude === null ? 0 : editMagnitude,
+    editMagnitude: isNumeric && !wasEdited ? 0 : editMagnitude,
     createdAt: Date.now(),
   };
 }

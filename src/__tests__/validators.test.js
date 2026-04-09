@@ -157,25 +157,25 @@ describe('validateRequiredPhotoSlots', () => {
     expect(result.hasReferenceCard).toBe(true);
   });
 
-  test('valid when overview is missing (all slots optional)', () => {
+  test('invalid when overview is missing', () => {
     const photos = { ...allPhotos, overview: null };
     const result = validateRequiredPhotoSlots(photos);
-    expect(result.valid).toBe(true);
-    expect(result.missingSlots).toHaveLength(0);
+    expect(result.valid).toBe(false);
+    expect(result.missingSlots).toContain('overview');
   });
 
-  test('valid when closeup is missing (all slots optional)', () => {
+  test('invalid when closeup is missing', () => {
     const photos = { ...allPhotos, closeup: null };
     const result = validateRequiredPhotoSlots(photos);
-    expect(result.valid).toBe(true);
-    expect(result.missingSlots).toHaveLength(0);
+    expect(result.valid).toBe(false);
+    expect(result.missingSlots).toContain('closeup');
   });
 
-  test('valid when referenceCard is missing', () => {
+  test('invalid when referenceCard is missing', () => {
     const photos = { ...allPhotos, referenceCard: null };
     const result = validateRequiredPhotoSlots(photos);
-    expect(result.valid).toBe(true);
-    expect(result.missingSlots).toHaveLength(0);
+    expect(result.valid).toBe(false);
+    expect(result.missingSlots).toContain('referenceCard');
     expect(result.hasReferenceCard).toBe(false);
   });
 
@@ -186,11 +186,11 @@ describe('validateRequiredPhotoSlots', () => {
     expect(result.missingSlots).toHaveLength(0);
   });
 
-  test('valid even when all slots are empty (all optional)', () => {
+  test('invalid when all slots are empty', () => {
     const photos = { overview: null, closeup: null, sideProfile: null, referenceCard: null, access: null };
     const result = validateRequiredPhotoSlots(photos);
-    expect(result.valid).toBe(true);
-    expect(result.missingSlots).toHaveLength(0);
+    expect(result.valid).toBe(false);
+    expect(result.missingSlots).toHaveLength(3);
   });
 
   test('hasReferenceCard is true when referenceCard slot filled', () => {

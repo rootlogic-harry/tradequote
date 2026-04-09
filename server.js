@@ -62,6 +62,17 @@ async function initDB() {
         saved_at TIMESTAMPTZ DEFAULT NOW(),
         data JSONB NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS user_photos (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        context TEXT NOT NULL DEFAULT 'draft',
+        slot TEXT NOT NULL,
+        data TEXT NOT NULL,
+        label TEXT,
+        name TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (user_id, context, slot)
+      );
     `);
 
     // Bootstrap default users
@@ -468,12 +479,92 @@ app.delete('/api/users/:id/drafts', async (req, res) => {
   }
 });
 
+// --- Photo Routes ---
+
+app.put('/api/users/:id/photos/:context/:slot', async (req, res) => {
+  try {
+    const { data, label, name } = req.body;
+    if (!data) return res.status(400).json({ error: 'data is required' });
+    await pool.query(
+      `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (user_id, context, slot)
+       DO UPDATE SET data = $4, label = $5, name = $6, updated_at = NOW()`,
+      [req.params.id, req.params.context, req.params.slot, data, label || null, name || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/photos/:context', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT slot, data, label, name FROM user_photos WHERE user_id = $1 AND context = $2',
+      [req.params.id, req.params.context]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id/photos/:context', async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
+      [req.params.id, req.params.context]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id/photos/:context/:slot', async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM user_photos WHERE user_id = $1 AND context = $2 AND slot = $3',
+      [req.params.id, req.params.context, req.params.slot]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users/:id/photos/copy', async (req, res) => {
+  try {
+    const { fromContext, toContext } = req.body;
+    if (!fromContext || !toContext) {
+      return res.status(400).json({ error: 'fromContext and toContext required' });
+    }
+    // Delete existing target photos first
+    await pool.query(
+      'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
+      [req.params.id, toContext]
+    );
+    // Copy from source to target
+    await pool.query(
+      `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
+       SELECT user_id, $2, slot, data, label, name, NOW()
+       FROM user_photos WHERE user_id = $1 AND context = $3`,
+      [req.params.id, toContext, fromContext]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- GDPR Routes ---
 
 app.delete('/api/users/:id/data', async (req, res) => {
   try {
     const userId = req.params.id;
-    // CASCADE handles profiles, settings, jobs, drafts
+    // CASCADE handles profiles, settings, jobs, drafts, user_photos
+    await pool.query('DELETE FROM user_photos WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM drafts WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM jobs WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM settings WHERE user_id = $1', [userId]);
@@ -487,11 +578,12 @@ app.delete('/api/users/:id/data', async (req, res) => {
 app.get('/api/users/:id/export', async (req, res) => {
   try {
     const userId = req.params.id;
-    const [profileRes, settingsRes, jobsRes, draftsRes] = await Promise.all([
+    const [profileRes, settingsRes, jobsRes, draftsRes, photosRes] = await Promise.all([
       pool.query('SELECT data FROM profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT key, value FROM settings WHERE user_id = $1', [userId]),
       pool.query('SELECT quote_snapshot AS "quoteSnapshot", rams_snapshot AS "ramsSnapshot", saved_at AS "savedAt", client_name AS "clientName" FROM jobs WHERE user_id = $1', [userId]),
       pool.query('SELECT data FROM drafts WHERE user_id = $1', [userId]),
+      pool.query('SELECT context, slot, label, name, updated_at AS "updatedAt" FROM user_photos WHERE user_id = $1', [userId]),
     ]);
 
     res.json({
@@ -501,6 +593,7 @@ app.get('/api/users/:id/export', async (req, res) => {
       settings: settingsRes.rows,
       jobs: jobsRes.rows,
       drafts: draftsRes.rows.map(r => r.data),
+      photos: photosRes.rows,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -592,15 +685,18 @@ app.get('/{*path}', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-initDB()
+const dbReady = initDB()
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(`TradeQuote server running on port ${PORT}`);
-    });
+    // Don't auto-listen when imported by test runner
+    if (process.env.NODE_ENV !== 'test') {
+      app.listen(PORT, () => {
+        console.log(`TradeQuote server running on port ${PORT}`);
+      });
+    }
   })
   .catch((err) => {
     console.error('Failed to initialise database:', err);
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'test') process.exit(1);
   });
 
-export { app, pool };
+export { app, pool, dbReady };

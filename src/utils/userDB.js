@@ -76,10 +76,17 @@ export async function incrementQuoteSequence(userId) {
 
 function stripBlobFields(state) {
   const clone = JSON.parse(JSON.stringify(state));
+  // Record which photo slots had data before stripping (for restore-time warnings)
   if (clone.photos) {
+    const slots = {};
     for (const key of Object.keys(clone.photos)) {
+      if (clone.photos[key]) slots[key] = true;
       clone.photos[key] = null;
     }
+    if (Object.keys(slots).length > 0) clone._photoSlots = slots;
+  }
+  if (clone.extraPhotos && clone.extraPhotos.length > 0) {
+    clone._extraPhotoCount = clone.extraPhotos.length;
   }
   clone.extraPhotos = [];
   if (clone.profile) {
@@ -108,6 +115,8 @@ export async function saveJob(userId, state) {
     }
     const data = await res.json();
     if (!data.id) throw new Error('Server returned no job ID');
+    // Copy draft photos to the new job context (server-side, no re-upload)
+    try { await copyPhotos(userId, 'draft', data.id); } catch {}
     return data.id;
   } finally {
     clearTimeout(timeout);
@@ -189,6 +198,53 @@ export async function loadDraft(userId) {
 
 export async function clearDraft(userId) {
   await fetch(`/api/users/${userId}/drafts`, { method: 'DELETE' });
+}
+
+// --- Photos ---
+
+export function savePhoto(userId, context, slot, photo) {
+  // Fire-and-forget: warn on failure but don't throw
+  fetch(`/api/users/${userId}/photos/${context}/${slot}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: photo.data, label: photo.label || null, name: photo.name || null }),
+  }).catch((err) => console.warn('Photo upload failed:', err.message));
+}
+
+export async function loadPhotos(userId, context) {
+  try {
+    const res = await fetch(`/api/users/${userId}/photos/${context}`);
+    if (!res.ok) return { photos: {}, extraPhotos: [] };
+    const rows = await res.json();
+    const photos = {};
+    const extraPhotos = [];
+    for (const row of rows) {
+      if (row.slot.startsWith('extra-')) {
+        extraPhotos.push({ data: row.data, name: row.name || '', label: row.label || 'Other' });
+      } else {
+        photos[row.slot] = { data: row.data, name: row.name || '' };
+      }
+    }
+    return { photos, extraPhotos };
+  } catch {
+    return { photos: {}, extraPhotos: [] };
+  }
+}
+
+export async function deletePhotos(userId, context) {
+  await fetch(`/api/users/${userId}/photos/${context}`, { method: 'DELETE' });
+}
+
+export async function deletePhoto(userId, context, slot) {
+  await fetch(`/api/users/${userId}/photos/${context}/${slot}`, { method: 'DELETE' });
+}
+
+export async function copyPhotos(userId, fromContext, toContext) {
+  await fetch(`/api/users/${userId}/photos/copy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromContext, toContext }),
+  });
 }
 
 // --- GDPR ---

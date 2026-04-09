@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
 import { runAnalysis } from '../../utils/analyseJob.js';
+import { savePhoto, deletePhoto, saveDraft } from '../../utils/userDB.js';
 
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
@@ -207,7 +208,7 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
   "additionalNotes": "string"
 }`;
 
-export default function JobDetails({ state, dispatch, abortRef }) {
+export default function JobDetails({ state, dispatch, abortRef, showToast }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
   const fileInputRefs = useRef({});
@@ -229,6 +230,9 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       slot: slotKey,
       photo: { data: dataUrl, name: file.name },
     });
+    if (state.currentUserId) {
+      savePhoto(state.currentUserId, 'draft', slotKey, { data: dataUrl, name: file.name });
+    }
   };
 
   // Drag-and-drop handlers for photo slots
@@ -260,6 +264,9 @@ export default function JobDetails({ state, dispatch, abortRef }) {
       slot: slotKey,
       photo: { data: dataUrl, name: file.name },
     });
+    if (state.currentUserId) {
+      savePhoto(state.currentUserId, 'draft', slotKey, { data: dataUrl, name: file.name });
+    }
   };
 
   const [extraPhotoLabel, setExtraPhotoLabel] = useState('Other');
@@ -269,10 +276,14 @@ export default function JobDetails({ state, dispatch, abortRef }) {
     const file = e.target.files?.[0];
     if (!file || extraPhotos.length >= 10) return;
     const dataUrl = await resizeImage(file);
+    const newIndex = extraPhotos.length;
     dispatch({
       type: 'ADD_EXTRA_PHOTO',
       photo: { data: dataUrl, name: file.name, label: extraPhotoLabel },
     });
+    if (state.currentUserId) {
+      savePhoto(state.currentUserId, 'draft', `extra-${newIndex}`, { data: dataUrl, name: file.name, label: extraPhotoLabel });
+    }
   };
 
   const handleAnalyse = async () => {
@@ -398,6 +409,15 @@ export default function JobDetails({ state, dispatch, abortRef }) {
         </div>
       </div>
 
+      {/* Missing-photos warning (shown when restored draft had photos that are now null) */}
+      {state._photoSlots && Object.values(photos).every(p => p == null) && (
+        <div className="bg-tq-unconfirmed/10 border border-tq-unconfirmed/30 rounded p-3 mb-6">
+          <p className="text-tq-unconfirmed text-sm">
+            ⚠ Photos from your previous session could not be restored. Please re-upload them to continue.
+          </p>
+        </div>
+      )}
+
       {/* Photo slots */}
       <h3 className="text-lg font-heading font-bold text-tq-text mb-4">
         Photo Upload
@@ -480,7 +500,10 @@ export default function JobDetails({ state, dispatch, abortRef }) {
                       className="w-full h-28 object-cover rounded"
                     />
                     <button
-                      onClick={() => dispatch({ type: 'SET_PHOTO', slot: slot.key, photo: null })}
+                      onClick={() => {
+                        dispatch({ type: 'SET_PHOTO', slot: slot.key, photo: null });
+                        if (state.currentUserId) deletePhoto(state.currentUserId, 'draft', slot.key);
+                      }}
                       className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-sm"
                       style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: '#ffffff' }}
                     >
@@ -531,10 +554,14 @@ export default function JobDetails({ state, dispatch, abortRef }) {
             const file = e.dataTransfer.files?.[0];
             if (!file || !file.type.startsWith('image/') || extraPhotos.length >= 10) return;
             const dataUrl = await resizeImage(file);
+            const newIndex = extraPhotos.length;
             dispatch({
               type: 'ADD_EXTRA_PHOTO',
               photo: { data: dataUrl, name: file.name, label: extraPhotoLabel },
             });
+            if (state.currentUserId) {
+              savePhoto(state.currentUserId, 'draft', `extra-${newIndex}`, { data: dataUrl, name: file.name, label: extraPhotoLabel });
+            }
           }}
           className={`mb-6 flex items-center gap-3 flex-wrap p-3 rounded-lg border-2 transition-all ${
             dragOverExtra
@@ -574,7 +601,21 @@ export default function JobDetails({ state, dispatch, abortRef }) {
                 </span>
               )}
               <button
-                onClick={() => dispatch({ type: 'REMOVE_EXTRA_PHOTO', index: i })}
+                onClick={() => {
+                  dispatch({ type: 'REMOVE_EXTRA_PHOTO', index: i });
+                  if (state.currentUserId) {
+                    // Delete all extras then re-upload remaining (re-index)
+                    const remaining = extraPhotos.filter((_, idx) => idx !== i);
+                    // Delete all extra-* slots
+                    for (let j = 0; j < extraPhotos.length; j++) {
+                      deletePhoto(state.currentUserId, 'draft', `extra-${j}`);
+                    }
+                    // Re-upload remaining with corrected indices
+                    remaining.forEach((p, idx) => {
+                      savePhoto(state.currentUserId, 'draft', `extra-${idx}`, { data: p.data, name: p.name, label: p.label });
+                    });
+                  }
+                }}
                 className="absolute -top-1 -right-1 bg-tq-error text-white w-5 h-5 rounded-full flex items-center justify-center text-xs"
               >
                 ×
@@ -595,6 +636,21 @@ export default function JobDetails({ state, dispatch, abortRef }) {
 
       {/* Analyse CTA */}
       <div className="flex justify-end gap-3">
+        {state.currentUserId && (
+          <button
+            onClick={async () => {
+              try {
+                await saveDraft(state.currentUserId, state);
+                if (showToast) showToast('Progress saved', 'success');
+              } catch {
+                if (showToast) showToast('Failed to save progress', 'error');
+              }
+            }}
+            className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-3 rounded transition-colors"
+          >
+            Save Progress
+          </button>
+        )}
         {state.reviewData && (
           <button
             onClick={() => dispatch({ type: 'SET_STEP', step: 4 })}

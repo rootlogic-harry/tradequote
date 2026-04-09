@@ -363,6 +363,14 @@ function reducerCore(state, action) {
       };
     }
 
+    case 'RESTORE_PHOTOS': {
+      return {
+        ...state,
+        photos: action.photos ?? state.photos,
+        extraPhotos: action.extraPhotos ?? state.extraPhotos,
+      };
+    }
+
     case 'CREATE_RAMS': {
       const { profile, jobDetails, photos, extraPhotos = [] } = state;
       // Collect photos

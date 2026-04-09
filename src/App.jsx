@@ -20,7 +20,7 @@ import StatusModal from './components/StatusModal.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
-import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB } from './utils/userDB.js';
+import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
@@ -302,6 +302,8 @@ export default function App() {
     if (state.currentUserId && state.step >= 2 && state.step <= 4) {
       saveDraft(state.currentUserId, state).catch(() => {});
     }
+    // Clear draft photos for fresh start
+    if (state.currentUserId) deletePhotos(state.currentUserId, 'draft').catch(() => {});
     dispatch({ type: 'NEW_QUOTE' });
     setCurrentView('editor');
   };
@@ -310,26 +312,45 @@ export default function App() {
     if (state.currentUserId && state.step >= 2 && state.step <= 4) {
       saveDraft(state.currentUserId, state).catch(() => {});
     }
+    if (state.currentUserId) deletePhotos(state.currentUserId, 'draft').catch(() => {});
     dispatch({ type: 'NEW_QUOTE', mode: 'quick' });
     setCurrentView('editor');
   };
 
-  const handleResumeDraft = () => {
+  const handleResumeDraft = async () => {
     if (pendingDraft) {
       dispatch({ type: 'RESTORE_DRAFT', draft: pendingDraft });
       setPendingDraft(null);
     }
     setCurrentView('editor');
+    // Load photos from server
+    if (state.currentUserId) {
+      try {
+        const { photos, extraPhotos } = await loadPhotos(state.currentUserId, 'draft');
+        if (Object.keys(photos).length > 0 || extraPhotos.length > 0) {
+          dispatch({ type: 'RESTORE_PHOTOS', photos, extraPhotos });
+        }
+      } catch {}
+    }
     showToast('Draft restored', 'success');
   };
 
-  const handleResumeJob = (job) => {
+  const handleResumeJob = async (job) => {
     const snapshot = job.quoteSnapshot || job.snapshot;
     if (snapshot) {
       dispatch({ type: 'RESTORE_DRAFT', draft: { ...snapshot, step: 4 } });
     }
     setActiveJobId(job.id);
     setCurrentView('editor');
+    // Load photos from the job context
+    if (state.currentUserId) {
+      try {
+        const { photos, extraPhotos } = await loadPhotos(state.currentUserId, job.id);
+        if (Object.keys(photos).length > 0 || extraPhotos.length > 0) {
+          dispatch({ type: 'RESTORE_PHOTOS', photos, extraPhotos });
+        }
+      } catch {}
+    }
     showToast(`Resumed: ${job.clientName || 'Job'}`, 'success');
   };
 
@@ -385,10 +406,19 @@ export default function App() {
     }
   };
 
-  const handleEditQuote = (virtualState) => {
+  const handleEditQuote = async (virtualState) => {
     dispatch({ type: 'RESTORE_DRAFT', draft: { ...virtualState, step: 4 } });
     setViewingQuote(null);
     setCurrentView('editor');
+    // Load photos from the saved job context
+    if (state.currentUserId && viewingQuote?.id) {
+      try {
+        const { photos, extraPhotos } = await loadPhotos(state.currentUserId, viewingQuote.id);
+        if (Object.keys(photos).length > 0 || extraPhotos.length > 0) {
+          dispatch({ type: 'RESTORE_PHOTOS', photos, extraPhotos });
+        }
+      } catch {}
+    }
     showToast('Quote loaded for editing', 'success');
   };
 
@@ -402,10 +432,19 @@ export default function App() {
   };
 
   // RAMS: Create from saved job
-  const handleCreateRamsFromSaved = (savedJob) => {
+  const handleCreateRamsFromSaved = async (savedJob) => {
     const snapshot = savedJob.quoteSnapshot || savedJob.snapshot;
     if (snapshot) {
       dispatch({ type: 'RESTORE_DRAFT', draft: { ...snapshot, step: 5 } });
+    }
+    // Load photos from the saved job context before creating RAMS
+    if (state.currentUserId) {
+      try {
+        const { photos, extraPhotos } = await loadPhotos(state.currentUserId, savedJob.id);
+        if (Object.keys(photos).length > 0 || extraPhotos.length > 0) {
+          dispatch({ type: 'RESTORE_PHOTOS', photos, extraPhotos });
+        }
+      } catch {}
     }
     setTimeout(() => {
       dispatch({ type: 'CREATE_RAMS' });
@@ -528,6 +567,7 @@ export default function App() {
             quote={viewingQuote}
             onBack={() => setViewingQuote(null)}
             onEditQuote={handleEditQuote}
+            currentUserId={state.currentUserId}
           />
         );
       }
@@ -558,11 +598,11 @@ export default function App() {
           />
         );
       case 2:
-        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} />;
+        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} />;
       case 3:
         return <AIAnalysis state={state} dispatch={dispatch} cancelAnalysis={cancelAnalysis} />;
       case 4:
-        return <ReviewEdit state={state} dispatch={dispatch} />;
+        return <ReviewEdit state={state} dispatch={dispatch} showToast={showToast} />;
       case 5:
         return (
           <QuoteOutput

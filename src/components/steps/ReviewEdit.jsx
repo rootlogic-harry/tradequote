@@ -8,6 +8,7 @@ import { allMeasurementsConfirmed, countUnconfirmedMeasurements, canGenerateQuot
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { formatCurrency } from '../../utils/quoteBuilder.js';
 import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
+import { saveDraft } from '../../utils/userDB.js';
 
 function AccordionSection({ title, isOpen, onToggle, children }) {
   return (
@@ -30,7 +31,7 @@ function AccordionSection({ title, isOpen, onToggle, children }) {
   );
 }
 
-export default function ReviewEdit({ state, dispatch }) {
+export default function ReviewEdit({ state, dispatch, showToast }) {
   const { reviewData, profile } = state;
   const [openSections, setOpenSections] = useState({
     damage: true,
@@ -391,7 +392,22 @@ export default function ReviewEdit({ state, dispatch }) {
       <LivePreview state={state} />
 
       {/* Generate Quote CTA */}
-      <div className="mt-8 flex flex-col items-end">
+      <div className="mt-8 flex items-center justify-end gap-3">
+        {state.currentUserId && (
+          <button
+            onClick={async () => {
+              try {
+                await saveDraft(state.currentUserId, state);
+                if (showToast) showToast('Progress saved', 'success');
+              } catch {
+                if (showToast) showToast('Failed to save progress', 'error');
+              }
+            }}
+            className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-3 rounded transition-colors"
+          >
+            Save Progress
+          </button>
+        )}
         <button
           disabled={!generateEnabled}
           onClick={() => dispatch({ type: 'GENERATE_QUOTE' })}

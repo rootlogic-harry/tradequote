@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listJobs, deleteJob } from '../utils/userDB.js';
+import { listJobs, deleteJob, deletePhotos } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
 
@@ -28,6 +28,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
   const handleDelete = async (id) => {
     try {
       await deleteJob(currentUserId, id);
+      deletePhotos(currentUserId, id).catch(() => {});
       setLocalQuotes(prev => prev.filter(q => q.id !== id));
       if (dispatch) dispatch({ type: 'DELETE_JOB', id });
       setConfirmDeleteId(null);

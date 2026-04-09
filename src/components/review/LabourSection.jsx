@@ -63,7 +63,7 @@ export default function LabourSection({ labourEstimate, dispatch }) {
             <NumericInput
               value={estimatedDays}
               step="0.5"
-              onChange={(v) => update('estimatedDays', v)}
+              onChange={(v) => update('estimatedDays', Math.max(0, v))}
               className="focus:outline-none focus:border-tq-accent"
               style={inputStyle}
             />
@@ -88,7 +88,7 @@ export default function LabourSection({ labourEstimate, dispatch }) {
             <label className="block mb-1" style={{ fontSize: 10, color: 'var(--tq-muted)', textTransform: 'uppercase' }}>Day Rate</label>
             <NumericInput
               value={dayRate}
-              onChange={(v) => update('dayRate', v)}
+              onChange={(v) => update('dayRate', Math.max(0, v))}
               className="focus:outline-none focus:border-tq-accent"
               style={inputStyle}
             />

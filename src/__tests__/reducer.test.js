@@ -180,6 +180,47 @@ describe('reducer', () => {
     });
   });
 
+  describe('RESTORE_PHOTOS', () => {
+    test('merges photos into state', () => {
+      const state = {
+        ...initialState,
+        currentUserId: 'mark',
+        photos: { overview: null, closeup: null, sideProfile: null, referenceCard: null, access: null },
+        extraPhotos: [],
+      };
+
+      const result = reducer(state, {
+        type: 'RESTORE_PHOTOS',
+        photos: { overview: { data: 'data:img1', name: 'ov.jpg' }, closeup: { data: 'data:img2', name: 'cu.jpg' } },
+        extraPhotos: [{ data: 'data:img3', name: 'ex.jpg', label: 'Other' }],
+      });
+
+      expect(result.photos.overview.data).toBe('data:img1');
+      expect(result.photos.closeup.data).toBe('data:img2');
+      expect(result.extraPhotos).toHaveLength(1);
+      expect(result.extraPhotos[0].data).toBe('data:img3');
+    });
+
+    test('preserves existing photos when action has null/undefined', () => {
+      const state = {
+        ...initialState,
+        currentUserId: 'mark',
+        photos: { overview: { data: 'existing' }, closeup: null, sideProfile: null, referenceCard: null, access: null },
+        extraPhotos: [{ data: 'existing-extra' }],
+      };
+
+      const result = reducer(state, {
+        type: 'RESTORE_PHOTOS',
+        photos: null,
+        extraPhotos: null,
+      });
+
+      // Should keep existing state when action values are null
+      expect(result.photos.overview.data).toBe('existing');
+      expect(result.extraPhotos).toHaveLength(1);
+    });
+  });
+
   describe('BACK_TO_REVIEW', () => {
     test('goes to step 4 and resets quoteMode to standard', () => {
       const state = { ...initialState, step: 5, quoteMode: 'quick', quotePayload: { fake: true } };

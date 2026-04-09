@@ -38,7 +38,7 @@ export function validateJobDetails(jobDetails) {
 }
 
 export function validateRequiredPhotoSlots(photos) {
-  const requiredSlots = [];
+  const requiredSlots = ['overview', 'closeup', 'referenceCard'];
   const missingSlots = requiredSlots.filter(slot => !photos[slot]);
 
   return {
