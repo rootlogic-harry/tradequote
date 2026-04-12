@@ -18,6 +18,7 @@ export default function StepIndicator({
   onStartNewQuote,
   onGoToSaved,
   quoteMode,
+  onLogout,
 }) {
   const isEditor = currentView === 'editor';
   const isRams = currentView === 'rams';
@@ -258,6 +259,17 @@ export default function StepIndicator({
                 title="Edit Profile"
               >
                 {'\u2699'}
+              </button>
+            )}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="transition-colors text-lg"
+                style={{ color: 'var(--tq-nav-muted)' }}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                {'\u23FB'}
               </button>
             )}
           </div>

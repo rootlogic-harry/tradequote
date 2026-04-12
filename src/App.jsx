@@ -12,17 +12,14 @@ import SavedQuoteViewer from './components/SavedQuoteViewer.jsx';
 import RamsEditor from './components/rams/RamsEditor.jsx';
 import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
-import UserSelector from './components/UserSelector.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import StatusModal from './components/StatusModal.jsx';
 // Sidebar import removed — nav is now in StepIndicator
-import LandingPage from './components/LandingPage.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
 import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
-import { bootstrapUsers, listUsers } from './utils/userRegistry.js';
 
 function getStoredTheme(userId) {
   try {
@@ -33,10 +30,6 @@ function getStoredTheme(userId) {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
-  const [showLanding, setShowLanding] = useState(() => {
-    try { return !sessionStorage.getItem('tq_last_user'); }
-    catch { return true; }
-  });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [theme, setTheme] = useState(() => getStoredTheme(null));
   const [currentView, setCurrentView] = useState('dashboard');
@@ -66,15 +59,23 @@ export default function App() {
 
   const draftChecked = useRef(false);
 
-  // --- Init flow: bootstrap users → list → INIT_COMPLETE ---
+  // --- Init flow: fetch /auth/me → INIT_COMPLETE or redirect to /login ---
   const initDone = useRef(false);
   useEffect(() => {
     if (initDone.current) return;
     initDone.current = true;
     (async () => {
-      await bootstrapUsers();
-      const users = await listUsers();
-      dispatch({ type: 'INIT_COMPLETE', users });
+      try {
+        const res = await fetch('/auth/me');
+        const data = await res.json();
+        if (!data?.user) {
+          window.location.href = '/login';
+          return;
+        }
+        dispatch({ type: 'INIT_COMPLETE', user: data.user });
+      } catch {
+        window.location.href = '/login';
+      }
     })();
   }, []);
 
@@ -159,13 +160,6 @@ export default function App() {
     // Fetch jobs for dashboard
     fetchIncompleteJobs(userId);
   }
-
-  // --- User selection handler ---
-  const handleSelectUser = useCallback(async (userId) => {
-    autoLoadDone.current = true;
-    draftChecked.current = false;
-    await loadUserData(userId);
-  }, [state.allUsers]);
 
   // --- User switch handler ---
   const handleSwitchUser = useCallback(async (userId) => {
@@ -480,28 +474,46 @@ export default function App() {
     showToast('Profile saved', 'success');
   };
 
-  // --- Show landing page for new visitors ---
-  if (showLanding) {
-    return <LandingPage onGetStarted={() => setShowLanding(false)} onLogIn={() => setShowLanding(false)} />;
-  }
-
-  // --- Show UserSelector if init complete but no user selected ---
-  if (state.initComplete && !state.currentUserId) {
+  // --- Loading state before init (also covers redirect-to-login case) ---
+  if (!state.initComplete || !state.currentUserId) {
     return (
-      <div className="min-h-screen bg-tq-bg text-tq-text font-body">
-        <UserSelector users={state.allUsers} onSelectUser={handleSelectUser} />
-        {toast && (
-          <Toast key={toast.key} message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
-        )}
+      <div className="min-h-screen bg-tq-bg flex items-center justify-center">
+        <div className="text-tq-muted text-sm font-heading">Loading...</div>
       </div>
     );
   }
 
-  // --- Loading state before init ---
-  if (!state.initComplete) {
+  // --- Onboarding gate: new Google users land on profile setup before anything else ---
+  if (state.currentUser && state.currentUser.profileComplete === false) {
     return (
-      <div className="min-h-screen bg-tq-bg flex items-center justify-center">
-        <div className="text-tq-muted text-sm font-heading">Loading...</div>
+      <div className="min-h-screen bg-tq-bg text-tq-text font-body">
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <ProfileSetup
+            state={state}
+            dispatch={dispatch}
+            onProfileComplete={async () => {
+              if (state.currentUserId) {
+                try {
+                  await saveProfile(state.currentUserId, state.profile);
+                  await fetch(`/api/users/${state.currentUserId}/settings/profile_complete`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: true }),
+                  });
+                } catch {}
+              }
+              dispatch({
+                type: 'INIT_COMPLETE',
+                user: { ...state.currentUser, profileComplete: true },
+              });
+              setCurrentView('dashboard');
+              showToast('Profile saved \u2014 welcome to TradeQuote', 'success');
+            }}
+          />
+        </div>
+        {toast && (
+          <Toast key={toast.key} message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
+        )}
       </div>
     );
   }
@@ -510,6 +522,17 @@ export default function App() {
     setCurrentView('saved');
     setViewingQuote(null);
   };
+
+  const handleLogout = async () => {
+    try {
+      if (state.currentUserId) {
+        await saveProfile(state.currentUserId, state.profile).catch(() => {});
+      }
+    } catch {}
+    window.location.href = '/auth/logout';
+  };
+
+  const isFullPlan = state.currentUser?.plan === 'full';
 
   const renderContent = () => {
     // Dashboard view
@@ -531,6 +554,7 @@ export default function App() {
           dispatch={dispatch}
           onViewJob={handleViewQuote}
           onViewRams={handleViewRams}
+          isFullPlan={isFullPlan}
         />
       );
     }
@@ -579,6 +603,7 @@ export default function App() {
           currentUserId={state.currentUserId}
           recentJobs={state.recentJobs}
           dispatch={dispatch}
+          isFullPlan={isFullPlan}
         />
       );
     }
@@ -611,6 +636,7 @@ export default function App() {
             showToast={showToast}
             onCreateRams={handleCreateRams}
             onSaved={() => fetchIncompleteJobs(state.currentUserId)}
+            isFullPlan={isFullPlan}
           />
         );
       default:
@@ -636,6 +662,7 @@ export default function App() {
         onStartNewQuote={handleStartNewQuote}
         onGoToSaved={handleGoToSaved}
         quoteMode={state.quoteMode}
+        onLogout={handleLogout}
       />
 
       {/* Main content */}

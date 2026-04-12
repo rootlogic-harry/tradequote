@@ -495,29 +495,25 @@ function reducerCore(state, action) {
       return { ...state, recentJobs: state.recentJobs.filter(j => j.id !== action.id) };
 
     case 'INIT_COMPLETE': {
-      const lastUser = (() => {
-        try { return sessionStorage.getItem('tq_last_user'); } catch { return null; }
-      })();
-      if (lastUser) {
-        const user = action.users.find(u => u.id === lastUser);
-        if (user) {
-          return {
-            ...state,
-            allUsers: action.users,
-            initComplete: true,
-            currentUserId: user.id,
-            currentUser: { id: user.id, name: user.name },
-          };
-        }
+      // Post-OAuth init: the server has told us who the current user is.
+      // `action.user` has { id, name, email, avatarUrl, plan, profileComplete }
+      if (!action.user) {
+        return { ...state, initComplete: true };
       }
-      return { ...state, allUsers: action.users, initComplete: true };
+      return {
+        ...state,
+        initComplete: true,
+        currentUserId: action.user.id,
+        currentUser: action.user,
+        allUsers: [action.user], // single-user list; UserSwitcher no longer needed
+      };
     }
 
     case 'SELECT_USER':
       return {
         ...state,
         currentUserId: action.userId,
-        currentUser: { id: action.userId, name: action.name },
+        currentUser: { ...state.currentUser, id: action.userId, name: action.name },
         profile: action.profile ? { ...state.profile, ...action.profile } : state.profile,
         quoteSequence: action.quoteSequence || state.quoteSequence,
       };

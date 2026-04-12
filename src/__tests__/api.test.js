@@ -41,11 +41,20 @@ beforeEach(async () => {
 });
 
 async function api(path, opts = {}) {
-  const { method = 'GET', body } = opts;
-  const options = { method, headers: {} };
+  const { method = 'GET', body, headers: extraHeaders = {} } = opts;
+  const options = { method, headers: { ...extraHeaders } };
   if (body !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
+  }
+  // Auto-inject test auth header for any /api/users/:id(/...) route so the
+  // requireAuth + requireOwner middleware bypass kicks in under NODE_ENV=test.
+  const userIdMatch = path.match(/^\/api\/users\/([^/?#]+)/);
+  if (userIdMatch && !options.headers['x-test-user-id']) {
+    options.headers['x-test-user-id'] = decodeURIComponent(userIdMatch[1]);
+    if (!options.headers['x-test-plan']) {
+      options.headers['x-test-plan'] = 'full';
+    }
   }
   const res = await fetch(`${baseUrl}${path}`, options);
   const text = await res.text();

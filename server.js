@@ -3,11 +3,16 @@ import pg from 'pg';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import https from 'https';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1); // trust first proxy (Railway)
 app.use(express.json({ limit: '50mb' }));
 
 // --- Postgres Pool ---
@@ -100,11 +105,343 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS decline_reason TEXT;
     `);
 
+    // TRQ-10: OAuth columns on users table + sessions table
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'local';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'standard';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT false;
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS session (
+        sid    VARCHAR NOT NULL PRIMARY KEY,
+        sess   JSON NOT NULL,
+        expire TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);
+    `);
+
+    // Bootstrap: mark and harry get full plan and are already onboarded
+    await client.query(`
+      UPDATE users SET plan = 'full', auth_provider = 'local', profile_complete = true
+      WHERE id IN ('mark', 'harry');
+    `);
+
     console.log('Database schema initialised, default users bootstrapped.');
   } finally {
     client.release();
   }
 }
+
+// --- Session + Passport ---
+
+const PgSession = connectPgSimple(session);
+
+app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+    pruneSessionInterval: 60 * 60, // prune expired sessions every hour
+  }),
+  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  },
+  name: 'tq_session',
+}));
+
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID || 'missing',
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'missing',
+  callbackURL: '/auth/google/callback',
+},
+async (accessToken, refreshToken, profile, done) => {
+  try {
+    const googleId = profile.id;
+    const email = profile.emails?.[0]?.value ?? null;
+    const name = profile.displayName ?? email ?? 'User';
+    const avatar = profile.photos?.[0]?.value ?? null;
+
+    // Existing user by Google ID
+    const existing = await pool.query(
+      'SELECT * FROM users WHERE auth_provider = $1 AND auth_provider_id = $2',
+      ['google', googleId]
+    );
+
+    if (existing.rows.length > 0) {
+      await pool.query(
+        'UPDATE users SET last_login_at = NOW(), avatar_url = $1, email = COALESCE(email, $2) WHERE id = $3',
+        [avatar, email, existing.rows[0].id]
+      );
+      return done(null, existing.rows[0]);
+    }
+
+    // New user — provision account with unique, URL-safe ID
+    const baseId = (name || 'user')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 20) || 'user';
+    let userId = baseId;
+    const clash = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (clash.rows.length > 0) {
+      userId = `${baseId}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+
+    const inserted = await pool.query(
+      `INSERT INTO users (id, name, email, avatar_url, auth_provider, auth_provider_id,
+        plan, profile_complete, created_at, last_login_at)
+       VALUES ($1, $2, $3, $4, 'google', $5, 'standard', false, NOW(), NOW())
+       RETURNING *`,
+      [userId, name, email, avatar, googleId]
+    );
+    return done(null, inserted.rows[0]);
+  } catch (err) {
+    return done(err, null);
+  }
+}));
+
+passport.serializeUser((user, done) => done(null, user.id));
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    done(null, result.rows[0] ?? false);
+  } catch (err) {
+    done(err, null);
+  }
+});
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// --- Auth Routes ---
+
+app.get('/auth/google',
+  passport.authenticate('google', {
+    scope: ['openid', 'profile', 'email'],
+    prompt: 'select_account',
+  })
+);
+
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login?error=auth_failed' }),
+  (req, res) => {
+    if (!req.user.profile_complete) {
+      return res.redirect('/?onboarding=true');
+    }
+    res.redirect('/');
+  }
+);
+
+app.get('/auth/logout', (req, res, next) => {
+  req.logout((err) => {
+    if (err) return next(err);
+    req.session.destroy(() => {
+      res.clearCookie('tq_session');
+      res.redirect('/login');
+    });
+  });
+});
+
+app.get('/auth/me', async (req, res) => {
+  // Google OAuth session
+  if (req.user) {
+    return res.json({
+      user: {
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        avatarUrl: req.user.avatar_url,
+        plan: req.user.plan || 'standard',
+        profileComplete: !!req.user.profile_complete,
+      },
+      legacy: false,
+    });
+  }
+  // Legacy switcher session (Mark / Harry)
+  if (req.session?.legacyUserId) {
+    try {
+      const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.legacyUserId]);
+      const u = r.rows[0];
+      if (!u) return res.json({ user: null });
+      return res.json({
+        user: {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          avatarUrl: u.avatar_url,
+          plan: u.plan || 'standard',
+          profileComplete: !!u.profile_complete,
+        },
+        legacy: true,
+      });
+    } catch {
+      return res.json({ user: null });
+    }
+  }
+  res.json({ user: null });
+});
+
+// Temporary legacy-session endpoint for Mark and Harry transition
+const LEGACY_USERS = ['mark', 'harry'];
+app.post('/api/session/legacy', (req, res) => {
+  const { userId } = req.body || {};
+  if (!LEGACY_USERS.includes(userId)) {
+    return res.status(403).json({ error: 'Not a legacy user' });
+  }
+  req.session.legacyUserId = userId;
+  res.json({ ok: true });
+});
+
+// --- Login page (static HTML served directly by Express) ---
+
+const LOGIN_PAGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradeQuote &mdash; Sign In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: #1a1714;
+      color: #f0ede8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #222018;
+      border: 1px solid #3a3630;
+      border-radius: 14px;
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+    .logo {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      color: #e8a838;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .tagline { color: #7a6f5e; font-size: 14px; margin-bottom: 40px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 28px;
+      background: #fff;
+      color: #1a1714;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      transition: background 0.15s;
+      width: 100%;
+    }
+    .btn:hover { background: #f0ede8; }
+    .error {
+      color: #f87171;
+      font-size: 13px;
+      margin-bottom: 20px;
+      padding: 10px 14px;
+      background: rgba(248,113,113,0.08);
+      border-radius: 6px;
+      border: 1px solid rgba(248,113,113,0.2);
+    }
+    .footer { margin-top: 32px; font-size: 12px; color: #4a4640; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">TRADEQUOTE</div>
+    <div class="tagline">AI-powered quoting for dry stone walling professionals</div>
+    \${ERROR_HTML}
+    <a href="/auth/google" class="btn">
+      <svg width="20" height="20" viewBox="0 0 48 48">
+        <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      Sign in with Google
+    </a>
+    <div class="footer">Invite only &middot; Your data is private and never shared</div>
+  </div>
+</body>
+</html>`;
+
+app.get('/login', (req, res) => {
+  if (req.isAuthenticated?.() || req.session?.legacyUserId) {
+    return res.redirect('/');
+  }
+  const errorMsg = req.query.error === 'auth_failed'
+    ? "<div class='error'>Sign-in failed. Please try again.</div>"
+    : '';
+  const html = LOGIN_PAGE_HTML.replace('${ERROR_HTML}', errorMsg);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// --- Auth Middleware ---
+
+function requireAuth(req, res, next) {
+  // Test bypass — only active when NODE_ENV=test AND a header is provided
+  if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-id']) {
+    req.user = {
+      id: req.headers['x-test-user-id'],
+      plan: req.headers['x-test-plan'] || 'full',
+    };
+    return next();
+  }
+  // Google OAuth session
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
+  }
+  // Legacy switcher session
+  if (req.session?.legacyUserId) {
+    req.user = { id: req.session.legacyUserId, plan: 'full' };
+    return next();
+  }
+  res.status(401).json({ error: 'Not authenticated' });
+}
+
+function requireOwner(req, res, next) {
+  const sessionUserId = req.user?.id;
+  const routeUserId = req.params.id;
+  if (sessionUserId !== routeUserId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
+function requireFullPlan(req, res, next) {
+  if (req.user?.plan !== 'full') {
+    return res.status(403).json({ error: 'This feature is not available on your plan.' });
+  }
+  next();
+}
+
+// Protect all user-scoped routes
+app.use('/api/users/:id', requireAuth, requireOwner);
 
 // --- User Registry Routes ---
 
@@ -205,6 +542,13 @@ app.put('/api/users/:id/settings/:key', async (req, res) => {
        ON CONFLICT (user_id, key) DO UPDATE SET value = $3`,
       [req.params.id, req.params.key, JSON.stringify(req.body.value)]
     );
+    // Also update users.profile_complete column so passport deserialization sees it
+    if (req.params.key === 'profile_complete') {
+      await pool.query(
+        'UPDATE users SET profile_complete = $2 WHERE id = $1',
+        [req.params.id, !!req.body.value]
+      );
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -377,7 +721,7 @@ app.delete('/api/users/:id/jobs/:jobId', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id/jobs/:jobId/rams', async (req, res) => {
+app.put('/api/users/:id/jobs/:jobId/rams', requireFullPlan, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
@@ -396,7 +740,7 @@ app.put('/api/users/:id/jobs/:jobId/rams', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id/jobs/:jobId/rams-not-required', async (req, res) => {
+app.put('/api/users/:id/jobs/:jobId/rams-not-required', requireFullPlan, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
@@ -675,7 +1019,7 @@ app.use((err, req, res, next) => {
 app.use(express.static(join(__dirname, 'dist')));
 
 app.get('/{*path}', (req, res) => {
-  if (req.path.startsWith('/api')) {
+  if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
     return res.status(404).json({ error: 'Not found' });
   }
   res.sendFile(join(__dirname, 'dist', 'index.html'));
