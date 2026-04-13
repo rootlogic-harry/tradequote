@@ -373,7 +373,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 <body>
   <div class="card">
     <div class="logo">TRADEQUOTE</div>
-    <div class="tagline">AI-powered quoting for dry stone walling professionals</div>
+    <div class="tagline">Professional quoting for tradespeople</div>
     \${ERROR_HTML}
     <a href="/auth/google" class="btn">
       <svg width="20" height="20" viewBox="0 0 48 48">
@@ -384,7 +384,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       </svg>
       Sign in with Google
     </a>
-    <div class="footer">Invite only &middot; Your data is private and never shared</div>
+    <div class="footer">Your data is private and never shared</div>
   </div>
 </body>
 </html>`;
@@ -408,7 +408,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FastQuote &mdash; AI-Powered Quoting for Tradespeople</title>
+  <title>FastQuote &mdash; Professional Quoting for Tradespeople</title>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -521,7 +521,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <div class="hero">
     <h1>Professional quotes<br>in <span>under 5 minutes</span></h1>
     <p class="subtitle">
-      Upload photos of the job, let AI handle the measurements and materials,
+      Upload photos of the job, get measurements and materials calculated,
       then review and send a polished quote your client can trust.
     </p>
     <a href="/login" class="cta">Get Started &rarr;</a>
@@ -530,7 +530,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     <div class="feature">
       <div class="feature-icon">&#128247;</div>
       <h3>Photo Analysis</h3>
-      <p>Upload site photos and AI extracts measurements, stone type, and damage assessment automatically.</p>
+      <p>Upload site photos and get measurements, stone type, and damage assessment extracted automatically.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">&#128200;</div>
@@ -543,7 +543,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
       <p>Generate professional, print-ready quotes with your branding. Download or email directly.</p>
     </div>
   </div>
-  <div class="footer-bar">Invite only &middot; &copy; 2026 FastQuote</div>
+  <div class="footer-bar">&copy; 2026 FastQuote</div>
 </body>
 </html>`;
 
