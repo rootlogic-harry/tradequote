@@ -72,7 +72,29 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`API error ${response.status}: ${errText}`);
+      let friendlyMessage;
+      try {
+        const errJson = JSON.parse(errText);
+        const errorType = errJson?.error?.type;
+        if (response.status === 529 || errorType === 'overloaded_error') {
+          friendlyMessage = 'The AI service is temporarily overloaded. Please wait a moment and retry.';
+        } else if (errorType === 'rate_limit_error' || response.status === 429) {
+          friendlyMessage = 'Rate limit reached — please wait a minute before retrying.';
+        } else if (errorType === 'authentication_error') {
+          friendlyMessage = 'API authentication failed — contact support to check the API key.';
+        } else if (errorType === 'invalid_request_error') {
+          friendlyMessage = errJson?.error?.message || 'Invalid request sent to the AI service.';
+        } else if (response.status >= 500) {
+          friendlyMessage = 'The AI service is temporarily unavailable. Please retry in a moment.';
+        } else {
+          friendlyMessage = errJson?.error?.message || errJson?.error || `API error (${response.status})`;
+        }
+      } catch {
+        friendlyMessage = response.status >= 500
+          ? 'The AI service is temporarily unavailable. Please retry in a moment.'
+          : `API error (${response.status}). Please retry.`;
+      }
+      throw new Error(friendlyMessage);
     }
 
     const data = await response.json();

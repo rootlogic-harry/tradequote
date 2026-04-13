@@ -1374,6 +1374,47 @@ app.get('/api/users/:id/export', async (req, res) => {
 
 // --- Anthropic Proxy Route ---
 
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 529]);
+const ANTHROPIC_MAX_RETRIES = 3;
+const ANTHROPIC_RETRY_DELAYS = [1000, 2000, 4000]; // exponential backoff
+
+function makeAnthropicRequest(body, apiKey) {
+  return new Promise((resolve, reject) => {
+    const proxyReq = https.request(
+      {
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: 150000, // 2.5 minutes — Anthropic with images can be slow
+      },
+      (proxyRes) => {
+        const chunks = [];
+        proxyRes.on('data', (chunk) => chunks.push(chunk));
+        proxyRes.on('end', () => {
+          resolve({
+            statusCode: proxyRes.statusCode,
+            headers: proxyRes.headers,
+            body: Buffer.concat(chunks).toString(),
+          });
+        });
+        proxyRes.on('error', reject);
+      }
+    );
+    proxyReq.on('timeout', () => {
+      proxyReq.destroy(new Error('Request timed out'));
+    });
+    proxyReq.on('error', reject);
+    proxyReq.write(body);
+    proxyReq.end();
+  });
+}
+
 const aiRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,
@@ -1381,7 +1422,7 @@ const aiRateLimit = rateLimit({
   message: { error: 'Too many analyses. Please wait before trying again.' },
 });
 
-app.post('/api/anthropic/messages', aiRateLimit, (req, res) => {
+app.post('/api/anthropic/messages', aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
@@ -1389,52 +1430,41 @@ app.post('/api/anthropic/messages', aiRateLimit, (req, res) => {
 
   const body = JSON.stringify(req.body);
 
-  const proxyReq = https.request(
-    {
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Length': Buffer.byteLength(body),
-      },
-      timeout: 150000, // 2.5 minutes — Anthropic with images can be slow
-    },
-    (proxyRes) => {
-      res.status(proxyRes.statusCode);
-      for (const [key, value] of Object.entries(proxyRes.headers)) {
-        if (key.toLowerCase() !== 'transfer-encoding') {
+  for (let attempt = 0; attempt < ANTHROPIC_MAX_RETRIES; attempt++) {
+    try {
+      const result = await makeAnthropicRequest(body, apiKey);
+
+      if (RETRYABLE_STATUS_CODES.has(result.statusCode) && attempt < ANTHROPIC_MAX_RETRIES - 1) {
+        const delay = result.statusCode === 429
+          ? Math.max(ANTHROPIC_RETRY_DELAYS[attempt], parseInt(result.headers['retry-after'] || '0', 10) * 1000)
+          : ANTHROPIC_RETRY_DELAYS[attempt];
+        console.warn(`Anthropic returned ${result.statusCode}, retrying in ${delay}ms (attempt ${attempt + 1}/${ANTHROPIC_MAX_RETRIES})`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
+      res.status(result.statusCode);
+      for (const [key, value] of Object.entries(result.headers)) {
+        const lk = key.toLowerCase();
+        if (lk !== 'transfer-encoding' && lk !== 'content-length') {
           res.setHeader(key, value);
         }
       }
-      proxyRes.on('error', (err) => {
-        console.error('Anthropic response stream error:', err.message);
-        if (!res.headersSent) {
-          res.status(502).json({ error: `Anthropic response error: ${err.message}` });
-        } else {
-          res.end();
-        }
-      });
-      proxyRes.pipe(res);
+      res.send(result.body);
+      return;
+    } catch (err) {
+      if (attempt < ANTHROPIC_MAX_RETRIES - 1) {
+        console.warn(`Anthropic proxy error: ${err.message}, retrying in ${ANTHROPIC_RETRY_DELAYS[attempt]}ms (attempt ${attempt + 1}/${ANTHROPIC_MAX_RETRIES})`);
+        await new Promise((r) => setTimeout(r, ANTHROPIC_RETRY_DELAYS[attempt]));
+        continue;
+      }
+      console.error('Anthropic proxy error after all retries:', err.message);
+      if (!res.headersSent) {
+        res.status(502).json({ error: `Anthropic proxy error: ${err.message}` });
+      }
+      return;
     }
-  );
-
-  proxyReq.on('timeout', () => {
-    console.error('Anthropic proxy request timed out after 150s');
-    proxyReq.destroy(new Error('Request timed out'));
-  });
-
-  proxyReq.on('error', (err) => {
-    console.error('Anthropic proxy error:', err.message);
-    if (!res.headersSent) {
-      res.status(502).json({ error: `Anthropic proxy error: ${err.message}` });
-    }
-  });
-
-  proxyReq.write(body);
-  proxyReq.end();
+  }
 });
 
 // --- Error handler for body-parser / payload too large ---
