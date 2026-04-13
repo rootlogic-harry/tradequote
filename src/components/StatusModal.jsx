@@ -13,6 +13,7 @@ const DECLINE_REASONS = [
 export default function StatusModal({ modal, job, onConfirm, onCancel }) {
   const { jobId, targetStatus } = modal;
   const [declineReason, setDeclineReason] = useState(DECLINE_REASONS[0]);
+  const [completionFeedback, setCompletionFeedback] = useState('spot_on');
 
   const now = new Date().toISOString();
   const expiresAt = calculateExpiresAt(now);
@@ -30,7 +31,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
     } else if (targetStatus === 'declined') {
       onConfirm(jobId, 'declined', { declinedAt: now, declineReason });
     } else if (targetStatus === 'completed') {
-      onConfirm(jobId, 'completed', {});
+      onConfirm(jobId, 'completed', { completionFeedback });
     }
   };
 
@@ -159,9 +160,41 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
           )}
 
           {targetStatus === 'completed' && (
-            <p style={{ color: 'var(--tq-muted)', fontSize: 14, marginBottom: 20 }}>
-              Mark this job as completed. The work has been done and the project is finished.
-            </p>
+            <>
+              <p style={{ color: 'var(--tq-muted)', fontSize: 14, marginBottom: 16 }}>
+                How accurate was this quote?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                {[
+                  { value: 'spot_on', label: 'Spot on', desc: 'Quote matched the actual job cost' },
+                  { value: 'under_quoted', label: 'Under-quoted', desc: 'The job cost more than quoted' },
+                  { value: 'over_quoted', label: 'Over-quoted', desc: 'The job cost less than quoted' },
+                ].map(opt => (
+                  <label
+                    key={opt.value}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                      borderRadius: 8, cursor: 'pointer',
+                      backgroundColor: completionFeedback === opt.value ? 'var(--tq-confirmed-bg)' : 'var(--tq-surface)',
+                      border: `1.5px solid ${completionFeedback === opt.value ? 'var(--tq-confirmed-bd)' : 'var(--tq-border)'}`,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="completionFeedback"
+                      value={opt.value}
+                      checked={completionFeedback === opt.value}
+                      onChange={() => setCompletionFeedback(opt.value)}
+                      style={{ accentColor: 'var(--tq-confirmed-bd)' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--tq-text)' }}>{opt.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--tq-muted)' }}>{opt.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </>
           )}
 
           {/* Action buttons */}

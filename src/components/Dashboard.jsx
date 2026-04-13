@@ -115,7 +115,7 @@ export default function Dashboard({
       </div>
 
       {/* Stat cards — 4 cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
         <div
           className="rounded-lg p-4"
           style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
@@ -285,7 +285,7 @@ export default function Dashboard({
               return (
                 <div
                   key={job.id}
-                  className="flex items-center gap-3 px-5 py-3"
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-3"
                   style={{ borderBottom: '1px solid var(--tq-border-soft)', borderLeft, cursor: 'pointer' }}
                   onClick={() => handleRowClick(job)}
                 >
@@ -307,7 +307,7 @@ export default function Dashboard({
                   </div>
 
                   {/* Contextual action buttons */}
-                  <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                  <div className="flex flex-wrap gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                     {status === 'DRAFT' && (
                       <button
                         onClick={(e) => openStatusModal(e, job.id, 'sent')}

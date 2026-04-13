@@ -7,6 +7,7 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import rateLimit from 'express-rate-limit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -421,7 +422,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       </svg>
       Sign in with Google
     </a>
-    <div class="footer">Your data is private and never shared</div>
+    <div class="footer"><a href="/privacy" style="color:#4a4640;text-decoration:none">Privacy</a> &middot; <a href="/terms" style="color:#4a4640;text-decoration:none">Terms</a></div>
   </div>
 </body>
 </html>`;
@@ -436,6 +437,107 @@ app.get('/login', (req, res) => {
   const html = LOGIN_PAGE_HTML.replace('${ERROR_HTML}', errorMsg);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
+});
+
+// --- Legal pages ---
+
+const LEGAL_PAGE_STYLE = `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'IBM Plex Sans', sans-serif; background: #1a1714; color: #f0ede8; min-height: 100vh; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 40px 24px 60px; }
+  .brand { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 800; color: #e8a838; letter-spacing: 0.05em; text-decoration: none; }
+  h1 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; margin: 32px 0 8px; color: #f0ede8; }
+  h2 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 20px; margin: 28px 0 8px; color: #f0ede8; }
+  p, li { font-size: 14px; line-height: 1.7; color: #b5ae9e; margin-bottom: 12px; }
+  ul { padding-left: 20px; margin-bottom: 16px; }
+  .updated { font-size: 12px; color: #4a4640; margin-bottom: 24px; }
+  a { color: #e8a838; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+`;
+
+app.get('/privacy', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote &mdash; Privacy Policy</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet"><style>${LEGAL_PAGE_STYLE}</style></head><body><div class="wrap">
+  <a href="/" class="brand">FASTQUOTE</a>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: April 2026</p>
+
+  <h2>What we collect</h2>
+  <p>When you use FastQuote, we collect and store:</p>
+  <ul>
+    <li>Your name, email address, and business details (company name, phone, address)</li>
+    <li>Job photographs you upload for AI analysis</li>
+    <li>Quote data including measurements, materials, labour estimates, and generated documents</li>
+    <li>Learning data: the differences between AI suggestions and your confirmed values</li>
+  </ul>
+
+  <h2>How we use it</h2>
+  <p>Your data is used solely to provide the FastQuote quoting service. Specifically:</p>
+  <ul>
+    <li>To generate, store, and retrieve your quotes</li>
+    <li>To improve the AI's accuracy over time using anonymised learning data</li>
+    <li>To authenticate your account</li>
+  </ul>
+
+  <h2>Who can see your data</h2>
+  <p>Only you. Your data is completely isolated from other users. No other FastQuote user can access your quotes, photos, or business details.</p>
+
+  <h2>Third parties</h2>
+  <ul>
+    <li><strong>Anthropic</strong> &mdash; your job photographs are sent to Anthropic's Claude API for AI analysis. Photos are processed and not retained by Anthropic beyond the API request.</li>
+    <li><strong>Railway</strong> &mdash; our hosting provider. Your data is stored on Railway's infrastructure.</li>
+    <li><strong>Google</strong> &mdash; used for sign-in authentication only. We receive your name and email.</li>
+  </ul>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>We do not sell your data</li>
+    <li>We do not use advertising or tracking</li>
+    <li>We do not share your data with anyone beyond the services listed above</li>
+  </ul>
+
+  <h2>Data retention</h2>
+  <p>Your data is retained until you request its deletion. You can request access to or deletion of all your data at any time.</p>
+
+  <h2>Your rights</h2>
+  <p>You have the right to access, correct, or delete your personal data. To exercise these rights, contact Harry at the email address provided during onboarding.</p>
+
+  <h2>Contact</h2>
+  <p>For privacy questions, contact the FastQuote team via the email used during your invitation.</p>
+  </div></body></html>`);
+});
+
+app.get('/terms', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote &mdash; Terms of Service</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet"><style>${LEGAL_PAGE_STYLE}</style></head><body><div class="wrap">
+  <a href="/" class="brand">FASTQUOTE</a>
+  <h1>Terms of Service</h1>
+  <p class="updated">Last updated: April 2026</p>
+
+  <h2>What FastQuote is</h2>
+  <p>FastQuote is an AI-assisted quoting tool for tradespeople. It helps you generate professional quotes from job photographs. It is provided as a free, invite-only service.</p>
+
+  <h2>Access</h2>
+  <p>Access to FastQuote is by invitation only. We reserve the right to withdraw access at any time without notice. There is no guarantee of continued availability.</p>
+
+  <h2>Your responsibility</h2>
+  <p>You are solely responsible for the accuracy of any quote you send to a client. FastQuote provides AI-generated suggestions that you must review, confirm, and adjust before issuing. Every measurement and cost figure must be verified by you before the quote leaves the system.</p>
+
+  <h2>Limitation of liability</h2>
+  <p>FastQuote is not liable for errors in AI-generated content, including incorrect measurements, material estimates, labour calculations, or any other suggested values. The AI is a tool to assist your professional judgement, not a replacement for it.</p>
+
+  <h2>Your data</h2>
+  <p>You retain ownership of all data you enter into FastQuote. See our <a href="/privacy">Privacy Policy</a> for how we handle your data.</p>
+
+  <h2>Acceptable use</h2>
+  <p>You agree to use FastQuote only for its intended purpose: generating professional quotes for legitimate trade work. You must not attempt to access other users' data or interfere with the service.</p>
+
+  <h2>Changes to terms</h2>
+  <p>We may update these terms from time to time. Continued use of FastQuote after changes constitutes acceptance of the updated terms.</p>
+
+  <h2>Governing law</h2>
+  <p>These terms are governed by the laws of England and Wales.</p>
+  </div></body></html>`);
 });
 
 // --- Landing page for unauthenticated visitors at / ---
@@ -954,7 +1056,7 @@ app.put('/api/users/:id/jobs/:jobId/rams-not-required', requireAdminPlan, async 
 
 app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
   try {
-    const { status, sentAt, expiresAt, acceptedAt, declinedAt, declineReason } = req.body;
+    const { status, sentAt, expiresAt, acceptedAt, declinedAt, declineReason, completionFeedback } = req.body;
     if (!['sent', 'accepted', 'declined', 'completed'].includes(status)) {
       return res.status(400).json({ error: `Invalid status: ${status}. Must be sent, accepted, declined, or completed.` });
     }
@@ -967,10 +1069,12 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
     }
     await pool.query(
       `UPDATE jobs SET status = $1, sent_at = $2, expires_at = $3,
-       accepted_at = $4, declined_at = $5, decline_reason = $6
-       WHERE id = $7 AND user_id = $8`,
+       accepted_at = $4, declined_at = $5, decline_reason = $6,
+       completion_feedback = $7
+       WHERE id = $8 AND user_id = $9`,
       [status, sentAt || null, expiresAt || null, acceptedAt || null,
-       declinedAt || null, declineReason || null, req.params.jobId, req.params.id]
+       declinedAt || null, declineReason || null, completionFeedback || null,
+       req.params.jobId, req.params.id]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -1269,7 +1373,14 @@ app.get('/api/users/:id/export', async (req, res) => {
 
 // --- Anthropic Proxy Route ---
 
-app.post('/api/anthropic/messages', (req, res) => {
+const aiRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  keyGenerator: (req) => req.user?.id ?? req.ip,
+  message: { error: 'Too many analyses. Please wait before trying again.' },
+});
+
+app.post('/api/anthropic/messages', aiRateLimit, (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
@@ -1327,14 +1438,18 @@ app.post('/api/anthropic/messages', (req, res) => {
 
 // --- Error handler for body-parser / payload too large ---
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   if (err.type === 'entity.too.large') {
     console.error(`Payload too large on ${req.method} ${req.path}: ${err.message}`);
     return res.status(413).json({
       error: 'Request too large — try reducing the number or size of photos.',
     });
   }
-  next(err);
+  console.error(`Server error on ${req.method} ${req.path}:`, err.message);
+  if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  res.status(500).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'IBM Plex Sans',sans-serif;background:#1a1714;color:#f0ede8;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}.brand{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;color:#e8a838;letter-spacing:.05em;margin-bottom:24px}h1{font-size:20px;font-weight:500;margin-bottom:8px}p{color:#999;font-size:14px;margin-bottom:24px}a{color:#e8a838;text-decoration:none;font-size:14px;padding:10px 24px;border:1px solid #3a3630;border-radius:8px;transition:all .15s}a:hover{border-color:#e8a838}</style></head><body><div class="brand">FASTQUOTE</div><h1>Something went wrong</h1><p>Please try again in a moment.</p><a href="/">Go to Dashboard</a></body></html>`);
 });
 
 // --- Static Files + SPA Fallback ---

@@ -292,6 +292,24 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [state.currentUserId, profileJSON]);
 
+  // Document title: show quote reference on Steps 4 and 5
+  useEffect(() => {
+    if ((state.step === 4 || state.step === 5) && state.jobDetails?.quoteReference) {
+      document.title = `FastQuote \u2014 ${state.jobDetails.quoteReference}`;
+    } else {
+      document.title = 'FastQuote';
+    }
+    return () => { document.title = 'FastQuote'; };
+  }, [state.step, state.jobDetails?.quoteReference]);
+
+  // Warn before closing tab on Step 4 (unsaved work)
+  useEffect(() => {
+    if (state.step !== 4) return;
+    const handler = (e) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [state.step]);
+
   // Retry analysis: watch for retryCount increments (set by RETRY_ANALYSIS)
   const lastRetryCount = useRef(state.retryCount || 0);
   useEffect(() => {
@@ -506,7 +524,9 @@ export default function App() {
   if (!state.initComplete || !state.currentUserId) {
     return (
       <div className="min-h-screen bg-tq-bg flex items-center justify-center">
-        <div className="text-tq-muted text-sm font-heading">Loading...</div>
+        <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 32, letterSpacing: '0.05em', color: 'var(--tq-accent)', opacity: 0.7 }}>
+          FASTQUOTE
+        </span>
       </div>
     );
   }

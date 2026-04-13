@@ -804,7 +804,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       </p>
 
       {/* Action buttons */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 mb-6">
         <button
           onClick={handleDownloadPDF}
           disabled={generatingPDF}
