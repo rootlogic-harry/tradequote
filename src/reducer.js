@@ -71,6 +71,8 @@ export const initialState = {
   quotePayload: null,
   quoteMode: 'standard',  // 'standard' | 'quick'
   quoteSequence: 1,
+  savedJobId: null,
+  quoteSaveError: null,
   rams: null,
   retryCount: 0,
   statusModal: { open: false, jobId: null, targetStatus: null },
@@ -347,6 +349,8 @@ function reducerCore(state, action) {
         diffs: [],
         quotePayload: null,
         quoteSequence: nextSeq,
+        savedJobId: null,
+        quoteSaveError: null,
       };
     }
 
@@ -516,6 +520,19 @@ function reducerCore(state, action) {
         currentUser: { ...state.currentUser, id: action.userId, name: action.name },
         profile: action.profile ? { ...state.profile, ...action.profile } : state.profile,
         quoteSequence: action.quoteSequence || state.quoteSequence,
+      };
+
+    case 'QUOTE_SAVED':
+      return {
+        ...state,
+        savedJobId: action.jobId,
+        quoteSaveError: null,
+      };
+
+    case 'QUOTE_SAVE_FAILED':
+      return {
+        ...state,
+        quoteSaveError: action.error || 'Save failed. Your work is preserved in this tab.',
       };
 
     case 'SWITCH_USER':

@@ -1,3 +1,29 @@
+import { buildSaveSnapshot } from './stripBlobs.js';
+
+// --- fetchWithRetry ---
+
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  let lastError;
+  let lastResponse;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      if (response.status < 500) return response; // don't retry 4xx
+      lastResponse = response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < maxRetries) {
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  // Return the last 5xx response so callers can read the error body
+  if (lastResponse) return lastResponse;
+  throw lastError;
+}
+
 // --- Profile ---
 
 export async function getProfile(userId) {
@@ -72,40 +98,17 @@ export async function incrementQuoteSequence(userId) {
   return res.json();
 }
 
-// --- Blob stripping (TRQ-55) ---
-
-function stripBlobFields(state) {
-  const clone = JSON.parse(JSON.stringify(state));
-  // Record which photo slots had data before stripping (for restore-time warnings)
-  if (clone.photos) {
-    const slots = {};
-    for (const key of Object.keys(clone.photos)) {
-      if (clone.photos[key]) slots[key] = true;
-      clone.photos[key] = null;
-    }
-    if (Object.keys(slots).length > 0) clone._photoSlots = slots;
-  }
-  if (clone.extraPhotos && clone.extraPhotos.length > 0) {
-    clone._extraPhotoCount = clone.extraPhotos.length;
-  }
-  clone.extraPhotos = [];
-  if (clone.profile) {
-    clone.profile.logo = null;
-  }
-  clone.aiRawResponse = null;
-  return clone;
-}
-
 // --- Jobs ---
 
 export async function saveJob(userId, state) {
+  const snapshot = buildSaveSnapshot(state);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const res = await fetch(`/api/users/${userId}/jobs`, {
+    const res = await fetchWithRetry(`/api/users/${userId}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(stripBlobFields(state)),
+      body: JSON.stringify(snapshot),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -178,16 +181,33 @@ export async function updateJobStatus(userId, jobId, status, meta = {}) {
 // --- Drafts ---
 
 export async function saveDraft(userId, state) {
+  const snapshot = buildSaveSnapshot(state);
   const res = await fetch(`/api/users/${userId}/drafts`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(stripBlobFields(state)),
+    body: JSON.stringify(snapshot),
   });
   if (!res.ok) {
     let msg = `Draft save failed (${res.status})`;
     try { const data = await res.json(); msg = data.error || msg; } catch {}
     throw new Error(msg);
   }
+}
+
+// --- Diffs ---
+
+export async function saveDiffs(userId, jobId, diffs, aiAccuracyScore) {
+  const res = await fetchWithRetry(`/api/users/${userId}/jobs/${jobId}/diffs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diffs, aiAccuracyScore }),
+  });
+  if (!res.ok) {
+    let msg = `Diffs save failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
 }
 
 export async function loadDraft(userId) {

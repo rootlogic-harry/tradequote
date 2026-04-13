@@ -754,9 +754,20 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   };
 
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState(null);
-  const [savedJobId, setSavedJobId] = useState(null);
+  const [saved, setSaved] = useState(!!state.savedJobId);
+  const [saveError, setSaveError] = useState(state.quoteSaveError || null);
+  const [savedJobId, setSavedJobId] = useState(state.savedJobId || null);
+
+  // Sync from auto-save reducer state
+  useEffect(() => {
+    if (state.savedJobId && !savedJobId) {
+      setSavedJobId(state.savedJobId);
+      setSaved(true);
+    }
+    if (state.quoteSaveError && !saveError) {
+      setSaveError(state.quoteSaveError);
+    }
+  }, [state.savedJobId, state.quoteSaveError]);
 
   useEffect(() => {
     if (!saved) return;
@@ -771,6 +782,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const id = await saveQuote(state.currentUserId, state);
       setSaved(true);
       setSavedJobId(id);
+      dispatch({ type: 'QUOTE_SAVED', jobId: id });
       showToast?.('Quote saved', 'success');
       onSaved?.();
     } catch (err) {
@@ -830,6 +842,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           >
             {saving ? 'Saving...' : saved ? 'Saved \u2713' : saveError || 'Save Quote'}
           </button>
+        )}
+        {saveError && !saving && (
+          <span className="text-xs self-center" style={{ color: 'var(--tq-error-txt, #f87171)' }}>
+            {saveError}. Your work is preserved in this tab.
+          </span>
         )}
         {!isReadOnly && onCreateRams && isAdminPlan && (
           <button

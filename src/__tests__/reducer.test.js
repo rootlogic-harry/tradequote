@@ -232,4 +232,34 @@ describe('reducer', () => {
       expect(result.quotePayload).toBeNull();
     });
   });
+
+  describe('QUOTE_SAVED', () => {
+    test('sets savedJobId and clears error', () => {
+      const state = { ...initialState, quoteSaveError: 'old error' };
+      const result = reducer(state, { type: 'QUOTE_SAVED', jobId: 'sq-123' });
+      expect(result.savedJobId).toBe('sq-123');
+      expect(result.quoteSaveError).toBeNull();
+    });
+  });
+
+  describe('QUOTE_SAVE_FAILED', () => {
+    test('sets quoteSaveError', () => {
+      const result = reducer(initialState, { type: 'QUOTE_SAVE_FAILED', error: 'Network error' });
+      expect(result.quoteSaveError).toBe('Network error');
+    });
+
+    test('uses default message when no error provided', () => {
+      const result = reducer(initialState, { type: 'QUOTE_SAVE_FAILED' });
+      expect(result.quoteSaveError).toContain('Save failed');
+    });
+  });
+
+  describe('NEW_QUOTE clears save state', () => {
+    test('clears savedJobId and quoteSaveError', () => {
+      const state = { ...initialState, savedJobId: 'sq-123', quoteSaveError: 'old' };
+      const result = reducer(state, { type: 'NEW_QUOTE' });
+      expect(result.savedJobId).toBeNull();
+      expect(result.quoteSaveError).toBeNull();
+    });
+  });
 });

@@ -125,6 +125,36 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);
     `);
 
+    // quote_diffs table — learning engine (4.1b)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS quote_diffs (
+        id                   TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        job_id               TEXT REFERENCES jobs(id) ON DELETE CASCADE,
+        user_id              TEXT REFERENCES users(id) ON DELETE CASCADE,
+        field_type           TEXT NOT NULL,
+        field_label          TEXT NOT NULL,
+        ai_value             TEXT NOT NULL,
+        confirmed_value      TEXT NOT NULL,
+        was_edited           BOOLEAN NOT NULL,
+        edit_magnitude       DECIMAL(8,4),
+        reference_card_used  BOOLEAN,
+        stone_type           TEXT,
+        wall_height_mm       INTEGER,
+        wall_length_mm       INTEGER,
+        ai_accuracy_score    DECIMAL(4,3),
+        created_at           TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS quote_diffs_user_id_idx    ON quote_diffs (user_id);
+      CREATE INDEX IF NOT EXISTS quote_diffs_field_type_idx ON quote_diffs (field_type, field_label);
+      CREATE INDEX IF NOT EXISTS quote_diffs_was_edited_idx ON quote_diffs (was_edited);
+      CREATE INDEX IF NOT EXISTS quote_diffs_created_at_idx ON quote_diffs (created_at DESC);
+    `);
+
+    // Add completion_feedback column (4.5)
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS completion_feedback TEXT;
+    `);
+
     // Terminology migration: full→admin, standard→basic
     await client.query(`
       UPDATE users SET plan = 'admin' WHERE plan = 'full';
@@ -948,6 +978,134 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
   }
 });
 
+// --- Diffs Routes (Learning Engine 4.1b) ---
+
+app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
+  try {
+    const { diffs, aiAccuracyScore } = req.body;
+    if (!Array.isArray(diffs)) {
+      return res.status(400).json({ error: 'diffs must be an array' });
+    }
+    if (diffs.length === 0) {
+      return res.json({ ok: true, inserted: 0 });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      let inserted = 0;
+      for (const d of diffs) {
+        const result = await client.query(
+          `INSERT INTO quote_diffs (
+            job_id, user_id, field_type, field_label,
+            ai_value, confirmed_value, was_edited, edit_magnitude,
+            reference_card_used, stone_type, wall_height_mm, wall_length_mm,
+            ai_accuracy_score, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT DO NOTHING`,
+          [
+            req.params.jobId,
+            req.params.id,
+            d.fieldType,
+            d.fieldLabel,
+            String(d.aiValue),
+            String(d.confirmedValue),
+            !!d.wasEdited,
+            d.editMagnitude ?? null,
+            d.referenceCardUsed ?? null,
+            d.stoneType ?? null,
+            d.wallHeightMm ?? null,
+            d.wallLengthMm ?? null,
+            aiAccuracyScore ?? null,
+            d.createdAt ? new Date(d.createdAt) : new Date(),
+          ]
+        );
+        if (result.rowCount > 0) inserted++;
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, inserted });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Admin Learning Dashboard (4.1g) ---
+
+app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    // Field bias
+    const fieldBias = await pool.query(`
+      SELECT field_type, field_label,
+        COUNT(*) AS total,
+        ROUND(AVG(CASE WHEN was_edited THEN 1.0 ELSE 0.0 END) * 100, 1) AS edit_rate_pct,
+        ROUND(AVG(edit_magnitude) * 100, 1) AS avg_bias_pct,
+        ROUND(AVG(ABS(edit_magnitude)) * 100, 1) AS avg_error_pct
+      FROM quote_diffs
+      WHERE field_type IN ('measurement','material_unit_cost','labour_days')
+        AND edit_magnitude IS NOT NULL
+      GROUP BY field_type, field_label
+      ORDER BY edit_rate_pct DESC
+    `);
+
+    // Weekly accuracy trend
+    const weeklyTrend = await pool.query(`
+      SELECT DATE_TRUNC('week', created_at) AS week,
+        ROUND(AVG(ai_accuracy_score), 3) AS avg_accuracy,
+        COUNT(DISTINCT job_id) AS quote_count
+      FROM quote_diffs
+      WHERE ai_accuracy_score IS NOT NULL
+      GROUP BY DATE_TRUNC('week', created_at)
+      ORDER BY week DESC LIMIT 12
+    `);
+
+    // Reference card impact
+    const refCardImpact = await pool.query(`
+      SELECT reference_card_used,
+        ROUND(AVG(CASE WHEN was_edited THEN 1.0 ELSE 0.0 END) * 100, 1) AS edit_rate_pct,
+        COUNT(*) AS total
+      FROM quote_diffs WHERE field_type = 'measurement'
+      GROUP BY reference_card_used
+    `);
+
+    // Per-user accuracy
+    const userAccuracy = await pool.query(`
+      SELECT user_id,
+        ROUND(AVG(ai_accuracy_score), 3) AS avg_accuracy,
+        COUNT(DISTINCT job_id) AS quote_count
+      FROM quote_diffs
+      WHERE ai_accuracy_score IS NOT NULL
+      GROUP BY user_id
+    `);
+
+    res.json({
+      fieldBias: fieldBias.rows.map(r => ({
+        ...r, total: Number(r.total),
+        editRatePct: Number(r.edit_rate_pct), avgBiasPct: Number(r.avg_bias_pct),
+        avgErrorPct: Number(r.avg_error_pct),
+      })),
+      weeklyTrend: weeklyTrend.rows.map(r => ({
+        week: r.week, avgAccuracy: Number(r.avg_accuracy), quoteCount: Number(r.quote_count),
+      })),
+      refCardImpact: refCardImpact.rows.map(r => ({
+        referenceCardUsed: r.reference_card_used, editRatePct: Number(r.edit_rate_pct),
+        total: Number(r.total),
+      })),
+      userAccuracy: userAccuracy.rows.map(r => ({
+        userId: r.user_id, avgAccuracy: Number(r.avg_accuracy), quoteCount: Number(r.quote_count),
+        isOutlier: Number(r.avg_accuracy) < 0.4 && Number(r.quote_count) >= 3,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Draft Routes ---
 
 app.get('/api/users/:id/drafts', async (req, res) => {
@@ -1069,7 +1227,8 @@ app.post('/api/users/:id/photos/copy', async (req, res) => {
 app.delete('/api/users/:id/data', async (req, res) => {
   try {
     const userId = req.params.id;
-    // CASCADE handles profiles, settings, jobs, drafts, user_photos
+    // CASCADE handles profiles, settings, jobs, drafts, user_photos, quote_diffs
+    await pool.query('DELETE FROM quote_diffs WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM user_photos WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM drafts WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM jobs WHERE user_id = $1', [userId]);
@@ -1084,12 +1243,13 @@ app.delete('/api/users/:id/data', async (req, res) => {
 app.get('/api/users/:id/export', async (req, res) => {
   try {
     const userId = req.params.id;
-    const [profileRes, settingsRes, jobsRes, draftsRes, photosRes] = await Promise.all([
+    const [profileRes, settingsRes, jobsRes, draftsRes, photosRes, diffsRes] = await Promise.all([
       pool.query('SELECT data FROM profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT key, value FROM settings WHERE user_id = $1', [userId]),
       pool.query('SELECT quote_snapshot AS "quoteSnapshot", rams_snapshot AS "ramsSnapshot", saved_at AS "savedAt", client_name AS "clientName" FROM jobs WHERE user_id = $1', [userId]),
       pool.query('SELECT data FROM drafts WHERE user_id = $1', [userId]),
       pool.query('SELECT context, slot, label, name, updated_at AS "updatedAt" FROM user_photos WHERE user_id = $1', [userId]),
+      pool.query('SELECT field_type, field_label, ai_value, confirmed_value, was_edited, edit_magnitude, created_at FROM quote_diffs WHERE user_id = $1', [userId]),
     ]);
 
     res.json({
@@ -1100,6 +1260,7 @@ app.get('/api/users/:id/export', async (req, res) => {
       jobs: jobsRes.rows,
       drafts: draftsRes.rows.map(r => r.data),
       photos: photosRes.rows,
+      diffs: diffsRes.rows,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

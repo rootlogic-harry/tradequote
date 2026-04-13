@@ -15,10 +15,11 @@ import Toast from './components/Toast.jsx';
 import UserSwitcher from './components/UserSwitcher.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import StatusModal from './components/StatusModal.jsx';
+import LearningDashboard from './components/LearningDashboard.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
-import { getJob, listJobs, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos } from './utils/userDB.js';
+import { getJob, listJobs, saveJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 
 function getStoredTheme(userId) {
@@ -236,6 +237,33 @@ export default function App() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [state]);
+
+  // Auto-save job + diffs at Generate Quote (Step 4 → Step 5)
+  const autoSaveTriggered = useRef(false);
+  useEffect(() => {
+    if (state.step !== 5 || !state.quotePayload || !state.currentUserId) {
+      autoSaveTriggered.current = false;
+      return;
+    }
+    if (state.savedJobId || autoSaveTriggered.current) return;
+    autoSaveTriggered.current = true;
+
+    (async () => {
+      try {
+        const jobId = await saveJob(state.currentUserId, state);
+        // Save diffs independently to quote_diffs table
+        try {
+          await saveDiffs(state.currentUserId, jobId, state.diffs, state.quotePayload?.aiAccuracyScore ?? null);
+        } catch (err) {
+          console.warn('[AutoSave] Diffs save failed:', err.message);
+        }
+        dispatch({ type: 'QUOTE_SAVED', jobId });
+      } catch (err) {
+        console.error('[AutoSave] Job save failed:', err.message);
+        dispatch({ type: 'QUOTE_SAVE_FAILED', error: err.message });
+      }
+    })();
+  }, [state.step, state.quotePayload, state.currentUserId, state.savedJobId]);
 
   // Auto-save profile to DB (debounced 3s) whenever profile changes
   // Skip the first change after user load to avoid writing stale/initial profile back to DB
@@ -535,6 +563,11 @@ export default function App() {
   const isAdminPlan = state.currentUser?.plan === 'admin';
 
   const renderContent = () => {
+    // Learning dashboard (admin only)
+    if (currentView === 'learning' && isAdminPlan) {
+      return <LearningDashboard currentUserId={state.currentUserId} />;
+    }
+
     // Dashboard view
     if (currentView === 'dashboard') {
       return (
@@ -663,6 +696,8 @@ export default function App() {
         onGoToSaved={handleGoToSaved}
         quoteMode={state.quoteMode}
         onLogout={handleLogout}
+        onGoToLearning={() => setCurrentView('learning')}
+        isAdminPlan={isAdminPlan}
       />
 
       {/* Main content */}

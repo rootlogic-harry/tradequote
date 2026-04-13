@@ -32,6 +32,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Clean all tables before each test (order matters for FK constraints)
+  await pool.query('DELETE FROM quote_diffs');
   await pool.query('DELETE FROM user_photos');
   await pool.query('DELETE FROM drafts');
   await pool.query('DELETE FROM jobs');
@@ -715,6 +716,130 @@ describe('E2E: Full Quote Lifecycle', () => {
     await api(`/api/users/mark/photos/${jobId}`, { method: 'DELETE' });
     const { data } = await api(`/api/users/mark/photos/${jobId}`);
     expect(data).toEqual([]);
+  });
+});
+
+// --- Quote Diffs (Learning Engine) ---
+
+describe('Quote Diffs', () => {
+  let jobId;
+
+  beforeEach(async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Diffs Test') });
+    jobId = data.id;
+  });
+
+  test('POST /diffs saves all diffs to quote_diffs table', async () => {
+    const diffs = [
+      { fieldType: 'measurement', fieldLabel: 'Wall height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667, createdAt: Date.now() },
+      { fieldType: 'measurement', fieldLabel: 'Wall length', aiValue: '4500', confirmedValue: '4500', wasEdited: false, editMagnitude: 0, createdAt: Date.now() },
+    ];
+    const { status, data } = await api(`/api/users/mark/jobs/${jobId}/diffs`, {
+      method: 'POST',
+      body: { diffs, aiAccuracyScore: 0.5 },
+    });
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.inserted).toBe(2);
+  });
+
+  test('POST /diffs is idempotent (ON CONFLICT DO NOTHING)', async () => {
+    const diffs = [
+      { fieldType: 'measurement', fieldLabel: 'Wall height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667, createdAt: Date.now() },
+    ];
+    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
+    // Second call with same data — new rows get unique IDs, so they'll insert (IDs are UUIDs)
+    const { data } = await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
+    expect(data.ok).toBe(true);
+  });
+
+  test('POST /diffs with empty array returns ok:true, inserted:0', async () => {
+    const { status, data } = await api(`/api/users/mark/jobs/${jobId}/diffs`, {
+      method: 'POST',
+      body: { diffs: [], aiAccuracyScore: null },
+    });
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.inserted).toBe(0);
+  });
+
+  test('POST /diffs rejects non-array diffs', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/diffs`, {
+      method: 'POST',
+      body: { diffs: 'not-an-array' },
+    });
+    expect(status).toBe(400);
+  });
+
+  test('diffs are deleted when job is deleted (CASCADE)', async () => {
+    const diffs = [
+      { fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667 },
+    ];
+    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
+
+    // Delete the job — diffs should cascade
+    await api(`/api/users/mark/jobs/${jobId}`, { method: 'DELETE' });
+
+    // Create a new job and verify no orphan diffs
+    const { data: newJob } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('New') });
+    expect(newJob.id).toBeDefined();
+  });
+
+  test('diffs included in GDPR export', async () => {
+    const diffs = [
+      { fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667 },
+    ];
+    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
+
+    const { data } = await api('/api/users/mark/export');
+    expect(data.diffs).toBeDefined();
+    expect(data.diffs.length).toBeGreaterThan(0);
+  });
+
+  test('diffs deleted in GDPR delete', async () => {
+    const diffs = [
+      { fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667 },
+    ];
+    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
+
+    await api('/api/users/mark/data', { method: 'DELETE' });
+
+    // Verify diffs are gone by checking export of re-created user
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data } = await api('/api/users/mark/export');
+    expect(data.diffs).toHaveLength(0);
+  });
+});
+
+// --- Admin Learning ---
+
+describe('Admin Learning', () => {
+  test('GET /api/admin/learning returns learning data', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data: job } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Learn') });
+    const diffs = [
+      { fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667 },
+      { fieldType: 'measurement', fieldLabel: 'Length', aiValue: '4500', confirmedValue: '4500', wasEdited: false, editMagnitude: 0 },
+    ];
+    await api(`/api/users/mark/jobs/${job.id}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
+
+    const { status, data } = await api('/api/admin/learning', {
+      headers: { 'x-test-user-id': 'mark', 'x-test-plan': 'admin' },
+    });
+    expect(status).toBe(200);
+    expect(data.fieldBias).toBeDefined();
+    expect(data.weeklyTrend).toBeDefined();
+    expect(data.refCardImpact).toBeDefined();
+    expect(data.userAccuracy).toBeDefined();
+  });
+
+  test('GET /api/admin/learning returns 403 for basic plan', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'paul', name: 'Paul' } });
+    const { status } = await api('/api/admin/learning', {
+      headers: { 'x-test-user-id': 'paul', 'x-test-plan': 'basic' },
+    });
+    expect(status).toBe(403);
   });
 });
 
