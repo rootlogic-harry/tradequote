@@ -1263,8 +1263,12 @@ app.post('/api/admin/migrate-data', requireAuth, requireAdminPlan, async (req, r
     const jobs = await client.query('UPDATE jobs SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
     // Migrate quote_diffs
     const diffs = await client.query('UPDATE quote_diffs SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
-    // Migrate photos
-    const photos = await client.query('UPDATE user_photos SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
+    // Migrate photos (skip duplicates — PK is user_id, context, slot)
+    const photos = await client.query(`
+      UPDATE user_photos SET user_id = $1
+      WHERE user_id = $2
+        AND (context, slot) NOT IN (SELECT context, slot FROM user_photos WHERE user_id = $1)
+    `, [toUserId, fromUserId]);
     // Migrate profile (upsert — keep target's if exists, else move source's)
     const targetProfile = await client.query('SELECT 1 FROM profiles WHERE user_id = $1', [toUserId]);
     if (targetProfile.rows.length === 0) {
