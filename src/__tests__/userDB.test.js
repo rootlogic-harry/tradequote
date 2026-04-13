@@ -13,6 +13,7 @@ import {
   getQuoteSequence, incrementQuoteSequence,
   saveJob, listJobs, getJob, deleteJob, updateJobRams,
   saveDraft, loadDraft, clearDraft,
+  saveDiffs, updateJobStatus, setRamsNotRequired,
   deleteUserData, exportUserData,
   migrateFromLegacyDB,
   savePhoto, loadPhotos, deletePhotos, deletePhoto, copyPhotos,
@@ -400,6 +401,159 @@ describe('saveJob with photo copy', () => {
     // Second call should be the photo copy
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe('/api/users/mark/photos/copy');
+  });
+});
+
+// --- fetchWithRetry (tested via saveJob/saveDiffs) ---
+
+describe('fetchWithRetry via saveJob', () => {
+  test('saveJob retries on 500 and succeeds on second attempt', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ error: 'Temporary failure' }, false, 500))  // 1st attempt: 500
+      .mockReturnValueOnce(mockResponse({ id: 'sq-retry' }))                           // 2nd attempt: success
+      .mockReturnValueOnce(mockResponse({ ok: true }));                                 // copyPhotos
+    const id = await saveJob('mark', makeFakeState('Retry'));
+    expect(id).toBe('sq-retry');
+    // First call is POST /jobs (fail), second is POST /jobs (success), third is photo copy
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  }, 15000);
+
+  test('saveJob returns last 500 error after all retries exhausted', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Persistent failure' }, false, 500));
+    await expect(saveJob('mark', makeFakeState('Fail')))
+      .rejects.toThrow('Persistent failure');
+  }, 30000);
+
+  test('saveJob does not retry on 4xx errors', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Bad request' }, false, 400));
+    await expect(saveJob('mark', makeFakeState('NoRetry')))
+      .rejects.toThrow('Bad request');
+    // Should only be called once — no retries for 4xx
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fetchWithRetry via saveDiffs', () => {
+  test('saveDiffs retries on 500 and succeeds on second attempt', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ error: 'Temporary' }, false, 500))
+      .mockReturnValueOnce(mockResponse({ ok: true, inserted: 2 }));
+    const result = await saveDiffs('mark', 'sq-1', [{ fieldType: 'measurement' }], 0.5);
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 15000);
+});
+
+// --- saveDiffs ---
+
+describe('saveDiffs', () => {
+  test('calls POST with correct URL and body', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true, inserted: 1 }));
+    const diffs = [{ fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1400' }];
+    await saveDiffs('mark', 'sq-1', diffs, 0.5);
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-1/diffs', expect.objectContaining({
+      method: 'POST',
+    }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.diffs).toEqual(diffs);
+  });
+
+  test('includes aiAccuracyScore in body', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true, inserted: 0 }));
+    await saveDiffs('mark', 'sq-1', [], 0.75);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.aiAccuracyScore).toBe(0.75);
+  });
+
+  test('throws on server error', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'DB write failed' }, false, 500));
+    await expect(saveDiffs('mark', 'sq-1', [], null))
+      .rejects.toThrow('DB write failed');
+  }, 30000);
+
+  test('sends empty array when no diffs', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true, inserted: 0 }));
+    const result = await saveDiffs('mark', 'sq-1', [], null);
+    expect(result.inserted).toBe(0);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.diffs).toEqual([]);
+  });
+});
+
+// --- updateJobStatus ---
+
+describe('updateJobStatus', () => {
+  test('calls PUT with correct URL and body', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await updateJobStatus('mark', 'sq-1', 'sent');
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-1/status', expect.objectContaining({
+      method: 'PUT',
+    }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.status).toBe('sent');
+  });
+
+  test('passes meta fields (sentAt, expiresAt)', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    const sentAt = '2026-04-10T12:00:00.000Z';
+    const expiresAt = '2026-05-10T12:00:00.000Z';
+    await updateJobStatus('mark', 'sq-1', 'sent', { sentAt, expiresAt });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.sentAt).toBe(sentAt);
+    expect(body.expiresAt).toBe(expiresAt);
+  });
+
+  test('passes completionFeedback in meta', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await updateJobStatus('mark', 'sq-1', 'completed', { completionFeedback: 'Great job' });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.status).toBe('completed');
+    expect(body.completionFeedback).toBe('Great job');
+  });
+
+  test('throws on server error with message', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Update failed' }, false, 500));
+    await expect(updateJobStatus('mark', 'sq-1', 'sent'))
+      .rejects.toThrow('Update failed');
+  });
+
+  test('throws on 404', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Job sq-missing not found' }, false, 404));
+    await expect(updateJobStatus('mark', 'sq-missing', 'sent'))
+      .rejects.toThrow('Job sq-missing not found');
+  });
+});
+
+// --- setRamsNotRequired ---
+
+describe('setRamsNotRequired', () => {
+  test('calls PUT with correct body', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await setRamsNotRequired('mark', 'sq-1', true);
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-1/rams-not-required', expect.objectContaining({
+      method: 'PUT',
+    }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.value).toBe(true);
+  });
+
+  test('throws on 404', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Job not found' }, false, 404));
+    await expect(setRamsNotRequired('mark', 'sq-missing', true))
+      .rejects.toThrow('Job not found');
+  });
+});
+
+// --- saveJob photo copy failure resilience ---
+
+describe('saveJob photo copy failure', () => {
+  test('copyPhotos failure does not break job save', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ id: 'sq-789' }))                   // saveJob POST — success
+      .mockReturnValueOnce(Promise.reject(new Error('Copy failed')));          // copyPhotos — fails
+    const id = await saveJob('mark', makeFakeState('CopyFail'));
+    // Job still saved successfully despite copy failure
+    expect(id).toBe('sq-789');
   });
 });
 

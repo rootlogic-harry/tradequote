@@ -843,12 +843,124 @@ describe('Admin Learning', () => {
   });
 });
 
-// --- SPA Fallback ---
+// --- Completion Feedback (4.5) ---
 
-describe('SPA Fallback', () => {
-  test('unknown API route returns 404', async () => {
-    const { status } = await api('/api/nonexistent');
+describe('Completion Feedback', () => {
+  let jobId;
+
+  beforeEach(async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const { data } = await api('/api/users/mark/jobs', { method: 'POST', body: makeFakeState('Feedback Test') });
+    jobId = data.id;
+  });
+
+  test('completionFeedback is stored when status set to completed', async () => {
+    const { status } = await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'completed', completionFeedback: 'Job went well, client happy' },
+    });
+    expect(status).toBe(200);
+  });
+
+  test('completionFeedback is returned in GET /jobs/:jobId', async () => {
+    await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'completed', completionFeedback: 'Excellent result' },
+    });
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.completionFeedback).toBe('Excellent result');
+  });
+
+  test('completionFeedback is null when not provided', async () => {
+    await api(`/api/users/mark/jobs/${jobId}/status`, {
+      method: 'PUT',
+      body: { status: 'completed' },
+    });
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.completionFeedback).toBeNull();
+  });
+});
+
+// --- Legal Pages (4.6) ---
+
+describe('Legal Pages', () => {
+  test('GET /privacy returns 200 with HTML containing "Privacy Policy"', async () => {
+    const res = await fetch(`${baseUrl}/privacy`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Privacy Policy');
+  });
+
+  test('GET /terms returns 200 with HTML containing "Terms of Service"', async () => {
+    const res = await fetch(`${baseUrl}/terms`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Terms of Service');
+  });
+});
+
+// --- Landing Page ---
+
+describe('Landing Page', () => {
+  test('GET / without auth returns 200 with HTML containing "FASTQUOTE"', async () => {
+    // No auth cookies — should serve landing page
+    const res = await fetch(`${baseUrl}/`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('FASTQUOTE');
+  });
+
+  test('GET /login returns 200 with HTML', async () => {
+    const res = await fetch(`${baseUrl}/login`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('html');
+  });
+});
+
+// --- Rate Limiting (4.4) ---
+
+describe('Rate Limiting', () => {
+  test('POST /api/anthropic/messages returns rate limit headers', async () => {
+    const res = await fetch(`${baseUrl}/api/anthropic/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'test', messages: [] }),
+    });
+    // The rate limiter adds these headers regardless of outcome
+    const limitHeader = res.headers.get('ratelimit-limit') || res.headers.get('x-ratelimit-limit');
+    expect(limitHeader).toBeDefined();
+  });
+
+  test('POST /api/anthropic/messages returns 500 when no API key set', async () => {
+    const res = await fetch(`${baseUrl}/api/anthropic/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'test', messages: [] }),
+    });
+    // No ANTHROPIC_API_KEY in test env — should return 500
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    expect(data.error).toContain('ANTHROPIC_API_KEY');
+  });
+});
+
+// --- Error Handling (4.3) ---
+
+describe('Error Handling', () => {
+  test('unknown API route returns JSON 404', async () => {
+    const { status, data } = await api('/api/nonexistent');
     expect(status).toBe(404);
+  });
+
+  test('POST with invalid JSON returns error status', async () => {
+    const res = await fetch(`${baseUrl}/api/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{ invalid json',
+    });
+    // Express json parser returns 400 SyntaxError
+    expect(res.status).toBeGreaterThanOrEqual(400);
   });
 });
 

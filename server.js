@@ -989,7 +989,8 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
               rams_snapshot AS "ramsSnapshot",
               status, sent_at AS "sentAt", expires_at AS "expiresAt",
               accepted_at AS "acceptedAt", declined_at AS "declinedAt",
-              decline_reason AS "declineReason"
+              decline_reason AS "declineReason",
+              completion_feedback AS "completionFeedback"
        FROM jobs WHERE id = $1 AND user_id = $2`,
       [req.params.jobId, req.params.id]
     );
