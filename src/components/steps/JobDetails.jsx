@@ -62,8 +62,62 @@ MEASUREMENT INSTRUCTIONS:
 - NEVER fabricate a confident measurement without a scale reference.
 - Report all measurements in millimetres.
 
-KNOWN CALIBRATION NOTES:
-Source: Professional waller quote data, March 2026, West Yorkshire / Cumbria.
+KNOWN CALIBRATION NOTES (last updated April 2026, based on confirmed job comparisons):
+
+1. TRAFFIC MANAGEMENT — ROADSIDE JOBS
+If any uploaded photograph shows the wall is adjacent to a public carriageway
+(road markings, kerb edges, drain covers, white lines, or tarmac surface visible
+in frame), you MUST include a Chapter 8 traffic management line item in the cost
+breakdown. This is a legal requirement for roadside works and must never be omitted.
+Typical cost: £380–450 for up to one week's duration.
+Add it as a separate line item labelled "Chapter 8 traffic management."
+If you are uncertain whether the site is roadside, include it anyway and note
+the uncertainty.
+
+2. FOUNDATION SCOPE — WHEN FAILURE IS DESCRIBED THROUGHOUT
+If the damage description indicates that the foundation has failed along the
+full length of the wall (not just at a localised collapse point), the foundation
+excavation and reinstatement must cover the FULL wall length, not just the
+collapsed section.
+Common phrases indicating full-length foundation failure: "foundation has tipped,"
+"foundation no longer structurally sound along the run," "failed foundation
+throughout," "strip foundation failed."
+Do not limit foundation scope to the collapsed section alone when full-length
+failure is indicated.
+
+3. MORTAR SPECIFICATION — NATURAL STONE WALLS
+For natural sandstone or natural stone boundary walls that require bedding and
+pointing, always specify 1:1:6 cement-lime-sand mortar — NOT sand and cement only.
+Lime mortar is the correct specification for natural stone: it is more flexible,
+allows the wall to breathe, and is the standard expected by loss adjusters and
+insurance companies.
+Material cost for mortar materials (sand, cement, hydrated lime): £130–165 for
+a 10–14 linear metre run.
+Always write "1:1:6 cement-lime-sand mortar" in the schedule of works description,
+not "sand and cement mortar."
+
+4. PLANTING AND HEDGING — CHERRY LAUREL AND SIMILAR SHRUBS
+Cherry Laurel (Prunus laurocerasus) at 600–1000mm height, pot grown, supply
+and plant including topsoil and slow-release fertiliser: £38–50 per plant.
+For a 12 linear metre run at 600mm planting centres: approximately 20 plants,
+total supply and plant cost £760–1,000 depending on plant size and site access.
+For 5-year-old specimens at 1000mm height: budget £45–52 per plant.
+Do not estimate planting costs above this range without specific justification
+(e.g. very large specimen trees, crane access required).
+
+5. LABOUR — MORTAR-POINTED SANDSTONE BOUNDARY WALL
+For a mortar-pointed natural sandstone boundary wall with foundation reinstatement,
+realistic labour estimates for two operatives:
+- 10–12 linear metres, 900mm height, full rebuild: 7–9 days for 2 operatives
+- Per linear metre rate: approximately 0.7–0.8 operative-days/metre for rebuild
+  including foundation, pointing and coping reinstatement
+- Dismantling adds approximately 1.5–2 days for 10–12 metres
+Always use the conservative end of the range for quoting.
+For this wall type, 2 operatives for 8 days (£6,400 at £400/day) is the
+established benchmark. Do not exceed 9 days without specific site complexity
+justification (steep gradient, restricted access, scaffolding required).
+
+Source: Professional waller quote data, March–April 2026, West Yorkshire / Cumbria.
 These are verified rates from accepted quotes — use as baseline for the region.
 
 IMPORTANT — MATERIALS vs LABOUR DISTINCTION:
