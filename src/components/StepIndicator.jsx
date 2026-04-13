@@ -238,43 +238,33 @@ export default function StepIndicator({
           {/* Vertical divider */}
           <div className="hidden sm:block mx-3" style={{ width: 1, height: 24, backgroundColor: 'var(--tq-border)' }} />
 
-          {/* Right: user + theme + settings */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right: theme toggle + account dropdown */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={toggleTheme}
+              className="transition-colors flex items-center justify-center"
+              style={{ color: 'var(--tq-nav-muted)', width: 32, height: 32 }}
+              title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            >
+              {theme === 'light' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+              )}
+            </button>
             {currentUser && (
               <UserSwitcher
                 currentUser={currentUser}
                 allUsers={allUsers}
                 onSwitchUser={onSwitchUser}
+                onSettingsClick={onSettingsClick}
+                onLogout={onLogout}
+                showSettings={currentStep > 1}
               />
-            )}
-            <button
-              onClick={toggleTheme}
-              className="transition-colors text-lg"
-              style={{ color: 'var(--tq-nav-muted)' }}
-              title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-            >
-              {theme === 'light' ? '\uD83C\uDF19' : '\u2600\uFE0F'}
-            </button>
-            {currentStep > 1 && (
-              <button
-                onClick={onSettingsClick}
-                className="transition-colors text-lg"
-                style={{ color: 'var(--tq-nav-muted)' }}
-                title="Edit Profile"
-              >
-                {'\u2699'}
-              </button>
-            )}
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="transition-colors text-lg"
-                style={{ color: 'var(--tq-nav-muted)' }}
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                {'\u23FB'}
-              </button>
             )}
           </div>
         </div>
