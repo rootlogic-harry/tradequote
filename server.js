@@ -401,6 +401,161 @@ app.get('/login', (req, res) => {
   res.send(html);
 });
 
+// --- Landing page for unauthenticated visitors at / ---
+
+const LANDING_PAGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FastQuote &mdash; AI-Powered Quoting for Tradespeople</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: #1a1714;
+      color: #f0ede8;
+      min-height: 100vh;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .brand {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: #e8a838;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+    }
+    .login-link {
+      color: #f0ede8;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 24px;
+      border: 1px solid #3a3630;
+      border-radius: 8px;
+      transition: all 0.15s;
+    }
+    .login-link:hover { border-color: #e8a838; color: #e8a838; }
+    .hero {
+      max-width: 700px;
+      margin: 80px auto 0;
+      text-align: center;
+      padding: 0 24px;
+    }
+    h1 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+    h1 span { color: #e8a838; }
+    .subtitle {
+      font-size: 18px;
+      color: #7a6f5e;
+      line-height: 1.6;
+      margin-bottom: 48px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 36px;
+      background: #e8a838;
+      color: #1a1714;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 16px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      transition: background 0.15s;
+    }
+    .cta:hover { background: #d49a30; }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: 80px auto 60px;
+      padding: 0 24px;
+    }
+    .feature {
+      background: #222018;
+      border: 1px solid #3a3630;
+      border-radius: 12px;
+      padding: 28px 24px;
+    }
+    .feature-icon { font-size: 28px; margin-bottom: 12px; }
+    .feature h3 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .feature p { color: #7a6f5e; font-size: 14px; line-height: 1.5; }
+    .footer-bar {
+      text-align: center;
+      padding: 32px;
+      font-size: 12px;
+      color: #4a4640;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <span class="brand">FASTQUOTE</span>
+    <a href="/login" class="login-link">Log In</a>
+  </nav>
+  <div class="hero">
+    <h1>Professional quotes<br>in <span>under 5 minutes</span></h1>
+    <p class="subtitle">
+      Upload photos of the job, let AI handle the measurements and materials,
+      then review and send a polished quote your client can trust.
+    </p>
+    <a href="/login" class="cta">Get Started &rarr;</a>
+  </div>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">&#128247;</div>
+      <h3>Photo Analysis</h3>
+      <p>Upload site photos and AI extracts measurements, stone type, and damage assessment automatically.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128200;</div>
+      <h3>Accurate Costing</h3>
+      <p>Materials, labour, and schedule of works calculated from real trade data. Every figure editable.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#128196;</div>
+      <h3>PDF Quotes</h3>
+      <p>Generate professional, print-ready quotes with your branding. Download or email directly.</p>
+    </div>
+  </div>
+  <div class="footer-bar">Invite only &middot; &copy; 2026 FastQuote</div>
+</body>
+</html>`;
+
+app.get('/', (req, res, next) => {
+  // Authenticated users get the React SPA
+  if (req.isAuthenticated?.() || req.session?.legacyUserId) {
+    return next();
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(LANDING_PAGE_HTML);
+});
+
 // --- Auth Middleware ---
 
 function requireAuth(req, res, next) {
