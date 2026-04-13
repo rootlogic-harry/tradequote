@@ -38,7 +38,7 @@ export default function Dashboard({
   dispatch,
   onViewJob,
   onViewRams,
-  isFullPlan = true,
+  isAdminPlan = true,
 }) {
   // Use recentJobs (from reducer) if available, fallback to savedJobs
   const jobs = recentJobs.length > 0 ? recentJobs : savedJobs;
@@ -199,7 +199,7 @@ export default function Dashboard({
       )}
 
       {/* Incomplete jobs (needs RAMS) — full plan only */}
-      {isFullPlan && incompleteJobs && incompleteJobs.length > 0 && (
+      {isAdminPlan && incompleteJobs && incompleteJobs.length > 0 && (
         <div className="mb-8">
           <h2 className="text-sm font-heading font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--tq-muted)' }}>
             Needs Attention
@@ -296,7 +296,7 @@ export default function Dashboard({
                       </span>
                       <StatusBadge status={status} />
                       {status === 'SENT' && <ExpiryBadge expiresAt={job.expiresAt} />}
-                      {status === 'ACCEPTED' && isFullPlan && <RamsBadge hasRams={hasRams} />}
+                      {status === 'ACCEPTED' && isAdminPlan && <RamsBadge hasRams={hasRams} />}
                     </div>
                     <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
                       {job.quoteReference}{job.siteAddress ? ` \u00b7 ${job.siteAddress}` : ''}
@@ -337,7 +337,7 @@ export default function Dashboard({
                     )}
                     {status === 'ACCEPTED' && (
                       <>
-                        {isFullPlan && hasRams ? (
+                        {isAdminPlan && hasRams ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
                             className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap"
@@ -345,7 +345,7 @@ export default function Dashboard({
                           >
                             View RAMS
                           </button>
-                        ) : isFullPlan ? (
+                        ) : isAdminPlan ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
                             className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors whitespace-nowrap"

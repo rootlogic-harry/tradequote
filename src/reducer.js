@@ -309,7 +309,7 @@ function reducerCore(state, action) {
         reviewDataWithRaw,
         allDiffs
       );
-      console.log('TradeQuote Payload:', JSON.stringify(payload, null, 2));
+      console.log('FastQuote Payload:', JSON.stringify(payload, null, 2));
       return {
         ...state,
         diffs: allDiffs,

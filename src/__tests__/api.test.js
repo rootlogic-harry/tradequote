@@ -1,5 +1,5 @@
 /**
- * API Integration Tests for TradeQuote Express Server
+ * API Integration Tests for FastQuote Express Server
  *
  * These tests require a running Postgres database.
  * Set DATABASE_URL env var before running.
@@ -53,7 +53,7 @@ async function api(path, opts = {}) {
   if (userIdMatch && !options.headers['x-test-user-id']) {
     options.headers['x-test-user-id'] = decodeURIComponent(userIdMatch[1]);
     if (!options.headers['x-test-plan']) {
-      options.headers['x-test-plan'] = 'full';
+      options.headers['x-test-plan'] = 'admin';
     }
   }
   const res = await fetch(`${baseUrl}${path}`, options);

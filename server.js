@@ -112,7 +112,7 @@ async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'local';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider_id TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'standard';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'basic';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT false;
     `);
 
@@ -125,9 +125,16 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS session_expire_idx ON session (expire);
     `);
 
-    // Bootstrap: mark and harry get full plan and are already onboarded
+    // Terminology migration: full→admin, standard→basic
     await client.query(`
-      UPDATE users SET plan = 'full', auth_provider = 'local', profile_complete = true
+      UPDATE users SET plan = 'admin' WHERE plan = 'full';
+      UPDATE users SET plan = 'basic' WHERE plan = 'standard';
+      ALTER TABLE users ALTER COLUMN plan SET DEFAULT 'basic';
+    `);
+
+    // Bootstrap: mark and harry get admin plan and are already onboarded
+    await client.query(`
+      UPDATE users SET plan = 'admin', auth_provider = 'local', profile_complete = true
       WHERE id IN ('mark', 'harry');
     `);
 
@@ -310,7 +317,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TradeQuote &mdash; Sign In</title>
+  <title>FastQuote &mdash; Sign In</title>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -372,7 +379,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div class="card">
-    <div class="logo">TRADEQUOTE</div>
+    <div class="logo">FASTQUOTE</div>
     <div class="tagline">Professional quoting for tradespeople</div>
     \${ERROR_HTML}
     <a href="/auth/google" class="btn">
@@ -563,7 +570,7 @@ function requireAuth(req, res, next) {
   if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-id']) {
     req.user = {
       id: req.headers['x-test-user-id'],
-      plan: req.headers['x-test-plan'] || 'full',
+      plan: req.headers['x-test-plan'] || 'admin',
     };
     return next();
   }
@@ -573,7 +580,7 @@ function requireAuth(req, res, next) {
   }
   // Legacy switcher session
   if (req.session?.legacyUserId) {
-    req.user = { id: req.session.legacyUserId, plan: 'full' };
+    req.user = { id: req.session.legacyUserId, plan: 'admin' };
     return next();
   }
   res.status(401).json({ error: 'Not authenticated' });
@@ -588,8 +595,8 @@ function requireOwner(req, res, next) {
   next();
 }
 
-function requireFullPlan(req, res, next) {
-  if (req.user?.plan !== 'full') {
+function requireAdminPlan(req, res, next) {
+  if (req.user?.plan !== 'admin') {
     return res.status(403).json({ error: 'This feature is not available on your plan.' });
   }
   next();
@@ -876,7 +883,7 @@ app.delete('/api/users/:id/jobs/:jobId', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id/jobs/:jobId/rams', requireFullPlan, async (req, res) => {
+app.put('/api/users/:id/jobs/:jobId/rams', requireAdminPlan, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
@@ -895,7 +902,7 @@ app.put('/api/users/:id/jobs/:jobId/rams', requireFullPlan, async (req, res) => 
   }
 });
 
-app.put('/api/users/:id/jobs/:jobId/rams-not-required', requireFullPlan, async (req, res) => {
+app.put('/api/users/:id/jobs/:jobId/rams-not-required', requireAdminPlan, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
@@ -1189,7 +1196,7 @@ const dbReady = initDB()
     // Don't auto-listen when imported by test runner
     if (process.env.NODE_ENV !== 'test') {
       app.listen(PORT, () => {
-        console.log(`TradeQuote server running on port ${PORT}`);
+        console.log(`FastQuote server running on port ${PORT}`);
       });
     }
   })

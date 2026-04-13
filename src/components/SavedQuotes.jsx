@@ -5,7 +5,7 @@ import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
 
 const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
 
-export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isFullPlan = true }) {
+export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isAdminPlan = true }) {
   const [localQuotes, setLocalQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -194,7 +194,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
 
                 {status === 'ACCEPTED' && (
                   <>
-                    {isFullPlan && hasRams && onViewRams ? (
+                    {isAdminPlan && hasRams && onViewRams ? (
                       <button
                         onClick={() => onViewRams(quote)}
                         className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
@@ -202,7 +202,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                       >
                         View RAMS
                       </button>
-                    ) : isFullPlan && onCreateRams ? (
+                    ) : isAdminPlan && onCreateRams ? (
                       <button
                         onClick={() => onCreateRams(quote)}
                         className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"

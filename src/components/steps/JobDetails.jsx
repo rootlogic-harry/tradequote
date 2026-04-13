@@ -53,7 +53,7 @@ DOMAIN KNOWLEDGE:
   stonework typically requires taking back 300-600mm before rebuilding
 
 MEASUREMENT INSTRUCTIONS:
-- If a TradeQuote Reference Card (A5 white card, 148mm x 210mm, with a geometric
+- If a FastQuote Reference Card (A5 white card, 148mm x 210mm, with a geometric
   calibration pattern) is visible in any photograph, use it as your ONLY scale
   reference. Calculate all absolute measurements from its known dimensions.
   Set referenceCardDetected: true and note which photo it appeared in.
@@ -401,7 +401,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
         <span className="text-2xl shrink-0">📐</span>
         <div>
           <p className="font-heading font-bold text-sm" style={{ color: 'var(--tq-accent)' }}>
-            Using your TradeQuote Reference Card?
+            Using your FastQuote Reference Card?
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--tq-text)' }}>
             Place it flat against the wall in Slot 4. The AI uses its known 148×210mm dimensions to calculate real measurements.

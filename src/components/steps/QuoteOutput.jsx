@@ -6,7 +6,7 @@ import { saveJob as saveQuote } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isFullPlan = true }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = true }) {
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos, extraPhotos = [] } = state;
 
@@ -831,7 +831,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             {saving ? 'Saving...' : saved ? 'Saved \u2713' : saveError || 'Save Quote'}
           </button>
         )}
-        {!isReadOnly && onCreateRams && isFullPlan && (
+        {!isReadOnly && onCreateRams && isAdminPlan && (
           <button
             onClick={() => onCreateRams(savedJobId)}
             disabled={!savedJobId}

@@ -121,7 +121,7 @@ export default function StepIndicator({
               style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 22, letterSpacing: '0.05em', color: 'var(--tq-accent)', cursor: 'pointer' }}
               onClick={onGoToDashboard}
             >
-              TRADEQUOTE
+              FASTQUOTE
             </span>
           </div>
 

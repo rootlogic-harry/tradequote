@@ -337,7 +337,7 @@ export default function RamsDocument({ rams, profile, showPhotos = true }) {
         <p className="mb-1">This RAMS must be reviewed and briefed to all site operatives before work commences.</p>
         <p className="mb-1">Review date: Prior to commencement and thereafter as conditions change.</p>
         <p className="mb-1">{rams.foreman || profile?.fullName} — {profile?.accreditations || ''}</p>
-        <p className="italic">Document prepared with TradeQuote — reviewed and approved by {rams.foreman || profile?.fullName}.</p>
+        <p className="italic">Document prepared with FastQuote — reviewed and approved by {rams.foreman || profile?.fullName}.</p>
       </div>
     </div>
   );

@@ -312,7 +312,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
       }));
       children.push(new Paragraph({
-        children: [txt(`Document prepared with TradeQuote \u2014 reviewed and approved by ${rams.foreman || profile?.fullName || ''}.`, { size: 20, italics: true, color: '888888' })],
+        children: [txt(`Document prepared with FastQuote \u2014 reviewed and approved by ${rams.foreman || profile?.fullName || ''}.`, { size: 20, italics: true, color: '888888' })],
         spacing: { after: 200 },
       }));
 

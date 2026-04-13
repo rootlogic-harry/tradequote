@@ -507,7 +507,7 @@ export default function App() {
                 user: { ...state.currentUser, profileComplete: true },
               });
               setCurrentView('dashboard');
-              showToast('Profile saved \u2014 welcome to TradeQuote', 'success');
+              showToast('Profile saved \u2014 welcome to FastQuote', 'success');
             }}
           />
         </div>
@@ -532,7 +532,7 @@ export default function App() {
     window.location.href = '/auth/logout';
   };
 
-  const isFullPlan = state.currentUser?.plan === 'full';
+  const isAdminPlan = state.currentUser?.plan === 'admin';
 
   const renderContent = () => {
     // Dashboard view
@@ -554,7 +554,7 @@ export default function App() {
           dispatch={dispatch}
           onViewJob={handleViewQuote}
           onViewRams={handleViewRams}
-          isFullPlan={isFullPlan}
+          isAdminPlan={isAdminPlan}
         />
       );
     }
@@ -603,7 +603,7 @@ export default function App() {
           currentUserId={state.currentUserId}
           recentJobs={state.recentJobs}
           dispatch={dispatch}
-          isFullPlan={isFullPlan}
+          isAdminPlan={isAdminPlan}
         />
       );
     }
@@ -636,7 +636,7 @@ export default function App() {
             showToast={showToast}
             onCreateRams={handleCreateRams}
             onSaved={() => fetchIncompleteJobs(state.currentUserId)}
-            isFullPlan={isFullPlan}
+            isAdminPlan={isAdminPlan}
           />
         );
       default:
