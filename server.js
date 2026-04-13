@@ -1211,6 +1211,93 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
   }
 });
 
+// --- Admin User Management ---
+
+app.get('/api/admin/users', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id, u.name, u.email, u.auth_provider, u.plan, u.profile_complete,
+        u.last_login_at, u.created_at,
+        (SELECT COUNT(*) FROM jobs WHERE user_id = u.id) AS job_count,
+        (SELECT COUNT(*) FROM quote_diffs WHERE user_id = u.id) AS diff_count,
+        (SELECT COUNT(*) FROM user_photos WHERE user_id = u.id) AS photo_count,
+        (EXISTS (SELECT 1 FROM profiles WHERE user_id = u.id)) AS has_profile
+      FROM users u ORDER BY u.created_at
+    `);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users/:id/set-plan', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { plan } = req.body;
+    if (!['admin', 'basic'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan must be admin or basic' });
+    }
+    const { rowCount } = await pool.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, req.params.id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ ok: true, id: req.params.id, plan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/migrate-data', requireAuth, requireAdminPlan, async (req, res) => {
+  const { fromUserId, toUserId } = req.body;
+  if (!fromUserId || !toUserId) {
+    return res.status(400).json({ error: 'fromUserId and toUserId required' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify both users exist
+    const fromUser = await client.query('SELECT id, name FROM users WHERE id = $1', [fromUserId]);
+    const toUser = await client.query('SELECT id, name FROM users WHERE id = $1', [toUserId]);
+    if (fromUser.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: `Source user '${fromUserId}' not found` }); }
+    if (toUser.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: `Target user '${toUserId}' not found` }); }
+
+    // Migrate jobs
+    const jobs = await client.query('UPDATE jobs SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
+    // Migrate quote_diffs
+    const diffs = await client.query('UPDATE quote_diffs SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
+    // Migrate photos
+    const photos = await client.query('UPDATE user_photos SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
+    // Migrate profile (upsert — keep target's if exists, else move source's)
+    const targetProfile = await client.query('SELECT 1 FROM profiles WHERE user_id = $1', [toUserId]);
+    if (targetProfile.rows.length === 0) {
+      await client.query('UPDATE profiles SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
+    }
+    // Migrate drafts (upsert — keep target's if exists)
+    const targetDraft = await client.query('SELECT 1 FROM drafts WHERE user_id = $1', [toUserId]);
+    if (targetDraft.rows.length === 0) {
+      await client.query('UPDATE drafts SET user_id = $1 WHERE user_id = $2', [toUserId, fromUserId]);
+    }
+    // Migrate settings
+    await client.query('UPDATE settings SET user_id = $1 WHERE user_id = $2 AND key NOT IN (SELECT key FROM settings WHERE user_id = $1)', [toUserId, fromUserId]);
+
+    await client.query('COMMIT');
+    res.json({
+      ok: true,
+      from: { id: fromUserId, name: fromUser.rows[0].name },
+      to: { id: toUserId, name: toUser.rows[0].name },
+      migrated: {
+        jobs: jobs.rowCount,
+        diffs: diffs.rowCount,
+        photos: photos.rowCount,
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Data migration error:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // --- Draft Routes ---
 
 app.get('/api/users/:id/drafts', async (req, res) => {
