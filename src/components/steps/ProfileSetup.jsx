@@ -195,7 +195,15 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
 
       </div>
 
-      <div className="mt-6 flex justify-end">
+      {!isModal && (
+        <p className="mt-6 text-xs leading-relaxed" style={{ color: 'var(--tq-muted)' }}>
+          By continuing, you agree that your quoting data (including edits,
+          feedback, and completed job outcomes) may be used to improve system
+          accuracy and is visible to account administrators.
+        </p>
+      )}
+
+      <div className={`${isModal ? 'mt-6' : 'mt-3'} flex justify-end`}>
         <button
           onClick={handleSave}
           className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-8 py-3 rounded transition-colors"
