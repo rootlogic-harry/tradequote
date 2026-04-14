@@ -247,14 +247,332 @@ Test files live in `src/__tests__/`. Key test suites:
 
 ---
 
+## Agent Operating Protocol
+
+### Permission Tiers
+
+**Autonomous (no confirmation needed):**
+- Edit any file in `src/` (components, utils, tests)
+- Create new files in `src/utils/`, `src/components/`, `src/__tests__/`
+- Run `npm test`, `npx vite build`, `git status`, `git diff`, `git log`
+- Read any file in the repo
+- Create and run test files
+- Fix lint/build errors in code you just wrote
+
+**Verify-then-proceed (run tests + build, check results, continue if green):**
+- Modify `server.js` routes or middleware
+- Change `reducer.js` action handling
+- Edit `src/utils/stripBlobs.js` or `src/utils/isAdminPlan.js`
+- Add new reducer actions
+- Modify component prop interfaces
+
+**Ask before proceeding:**
+- DB schema changes (new columns, altered tables, migrations)
+- Deleting files or removing public exports
+- Changing `SAVE_ALLOWLIST` contents
+- Modifying auth flow, session handling, or OAuth config
+- Any change to the AI system prompt or agent prompts
+- Modifying `aiParser.js` normalisation logic
+- Changes that affect billing, user data, or privacy
+- Force-pushing, rebasing, or amending published commits
+
+### Standing Orders
+
+These apply to every task, every time:
+
+1. **Read before you edit.** Never modify a file you haven't read in this session.
+2. **Test before you commit.** `npm test` must be green. No exceptions.
+3. **Build before you push.** `npx vite build` must succeed.
+4. **One concern per commit.** Atomic commits with Linear ticket prefix.
+5. **Update this file.** If your change affects documented architecture, update CLAUDE.md in the same commit.
+
+---
+
+## Do-Not-Touch List
+
+These files/systems have hard invariants. Modifying them risks corrupting production data or breaking the learning engine. Do not change without explicit approval and a clear reason.
+
+| Protected Item | Why | Risk if Violated |
+|----------------|-----|------------------|
+| `aiValue` assignment in `aiParser.js` | Set once, never overwritten | All learning data corrupted — diffs become meaningless |
+| `diffTracking.js` core logic | Constructs per-field diffs for learning | Historical learning data invalidated |
+| `quote_diffs` table schema | Stores immutable learning records | Breaks diff queries, agent analysis, calibration |
+| `calibration_notes` table schema | System prompt tuning records | Loses approved calibration history |
+| AI system prompt content | Tuned through calibration agents | Uncontrolled prompt changes bypass the calibration loop |
+| `SAVE_ALLOWLIST` in `stripBlobs.js` | Controls what persists to JSONB | Adding junk bloats snapshots; removing keys loses data |
+| `requireAdminPlan` middleware | Gates all admin routes | Basic users see admin internals (violates design law) |
+| `isAdminPlan.js` contract | Sole admin-branching primitive | Raw checks proliferate, defaults flip, basic users see admin UI |
+
+**If you need to change a protected item:** explain what you want to change, why, and what the blast radius is. Then wait for approval.
+
+---
+
+## Agentic Loops
+
+### TDD Loop (default for all code changes)
+
+```
+1. WRITE TEST (red)
+   → Create or extend test file
+   → Run npm test → confirm new tests FAIL
+   → If tests pass already, your test isn't testing the right thing — fix the assertion
+
+2. IMPLEMENT (green)
+   → Write the minimum code to make tests pass
+   → Run npm test → confirm ALL tests pass (new + existing)
+   → If existing tests broke, you introduced a regression — fix before continuing
+
+3. REFACTOR (optional)
+   → Clean up only if the code is unclear
+   → Run npm test → confirm still green
+   → Do not refactor code you didn't write unless asked
+
+4. COMMIT
+   → git add specific files (never git add -A)
+   → Commit with Linear ticket prefix
+   → Continue to next change
+```
+
+### Explore-Before-Edit Loop
+
+Use this before touching unfamiliar code:
+
+```
+1. READ the target file
+2. GREP for all call sites (who uses this function/component?)
+3. READ 2-3 key call sites to understand the contract
+4. CHECK for tests that cover the target
+5. PLAN the change (what needs to move, what breaks?)
+6. Only THEN start the TDD loop
+```
+
+### Multi-File Change Loop
+
+When a change spans 3+ files:
+
+```
+1. LIST all files that need changing
+2. WRITE tests that cover the full change (may span multiple test files)
+3. CONFIRM red (tests fail)
+4. IMPLEMENT across all files
+5. RUN npm test → must be fully green
+6. RUN npx vite build → must succeed
+7. COMMIT atomically (all related files in one commit)
+```
+
+### Bug Investigation Loop
+
+When something is broken and you don't know why:
+
+```
+1. REPRODUCE — read the error, find the exact failure point
+2. TRACE — follow the data flow backwards from the failure
+3. NARROW — form a hypothesis, grep for evidence
+4. TEST — write a failing test that captures the bug
+5. FIX — minimum change to make the test pass
+6. VERIFY — run full suite, confirm no regressions
+```
+
+---
+
+## Verification & Self-Healing
+
+### After Every Code Change
+
+```bash
+npm test
+```
+
+- **Green:** Continue.
+- **Red:** Read the failure output. Fix the issue. Re-run. Max 3 fix attempts.
+- **Still red after 3 attempts:** Stop. Describe what's failing and why your fixes didn't work. Ask for guidance.
+
+### After Every Commit
+
+Run these checks (automate in your head — do them every time):
+
+```bash
+# 1. No raw admin checks leaked
+grep -r "plan\s*[!=]==\?\s*['\"]admin['\"]" src/ --include="*.js" --include="*.jsx" | grep -v isAdminPlan.js | grep -v __tests__
+
+# 2. No banned vocabulary in basic-user components
+npm test -- --testPathPattern=aiTextRemoval
+
+# 3. Build still works
+npx vite build
+
+# 4. SAVE_ALLOWLIST unchanged (unless intentional)
+git diff src/utils/stripBlobs.js
+```
+
+### After Every Push
+
+```bash
+# Check Railway deploy started
+git log --oneline -1  # Confirm pushed commit
+
+# If you have railway CLI access:
+railway logs --tail 50  # Check for startup errors
+```
+
+### Self-Healing Patterns
+
+| Symptom | Diagnosis | Fix |
+|---------|-----------|-----|
+| `npm test` fails on unrelated test | Your change has a side effect | Read the failing test, trace the dependency, undo the side effect |
+| `vite build` fails: import error | Missing `.jsx` extension or bad ESM import | Check file extension matches, ensure `export` exists |
+| `vite build` fails: module not found | New dependency not installed | `npm install <package>` — but ask before adding new deps |
+| Test passes locally but logic is wrong | Test doesn't cover the actual scenario | Write a more specific assertion, reproduce the real user flow |
+| Reducer action has no effect | Action string typo or missing `case` | Check `dispatch({ type: 'X' })` matches exactly in `reducer.js` |
+| Component renders but looks wrong | CSS class doesn't exist or Tailwind CDN issue | Grep for the class in the codebase — ensure it's defined |
+| Save works but data missing on reload | Field not in `SAVE_ALLOWLIST` | Add to allowlist (requires approval — see Do-Not-Touch List) |
+| Basic user sees admin content | Missing `isAdminPlan` gate | Add `{isAdminPlan && ...}` conditional or check component defaults |
+
+---
+
+## Common Pitfalls
+
+These are mistakes that have actually happened in this codebase. Check for them proactively.
+
+### 1. Dangerous Defaults
+
+Components receive `isAdminPlan` as a prop. If a parent forgets to pass it, the default kicks in. **All defaults must be `false`** so basic users never accidentally see admin UI.
+
+```javascript
+// CORRECT
+function MyComponent({ isAdminPlan = false }) { ... }
+
+// WRONG — leaks admin UI if prop is forgotten
+function MyComponent({ isAdminPlan = true }) { ... }
+```
+
+**Self-check:** After creating any component that accepts `isAdminPlan`, grep for its usage and confirm every call site passes the prop explicitly.
+
+### 2. aiValue Corruption
+
+The reducer handles `CONFIRM_MEASUREMENT` and `EDIT_MEASUREMENT`. These must update `value` only, never `aiValue`.
+
+**Self-check:** After any reducer change touching `reviewData` or measurements, verify that `aiValue` is never on the left side of an assignment.
+
+### 3. Snapshot Bloat
+
+`buildSaveSnapshot` only persists keys in `SAVE_ALLOWLIST`. If you add new state to the reducer and it should persist, it will silently be dropped unless added to the allowlist.
+
+**Self-check:** When adding new state fields, ask: "Should this survive a page reload?" If yes, it needs to be in `SAVE_ALLOWLIST`.
+
+### 4. Visibility Leaks
+
+Even if `isAdminPlan` gates are correct, a careless string in a tooltip, placeholder, or error message can leak the AI abstraction to basic users.
+
+**Self-check:** After writing any user-facing text, scan it against the banned vocabulary list in the Visibility Rules section above. The test `aiTextRemoval.test.js` catches some but not all — use judgement.
+
+### 5. CSS Cache Busting
+
+Browser-cached CSS will make deployed changes invisible. After modifying any CSS (including Tailwind classes that depend on build output):
+
+**Self-check:** If your change alters visual appearance, bump the `?v=` cache-buster parameter in `index.html` link tags.
+
+### 6. Photo Slot Names
+
+The 5 photo slots (`overview`, `closeup`, `sideProfile`, `referenceCard`, `access`) are stored in the database. Renaming them requires a data migration.
+
+**Self-check:** Never rename slot strings. If you need a new slot, add it — don't rename an existing one.
+
+---
+
+## Code Conventions
+
+Follow these patterns so new code is consistent with the existing codebase.
+
+### Reducer Actions
+```javascript
+// Action types: UPPER_SNAKE_CASE
+dispatch({ type: 'SET_JOB_DETAILS', payload: { ... } })
+
+// Reducer: switch/case in src/reducer.js
+case 'SET_JOB_DETAILS':
+  return { ...state, jobDetails: { ...state.jobDetails, ...action.payload } };
+```
+
+### Component Props
+```javascript
+// Destructure with safe defaults
+export default function QuoteOutput({
+  state,
+  dispatch,
+  isAdminPlan = false,  // Always default false
+  onNavigate,
+}) { ... }
+```
+
+### Utility Functions
+```javascript
+// Pure functions in src/utils/
+// Always exported, always tested
+// File name matches primary export
+export function calculateTotal(items) { ... }
+```
+
+### Server Routes
+```javascript
+// Grouped by domain, middleware chain
+app.get('/api/jobs', requireAuth, async (req, res) => { ... });
+app.get('/api/admin/agents', requireAuth, requireAdminPlan, async (req, res) => { ... });
+```
+
+### Test Files
+```javascript
+// Mirror source path: src/utils/foo.js → src/__tests__/foo.test.js
+// Jest + ESM, import from source
+import { calculateTotal } from '../utils/calculateTotal.js';
+
+describe('calculateTotal', () => {
+  it('sums line items correctly', () => {
+    expect(calculateTotal([{ amount: 100 }, { amount: 200 }])).toBe(300);
+  });
+});
+```
+
+### Commit Messages
+```
+TRQ-81: Short description matching Linear ticket title
+
+- Bullet point details if needed
+- Another detail
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+---
+
+## Escalation Rules
+
+Stop working and ask the user when any of these conditions are true:
+
+1. **Stuck in a loop.** Same test fails 3 times with different fix attempts. Describe what you've tried.
+2. **Scope creep.** The change requires modifying more than 5 files not anticipated in the original task.
+3. **Protected item.** You need to change something on the Do-Not-Touch List.
+4. **Security boundary.** The change touches auth, sessions, API keys, or user data handling.
+5. **Ambiguous requirement.** You can see two reasonable interpretations and the wrong choice would require rework.
+6. **Design law conflict.** The task seems to require mixing admin and basic user layers.
+7. **Data migration needed.** The change requires altering DB schema or backfilling existing data.
+8. **External side effect.** The change would send emails, call external APIs, or affect other users' data.
+
+**How to escalate:** State what you're trying to do, what's blocking you, what options you see, and which you'd recommend. Don't just say "I'm stuck" — give the user enough context to make a decision.
+
+---
+
 ## What to Update When
 
 Same-commit update policy: if a change affects any of the following, update this file in the same commit.
 
 - New state field → add to SAVE_ALLOWLIST if it should persist
-- New plan type → update isAdminPlan utility
-- New agent → add to agents table above
-- New table → add to data model
-- New API route → mention in architecture section
-- Test count changes significantly → update count
-- New component with `isAdminPlan` prop → default to `false`
+- New plan type → update isAdminPlan utility and Plan Model section
+- New agent → add to AI Agents table
+- New table → add to Data Model section
+- New API route → mention in Architecture section
+- Test count changes significantly → update Testing section count
+- New component with `isAdminPlan` prop → default to `false`, note in Code Conventions if novel pattern
+- New protected invariant discovered → add to Do-Not-Touch List
+- New common mistake encountered → add to Common Pitfalls
+- New self-healing pattern discovered → add to Verification & Self-Healing table
