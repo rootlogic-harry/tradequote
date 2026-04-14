@@ -50,8 +50,8 @@ export default function App() {
   // Pending draft for dashboard (replaces draftPrompt modal)
   const [pendingDraft, setPendingDraft] = useState(null);
 
-  // Save error banner dismiss state
-  const [dismissedSaveError, setDismissedSaveError] = useState(null);
+  // Save error banner dismiss state — matches against a key that increments per failure
+  const [dismissedSaveErrorKey, setDismissedSaveErrorKey] = useState(0);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -344,10 +344,7 @@ export default function App() {
     }
   }, [state.retryCount]);
 
-  // Reset save error dismissed state when error changes
-  useEffect(() => {
-    if (state.quoteSaveError) setDismissedSaveError(null);
-  }, [state.quoteSaveError]);
+  // No useEffect needed — key-based comparison handles repeated errors
 
   const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 
@@ -752,8 +749,8 @@ export default function App() {
         <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
           <OfflineBanner />
           <SaveErrorBanner
-            error={state.quoteSaveError && dismissedSaveError !== state.quoteSaveError ? state.quoteSaveError : null}
-            onDismiss={() => setDismissedSaveError(state.quoteSaveError)}
+            error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}
+            onDismiss={() => setDismissedSaveErrorKey(state.quoteSaveErrorKey || 0)}
           />
           {renderContent()}
         </div>

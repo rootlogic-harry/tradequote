@@ -536,6 +536,7 @@ function reducerCore(state, action) {
       return {
         ...state,
         quoteSaveError: action.error || 'Save failed. Your work is preserved in this tab.',
+        quoteSaveErrorKey: (state.quoteSaveErrorKey || 0) + 1,
       };
 
     case 'SWITCH_USER':
