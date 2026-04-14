@@ -82,6 +82,28 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
         </div>
       </div>
 
+      {/* Sticky pill bar for quick-jump navigation */}
+      <div className="sticky top-0 z-10 bg-tq-bg/95 backdrop-blur-sm border-b border-tq-border -mx-4 px-4 py-2 mb-4 overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
+          {SECTIONS.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => {
+                setOpenSections(prev => new Set([...prev, id]));
+                document.getElementById(`rams-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${
+                openSections.has(id)
+                  ? 'bg-tq-accent text-white'
+                  : 'bg-tq-card text-tq-muted border border-tq-border'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Accordion sections */}
       <div className="space-y-2 mb-6">
         {SECTIONS.map(({ id, label, Component }) => {
@@ -90,7 +112,7 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
           const isMatrix = id === 'matrix';
 
           return (
-            <div key={id} className="bg-tq-surface border border-tq-border rounded-lg overflow-hidden">
+            <div key={id} id={`rams-${id}`} className="bg-tq-surface border border-tq-border rounded-lg overflow-hidden">
               <button
                 onClick={() => toggleSection(id)}
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-tq-card transition-colors"
