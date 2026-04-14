@@ -588,6 +588,23 @@ describe('reducer', () => {
       expect(result.critiqueNotes).toEqual(critiqueNotes);
     });
 
+    test('generates material_quantity diffs in quick mode', () => {
+      const state = makeReviewState({ isAnalysing: true, step: 3, quoteMode: 'quick', reviewData: null, diffs: [] });
+      const normalised = {
+        referenceCardDetected: true,
+        stoneType: 'gritstone',
+        measurements: [],
+        materials: [{ id: 'mat1', description: 'Stone', quantity: '2', unit: 't', unitCost: 180, totalCost: 360, aiUnitCost: 180, aiQuantity: '3' }],
+        labourEstimate: { estimatedDays: 2, numberOfWorkers: 1, dayRate: 400 },
+        scheduleOfWorks: [],
+        siteConditions: {},
+      };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '{}' });
+      const qtyDiff = result.diffs.find(d => d.fieldType === 'material_quantity');
+      expect(qtyDiff).toBeDefined();
+      expect(qtyDiff.fieldLabel).toBe('Stone');
+    });
+
     test('isAnalysing set to false in quick mode', () => {
       const state = makeReviewState({ isAnalysing: true, step: 3, quoteMode: 'quick', reviewData: null, diffs: [] });
       const normalised = {
@@ -844,6 +861,52 @@ describe('reducer', () => {
       const result = reducer(state, { type: 'GENERATE_QUOTE' });
       const labourDiffs = result.diffs.filter(d => d.fieldType === 'labour_days');
       expect(labourDiffs).toHaveLength(1); // deduplicated, not 2
+    });
+
+    test('generates material_quantity diffs when aiQuantity is present', () => {
+      const state = makeReviewState({
+        reviewData: {
+          ...makeReviewState().reviewData,
+          measurements: [{ id: 'm1', item: 'Height', aiValue: '1200', value: '1200', confirmed: true }],
+          materials: [
+            { id: 'mat1', description: 'Gritstone', quantity: '2', unit: 't', unitCost: 180, totalCost: 360, aiUnitCost: 180, aiQuantity: '3' },
+          ],
+        },
+      });
+      const result = reducer(state, { type: 'GENERATE_QUOTE' });
+      const qtyDiff = result.diffs.find(d => d.fieldType === 'material_quantity');
+      expect(qtyDiff).toBeDefined();
+      expect(qtyDiff.fieldLabel).toBe('Gritstone');
+    });
+
+    test('skips material_quantity diff when aiQuantity is null', () => {
+      const state = makeReviewState({
+        reviewData: {
+          ...makeReviewState().reviewData,
+          measurements: [{ id: 'm1', item: 'Height', aiValue: '1200', value: '1200', confirmed: true }],
+          materials: [
+            { id: 'mat1', description: 'Gritstone', quantity: '2', unit: 't', unitCost: 180, totalCost: 360, aiUnitCost: 180 },
+          ],
+        },
+      });
+      const result = reducer(state, { type: 'GENERATE_QUOTE' });
+      const qtyDiff = result.diffs.find(d => d.fieldType === 'material_quantity');
+      expect(qtyDiff).toBeUndefined();
+    });
+
+    test('diffs are enriched with context (stoneType, referenceCardUsed)', () => {
+      const state = makeReviewState({
+        reviewData: {
+          ...makeReviewState().reviewData,
+          measurements: [{ id: 'm1', item: 'Height', aiValue: '1200', value: '1200', confirmed: true }],
+          referenceCardDetected: true,
+          stoneType: 'gritstone',
+        },
+      });
+      const result = reducer(state, { type: 'GENERATE_QUOTE' });
+      const labourDiff = result.diffs.find(d => d.fieldType === 'labour_days');
+      expect(labourDiff.stoneType).toBe('gritstone');
+      expect(labourDiff.referenceCardUsed).toBe(true);
     });
 
     test('includes aiRawResponse in quotePayload', () => {

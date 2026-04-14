@@ -309,4 +309,10 @@ describe('normalizeAIResponse', () => {
     expect(result.siteConditions.accessDifficulty).toBe('difficult');
     expect(result.siteConditions.accessNote).toBe('Steep hillside access');
   });
+
+  test('sets aiQuantity on materials from quantity field', () => {
+    const result = normalizeAIResponse(validAIResponse);
+    expect(result.materials[0].aiQuantity).toBe('6 tonnes');
+    expect(result.materials[1].aiQuantity).toBe('8 No.');
+  });
 });

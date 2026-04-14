@@ -1,6 +1,6 @@
 import { DEFAULT_DAY_RATE } from './constants.js';
 import { buildQuotePayload } from './utils/quoteBuilder.js';
-import { buildDiff } from './utils/diffTracking.js';
+import { buildDiff, enrichDiffWithContext } from './utils/diffTracking.js';
 import { calculateRiskRating, generateRamsId } from './utils/ramsBuilder.js';
 import { COMPANY_DEFAULTS, COMMON_PPE, DEFAULT_RISK_ASSESSMENTS } from './data/ramsDefaults.js';
 import { WORK_STAGES_TEMPLATES } from './data/ramsTemplates.js';
@@ -81,6 +81,19 @@ export const initialState = {
   recentJobs: [],
 };
 
+function buildDiffContext(reviewData) {
+  if (!reviewData) return {};
+  const measurements = reviewData.measurements || [];
+  const heightM = measurements.find(m => /height/i.test(m.item));
+  const lengthM = measurements.find(m => /length/i.test(m.item));
+  return {
+    stoneType: reviewData.stoneType || null,
+    wallHeightMm: heightM ? parseInt(heightM.value, 10) || null : null,
+    wallLengthMm: lengthM ? parseInt(lengthM.value, 10) || null : null,
+    referenceCardUsed: !!reviewData.referenceCardDetected,
+  };
+}
+
 export function reducer(state, action) {
   const newState = reducerCore(state, action);
   saveState(newState);
@@ -145,9 +158,13 @@ function reducerCore(state, action) {
           if (mat.aiUnitCost != null) {
             extraDiffs.push(buildDiff('material_unit_cost', mat.description, mat.aiUnitCost, mat.unitCost));
           }
+          if (mat.aiQuantity != null) {
+            extraDiffs.push(buildDiff('material_quantity', mat.description, mat.aiQuantity, mat.quantity));
+          }
         });
 
-        const allDiffs = [...measurementDiffs, ...extraDiffs];
+        const quickDiffContext = buildDiffContext(reviewData);
+        const allDiffs = [...measurementDiffs, ...extraDiffs].map(d => enrichDiffWithContext(d, quickDiffContext));
         const confirmedReviewData = { ...reviewData, measurements, aiRawResponse: action.rawResponse };
         const payload = buildQuotePayload(state.profile, state.jobDetails, confirmedReviewData, allDiffs);
 
@@ -194,10 +211,11 @@ function reducerCore(state, action) {
       const filteredDiffs = state.diffs.filter(
         d => !(d.fieldType === action.diff.fieldType && d.fieldLabel === action.diff.fieldLabel)
       );
+      const enrichedDiff = enrichDiffWithContext(action.diff, buildDiffContext(state.reviewData));
       return {
         ...state,
         reviewData: { ...state.reviewData, measurements },
-        diffs: [...filteredDiffs, action.diff],
+        diffs: [...filteredDiffs, enrichedDiff],
       };
     }
 
@@ -295,17 +313,21 @@ function reducerCore(state, action) {
       if (labour.aiEstimatedDays != null) {
         extraDiffs.push(buildDiff('labour_days', 'Estimated Days', labour.aiEstimatedDays, labour.estimatedDays));
       }
-      // Generate material diffs
+      // Generate material diffs (unit cost + quantity)
       (state.reviewData.materials || []).forEach(mat => {
         if (mat.aiUnitCost != null) {
           extraDiffs.push(buildDiff('material_unit_cost', mat.description, mat.aiUnitCost, mat.unitCost));
+        }
+        if (mat.aiQuantity != null) {
+          extraDiffs.push(buildDiff('material_quantity', mat.description, mat.aiQuantity, mat.quantity));
         }
       });
 
       // Deduplicate: remove existing labour/material diffs before appending fresh ones
       const extraDiffKeys = new Set(extraDiffs.map(d => `${d.fieldType}::${d.fieldLabel}`));
       const baseDiffs = state.diffs.filter(d => !extraDiffKeys.has(`${d.fieldType}::${d.fieldLabel}`));
-      const allDiffs = [...baseDiffs, ...extraDiffs];
+      const diffContext = buildDiffContext(state.reviewData);
+      const allDiffs = [...baseDiffs, ...extraDiffs].map(d => enrichDiffWithContext(d, diffContext));
       const reviewDataWithRaw = {
         ...state.reviewData,
         aiRawResponse: state.aiRawResponse,

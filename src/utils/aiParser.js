@@ -88,13 +88,14 @@ export function normalizeAIResponse(parsed) {
     confirmed: false,
   }));
 
-  // Materials: add id, aiUnitCost, aiTotalCost, default unit
+  // Materials: add id, aiUnitCost, aiTotalCost, aiQuantity, default unit
   data.materials = data.materials.map((m, i) => ({
     ...m,
     id: `mat-${i}`,
     unit: m.unit || 'Item',
     aiUnitCost: m.unitCost,
     aiTotalCost: m.totalCost,
+    aiQuantity: m.quantity,
   }));
 
   // Schedule of works: add id
