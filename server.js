@@ -9,6 +9,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 import { safeError } from './safeError.js';
+import { pickAllowedKeys } from './serverSaveAllowlist.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -991,18 +992,13 @@ app.get('/api/users/:id/jobs', async (req, res) => {
 
 app.post('/api/users/:id/jobs', async (req, res) => {
   try {
-    const {
-      profile, jobDetails, photos, extraPhotos, reviewData, diffs,
-      quotePayload, quoteSequence, aiRawResponse,
-    } = req.body;
+    const allowed = pickAllowedKeys(req.body);
+    const { jobDetails, quotePayload } = allowed;
 
     const id = `sq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const totals = quotePayload?.totals;
 
-    const quoteSnapshot = {
-      profile, jobDetails, photos, extraPhotos, reviewData,
-      diffs, quotePayload, quoteSequence, aiRawResponse,
-    };
+    const quoteSnapshot = allowed;
 
     await pool.query(
       `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
@@ -1027,9 +1023,10 @@ app.post('/api/users/:id/jobs', async (req, res) => {
 
 app.put('/api/users/:id/jobs/:jobId', async (req, res) => {
   try {
-    const { profile, jobDetails, reviewData, diffs, quotePayload, quoteSequence } = req.body;
+    const allowed = pickAllowedKeys(req.body);
+    const { jobDetails, quotePayload } = allowed;
     const totals = quotePayload?.totals;
-    const quoteSnapshot = { profile, jobDetails, reviewData, diffs, quotePayload, quoteSequence };
+    const quoteSnapshot = allowed;
 
     const { rowCount } = await pool.query(
       `UPDATE jobs SET saved_at = NOW(), client_name = $1, site_address = $2,
@@ -1423,10 +1420,14 @@ app.get('/api/users/:id/drafts', async (req, res) => {
 
 app.put('/api/users/:id/drafts', async (req, res) => {
   try {
+    const draftJson = JSON.stringify(req.body);
+    if (draftJson.length > 500 * 1024) {
+      console.warn(`[Draft] Large draft payload for user ${req.params.id}: ${Math.round(draftJson.length / 1024)}KB`);
+    }
     await pool.query(
       `INSERT INTO drafts (user_id, saved_at, data) VALUES ($1, NOW(), $2)
        ON CONFLICT (user_id) DO UPDATE SET saved_at = NOW(), data = $2`,
-      [req.params.id, JSON.stringify(req.body)]
+      [req.params.id, draftJson]
     );
     res.json({ ok: true });
   } catch (err) {
