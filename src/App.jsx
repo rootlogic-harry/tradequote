@@ -16,6 +16,7 @@ import UserSwitcher from './components/UserSwitcher.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import StatusModal from './components/StatusModal.jsx';
 import LearningDashboard from './components/LearningDashboard.jsx';
+import AgentActivity from './components/AgentActivity.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
@@ -332,6 +333,7 @@ export default function App() {
         systemPrompt: SYSTEM_PROMPT,
         abortRef,
         dispatch,
+        userId: state.currentUserId,
       });
     }
   }, [state.retryCount]);
@@ -596,6 +598,11 @@ export default function App() {
       return <LearningDashboard currentUserId={state.currentUserId} />;
     }
 
+    // Agent activity dashboard (admin only)
+    if (currentView === 'agents' && isAdminPlan) {
+      return <AgentActivity />;
+    }
+
     // Dashboard view
     if (currentView === 'dashboard') {
       return (
@@ -725,6 +732,7 @@ export default function App() {
         quoteMode={state.quoteMode}
         onLogout={handleLogout}
         onGoToLearning={() => setCurrentView('learning')}
+        onGoToAgents={() => setCurrentView('agents')}
         isAdminPlan={isAdminPlan}
       />
 
@@ -770,6 +778,7 @@ export default function App() {
           job={state.recentJobs.find(j => j.id === state.statusModal.jobId)}
           onConfirm={handleStatusConfirm}
           onCancel={() => dispatch({ type: 'CLOSE_STATUS_MODAL' })}
+          isAdminPlan={isAdminPlan}
         />
       )}
 

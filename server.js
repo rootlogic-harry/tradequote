@@ -156,6 +156,44 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS completion_feedback TEXT;
     `);
 
+    // Agent runs table — tracks every agentic AI loop execution
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_runs (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
+        agent_type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'running',
+        input_summary JSONB,
+        output_summary JSONB,
+        error TEXT,
+        model TEXT,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        duration_ms INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_user ON agent_runs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_type ON agent_runs(agent_type);
+      CREATE INDEX IF NOT EXISTS idx_agent_runs_created ON agent_runs(created_at DESC);
+    `);
+
+    // Calibration notes table — proposed/approved calibration adjustments
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS calibration_notes (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        field_type TEXT NOT NULL,
+        field_label TEXT NOT NULL,
+        note TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'proposed',
+        proposed_by TEXT,
+        approved_by TEXT REFERENCES users(id),
+        evidence JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        approved_at TIMESTAMPTZ
+      );
+    `);
+
     // Terminology migration: full→admin, standard→basic
     await client.query(`
       UPDATE users SET plan = 'admin' WHERE plan = 'full';
@@ -1105,6 +1143,32 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
        declinedAt || null, declineReason || null, completionFeedback || null,
        req.params.jobId, req.params.id]
     );
+
+    // Fire feedback agent async when a job is completed with feedback
+    if (status === 'completed' && completionFeedback) {
+      (async () => {
+        try {
+          const { rows: jobRows } = await pool.query(
+            'SELECT quote_snapshot FROM jobs WHERE id = $1',
+            [req.params.jobId]
+          );
+          if (jobRows.length > 0 && jobRows[0].quote_snapshot) {
+            await runFeedbackAgent({
+              pool,
+              userId: req.params.id,
+              jobId: req.params.jobId,
+              quoteSnapshot: jobRows[0].quote_snapshot,
+              completionFeedback,
+              completionNotes: req.body.completionNotes || '',
+            });
+            console.log(`[FeedbackAgent] Completed for job ${req.params.jobId}`);
+          }
+        } catch (err) {
+          console.error(`[FeedbackAgent] Error for job ${req.params.jobId}:`, err.message);
+        }
+      })();
+    }
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1587,6 +1651,208 @@ app.post('/api/anthropic/messages', aiRateLimit, async (req, res) => {
       }
       return;
     }
+  }
+});
+
+// --- Admin Agent Observability Routes ---
+
+app.get('/api/admin/agent-runs', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { type, limit = 50 } = req.query;
+    const params = [];
+    let where = '';
+    if (type) {
+      params.push(type);
+      where = `WHERE agent_type = $${params.length}`;
+    }
+    params.push(Math.min(parseInt(limit, 10) || 50, 250));
+    const { rows } = await pool.query(
+      `SELECT id, user_id, job_id, agent_type, status, input_summary, output_summary,
+              error, model, prompt_tokens, completion_tokens, duration_ms, created_at
+       FROM agent_runs ${where}
+       ORDER BY created_at DESC
+       LIMIT $${params.length}`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/agent-runs/:runId', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, user_id, job_id, agent_type, status, input_summary, output_summary,
+              error, model, prompt_tokens, completion_tokens, duration_ms, created_at
+       FROM agent_runs WHERE id = $1`,
+      [req.params.runId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Agent run not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/calibration-notes', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const params = [];
+    let where = '';
+    if (status) {
+      params.push(status);
+      where = `WHERE cn.status = $${params.length}`;
+    }
+    const { rows } = await pool.query(
+      `SELECT cn.*, u.name AS approved_by_name
+       FROM calibration_notes cn
+       LEFT JOIN users u ON cn.approved_by = u.id
+       ${where}
+       ORDER BY cn.created_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/calibration-notes/:noteId', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be approved or rejected' });
+    }
+    const { rowCount } = await pool.query(
+      `UPDATE calibration_notes
+       SET status = $1, approved_by = $2, approved_at = ${status === 'approved' ? 'NOW()' : 'NULL'}
+       WHERE id = $3`,
+      [status, req.user.id, req.params.noteId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Calibration note not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: trigger calibration agent run
+app.post('/api/admin/calibration/run', requireAuth, requireAdminPlan, async (req, res) => {
+  try {
+    const { runId, proposals } = await runCalibrationAgent({
+      pool,
+      userId: req.user.id,
+    });
+    res.json({ ok: true, runId, proposals });
+  } catch (err) {
+    console.error('[CalibrationRun] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public endpoint: approved calibration notes for system prompt assembly
+app.get('/api/calibration-notes/approved', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT field_type, field_label, note, evidence, approved_at
+       FROM calibration_notes
+       WHERE status = 'approved'
+       ORDER BY approved_at ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Server-side Analysis Endpoint (with self-critique) ---
+
+import { runSelfCritique } from './agents/selfCritique.js';
+import { runFeedbackAgent } from './agents/feedbackAgent.js';
+import { runCalibrationAgent } from './agents/calibrationAgent.js';
+import { callAnthropicRaw } from './agents/agentUtils.js';
+
+app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
+  }
+
+  const { systemPrompt, messages, model, max_tokens } = req.body;
+  if (!systemPrompt || !messages) {
+    return res.status(400).json({ error: 'systemPrompt and messages are required' });
+  }
+
+  try {
+    // Fetch approved calibration notes and append to system prompt
+    let augmentedPrompt = systemPrompt;
+    try {
+      const { rows: calNotes } = await pool.query(
+        `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
+      );
+      if (calNotes.length > 0) {
+        const dynamicSection = calNotes.map((n, i) =>
+          `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
+        ).join('\n');
+        augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES (auto-generated from completed job data):\n${dynamicSection}`;
+      }
+    } catch (err) {
+      console.warn('[Analyse] Failed to load calibration notes:', err.message);
+    }
+
+    // Call 1: Primary analysis
+    const analysisResponse = await callAnthropicRaw({
+      systemPrompt: augmentedPrompt,
+      messages,
+      model: model || 'claude-sonnet-4-20250514',
+      maxTokens: max_tokens || 4000,
+      apiKey,
+    });
+
+    const rawText = analysisResponse.content?.[0]?.text || '';
+
+    // Try to parse the analysis JSON
+    let analysisJson = null;
+    try {
+      const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      const toParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+      analysisJson = JSON.parse(toParse);
+    } catch {
+      // Return raw response if not parseable — let client handle it
+      return res.json({
+        content: [{ type: 'text', text: rawText }],
+        usage: analysisResponse.usage,
+        critiqueNotes: null,
+      });
+    }
+
+    // Call 2: Self-critique (fire-and-forget safe — if it fails, return original)
+    let finalAnalysis = analysisJson;
+    let critiqueNotes = null;
+    try {
+      const critiqueResult = await runSelfCritique({
+        pool,
+        userId: req.params.id,
+        jobId: null, // job not created yet at this point
+        analysis: analysisJson,
+        briefNotes: req.body.briefNotes || '',
+      });
+      finalAnalysis = critiqueResult.analysis;
+      critiqueNotes = critiqueResult.critique;
+    } catch (err) {
+      console.warn('[SelfCritique] Failed, returning original analysis:', err.message);
+    }
+
+    // Return in same format as Anthropic API response for backward compatibility
+    res.json({
+      content: [{ type: 'text', text: JSON.stringify(finalAnalysis) }],
+      usage: analysisResponse.usage,
+      critiqueNotes,
+    });
+  } catch (err) {
+    console.error('[Analyse] Error:', err.message);
+    res.status(502).json({ error: `Analysis error: ${err.message}` });
   }
 });
 

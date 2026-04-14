@@ -1,7 +1,7 @@
 import { PHOTO_SLOTS } from '../constants.js';
 import { parseAIResponse, validateAIResponse, normalizeAIResponse } from './aiParser.js';
 
-export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, systemPrompt, abortRef, dispatch }) {
+export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, systemPrompt, abortRef, dispatch, userId }) {
   try {
     const imageContent = [];
     for (const slot of PHOTO_SLOTS) {
@@ -46,10 +46,16 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
 
     const controller = new AbortController();
     if (abortRef) abortRef.current = controller;
-    // 3 minutes — multi-image analysis can take 60-120s on Anthropic
-    const timeoutId = setTimeout(() => controller.abort(), 180000);
+    // 5 minutes — analysis + self-critique takes longer than single call
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-    const response = await fetch('/api/anthropic/messages', {
+    // Use server-side analyse endpoint (includes self-critique) when userId is available,
+    // fall back to direct proxy for backward compatibility
+    const endpoint = userId
+      ? `/api/users/${userId}/analyse`
+      : '/api/anthropic/messages';
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,13 +64,15 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4000,
-        system: systemPrompt,
+        systemPrompt,
+        system: systemPrompt, // backward compat for proxy endpoint
         messages: [
           {
             role: 'user',
             content: imageContent,
           },
         ],
+        briefNotes: jobDetails.briefNotes || '',
       }),
     });
 
@@ -77,21 +85,21 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
         const errJson = JSON.parse(errText);
         const errorType = errJson?.error?.type;
         if (response.status === 529 || errorType === 'overloaded_error') {
-          friendlyMessage = 'The AI service is temporarily overloaded. Please wait a moment and retry.';
+          friendlyMessage = 'The service is temporarily overloaded. Please wait a moment and retry.';
         } else if (errorType === 'rate_limit_error' || response.status === 429) {
           friendlyMessage = 'Rate limit reached — please wait a minute before retrying.';
         } else if (errorType === 'authentication_error') {
           friendlyMessage = 'API authentication failed — contact support to check the API key.';
         } else if (errorType === 'invalid_request_error') {
-          friendlyMessage = errJson?.error?.message || 'Invalid request sent to the AI service.';
+          friendlyMessage = errJson?.error?.message || 'Invalid request sent to the service.';
         } else if (response.status >= 500) {
-          friendlyMessage = 'The AI service is temporarily unavailable. Please retry in a moment.';
+          friendlyMessage = 'The service is temporarily unavailable. Please retry in a moment.';
         } else {
           friendlyMessage = errJson?.error?.message || errJson?.error || `API error (${response.status})`;
         }
       } catch {
         friendlyMessage = response.status >= 500
-          ? 'The AI service is temporarily unavailable. Please retry in a moment.'
+          ? 'The service is temporarily unavailable. Please retry in a moment.'
           : `API error (${response.status}). Please retry.`;
       }
       throw new Error(friendlyMessage);
@@ -104,7 +112,7 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
     if (!parsed) {
       dispatch({
         type: 'ANALYSIS_ERROR',
-        error: 'AI returned an unreadable response. Try again or enter details manually.',
+        error: 'Analysis returned an unreadable response. Try again or enter details manually.',
       });
       return;
     }
@@ -124,13 +132,13 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
       type: 'ANALYSIS_SUCCESS',
       rawResponse: rawText,
       normalised,
+      critiqueNotes: data.critiqueNotes || null,
     });
   } catch (err) {
     if (err.name === 'AbortError') {
-      // Show a timeout error instead of silently cancelling
       dispatch({
         type: 'ANALYSIS_ERROR',
-        error: 'Analysis timed out — the AI is taking longer than expected. Try again with fewer photos, or retry.',
+        error: 'Analysis timed out — the analysis is taking longer than expected. Try again with fewer photos, or retry.',
       });
       return;
     }

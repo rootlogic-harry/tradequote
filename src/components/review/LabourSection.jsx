@@ -96,7 +96,7 @@ export default function LabourSection({ labourEstimate, dispatch }) {
         </div>
 
         {aiEstimatedDays != null && aiEstimatedDays !== estimatedDays && (
-          <p className="text-xs mt-2" style={{ color: 'var(--tq-muted)' }}>AI suggested: {aiEstimatedDays} days</p>
+          <p className="text-xs mt-2" style={{ color: 'var(--tq-muted)' }}>Suggested: {aiEstimatedDays} days</p>
         )}
 
         {/* Labour total */}

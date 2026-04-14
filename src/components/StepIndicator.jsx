@@ -18,6 +18,7 @@ export default function StepIndicator({
   onStartNewQuote,
   onGoToSaved,
   onGoToLearning,
+  onGoToAgents,
   quoteMode,
   onLogout,
   isAdminPlan,
@@ -51,6 +52,7 @@ export default function StepIndicator({
     { key: 'new', label: 'New Quote', action: onStartNewQuote },
     { key: 'saved', label: 'Saved Jobs', action: onGoToSaved },
     ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', action: onGoToLearning }] : []),
+    ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', action: onGoToAgents }] : []),
   ];
 
   const currentStepData = showSteps ? STEPS.find(s => s.number === currentStep) : null;
@@ -135,7 +137,8 @@ export default function StepIndicator({
                 (key === 'dashboard' && currentView === 'dashboard') ||
                 (key === 'saved' && currentView === 'saved') ||
                 (key === 'new' && isEditor) ||
-                (key === 'learning' && currentView === 'learning');
+                (key === 'learning' && currentView === 'learning') ||
+                (key === 'agents' && currentView === 'agents');
               return (
                 <button
                   key={key}

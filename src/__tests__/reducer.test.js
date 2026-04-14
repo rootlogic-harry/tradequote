@@ -462,6 +462,21 @@ describe('reducer', () => {
       expect(result.aiRawResponse).toBe('{"raw":true}');
     });
 
+    test('stores critiqueNotes from action', () => {
+      const state = { ...initialState, isAnalysing: true, step: 3, quoteMode: 'standard' };
+      const normalised = { measurements: [], materials: [], labourEstimate: {} };
+      const critiqueNotes = { corrections: [{ field: 'Labour', issue: 'Too high' }], notes: 'Issues found', confidence: 0.8 };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '', critiqueNotes });
+      expect(result.critiqueNotes).toEqual(critiqueNotes);
+    });
+
+    test('defaults critiqueNotes to null when not provided', () => {
+      const state = { ...initialState, isAnalysing: true, step: 3, quoteMode: 'standard' };
+      const normalised = { measurements: [], materials: [], labourEstimate: {} };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '' });
+      expect(result.critiqueNotes).toBeNull();
+    });
+
     test('measurements remain unconfirmed in standard mode', () => {
       const state = { ...initialState, isAnalysing: true, step: 3, quoteMode: 'standard' };
       const normalised = {
@@ -543,6 +558,20 @@ describe('reducer', () => {
       // Should have labour diff
       const lDiff = result.diffs.find(d => d.fieldType === 'labour_days');
       expect(lDiff).toBeDefined();
+    });
+
+    test('stores critiqueNotes in quick mode', () => {
+      const state = makeReviewState({ isAnalysing: true, step: 3, quoteMode: 'quick', reviewData: null, diffs: [] });
+      const normalised = {
+        measurements: [],
+        materials: [],
+        labourEstimate: { estimatedDays: 2, numberOfWorkers: 1, dayRate: 400 },
+        scheduleOfWorks: [],
+        siteConditions: {},
+      };
+      const critiqueNotes = { corrections: [], notes: 'All consistent', confidence: 1.0 };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '', critiqueNotes });
+      expect(result.critiqueNotes).toEqual(critiqueNotes);
     });
 
     test('isAnalysing set to false in quick mode', () => {

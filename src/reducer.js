@@ -124,6 +124,7 @@ function reducerCore(state, action) {
 
     case 'ANALYSIS_SUCCESS': {
       const reviewData = action.normalised;
+      const critiqueNotes = action.critiqueNotes || null;
 
       if (state.quoteMode === 'quick') {
         // Auto-confirm all measurements
@@ -155,6 +156,7 @@ function reducerCore(state, action) {
           reviewData: { ...reviewData, measurements },
           diffs: allDiffs,
           quotePayload: payload,
+          critiqueNotes,
           step: 5,
         };
       }
@@ -165,6 +167,7 @@ function reducerCore(state, action) {
         isAnalysing: false,
         aiRawResponse: action.rawResponse,
         reviewData,
+        critiqueNotes,
         step: 4,
       };
     }

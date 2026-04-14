@@ -10,10 +10,11 @@ const DECLINE_REASONS = [
   'Other',
 ];
 
-export default function StatusModal({ modal, job, onConfirm, onCancel }) {
+export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPlan }) {
   const { jobId, targetStatus } = modal;
   const [declineReason, setDeclineReason] = useState(DECLINE_REASONS[0]);
   const [completionFeedback, setCompletionFeedback] = useState('spot_on');
+  const [completionNotes, setCompletionNotes] = useState('');
 
   const now = new Date().toISOString();
   const expiresAt = calculateExpiresAt(now);
@@ -31,7 +32,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
     } else if (targetStatus === 'declined') {
       onConfirm(jobId, 'declined', { declinedAt: now, declineReason });
     } else if (targetStatus === 'completed') {
-      onConfirm(jobId, 'completed', { completionFeedback });
+      onConfirm(jobId, 'completed', { completionFeedback, completionNotes: completionNotes || undefined });
     }
   };
 
@@ -194,6 +195,25 @@ export default function StatusModal({ modal, job, onConfirm, onCancel }) {
                   </label>
                 ))}
               </div>
+              {isAdminPlan && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ color: 'var(--tq-muted)', fontSize: 12, display: 'block', marginBottom: 6 }}>
+                    Notes on what went differently than quoted (optional)
+                  </label>
+                  <textarea
+                    value={completionNotes}
+                    onChange={e => setCompletionNotes(e.target.value)}
+                    rows={3}
+                    placeholder="E.g. more stone needed than estimated, access was harder than expected..."
+                    style={{
+                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      backgroundColor: 'var(--tq-surface)', border: '1px solid var(--tq-border)',
+                      color: 'var(--tq-text)', fontSize: 13, fontFamily: 'IBM Plex Sans, sans-serif',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+              )}
             </>
           )}
 

@@ -316,7 +316,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             Review & Edit
           </h2>
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Review the AI analysis. Confirm or edit every measurement before generating your quote.
+            Review the analysis. Confirm or edit every measurement before generating your quote.
           </p>
           <button
             onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}

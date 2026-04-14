@@ -75,7 +75,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
         </div>
         {/* Footer */}
         <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--tq-confirmed-txt)', fontSize: 11 }}>
-          <span>{wasEdited ? `Edited from AI (was: ${measurement.aiValue})` : 'Accepted AI suggestion'}</span>
+          <span>{wasEdited ? `Edited (was: ${measurement.aiValue})` : 'Accepted'}</span>
           <span>·</span>
           <button onClick={handleEdit} className="underline" style={{ color: 'var(--tq-confirmed-txt)' }}>Edit</button>
         </div>
@@ -132,7 +132,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
       {/* Confirm button */}
       <div className="flex items-center justify-between mt-2">
         <span className="text-xs" style={{ color: 'var(--tq-muted)', fontSize: 11 }}>
-          AI suggested: {aiValue}
+          Suggested: {aiValue}
         </span>
         <button
           onClick={handleConfirm}

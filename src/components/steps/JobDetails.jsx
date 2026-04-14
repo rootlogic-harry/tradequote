@@ -359,6 +359,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
       systemPrompt: SYSTEM_PROMPT,
       abortRef,
       dispatch,
+      userId: state.currentUserId,
     });
   };
 
@@ -442,7 +443,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             rows={2}
             value={jobDetails.briefNotes}
             onChange={(e) => updateJob('briefNotes', e.target.value)}
-            placeholder="Anything the AI should know — e.g. wall is on a slope, needs through stones replacing..."
+            placeholder="Anything we should know — e.g. wall is on a slope, needs through stones replacing..."
           />
         </div>
       </div>
@@ -458,7 +459,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             Using your FastQuote Reference Card?
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--tq-text)' }}>
-            Place it flat against the wall in Slot 4. The AI uses its known 148×210mm dimensions to calculate real measurements.
+            Place it flat against the wall in Slot 4. The system uses the known 148×210mm dimensions to calculate real measurements.
           </p>
         </div>
       </div>
