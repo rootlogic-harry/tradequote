@@ -67,12 +67,13 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `users` | id, name, email, plan (admin\|basic), profile_complete |
 | `profiles` | user_id → JSONB data (company, rates, accreditations) |
 | `settings` | user_id + key → JSONB value (theme, etc.) |
-| `jobs` | JSONB quote_snapshot + rams_snapshot, status lifecycle, total_amount |
+| `jobs` | JSONB quote_snapshot + rams_snapshot, status lifecycle, total_amount, prompt_version |
 | `drafts` | Auto-saved work-in-progress (one per user) |
 | `user_photos` | Slot-based photo storage (context: draft or job ID) |
 | `quote_diffs` | Per-field AI vs confirmed value diffs (learning engine) |
 | `agent_runs` | Agent execution log (type, status, tokens, duration) |
 | `calibration_notes` | Proposed/approved system prompt adjustments |
+| `agent_retry_queue` | Exponential-backoff retry for failed agent runs |
 | `session` | Express session store (connect-pg-simple) |
 
 ### JSONB Snapshot Contract
@@ -170,9 +171,19 @@ Three async agents, all Haiku 4.5, all logged to `agent_runs` table:
 |-------|------|---------|---------|
 | Self-critique | `agents/selfCritique.js` | Reviews analysis for internal consistency (tonnage, labour, materials) | After AI analysis, before Step 4 |
 | Feedback | `agents/feedbackAgent.js` | Learns from completed jobs + tradesman feedback | Job marked complete with feedback |
-| Calibration | `agents/calibrationAgent.js` | Proposes system prompt calibration notes from aggregate diff data | Manual admin trigger |
+| Calibration | `agents/calibrationAgent.js` | Proposes system prompt calibration notes from aggregate diff data | Manual admin trigger + auto after 5 completed jobs |
 
 Agent orchestration lives in `agents/agentUtils.js`: creates run records, calls Anthropic API, parses JSON responses, logs results.
+
+**Auto-calibration:** After the feedback agent completes, `shouldAutoCalibrate()` (from `autoCalibration.js`) checks if >= 5 jobs have been completed since the last calibration run. If so, `runCalibrationAgent` fires async — the approval step stays manual.
+
+**Retry queue:** Failed feedback agent runs are enqueued to `agent_retry_queue` with exponential backoff (2^n * 60s, max 3 attempts). Queue is swept on server startup via `processRetryQueue()` from `agents/retryQueue.js`.
+
+**System prompt:** Single source of truth in `prompts/systemPrompt.js` (server-side). The client no longer sends a system prompt. `computePromptVersion()` produces an 8-char MD5 hash for tracking which prompt version generated each quote.
+
+**Error sanitisation:** `safeError.js` wraps all 500 catch blocks — logs full error server-side, returns generic "Something went wrong" to the client. 400/404 specific messages are preserved.
+
+**Server-side save allowlist:** `serverSaveAllowlist.js` enforces `pickAllowedKeys()` on job save routes, preventing photos/blobs from being stored in `quote_snapshot`.
 
 ---
 
@@ -200,7 +211,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 463 tests across 15 suites (includes 3 plan regression tests).
+**Current count:** 524 tests across 24 suites (includes 3 plan regression tests).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -215,6 +226,15 @@ Test files live in `src/__tests__/`. Key test suites:
 - `planNormalisation.test.js` — isAdminPlan utility, source-level scan
 - `selfCritique.test.js`, `feedbackAgent.test.js`, `calibrationAgent.test.js` — agent tests
 - `aiTextRemoval.test.js` — banned vocabulary enforcement
+- `analyseJob.test.js` — client-side analysis function (endpoint, dispatch, errors)
+- `autoCalibration.test.js` — auto-calibration threshold logic
+- `agentRetryQueue.test.js` — retry queue entry building and backoff
+- `safeError.test.js` — error sanitisation utility
+- `saveAllowlistServer.test.js` — server-side save allowlist enforcement
+- `dbIndexes.test.js` — database index presence assertions
+- `promptVersion.test.js` — prompt version hashing
+- `serverPrompt.test.js` — server-side system prompt validation
+- `promptRemoval.test.js` — confirms prompt removed from client
 
 ---
 
