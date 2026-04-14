@@ -194,6 +194,14 @@ async function initDB() {
       );
     `);
 
+    // Missing indexes for common query patterns
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_calibration_notes_status ON calibration_notes(status);
+      CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider, auth_provider_id);
+    `);
+
     // Terminology migration: full→admin, standard→basic
     await client.query(`
       UPDATE users SET plan = 'admin' WHERE plan = 'full';
