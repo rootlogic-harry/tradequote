@@ -1,4 +1,4 @@
-import { stripBlobs, buildSaveSnapshot } from '../utils/stripBlobs.js';
+import { stripBlobs, buildSaveSnapshot, SAVE_ALLOWLIST } from '../utils/stripBlobs.js';
 
 // --- stripBlobs ---
 
@@ -161,5 +161,136 @@ describe('buildSaveSnapshot', () => {
     expect(snapshot.profile).toEqual({});
     expect(snapshot.reviewData).toBeUndefined();
     expect(snapshot.diffs).toBeUndefined();
+  });
+});
+
+// --- SAVE_ALLOWLIST ---
+
+describe('SAVE_ALLOWLIST', () => {
+  test('is exported and is an array of strings', () => {
+    expect(Array.isArray(SAVE_ALLOWLIST)).toBe(true);
+    SAVE_ALLOWLIST.forEach(key => expect(typeof key).toBe('string'));
+  });
+
+  test('contains required keys', () => {
+    const required = ['profile', 'jobDetails', 'reviewData', 'quotePayload', 'quoteSequence', 'quoteMode', 'diffs'];
+    for (const key of required) {
+      expect(SAVE_ALLOWLIST).toContain(key);
+    }
+  });
+
+  test('does NOT contain excluded keys', () => {
+    const banned = ['aiRawResponse', 'photos', 'extraPhotos', 'step', 'isAnalysing'];
+    for (const key of banned) {
+      expect(SAVE_ALLOWLIST).not.toContain(key);
+    }
+  });
+});
+
+// --- buildSaveSnapshot with allowlist ---
+
+describe('buildSaveSnapshot with allowlist', () => {
+  const fullState = {
+    profile: { companyName: 'Test Co' },
+    jobDetails: { clientName: 'Client' },
+    reviewData: { measurements: [] },
+    quotePayload: { totals: {} },
+    quoteSequence: 5,
+    quoteMode: 'standard',
+    diffs: [],
+    // These should be excluded:
+    aiRawResponse: 'big response',
+    photos: { overview: null },
+    extraPhotos: [],
+    step: 5,
+    isAnalysing: false,
+    unknownFutureKey: 'should be excluded',
+  };
+
+  test('only includes keys from SAVE_ALLOWLIST', () => {
+    const snapshot = buildSaveSnapshot(fullState);
+    const keys = Object.keys(snapshot);
+    for (const key of keys) {
+      expect(SAVE_ALLOWLIST).toContain(key);
+    }
+  });
+
+  test('unknown keys added to state are excluded', () => {
+    const snapshot = buildSaveSnapshot(fullState);
+    expect(snapshot.unknownFutureKey).toBeUndefined();
+    expect(snapshot.aiRawResponse).toBeUndefined();
+  });
+
+  test('deep-clones values (mutating original does not affect snapshot)', () => {
+    const state = {
+      profile: { companyName: 'Original' },
+      jobDetails: { clientName: 'Client' },
+      reviewData: { measurements: [{ id: '1', value: '100' }] },
+      quotePayload: null,
+      quoteSequence: 1,
+      quoteMode: 'standard',
+      diffs: [],
+    };
+    const snapshot = buildSaveSnapshot(state);
+    state.reviewData.measurements[0].value = '999';
+    expect(snapshot.reviewData.measurements[0].value).toBe('100');
+  });
+
+  test('payload size under 200KB for realistic quote', () => {
+    const realisticState = {
+      profile: { companyName: 'Stone & Walling Ltd', fullName: 'Mark Doyle', phone: '01onal234', email: 'mark@stone.com', address: '123 Main St, Yorkshire', dayRate: 400 },
+      jobDetails: { clientName: 'John Smith', siteAddress: '45 Manor Road, Leeds', quoteReference: 'QT-2026-0042', quoteDate: '2026-03-15', briefNotes: 'Collapsed section near gate' },
+      reviewData: {
+        measurements: Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, item: `Measurement ${i}`, value: `${1000 + i * 100}`, aiValue: `${1000 + i * 100}`, confirmed: true })),
+        materials: Array.from({ length: 8 }, (_, i) => ({ id: `mat${i}`, description: `Material ${i}`, quantity: i + 1, unit: 'm²', unitCost: 100 + i * 50, totalCost: (i + 1) * (100 + i * 50) })),
+        labourEstimate: { estimatedDays: 5, numberOfWorkers: 2, dayRate: 400 },
+        scheduleOfWorks: Array.from({ length: 8 }, (_, i) => ({ stepNumber: i + 1, title: `Step ${i + 1}`, description: `Description for step ${i + 1} of the works.` })),
+        damageDescription: 'Collapsed section approximately 4m long, 1.2m high. Gritstone construction with lime mortar joints.',
+      },
+      quotePayload: { totals: { materialsSubtotal: 5000, labourTotal: 4000, additionalCostsTotal: 500, subtotal: 9500, vatAmount: 1900, total: 11400 } },
+      quoteSequence: 42,
+      quoteMode: 'standard',
+      diffs: Array.from({ length: 10 }, (_, i) => ({ fieldType: 'measurement', fieldLabel: `Measurement ${i}`, aiValue: `${1000 + i * 100}`, confirmedValue: `${1000 + i * 100}`, wasEdited: false, editMagnitude: 0 })),
+    };
+    const snapshot = buildSaveSnapshot(realisticState);
+    const size = new Blob([JSON.stringify(snapshot)]).size;
+    expect(size).toBeLessThan(200 * 1024);
+  });
+});
+
+// --- Save error state (reducer) ---
+
+describe('Save error state', () => {
+  // Mock sessionStorage for reducer
+  const storage = {};
+  const origSS = globalThis.sessionStorage;
+  beforeAll(() => {
+    globalThis.sessionStorage = {
+      getItem: (key) => storage[key] || null,
+      setItem: (key, value) => { storage[key] = value; },
+      removeItem: (key) => { delete storage[key]; },
+    };
+  });
+  afterAll(() => {
+    globalThis.sessionStorage = origSS;
+  });
+
+  let reducer, initialState;
+  beforeAll(async () => {
+    const mod = await import('../reducer.js');
+    reducer = mod.reducer;
+    initialState = mod.initialState;
+  });
+
+  test('reducer sets quoteSaveError on QUOTE_SAVE_FAILED action', () => {
+    const state = { ...initialState };
+    const newState = reducer(state, { type: 'QUOTE_SAVE_FAILED', error: 'Network error' });
+    expect(newState.quoteSaveError).toBe('Network error');
+  });
+
+  test('reducer clears quoteSaveError on QUOTE_SAVED action', () => {
+    const state = { ...initialState, quoteSaveError: 'Previous error' };
+    const newState = reducer(state, { type: 'QUOTE_SAVED', jobId: 'job-123' });
+    expect(newState.quoteSaveError).toBeNull();
   });
 });
