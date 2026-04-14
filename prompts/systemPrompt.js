@@ -1,3 +1,14 @@
+import { createHash } from 'crypto';
+
+/**
+ * Compute an 8-char hex hash from prompt + calibration notes.
+ * Deterministic: same inputs → same version string.
+ */
+export function computePromptVersion(basePrompt, calNotes) {
+  const hash = createHash('md5').update(basePrompt + calNotes).digest('hex');
+  return hash.slice(0, 8);
+}
+
 /**
  * Server-side system prompt for FastQuote analysis.
  * Single source of truth — the client no longer sends a system prompt.

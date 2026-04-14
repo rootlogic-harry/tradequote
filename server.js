@@ -204,6 +204,30 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider, auth_provider_id);
     `);
 
+    // Add prompt_version column to jobs
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_version TEXT;
+    `);
+
+    // Migrate hardcoded calibration notes to DB (idempotent)
+    const hardcodedNotes = [
+      { fieldType: 'material_unit_cost', fieldLabel: 'Chapter 8 traffic management', note: 'If any photograph shows the wall is adjacent to a public carriageway, include a Chapter 8 traffic management line item (£380–450). This is a legal requirement for roadside works.' },
+      { fieldType: 'measurement', fieldLabel: 'Foundation scope', note: 'When damage description indicates full-length foundation failure, the foundation excavation must cover the FULL wall length, not just the collapsed section.' },
+      { fieldType: 'material_unit_cost', fieldLabel: 'Mortar specification', note: 'For natural sandstone/stone boundary walls requiring bedding and pointing, specify 1:1:6 cement-lime-sand mortar. Material cost: £130–165 for 10–14 linear metres.' },
+      { fieldType: 'material_unit_cost', fieldLabel: 'Cherry Laurel planting', note: 'Cherry Laurel at 600–1000mm height: £38–50 per plant supply and plant. 12m run at 600mm centres ≈ 20 plants, £760–1,000 total.' },
+      { fieldType: 'labour_days', fieldLabel: 'Mortar-pointed sandstone wall', note: '10–12 linear metres, 900mm height, full rebuild: 7–9 days for 2 operatives. 0.7–0.8 operative-days/metre. Benchmark: 2 operatives for 8 days (£6,400 at £400/day).' },
+    ];
+    for (const note of hardcodedNotes) {
+      await client.query(
+        `INSERT INTO calibration_notes (field_type, field_label, note, status, proposed_by)
+         SELECT $1, $2, $3, 'approved', 'hardcoded-migration'
+         WHERE NOT EXISTS (
+           SELECT 1 FROM calibration_notes WHERE proposed_by = 'hardcoded-migration' AND field_label = $2
+         )`,
+        [note.fieldType, note.fieldLabel, note.note]
+      );
+    }
+
     // Terminology migration: full→admin, standard→basic
     await client.query(`
       UPDATE users SET plan = 'admin' WHERE plan = 'full';
@@ -1000,10 +1024,12 @@ app.post('/api/users/:id/jobs', async (req, res) => {
 
     const quoteSnapshot = allowed;
 
+    const promptVersion = req.body.promptVersion || null;
+
     await pool.query(
       `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
-        quote_reference, quote_date, total_amount, has_rams, quote_snapshot)
-       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8)`,
+        quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_version)
+       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9)`,
       [
         id,
         req.params.id,
@@ -1013,6 +1039,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         jobDetails?.quoteDate || '',
         totals?.total ?? 0,
         JSON.stringify(quoteSnapshot),
+        promptVersion,
       ]
     );
     res.json({ id });
@@ -1781,7 +1808,7 @@ import { runSelfCritique } from './agents/selfCritique.js';
 import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
 import { callAnthropicRaw } from './agents/agentUtils.js';
-import { SYSTEM_PROMPT } from './prompts/systemPrompt.js';
+import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 
 app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1810,6 +1837,9 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
     } catch (err) {
       console.warn('[Analyse] Failed to load calibration notes:', err.message);
     }
+
+    // Compute prompt version hash
+    const promptVersion = computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
 
     // Call 1: Primary analysis
     const analysisResponse = await callAnthropicRaw({
@@ -1859,6 +1889,7 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
       content: [{ type: 'text', text: JSON.stringify(finalAnalysis) }],
       usage: analysisResponse.usage,
       critiqueNotes,
+      promptVersion,
     });
   } catch (err) {
     console.error('[Analyse] Error:', err.message);
