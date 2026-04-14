@@ -1195,6 +1195,27 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
               completionNotes: req.body.completionNotes || '',
             });
             console.log(`[FeedbackAgent] Completed for job ${req.params.jobId}`);
+
+            // Auto-calibration: check if enough jobs completed since last calibration
+            try {
+              const { rows: calRows } = await pool.query(
+                `SELECT COUNT(*)::int AS cnt FROM jobs
+                 WHERE status = 'completed'
+                   AND saved_at > COALESCE(
+                     (SELECT MAX(created_at) FROM agent_runs WHERE agent_type = 'calibration' AND status = 'completed'),
+                     '1970-01-01'
+                   )`
+              );
+              const completedSinceLast = calRows[0]?.cnt || 0;
+              if (shouldAutoCalibrate(completedSinceLast)) {
+                console.log(`[AutoCalibration] Triggering: ${completedSinceLast} jobs since last calibration`);
+                runCalibrationAgent({ pool, userId: req.params.id }).catch(calErr =>
+                  console.error('[AutoCalibration] Error:', calErr.message)
+                );
+              }
+            } catch (calCheckErr) {
+              console.error('[AutoCalibration] Check failed:', calCheckErr.message);
+            }
           }
         } catch (err) {
           console.error(`[FeedbackAgent] Error for job ${req.params.jobId}:`, err.message);
@@ -1809,6 +1830,7 @@ import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
 import { callAnthropicRaw } from './agents/agentUtils.js';
 import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
+import { shouldAutoCalibrate } from './autoCalibration.js';
 
 app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
