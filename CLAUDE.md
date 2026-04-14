@@ -242,7 +242,7 @@ Test files live in `src/__tests__/`. Key test suites:
 
 - PDF page break issues on long quotes (html2canvas limitation)
 - RAMS mobile navigation relies on scroll-to with pill bar — no native anchor support
-- Game state is in-memory for session data; server redeploy clears active sessions
+- Draft auto-save is per-user in PostgreSQL, but active in-tab reducer state is lost on page refresh if not saved
 - Self-critique agent runs synchronously after analysis — adds ~2s to Step 3 load time
 
 ---
