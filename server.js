@@ -209,6 +209,20 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_version TEXT;
     `);
 
+    // Agent retry queue — exponential backoff for failed agent runs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_retry_queue (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        agent_type TEXT NOT NULL,
+        payload JSONB,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        last_error TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        next_retry_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
     // Migrate hardcoded calibration notes to DB (idempotent)
     const hardcodedNotes = [
       { fieldType: 'material_unit_cost', fieldLabel: 'Chapter 8 traffic management', note: 'If any photograph shows the wall is adjacent to a public carriageway, include a Chapter 8 traffic management line item (£380–450). This is a legal requirement for roadside works.' },
@@ -1219,6 +1233,14 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
           }
         } catch (err) {
           console.error(`[FeedbackAgent] Error for job ${req.params.jobId}:`, err.message);
+          enqueueRetry(pool, 'feedback', {
+            userId: req.params.id,
+            jobId: req.params.jobId,
+            completionFeedback,
+            completionNotes: req.body.completionNotes || '',
+          }, err.message).catch(retryErr =>
+            console.error('[RetryQueue] Failed to enqueue:', retryErr.message)
+          );
         }
       })();
     }
@@ -1831,6 +1853,7 @@ import { runCalibrationAgent } from './agents/calibrationAgent.js';
 import { callAnthropicRaw } from './agents/agentUtils.js';
 import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { shouldAutoCalibrate } from './autoCalibration.js';
+import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 
 app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1951,9 +1974,33 @@ app.get('/{*path}', (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 const dbReady = initDB()
-  .then(() => {
-    // Don't auto-listen when imported by test runner
+  .then(async () => {
+    // Sweep retry queue on startup
     if (process.env.NODE_ENV !== 'test') {
+      try {
+        await processRetryQueue(pool, {
+          feedback: async (payload) => {
+            const { rows } = await pool.query(
+              'SELECT quote_snapshot FROM jobs WHERE id = $1',
+              [payload.jobId]
+            );
+            if (rows.length > 0 && rows[0].quote_snapshot) {
+              await runFeedbackAgent({
+                pool,
+                userId: payload.userId,
+                jobId: payload.jobId,
+                quoteSnapshot: rows[0].quote_snapshot,
+                completionFeedback: payload.completionFeedback,
+                completionNotes: payload.completionNotes || '',
+              });
+            }
+          },
+        });
+        console.log('[RetryQueue] Startup sweep complete');
+      } catch (err) {
+        console.error('[RetryQueue] Startup sweep failed:', err.message);
+      }
+
       app.listen(PORT, () => {
         console.log(`FastQuote server running on port ${PORT}`);
       });
