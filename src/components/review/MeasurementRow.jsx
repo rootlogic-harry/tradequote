@@ -77,7 +77,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
         <div className="flex items-center gap-2 mt-2 text-xs" style={{ color: 'var(--tq-confirmed-txt)', fontSize: 11 }}>
           <span>{wasEdited ? `Edited (was: ${measurement.aiValue})` : 'Accepted'}</span>
           <span>·</span>
-          <button onClick={handleEdit} className="underline" style={{ color: 'var(--tq-confirmed-txt)' }}>Edit</button>
+          <button onClick={handleEdit} className="underline" style={{ color: 'var(--tq-confirmed-txt)', padding: '10px 16px', minHeight: 44 }}>Edit</button>
         </div>
       </div>
     );
@@ -140,11 +140,12 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
           style={{
             fontFamily: 'Barlow Condensed, sans-serif',
             fontWeight: 700,
-            fontSize: 11,
+            fontSize: 13,
             backgroundColor: 'var(--tq-accent)',
             color: '#ffffff',
-            padding: '4px 10px',
+            padding: '10px 16px',
             borderRadius: 6,
+            minHeight: 44,
           }}
         >
           CONFIRM

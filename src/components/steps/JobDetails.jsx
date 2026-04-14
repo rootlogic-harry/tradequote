@@ -494,10 +494,12 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
               ? { backgroundColor: '#1a1714', color: '#f5f0e8' }
               : { backgroundColor: '#7a6f5e', color: '#f5f0e8' };
 
-          // Card border
+          // Card border: required=solid accent, recommended=dashed grey, reference=solid gold
           const cardBorder = isReference
             ? '2px solid #e8a838'
-            : '1.5px solid var(--tq-border)';
+            : isRequired
+              ? '2px solid var(--tq-accent)'
+              : '2px dashed var(--tq-border)';
 
           // Header bg for reference slot
           const headerBg = isReference ? '#fdf6e8' : 'var(--tq-card)';
@@ -559,8 +561,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
                         dispatch({ type: 'SET_PHOTO', slot: slot.key, photo: null });
                         if (state.currentUserId) deletePhoto(state.currentUserId, 'draft', slot.key);
                       }}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center text-sm"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: '#ffffff' }}
+                      className="absolute top-1 right-1 w-10 h-10 rounded-full flex items-center justify-center text-sm"
+                      style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: '#ffffff', minWidth: 44, minHeight: 44 }}
                     >
                       ×
                     </button>
