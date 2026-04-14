@@ -21,7 +21,6 @@ import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
-import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
 import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
@@ -336,7 +335,6 @@ export default function App() {
         extraPhotos: state.extraPhotos,
         jobDetails: state.jobDetails,
         profile: state.profile,
-        systemPrompt: SYSTEM_PROMPT,
         abortRef,
         dispatch,
         userId: state.currentUserId,

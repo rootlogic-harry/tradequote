@@ -1781,6 +1781,7 @@ import { runSelfCritique } from './agents/selfCritique.js';
 import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
 import { callAnthropicRaw } from './agents/agentUtils.js';
+import { SYSTEM_PROMPT } from './prompts/systemPrompt.js';
 
 app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1788,14 +1789,14 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
   }
 
-  const { systemPrompt, messages, model, max_tokens } = req.body;
-  if (!systemPrompt || !messages) {
-    return res.status(400).json({ error: 'systemPrompt and messages are required' });
+  const { messages, model, max_tokens } = req.body;
+  if (!messages) {
+    return res.status(400).json({ error: 'messages is required' });
   }
 
   try {
-    // Fetch approved calibration notes and append to system prompt
-    let augmentedPrompt = systemPrompt;
+    // Use server-side prompt (ignore any client-sent systemPrompt)
+    let augmentedPrompt = SYSTEM_PROMPT;
     try {
       const { rows: calNotes } = await pool.query(
         `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`

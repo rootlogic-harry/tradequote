@@ -1,7 +1,7 @@
 import { PHOTO_SLOTS } from '../constants.js';
 import { parseAIResponse, validateAIResponse, normalizeAIResponse } from './aiParser.js';
 
-export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, systemPrompt, abortRef, dispatch, userId }) {
+export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId }) {
   try {
     const imageContent = [];
     for (const slot of PHOTO_SLOTS) {
@@ -64,8 +64,6 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, sy
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4000,
-        systemPrompt,
-        system: systemPrompt, // backward compat for proxy endpoint
         messages: [
           {
             role: 'user',
