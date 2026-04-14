@@ -38,7 +38,7 @@ export default function Dashboard({
   dispatch,
   onViewJob,
   onViewRams,
-  isAdminPlan = true,
+  isAdminPlan = false,
 }) {
   // Use recentJobs (from reducer) if available, fallback to savedJobs
   const jobs = recentJobs.length > 0 ? recentJobs : savedJobs;

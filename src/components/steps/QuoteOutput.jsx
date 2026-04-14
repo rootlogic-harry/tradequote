@@ -6,7 +6,7 @@ import { saveJob as saveQuote } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = true }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false }) {
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos, extraPhotos = [] } = state;
 

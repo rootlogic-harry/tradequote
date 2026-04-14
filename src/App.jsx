@@ -22,6 +22,7 @@ import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
 import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
+import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
 
 function getStoredTheme(userId) {
   try {
@@ -590,16 +591,16 @@ export default function App() {
     window.location.href = '/auth/logout';
   };
 
-  const isAdminPlan = state.currentUser?.plan === 'admin';
+  const isAdmin = checkAdminPlan(state.currentUser);
 
   const renderContent = () => {
     // Learning dashboard (admin only)
-    if (currentView === 'learning' && isAdminPlan) {
+    if (currentView === 'learning' && isAdmin) {
       return <LearningDashboard currentUserId={state.currentUserId} />;
     }
 
     // Agent activity dashboard (admin only)
-    if (currentView === 'agents' && isAdminPlan) {
+    if (currentView === 'agents' && isAdmin) {
       return <AgentActivity />;
     }
 
@@ -622,7 +623,7 @@ export default function App() {
           dispatch={dispatch}
           onViewJob={handleViewQuote}
           onViewRams={handleViewRams}
-          isAdminPlan={isAdminPlan}
+          isAdminPlan={isAdmin}
         />
       );
     }
@@ -671,7 +672,7 @@ export default function App() {
           currentUserId={state.currentUserId}
           recentJobs={state.recentJobs}
           dispatch={dispatch}
-          isAdminPlan={isAdminPlan}
+          isAdminPlan={isAdmin}
         />
       );
     }
@@ -704,7 +705,7 @@ export default function App() {
             showToast={showToast}
             onCreateRams={handleCreateRams}
             onSaved={() => fetchIncompleteJobs(state.currentUserId)}
-            isAdminPlan={isAdminPlan}
+            isAdminPlan={isAdmin}
           />
         );
       default:
@@ -733,7 +734,7 @@ export default function App() {
         onLogout={handleLogout}
         onGoToLearning={() => setCurrentView('learning')}
         onGoToAgents={() => setCurrentView('agents')}
-        isAdminPlan={isAdminPlan}
+        isAdminPlan={isAdmin}
       />
 
       {/* Main content */}
@@ -778,7 +779,7 @@ export default function App() {
           job={state.recentJobs.find(j => j.id === state.statusModal.jobId)}
           onConfirm={handleStatusConfirm}
           onCancel={() => dispatch({ type: 'CLOSE_STATUS_MODAL' })}
-          isAdminPlan={isAdminPlan}
+          isAdminPlan={isAdmin}
         />
       )}
 

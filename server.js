@@ -276,7 +276,7 @@ async (accessToken, refreshToken, profile, done) => {
     const inserted = await pool.query(
       `INSERT INTO users (id, name, email, avatar_url, auth_provider, auth_provider_id,
         plan, profile_complete, created_at, last_login_at)
-       VALUES ($1, $2, $3, $4, 'google', $5, 'standard', false, NOW(), NOW())
+       VALUES ($1, $2, $3, $4, 'google', $5, 'basic', false, NOW(), NOW())
        RETURNING *`,
       [userId, name, email, avatar, googleId]
     );
@@ -338,7 +338,7 @@ app.get('/auth/me', async (req, res) => {
         name: req.user.name,
         email: req.user.email,
         avatarUrl: req.user.avatar_url,
-        plan: req.user.plan || 'standard',
+        plan: req.user.plan || 'basic',
         profileComplete: !!req.user.profile_complete,
       },
       legacy: false,
@@ -356,7 +356,7 @@ app.get('/auth/me', async (req, res) => {
           name: u.name,
           email: u.email,
           avatarUrl: u.avatar_url,
-          plan: u.plan || 'standard',
+          plan: u.plan || 'basic',
           profileComplete: !!u.profile_complete,
         },
         legacy: true,

@@ -5,7 +5,7 @@ import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
 
 const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
 
-export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isAdminPlan = true }) {
+export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isAdminPlan = false }) {
   const [localQuotes, setLocalQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
