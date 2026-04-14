@@ -19,7 +19,7 @@ import LearningDashboard from './components/LearningDashboard.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
-import { getJob, listJobs, saveJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
+import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 
 function getStoredTheme(userId) {
@@ -239,25 +239,33 @@ export default function App() {
   }, [state]);
 
   // Auto-save job + diffs at Generate Quote (Step 4 → Step 5)
+  // Also fires on re-generate after BACK_TO_REVIEW → edit → GENERATE_QUOTE
   const autoSaveTriggered = useRef(false);
   useEffect(() => {
     if (state.step !== 5 || !state.quotePayload || !state.currentUserId) {
       autoSaveTriggered.current = false;
       return;
     }
-    if (state.savedJobId || autoSaveTriggered.current) return;
+    if (autoSaveTriggered.current) return;
     autoSaveTriggered.current = true;
 
     (async () => {
       try {
-        const jobId = await saveJob(state.currentUserId, state);
-        // Save diffs independently to quote_diffs table
+        let jobId = state.savedJobId;
+        if (jobId) {
+          // Re-generate: update existing job snapshot
+          await updateJob(state.currentUserId, jobId, state);
+        } else {
+          // First save: create new job
+          jobId = await saveJob(state.currentUserId, state);
+          dispatch({ type: 'QUOTE_SAVED', jobId });
+        }
+        // Always save/replace diffs
         try {
           await saveDiffs(state.currentUserId, jobId, state.diffs, state.quotePayload?.aiAccuracyScore ?? null);
         } catch (err) {
           console.warn('[AutoSave] Diffs save failed:', err.message);
         }
-        dispatch({ type: 'QUOTE_SAVED', jobId });
       } catch (err) {
         console.error('[AutoSave] Job save failed:', err.message);
         dispatch({ type: 'QUOTE_SAVE_FAILED', error: err.message });

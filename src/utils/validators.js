@@ -3,7 +3,6 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function validateProfile(profile) {
   const errors = {};
 
-  if (!profile.companyName?.trim()) errors.companyName = 'Company name is required';
   if (!profile.fullName?.trim()) errors.fullName = 'Full name is required';
   if (!profile.phone?.trim()) errors.phone = 'Phone number is required';
 

@@ -53,7 +53,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Company Name *
+            Company Name
           </label>
           <input
             className={inputClass('companyName')}

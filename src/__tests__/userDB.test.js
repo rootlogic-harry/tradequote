@@ -11,7 +11,7 @@ import {
   getSetting, setSetting,
   getTheme, setTheme,
   getQuoteSequence, incrementQuoteSequence,
-  saveJob, listJobs, getJob, deleteJob, updateJobRams,
+  saveJob, updateJob, listJobs, getJob, deleteJob, updateJobRams,
   saveDraft, loadDraft, clearDraft,
   saveDiffs, updateJobStatus, setRamsNotRequired,
   deleteUserData, exportUserData,
@@ -554,6 +554,58 @@ describe('saveJob photo copy failure', () => {
     const id = await saveJob('mark', makeFakeState('CopyFail'));
     // Job still saved successfully despite copy failure
     expect(id).toBe('sq-789');
+  });
+});
+
+// --- updateJob ---
+
+describe('updateJob', () => {
+  test('calls PUT with correct URL and snapshot body', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    await updateJob('mark', 'sq-123', makeFakeState('Updated'));
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/mark/jobs/sq-123', expect.objectContaining({
+      method: 'PUT',
+    }));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.jobDetails.clientName).toBe('Updated');
+  });
+
+  test('throws on server error (500)', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Update failed' }, false, 500));
+    await expect(updateJob('mark', 'sq-123', makeFakeState('Fail')))
+      .rejects.toThrow('Update failed');
+  }, 30000);
+
+  test('throws on 404 (job not found)', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Job not found' }, false, 404));
+    await expect(updateJob('mark', 'nonexistent', makeFakeState('Missing')))
+      .rejects.toThrow('Job not found');
+  });
+
+  test('retries on 500 and succeeds on second attempt', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ error: 'Temporary' }, false, 500))
+      .mockReturnValueOnce(mockResponse({ ok: true }));
+    const result = await updateJob('mark', 'sq-123', makeFakeState('Retry'));
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 15000);
+
+  test('does not retry on 4xx errors', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Bad request' }, false, 400));
+    await expect(updateJob('mark', 'sq-123', makeFakeState('NoRetry')))
+      .rejects.toThrow('Bad request');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('strips photo blobs via buildSaveSnapshot', async () => {
+    fetchMock.mockReturnValue(mockResponse({ ok: true }));
+    const state = makeFakeState('BlobStrip');
+    state.photos = { overview: { data: 'data:image/jpeg;base64,hugepayload' }, closeup: null };
+    await updateJob('mark', 'sq-123', state);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    // buildSaveSnapshot strips photo data
+    expect(body.photos).toBeUndefined();
   });
 });
 

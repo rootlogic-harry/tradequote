@@ -266,6 +266,84 @@ describe('Jobs', () => {
   });
 });
 
+// --- Job Update (PUT) ---
+
+describe('Job Update (PUT /jobs/:jobId)', () => {
+  let jobId;
+
+  beforeEach(async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'mark', name: 'Mark' } });
+    const state = makeFakeState('Original Client');
+    state.quotePayload = { totals: { total: 2500 } };
+    const { data } = await api('/api/users/mark/jobs', { method: 'POST', body: state });
+    jobId = data.id;
+  });
+
+  test('PUT updates job snapshot and metadata', async () => {
+    const updated = makeFakeState('Updated Client');
+    updated.jobDetails.siteAddress = '456 New St';
+    updated.quotePayload = { totals: { total: 3800 } };
+    const { status, data } = await api(`/api/users/mark/jobs/${jobId}`, {
+      method: 'PUT',
+      body: updated,
+    });
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+
+    // Verify the update persisted
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.clientName).toBe('Updated Client');
+    expect(job.siteAddress).toBe('456 New St');
+    expect(job.totalAmount).toBe(3800);
+    expect(job.quoteSnapshot.jobDetails.clientName).toBe('Updated Client');
+  });
+
+  test('PUT returns 404 for non-existent job', async () => {
+    const { status, data } = await api('/api/users/mark/jobs/nonexistent', {
+      method: 'PUT',
+      body: makeFakeState('Ghost'),
+    });
+    expect(status).toBe(404);
+    expect(data.error).toBe('Job not found');
+  });
+
+  test('PUT does not create a new job (only updates)', async () => {
+    const { data: jobsBefore } = await api('/api/users/mark/jobs');
+    expect(jobsBefore).toHaveLength(1);
+
+    await api(`/api/users/mark/jobs/${jobId}`, {
+      method: 'PUT',
+      body: makeFakeState('Updated'),
+    });
+
+    const { data: jobsAfter } = await api('/api/users/mark/jobs');
+    expect(jobsAfter).toHaveLength(1); // Still one job, not two
+  });
+
+  test('PUT is isolated by user', async () => {
+    await api('/api/users', { method: 'POST', body: { id: 'harry', name: 'Harry' } });
+    // Harry tries to update Mark's job — should 404 because user_id doesn't match
+    const { status } = await api(`/api/users/harry/jobs/${jobId}`, {
+      method: 'PUT',
+      body: makeFakeState('Hijack'),
+    });
+    expect(status).toBe(404);
+
+    // Verify Mark's job is unchanged
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.clientName).toBe('Original Client');
+  });
+
+  test('PUT preserves job ID', async () => {
+    await api(`/api/users/mark/jobs/${jobId}`, {
+      method: 'PUT',
+      body: makeFakeState('Updated'),
+    });
+    const { data: job } = await api(`/api/users/mark/jobs/${jobId}`);
+    expect(job.id).toBe(jobId);
+  });
+});
+
 // --- Job Status Lifecycle ---
 
 describe('Job Status Lifecycle', () => {
@@ -744,14 +822,43 @@ describe('Quote Diffs', () => {
     expect(data.inserted).toBe(2);
   });
 
-  test('POST /diffs is idempotent (ON CONFLICT DO NOTHING)', async () => {
-    const diffs = [
+  test('POST /diffs replaces existing diffs (DELETE + INSERT)', async () => {
+    const diffsV1 = [
       { fieldType: 'measurement', fieldLabel: 'Wall height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667, createdAt: Date.now() },
+      { fieldType: 'measurement', fieldLabel: 'Wall length', aiValue: '4500', confirmedValue: '4500', wasEdited: false, editMagnitude: 0, createdAt: Date.now() },
     ];
-    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
-    // Second call with same data — new rows get unique IDs, so they'll insert (IDs are UUIDs)
-    const { data } = await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs, aiAccuracyScore: 0.5 } });
-    expect(data.ok).toBe(true);
+    const { data: r1 } = await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs: diffsV1, aiAccuracyScore: 0.5 } });
+    expect(r1.inserted).toBe(2);
+
+    // Second call with different data — should replace, not accumulate
+    const diffsV2 = [
+      { fieldType: 'measurement', fieldLabel: 'Wall height', aiValue: '1200', confirmedValue: '1300', wasEdited: true, editMagnitude: 0.0833, createdAt: Date.now() },
+    ];
+    const { data: r2 } = await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs: diffsV2, aiAccuracyScore: 0.75 } });
+    expect(r2.ok).toBe(true);
+    expect(r2.inserted).toBe(1); // Only 1 diff now, not 3 (old 2 deleted)
+  });
+
+  test('POST /diffs replacement verified via GDPR export', async () => {
+    // Save first set of 3 diffs
+    const diffsV1 = [
+      { fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1400', wasEdited: true, editMagnitude: 0.1667 },
+      { fieldType: 'measurement', fieldLabel: 'Length', aiValue: '4500', confirmedValue: '4500', wasEdited: false, editMagnitude: 0 },
+      { fieldType: 'measurement', fieldLabel: 'Width', aiValue: '600', confirmedValue: '650', wasEdited: true, editMagnitude: 0.0833 },
+    ];
+    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs: diffsV1, aiAccuracyScore: 0.33 } });
+
+    // Replace with 1 diff
+    const diffsV2 = [
+      { fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1300', wasEdited: true, editMagnitude: 0.0833 },
+    ];
+    await api(`/api/users/mark/jobs/${jobId}/diffs`, { method: 'POST', body: { diffs: diffsV2, aiAccuracyScore: 0.0 } });
+
+    // Verify via export — should only have 1 diff, not 4
+    const { data: exported } = await api('/api/users/mark/export');
+    expect(exported.diffs).toHaveLength(1);
+    expect(exported.diffs[0].field_label).toBe('Height');
+    expect(exported.diffs[0].confirmed_value).toBe('1300');
   });
 
   test('POST /diffs with empty array returns ok:true, inserted:0', async () => {

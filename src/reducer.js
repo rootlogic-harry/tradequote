@@ -45,7 +45,7 @@ export const initialState = {
     vatRegistered: false,
     vatNumber: '',
     dayRate: DEFAULT_DAY_RATE,
-    accreditations: 'DSWA Professional Member',
+    accreditations: '',
     showNotesOnQuote: true,
   },
   jobDetails: {

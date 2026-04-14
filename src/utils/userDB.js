@@ -126,6 +126,28 @@ export async function saveJob(userId, state) {
   }
 }
 
+export async function updateJob(userId, jobId, state) {
+  const snapshot = buildSaveSnapshot(state);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetchWithRetry(`/api/users/${userId}/jobs/${jobId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snapshot),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let msg = `Job update failed (${res.status})`;
+      try { const data = await res.json(); msg = data.error || msg; } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function listJobs(userId) {
   const res = await fetch(`/api/users/${userId}/jobs`);
   if (!res.ok) return [];

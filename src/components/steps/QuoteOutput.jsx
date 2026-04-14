@@ -274,17 +274,17 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       }
 
       // Header
-      children.push(
-        new Paragraph({
-          children: [txt(profile.companyName, { bold: true, size: 36, color: '1a1a1a', font: HEADING_FONT })],
-          spacing: { after: 40 },
-        }),
-        new Paragraph({
-          children: [txt('Dry Stone Walling', { size: 20, color: '888888' })],
-        }),
-      );
+      const headerName = profile.companyName?.trim() || (!profile.logo ? profile.fullName : '');
+      if (headerName) {
+        children.push(
+          new Paragraph({
+            children: [txt(headerName, { bold: true, size: 36, color: '1a1a1a', font: HEADING_FONT })],
+            spacing: { after: 40 },
+          }),
+        );
+      }
 
-      if (profile.accreditations) {
+      if (profile.accreditations?.trim()) {
         children.push(new Paragraph({
           children: [txt(profile.accreditations, { size: 20, color: '888888' })],
         }));
@@ -508,21 +508,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         })
       );
 
-      // Additional costs
-      if (additionalCosts.length > 0) {
-        tableRows.push(
-          new TableRow({
-            children: [
-              new TableCell({
-                children: [new Paragraph({ children: [txt('Additional Costs', { bold: true, size: 20, color: '555555' })] })],
-                borders: lightBorder,
-                width: { size: COL_SPAN_5, type: WidthType.DXA },
-                columnSpan: 5,
-              }),
-            ],
-          })
-        );
-      }
+      // Additional costs (each with its own label, no group header)
       additionalCosts.forEach(cost => {
         tableRows.push(
           new TableRow({

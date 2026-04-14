@@ -201,7 +201,7 @@ app.use(session({
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID || 'missing',
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'missing',
-  callbackURL: '/auth/google/callback',
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
 },
 async (accessToken, refreshToken, profile, done) => {
   try {
@@ -978,6 +978,34 @@ app.post('/api/users/:id/jobs', async (req, res) => {
   }
 });
 
+app.put('/api/users/:id/jobs/:jobId', async (req, res) => {
+  try {
+    const { profile, jobDetails, reviewData, diffs, quotePayload, quoteSequence } = req.body;
+    const totals = quotePayload?.totals;
+    const quoteSnapshot = { profile, jobDetails, reviewData, diffs, quotePayload, quoteSequence };
+
+    const { rowCount } = await pool.query(
+      `UPDATE jobs SET saved_at = NOW(), client_name = $1, site_address = $2,
+       quote_reference = $3, quote_date = $4, total_amount = $5, quote_snapshot = $6
+       WHERE id = $7 AND user_id = $8`,
+      [
+        jobDetails?.clientName || '',
+        jobDetails?.siteAddress || '',
+        jobDetails?.quoteReference || '',
+        jobDetails?.quoteDate || '',
+        totals?.total ?? 0,
+        JSON.stringify(quoteSnapshot),
+        req.params.jobId,
+        req.params.id,
+      ]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Job not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -1098,16 +1126,20 @@ app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Delete existing diffs for this job so re-generates replace them
+      await client.query(
+        'DELETE FROM quote_diffs WHERE job_id = $1 AND user_id = $2',
+        [req.params.jobId, req.params.id]
+      );
       let inserted = 0;
       for (const d of diffs) {
-        const result = await client.query(
+        await client.query(
           `INSERT INTO quote_diffs (
             job_id, user_id, field_type, field_label,
             ai_value, confirmed_value, was_edited, edit_magnitude,
             reference_card_used, stone_type, wall_height_mm, wall_length_mm,
             ai_accuracy_score, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-          ON CONFLICT DO NOTHING`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
             req.params.jobId,
             req.params.id,
@@ -1125,7 +1157,7 @@ app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
             d.createdAt ? new Date(d.createdAt) : new Date(),
           ]
         );
-        if (result.rowCount > 0) inserted++;
+        inserted++;
       }
       await client.query('COMMIT');
       res.json({ ok: true, inserted });

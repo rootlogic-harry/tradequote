@@ -237,12 +237,12 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             </span>
             <span className="font-mono">{formatCurrency(totals.labourTotal)}</span>
           </div>
-          {totals.additionalCostsTotal > 0 && (
-            <div className="flex justify-between">
-              <span style={{ color: 'var(--tq-muted)' }}>Additional costs</span>
-              <span className="font-mono">{formatCurrency(totals.additionalCostsTotal)}</span>
+          {additionalCosts.filter(c => c.amount > 0).map((cost, i) => (
+            <div key={cost.id || i} className="flex justify-between">
+              <span style={{ color: 'var(--tq-muted)' }}>{cost.label || 'Additional cost'}</span>
+              <span className="font-mono">{formatCurrency(cost.amount)}</span>
             </div>
-          )}
+          ))}
           <div className="pt-2 flex justify-between" style={{ borderTop: '1px solid var(--tq-border-soft)' }}>
             <span style={{ color: 'var(--tq-muted)' }}>Subtotal (ex VAT)</span>
             <span className="font-mono font-medium">{formatCurrency(totals.subtotal)}</span>

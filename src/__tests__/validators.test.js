@@ -26,10 +26,10 @@ describe('validateProfile', () => {
     expect(Object.keys(result.errors)).toHaveLength(0);
   });
 
-  test('fails when companyName is missing', () => {
+  test('passes when companyName is missing (optional)', () => {
     const result = validateProfile({ ...validProfile, companyName: '' });
-    expect(result.valid).toBe(false);
-    expect(result.errors.companyName).toBeDefined();
+    expect(result.valid).toBe(true);
+    expect(result.errors.companyName).toBeUndefined();
   });
 
   test('fails when fullName is missing', () => {
@@ -92,7 +92,7 @@ describe('validateProfile', () => {
   });
 
   test('accumulates multiple errors', () => {
-    const result = validateProfile({ ...validProfile, companyName: '', email: 'bad', dayRate: -1 });
+    const result = validateProfile({ ...validProfile, fullName: '', email: 'bad', dayRate: -1 });
     expect(result.valid).toBe(false);
     expect(Object.keys(result.errors).length).toBeGreaterThanOrEqual(3);
   });

@@ -89,11 +89,17 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             <img src={profile.logo} alt="Logo" className="max-w-[200px] max-h-[80px] object-contain" />
           )}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {profile.companyName}
-            </h1>
-            <p className="text-gray-500 text-base">Dry Stone Walling</p>
-            {profile.accreditations && (
+            {profile.companyName?.trim() && (
+              <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {profile.companyName}
+              </h1>
+            )}
+            {!profile.logo && !profile.companyName?.trim() && (
+              <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {profile.fullName}
+              </h1>
+            )}
+            {profile.accreditations?.trim() && (
               <p className="text-gray-500 text-base">{profile.accreditations}</p>
             )}
           </div>
@@ -182,11 +188,6 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
               </td>
               <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(totals.labourTotal)}</td>
             </tr>
-            {additionalCosts.length > 0 && (
-              <tr className="border-b border-gray-200">
-                <td className="py-2 font-bold text-gray-600 text-base" colSpan={5}>Additional Costs</td>
-              </tr>
-            )}
             {additionalCosts.map((cost) => (
               <tr key={cost.id} className="border-b border-gray-100">
                 <td className="py-1" colSpan={4}>{cost.label}</td>

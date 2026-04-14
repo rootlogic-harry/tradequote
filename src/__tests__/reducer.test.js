@@ -72,6 +72,18 @@ describe('reducer', () => {
     };
   }
 
+  // ---- initialState defaults ----
+
+  describe('initialState defaults', () => {
+    test('accreditations defaults to empty string', () => {
+      expect(initialState.profile.accreditations).toBe('');
+    });
+
+    test('companyName defaults to empty string', () => {
+      expect(initialState.profile.companyName).toBe('');
+    });
+  });
+
   // ---- Existing tests ----
 
   describe('RESTORE_DRAFT', () => {
