@@ -387,7 +387,9 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         >
           {generateEnabled
             ? 'GENERATE QUOTE'
-            : `${unconfirmedCount} UNCONFIRMED`
+            : unconfirmedCount > 0
+              ? `${unconfirmedCount} UNCONFIRMED`
+              : 'GENERATE QUOTE — INCOMPLETE'
           }
         </button>
 
