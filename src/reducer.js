@@ -73,6 +73,8 @@ export const initialState = {
   quoteSequence: 1,
   savedJobId: null,
   quoteSaveError: null,
+  critiqueNotes: null,
+  quoteSaveErrorKey: 0,
   rams: null,
   retryCount: 0,
   statusModal: { open: false, jobId: null, targetStatus: null },
@@ -354,6 +356,7 @@ function reducerCore(state, action) {
         quoteSequence: nextSeq,
         savedJobId: null,
         quoteSaveError: null,
+        critiqueNotes: null,
       };
     }
 

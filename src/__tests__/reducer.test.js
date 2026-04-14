@@ -82,6 +82,14 @@ describe('reducer', () => {
     test('companyName defaults to empty string', () => {
       expect(initialState.profile.companyName).toBe('');
     });
+
+    test('critiqueNotes defaults to null', () => {
+      expect(initialState.critiqueNotes).toBeNull();
+    });
+
+    test('quoteSaveErrorKey defaults to 0', () => {
+      expect(initialState.quoteSaveErrorKey).toBe(0);
+    });
   });
 
   // ---- Existing tests ----
@@ -333,6 +341,12 @@ describe('reducer', () => {
       const result = reducer(state, { type: 'NEW_QUOTE' });
       expect(result.savedJobId).toBeNull();
       expect(result.quoteSaveError).toBeNull();
+    });
+
+    test('clears critiqueNotes to null', () => {
+      const state = { ...initialState, critiqueNotes: { corrections: [], notes: 'old' } };
+      const result = reducer(state, { type: 'NEW_QUOTE' });
+      expect(result.critiqueNotes).toBeNull();
     });
   });
 
