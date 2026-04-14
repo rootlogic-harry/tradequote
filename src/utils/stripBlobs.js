@@ -25,21 +25,27 @@ export function stripBlobs(obj) {
 }
 
 /**
- * Build a save-safe snapshot. Strips blobs and excludes aiRawResponse.
- * aiRawResponse is excluded entirely — it is large, immutable, and
- * can never be edited. The confirmed values in reviewData are what matter.
+ * Keys explicitly allowed in save snapshots.
+ * New state fields must be added here consciously to be persisted.
+ */
+export const SAVE_ALLOWLIST = [
+  'profile', 'jobDetails', 'reviewData',
+  'quotePayload', 'quoteSequence', 'quoteMode', 'diffs',
+];
+
+/**
+ * Build a save-safe snapshot. Only includes SAVE_ALLOWLIST keys,
+ * then strips blobs. This is functionally identical to the previous
+ * manual construction but enforced via the allowlist.
  */
 export function buildSaveSnapshot(state) {
-  const stripped = stripBlobs({
-    profile:       state.profile,
-    jobDetails:    state.jobDetails,
-    reviewData:    state.reviewData,
-    quotePayload:  state.quotePayload,
-    quoteSequence: state.quoteSequence,
-    quoteMode:     state.quoteMode,
-    diffs:         state.diffs,
-    // aiRawResponse intentionally excluded
-  })
+  const picked = {}
+  for (const key of SAVE_ALLOWLIST) {
+    if (state[key] !== undefined) {
+      picked[key] = state[key]
+    }
+  }
+  const stripped = stripBlobs(picked)
 
   if (typeof Blob !== 'undefined') {
     const size = new Blob([JSON.stringify(stripped)]).size

@@ -17,6 +17,7 @@ import Dashboard from './components/Dashboard.jsx';
 import StatusModal from './components/StatusModal.jsx';
 import LearningDashboard from './components/LearningDashboard.jsx';
 import AgentActivity from './components/AgentActivity.jsx';
+import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
@@ -47,6 +48,9 @@ export default function App() {
 
   // Pending draft for dashboard (replaces draftPrompt modal)
   const [pendingDraft, setPendingDraft] = useState(null);
+
+  // Save error banner dismiss state
+  const [dismissedSaveError, setDismissedSaveError] = useState(null);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -338,6 +342,11 @@ export default function App() {
       });
     }
   }, [state.retryCount]);
+
+  // Reset save error dismissed state when error changes
+  useEffect(() => {
+    if (state.quoteSaveError) setDismissedSaveError(null);
+  }, [state.quoteSaveError]);
 
   const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 
@@ -740,6 +749,10 @@ export default function App() {
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+          <SaveErrorBanner
+            error={state.quoteSaveError && dismissedSaveError !== state.quoteSaveError ? state.quoteSaveError : null}
+            onDismiss={() => setDismissedSaveError(state.quoteSaveError)}
+          />
           {renderContent()}
         </div>
       </div>
