@@ -8,6 +8,7 @@ import connectPgSimple from 'connect-pg-simple';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
+import { safeError } from './safeError.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -792,7 +793,7 @@ app.get('/api/users', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -805,7 +806,7 @@ app.get('/api/users/:id', async (req, res) => {
     if (rows.length === 0) return res.status(404).json(null);
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -819,7 +820,7 @@ app.post('/api/users', async (req, res) => {
     );
     res.json({ id, name });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -828,7 +829,7 @@ app.delete('/api/users/:id', async (req, res) => {
     await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -843,7 +844,7 @@ app.get('/api/users/:id/profile', async (req, res) => {
     if (rows.length === 0) return res.json(null);
     res.json(rows[0].data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -856,7 +857,7 @@ app.put('/api/users/:id/profile', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -871,7 +872,7 @@ app.get('/api/users/:id/settings/:key', async (req, res) => {
     if (rows.length === 0) return res.json(null);
     res.json(rows[0].value);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -891,7 +892,7 @@ app.put('/api/users/:id/settings/:key', async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -906,7 +907,7 @@ app.get('/api/users/:id/theme', async (req, res) => {
     if (rows.length === 0) return res.json(null);
     res.json(rows[0].value);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -919,7 +920,7 @@ app.put('/api/users/:id/theme', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -934,7 +935,7 @@ app.get('/api/users/:id/quote-sequence', async (req, res) => {
     if (rows.length === 0) return res.json(1);
     res.json(rows[0].value || 1);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -955,7 +956,7 @@ app.post('/api/users/:id/quote-sequence/increment', async (req, res) => {
     );
     res.json(next);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -984,7 +985,7 @@ app.get('/api/users/:id/jobs', async (req, res) => {
     }));
     res.json(jobs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1020,7 +1021,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
     );
     res.json({ id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1048,7 +1049,7 @@ app.put('/api/users/:id/jobs/:jobId', async (req, res) => {
     if (rowCount === 0) return res.status(404).json({ error: 'Job not found' });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1074,7 +1075,7 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
     job.snapshot = job.quoteSnapshot;
     res.json(job);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1086,7 +1087,7 @@ app.delete('/api/users/:id/jobs/:jobId', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1105,7 +1106,7 @@ app.put('/api/users/:id/jobs/:jobId/rams', requireAdminPlan, async (req, res) =>
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1125,7 +1126,7 @@ app.put('/api/users/:id/jobs/:jobId/rams-not-required', requireAdminPlan, async 
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1179,7 +1180,7 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1240,7 +1241,7 @@ app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
       client.release();
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1311,7 +1312,7 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1330,7 +1331,7 @@ app.get('/api/admin/users', requireAuth, requireAdminPlan, async (req, res) => {
     `);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1344,7 +1345,7 @@ app.post('/api/admin/users/:id/set-plan', requireAuth, requireAdminPlan, async (
     if (rowCount === 0) return res.status(404).json({ error: 'User not found' });
     res.json({ ok: true, id: req.params.id, plan });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1399,8 +1400,7 @@ app.post('/api/admin/migrate-data', requireAuth, requireAdminPlan, async (req, r
     });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Data migration error:', err.message);
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   } finally {
     client.release();
   }
@@ -1417,7 +1417,7 @@ app.get('/api/users/:id/drafts', async (req, res) => {
     if (rows.length === 0) return res.json(null);
     res.json(rows[0].data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1430,7 +1430,7 @@ app.put('/api/users/:id/drafts', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1439,7 +1439,7 @@ app.delete('/api/users/:id/drafts', async (req, res) => {
     await pool.query('DELETE FROM drafts WHERE user_id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1458,7 +1458,7 @@ app.put('/api/users/:id/photos/:context/:slot', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1470,7 +1470,7 @@ app.get('/api/users/:id/photos/:context', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1482,7 +1482,7 @@ app.delete('/api/users/:id/photos/:context', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1494,7 +1494,7 @@ app.delete('/api/users/:id/photos/:context/:slot', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1518,7 +1518,7 @@ app.post('/api/users/:id/photos/copy', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1536,7 +1536,7 @@ app.delete('/api/users/:id/data', async (req, res) => {
     await pool.query('DELETE FROM profiles WHERE user_id = $1', [userId]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1563,7 +1563,7 @@ app.get('/api/users/:id/export', async (req, res) => {
       diffs: diffsRes.rows,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1684,7 +1684,7 @@ app.get('/api/admin/agent-runs', requireAuth, requireAdminPlan, async (req, res)
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1699,7 +1699,7 @@ app.get('/api/admin/agent-runs/:runId', requireAuth, requireAdminPlan, async (re
     if (rows.length === 0) return res.status(404).json({ error: 'Agent run not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1722,7 +1722,7 @@ app.get('/api/admin/calibration-notes', requireAuth, requireAdminPlan, async (re
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1741,7 +1741,7 @@ app.put('/api/admin/calibration-notes/:noteId', requireAuth, requireAdminPlan, a
     if (rowCount === 0) return res.status(404).json({ error: 'Calibration note not found' });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1755,7 +1755,7 @@ app.post('/api/admin/calibration/run', requireAuth, requireAdminPlan, async (req
     res.json({ ok: true, runId, proposals });
   } catch (err) {
     console.error('[CalibrationRun] Error:', err.message);
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
@@ -1770,7 +1770,7 @@ app.get('/api/calibration-notes/approved', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 
