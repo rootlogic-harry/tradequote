@@ -34,9 +34,10 @@ function AccordionSection({ title, isOpen, onToggle, children }) {
 export default function ReviewEdit({ state, dispatch, showToast }) {
   const { reviewData, profile } = state;
   const [openSections, setOpenSections] = useState({
-    damage: true,
-    schedule: false,
+    measurements: true,
     costs: false,
+    schedule: false,
+    damage: false,
   });
 
   if (!reviewData) {
@@ -105,62 +106,63 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   };
 
   // Extracted content blocks shared between desktop and mobile
-  const damageContent = (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-heading font-bold text-tq-text mb-2">
-          Damage Description
+  const damageDescriptionContent = (
+    <div>
+      <h3 className="text-lg font-heading font-bold text-tq-text mb-2">
+        Damage Description
+      </h3>
+      <textarea
+        value={damageDescription}
+        onChange={(e) =>
+          dispatch({ type: 'UPDATE_DAMAGE_DESCRIPTION', value: e.target.value })
+        }
+        rows={5}
+        className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-sm text-tq-text focus:outline-none focus:border-tq-accent resize-none"
+      />
+    </div>
+  );
+
+  const measurementsContent = (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-lg font-heading font-bold text-tq-text">
+          Measurements
+          {unconfirmedCount > 0 && (
+            <span className="text-tq-unconfirmed text-sm font-body ml-2">
+              ({unconfirmedCount} to confirm)
+            </span>
+          )}
         </h3>
-        <textarea
-          value={damageDescription}
-          onChange={(e) =>
-            dispatch({ type: 'UPDATE_DAMAGE_DESCRIPTION', value: e.target.value })
-          }
-          rows={5}
-          className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-sm text-tq-text focus:outline-none focus:border-tq-accent resize-none"
-        />
+        {unconfirmedCount > 0 && (
+          <button
+            onClick={() => dispatch({ type: 'CONFIRM_ALL_MEASUREMENTS' })}
+            className="uppercase tracking-wide rounded"
+            style={{
+              fontFamily: 'Barlow Condensed, sans-serif',
+              fontWeight: 700,
+              fontSize: 13,
+              backgroundColor: 'var(--tq-accent)',
+              color: '#ffffff',
+              padding: '10px 16px',
+              borderRadius: 6,
+              minHeight: 44,
+            }}
+          >
+            CONFIRM ALL ({unconfirmedCount})
+          </button>
+        )}
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-lg font-heading font-bold text-tq-text">
-            Measurements
-            {unconfirmedCount > 0 && (
-              <span className="text-tq-unconfirmed text-sm font-body ml-2">
-                ({unconfirmedCount} to confirm)
-              </span>
-            )}
-          </h3>
-          {unconfirmedCount > 0 && (
-            <button
-              onClick={() => dispatch({ type: 'CONFIRM_ALL_MEASUREMENTS' })}
-              className="uppercase tracking-wide rounded"
-              style={{
-                fontFamily: 'Barlow Condensed, sans-serif',
-                fontWeight: 700,
-                fontSize: 11,
-                backgroundColor: 'var(--tq-accent)',
-                color: '#ffffff',
-                padding: '4px 10px',
-                borderRadius: 6,
-              }}
-            >
-              CONFIRM ALL ({unconfirmedCount})
-            </button>
-          )}
-        </div>
-
-        {/* Measurement cards */}
-        <div className="space-y-3">
-          {measurements.map((m) => (
-            <MeasurementRow
-              key={m.id}
-              measurement={m}
-              dispatch={dispatch}
-              variant="card"
-            />
-          ))}
-        </div>
+      {/* Measurement cards */}
+      <div className="space-y-3">
+        {measurements.map((m) => (
+          <MeasurementRow
+            key={m.id}
+            measurement={m}
+            dispatch={dispatch}
+            variant="card"
+          />
+        ))}
       </div>
     </div>
   );
@@ -356,19 +358,45 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
 
       {/* Desktop: three column layout — costs column wider for materials table */}
       <div className="hidden md:grid gap-6" style={{ gridTemplateColumns: '1fr 1fr 1.4fr' }}>
-        <div>{damageContent}</div>
+        <div className="space-y-6">{damageDescriptionContent}{measurementsContent}</div>
         <div>{scheduleContent}</div>
         <div>{costsContent}</div>
       </div>
 
-      {/* Mobile: accordion */}
+      {/* Mobile: accordion — reordered for field usability */}
       <div className="md:hidden space-y-3">
         <AccordionSection
-          title="Damage & Measurements"
-          isOpen={openSections.damage}
-          onToggle={() => toggleSection('damage')}
+          title="Measurements"
+          isOpen={openSections.measurements}
+          onToggle={() => toggleSection('measurements')}
         >
-          {damageContent}
+          {measurementsContent}
+        </AccordionSection>
+
+        {/* Duplicate Generate Quote CTA — mobile only */}
+        <button
+          disabled={!generateEnabled}
+          onClick={() => dispatch({ type: 'GENERATE_QUOTE' })}
+          className="w-full font-heading font-bold uppercase tracking-wide px-6 py-3 rounded text-sm transition-colors"
+          style={{
+            backgroundColor: generateEnabled ? 'var(--tq-accent)' : 'var(--tq-surface)',
+            color: generateEnabled ? '#ffffff' : 'var(--tq-muted)',
+            opacity: generateEnabled ? 1 : 0.6,
+            cursor: generateEnabled ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {generateEnabled
+            ? 'GENERATE QUOTE'
+            : `${unconfirmedCount} UNCONFIRMED`
+          }
+        </button>
+
+        <AccordionSection
+          title="Cost Breakdown"
+          isOpen={openSections.costs}
+          onToggle={() => toggleSection('costs')}
+        >
+          {costsContent}
         </AccordionSection>
 
         <AccordionSection
@@ -380,11 +408,11 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         </AccordionSection>
 
         <AccordionSection
-          title="Cost Breakdown"
-          isOpen={openSections.costs}
-          onToggle={() => toggleSection('costs')}
+          title="Damage Description"
+          isOpen={openSections.damage}
+          onToggle={() => toggleSection('damage')}
         >
-          {costsContent}
+          {damageDescriptionContent}
         </AccordionSection>
       </div>
 
