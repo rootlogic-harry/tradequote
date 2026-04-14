@@ -18,6 +18,7 @@ import StatusModal from './components/StatusModal.jsx';
 import LearningDashboard from './components/LearningDashboard.jsx';
 import AgentActivity from './components/AgentActivity.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
+import OfflineBanner from './components/OfflineBanner.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
 import { SYSTEM_PROMPT } from './components/steps/JobDetails.jsx';
@@ -749,6 +750,7 @@ export default function App() {
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+          <OfflineBanner />
           <SaveErrorBanner
             error={state.quoteSaveError && dismissedSaveError !== state.quoteSaveError ? state.quoteSaveError : null}
             onDismiss={() => setDismissedSaveError(state.quoteSaveError)}
