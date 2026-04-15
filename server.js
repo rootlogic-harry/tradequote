@@ -1033,6 +1033,22 @@ app.post('/api/users/:id/jobs', async (req, res) => {
     const allowed = pickAllowedKeys(req.body);
     const { jobDetails, quotePayload } = allowed;
 
+    const quoteRef = jobDetails?.quoteReference || '';
+
+    // Dedup: if same user + quote_reference was created in last 30 seconds, return existing
+    if (quoteRef) {
+      const { rows: existing } = await pool.query(
+        `SELECT id FROM jobs
+         WHERE user_id = $1 AND quote_reference = $2
+           AND saved_at > NOW() - INTERVAL '30 seconds'
+         ORDER BY saved_at DESC LIMIT 1`,
+        [req.params.id, quoteRef]
+      );
+      if (existing.length > 0) {
+        return res.json({ id: existing[0].id });
+      }
+    }
+
     const id = `sq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const totals = quotePayload?.totals;
 
@@ -1049,7 +1065,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         req.params.id,
         jobDetails?.clientName || '',
         jobDetails?.siteAddress || '',
-        jobDetails?.quoteReference || '',
+        quoteRef,
         jobDetails?.quoteDate || '',
         totals?.total ?? 0,
         JSON.stringify(quoteSnapshot),

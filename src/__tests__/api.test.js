@@ -264,6 +264,37 @@ describe('Jobs', () => {
     expect(typeof jobs[0].totalAmount).toBe('number');
     expect(jobs[0].totalAmount).toBe(3500.50);
   });
+
+  test('server-side dedup: two POSTs with same quoteReference within 30s return same ID', async () => {
+    const state = makeFakeState('Dedup Client');
+    state.jobDetails.quoteReference = 'QT-DEDUP-001';
+    const { data: first } = await api('/api/users/mark/jobs', { method: 'POST', body: state });
+    expect(typeof first.id).toBe('string');
+
+    // Second POST with identical quoteReference — should get back the same job ID
+    const { data: second } = await api('/api/users/mark/jobs', { method: 'POST', body: state });
+    expect(second.id).toBe(first.id);
+
+    // Verify only one job exists in the database
+    const { data: jobs } = await api('/api/users/mark/jobs');
+    const dedupJobs = jobs.filter(j => j.quoteReference === 'QT-DEDUP-001');
+    expect(dedupJobs).toHaveLength(1);
+  });
+
+  test('server-side dedup: different quoteReferences create separate jobs', async () => {
+    const state1 = makeFakeState('Client A');
+    state1.jobDetails.quoteReference = 'QT-UNIQUE-001';
+    const { data: first } = await api('/api/users/mark/jobs', { method: 'POST', body: state1 });
+
+    const state2 = makeFakeState('Client B');
+    state2.jobDetails.quoteReference = 'QT-UNIQUE-002';
+    const { data: second } = await api('/api/users/mark/jobs', { method: 'POST', body: state2 });
+
+    expect(first.id).not.toBe(second.id);
+
+    const { data: jobs } = await api('/api/users/mark/jobs');
+    expect(jobs).toHaveLength(2);
+  });
 });
 
 // --- Job Update (PUT) ---

@@ -2,13 +2,13 @@ import React, { useRef, useState, useEffect } from 'react';
 import QuoteDocument from '../QuoteDocument.jsx';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
-import { saveJob as saveQuote } from '../../utils/userDB.js';
+import { saveJob as saveQuote, updateJob } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false }) {
   const quoteRef = useRef(null);
-  const { profile, jobDetails, reviewData, photos, extraPhotos = [] } = state;
+  const { profile, jobDetails, reviewData, photos = {}, extraPhotos = [] } = state;
 
   // Collect all available photos for appendix (slots + extras)
   const allPhotos = [];
@@ -765,7 +765,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     setSaving(true);
     setSaveError(null);
     try {
-      const id = await saveQuote(state.currentUserId, state);
+      const existingId = savedJobId || state.savedJobId;
+      let id;
+      if (existingId) {
+        // Job already exists — update in place instead of creating a duplicate
+        await updateJob(state.currentUserId, existingId, state);
+        id = existingId;
+      } else {
+        id = await saveQuote(state.currentUserId, state);
+      }
       setSaved(true);
       setSavedJobId(id);
       dispatch({ type: 'QUOTE_SAVED', jobId: id });

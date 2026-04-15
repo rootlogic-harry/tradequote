@@ -406,29 +406,19 @@ describe('saveJob with photo copy', () => {
 
 // --- fetchWithRetry (tested via saveJob/saveDiffs) ---
 
-describe('fetchWithRetry via saveJob', () => {
-  test('saveJob retries on 500 and succeeds on second attempt', async () => {
-    fetchMock
-      .mockReturnValueOnce(mockResponse({ error: 'Temporary failure' }, false, 500))  // 1st attempt: 500
-      .mockReturnValueOnce(mockResponse({ id: 'sq-retry' }))                           // 2nd attempt: success
-      .mockReturnValueOnce(mockResponse({ ok: true }));                                 // copyPhotos
-    const id = await saveJob('mark', makeFakeState('Retry'));
-    expect(id).toBe('sq-retry');
-    // First call is POST /jobs (fail), second is POST /jobs (success), third is photo copy
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-  }, 15000);
-
-  test('saveJob returns last 500 error after all retries exhausted', async () => {
-    fetchMock.mockReturnValue(mockResponse({ error: 'Persistent failure' }, false, 500));
+describe('saveJob (no retry — POST is not retried to prevent duplicates)', () => {
+  test('saveJob fails immediately on 500 (no retry)', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Temporary failure' }, false, 500));
     await expect(saveJob('mark', makeFakeState('Fail')))
-      .rejects.toThrow('Persistent failure');
-  }, 30000);
+      .rejects.toThrow('Temporary failure');
+    // Only one call — no retries for POST
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
   test('saveJob does not retry on 4xx errors', async () => {
     fetchMock.mockReturnValue(mockResponse({ error: 'Bad request' }, false, 400));
     await expect(saveJob('mark', makeFakeState('NoRetry')))
       .rejects.toThrow('Bad request');
-    // Should only be called once — no retries for 4xx
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

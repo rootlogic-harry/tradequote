@@ -277,7 +277,7 @@ export default function App() {
         dispatch({ type: 'QUOTE_SAVE_FAILED', error: err.message });
       }
     })();
-  }, [state.step, state.quotePayload, state.currentUserId, state.savedJobId]);
+  }, [state.step, state.quotePayload, state.currentUserId]);
 
   // Auto-save profile to DB (debounced 3s) whenever profile changes
   // Skip the first change after user load to avoid writing stale/initial profile back to DB

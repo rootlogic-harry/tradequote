@@ -105,7 +105,8 @@ export async function saveJob(userId, state) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const res = await fetchWithRetry(`/api/users/${userId}/jobs`, {
+    // No retry for POST — retrying a create request risks duplicate jobs
+    const res = await fetch(`/api/users/${userId}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(snapshot),

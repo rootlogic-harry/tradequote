@@ -226,6 +226,11 @@ export default function Dashboard({
                   <div className="font-heading font-bold truncate" style={{ color: 'var(--tq-text)' }}>
                     {job.clientName || 'Unnamed client'}
                   </div>
+                  {job.siteAddress && (
+                    <div className="text-sm truncate" style={{ color: 'var(--tq-muted)' }}>
+                      {job.siteAddress}
+                    </div>
+                  )}
                 </div>
                 <div className="ml-4 flex gap-2 flex-shrink-0">
                   <button

@@ -3,7 +3,7 @@ import QuoteOutput from './steps/QuoteOutput.jsx';
 import { loadPhotos } from '../utils/userDB.js';
 
 export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId }) {
-  const { snapshot } = quote;
+  const snapshot = quote?.snapshot || {};
   const [restoredPhotos, setRestoredPhotos] = useState(null);
 
   // Load photos from server on mount
@@ -17,15 +17,17 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
   }, [currentUserId, quote.id]);
 
   // Reconstruct the state shape that QuoteOutput expects
+  // Note: photos are NOT in SAVE_ALLOWLIST, so snapshot.photos is always undefined.
+  // Photos come exclusively from restoredPhotos (loaded from user_photos table).
   const virtualState = {
     step: 5,
-    profile: snapshot.profile,
-    jobDetails: snapshot.jobDetails,
-    photos: restoredPhotos ? { ...snapshot.photos, ...restoredPhotos.photos } : snapshot.photos,
+    profile: snapshot.profile || {},
+    jobDetails: snapshot.jobDetails || {},
+    photos: restoredPhotos?.photos || {},
     extraPhotos: restoredPhotos?.extraPhotos?.length ? restoredPhotos.extraPhotos : (snapshot.extraPhotos || []),
-    reviewData: snapshot.reviewData,
+    reviewData: snapshot.reviewData || null,
     diffs: snapshot.diffs || [],
-    quotePayload: snapshot.quotePayload,
+    quotePayload: snapshot.quotePayload || null,
     quoteSequence: snapshot.quoteSequence,
     aiRawResponse: snapshot.aiRawResponse,
   };
