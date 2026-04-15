@@ -54,11 +54,16 @@ export async function getSetting(userId, key) {
 }
 
 export async function setSetting(userId, key, value) {
-  await fetch(`/api/users/${userId}/settings/${key}`, {
+  const res = await fetch(`/api/users/${userId}/settings/${key}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ value }),
   });
+  if (!res.ok) {
+    let msg = `Setting save failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
 }
 
 // --- Theme ---
@@ -162,7 +167,12 @@ export async function getJob(userId, id) {
 }
 
 export async function deleteJob(userId, id) {
-  await fetch(`/api/users/${userId}/jobs/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/users/${userId}/jobs/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    let msg = `Delete failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
 }
 
 export async function updateJobRams(userId, jobId, ramsSnapshot) {
@@ -172,8 +182,9 @@ export async function updateJobRams(userId, jobId, ramsSnapshot) {
     body: JSON.stringify(ramsSnapshot),
   });
   if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || `Failed to update RAMS for job ${jobId}`);
+    let msg = `Failed to update RAMS for job ${jobId}`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
   }
 }
 
@@ -184,8 +195,9 @@ export async function setRamsNotRequired(userId, jobId, value) {
     body: JSON.stringify({ value }),
   });
   if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || `Failed to update rams-not-required for job ${jobId}`);
+    let msg = `Failed to update rams-not-required for job ${jobId}`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
   }
 }
 

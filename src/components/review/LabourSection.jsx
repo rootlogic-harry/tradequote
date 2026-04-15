@@ -21,7 +21,7 @@ function NumericInput({ value: propValue, onChange, step, className, style }) {
   );
 }
 
-export default function LabourSection({ labourEstimate, dispatch }) {
+export default function LabourSection({ labourEstimate = {}, dispatch }) {
   const { estimatedDays, numberOfWorkers, dayRate, aiEstimatedDays, description } = labourEstimate;
   const labourTotal = (estimatedDays || 0) * (numberOfWorkers || 0) * (dayRate || 0);
 

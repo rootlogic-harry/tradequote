@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function UserSelector({ users, onSelectUser }) {
+export default function UserSelector({ users = [], onSelectUser }) {
   return (
     <div className="min-h-screen bg-tq-bg flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -21,7 +21,7 @@ export default function UserSelector({ users, onSelectUser }) {
               className="bg-tq-surface border border-tq-border rounded-lg p-5 flex items-center gap-4 hover:border-tq-accent hover:bg-tq-card transition-all group"
             >
               <div className="w-12 h-12 rounded-full bg-tq-accent/20 text-tq-accent flex items-center justify-center text-xl font-heading font-bold group-hover:bg-tq-accent group-hover:text-tq-bg transition-colors">
-                {user.name.charAt(0).toUpperCase()}
+                {(user.name || '').charAt(0).toUpperCase()}
               </div>
               <div className="text-left">
                 <div className="text-lg font-heading font-bold text-tq-text">

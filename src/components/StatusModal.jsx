@@ -10,7 +10,8 @@ const DECLINE_REASONS = [
   'Other',
 ];
 
-export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPlan }) {
+export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPlan = false }) {
+  if (!modal) return null;
   const { jobId, targetStatus } = modal;
   const [declineReason, setDeclineReason] = useState(DECLINE_REASONS[0]);
   const [completionFeedback, setCompletionFeedback] = useState('spot_on');

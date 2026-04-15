@@ -202,6 +202,7 @@ function reducerCore(state, action) {
       };
 
     case 'CONFIRM_MEASUREMENT': {
+      if (!state.reviewData) return state;
       const measurements = state.reviewData.measurements.map(m =>
         m.id === action.id
           ? { ...m, value: action.value, confirmed: true }
@@ -220,6 +221,7 @@ function reducerCore(state, action) {
     }
 
     case 'CONFIRM_ALL_MEASUREMENTS': {
+      if (!state.reviewData) return state;
       const measurements = state.reviewData.measurements.map(m =>
         m.confirmed ? m : { ...m, confirmed: true }
       );
@@ -240,6 +242,7 @@ function reducerCore(state, action) {
     }
 
     case 'EDIT_MEASUREMENT': {
+      if (!state.reviewData) return state;
       const measurements = state.reviewData.measurements.map(m =>
         m.id === action.id
           ? { ...m, confirmed: false }
@@ -252,12 +255,14 @@ function reducerCore(state, action) {
     }
 
     case 'UPDATE_MATERIALS':
+      if (!state.reviewData) return state;
       return {
         ...state,
         reviewData: { ...state.reviewData, materials: action.materials },
       };
 
     case 'UPDATE_LABOUR':
+      if (!state.reviewData) return state;
       return {
         ...state,
         reviewData: {
@@ -267,18 +272,21 @@ function reducerCore(state, action) {
       };
 
     case 'UPDATE_ADDITIONAL_COSTS':
+      if (!state.reviewData) return state;
       return {
         ...state,
         reviewData: { ...state.reviewData, additionalCosts: action.additionalCosts },
       };
 
     case 'UPDATE_SCHEDULE':
+      if (!state.reviewData) return state;
       return {
         ...state,
         reviewData: { ...state.reviewData, scheduleOfWorks: action.schedule },
       };
 
     case 'UPDATE_DAMAGE_DESCRIPTION':
+      if (!state.reviewData) return state;
       return {
         ...state,
         reviewData: { ...state.reviewData, damageDescription: action.value },
@@ -301,14 +309,16 @@ function reducerCore(state, action) {
       };
 
     case 'UPDATE_NOTES':
+      if (!state.reviewData) return state;
       return {
         ...state,
         reviewData: { ...state.reviewData, notes: action.notes },
       };
 
     case 'GENERATE_QUOTE': {
+      if (!state.reviewData) return state;
       // Generate labour diff
-      const labour = state.reviewData.labourEstimate;
+      const labour = state.reviewData.labourEstimate || {};
       const extraDiffs = [];
       if (labour.aiEstimatedDays != null) {
         extraDiffs.push(buildDiff('labour_days', 'Estimated Days', labour.aiEstimatedDays, labour.estimatedDays));
@@ -379,12 +389,23 @@ function reducerCore(state, action) {
         savedJobId: null,
         quoteSaveError: null,
         critiqueNotes: null,
+        quoteSaveErrorKey: 0,
+        retryCount: 0,
+        rams: null,
       };
     }
 
     case 'RESTORE_DRAFT': {
       // Restore job data from draft but preserve current profile (DB is source of truth)
-      const { profile: _draftProfile, ...draftData } = action.draft;
+      // Also protect auth-critical fields from being overwritten by untrusted draft data
+      const {
+        profile: _draftProfile,
+        currentUserId: _draftUserId,
+        currentUser: _draftUser,
+        allUsers: _draftAllUsers,
+        initComplete: _draftInit,
+        ...draftData
+      } = action.draft;
       return {
         ...state,
         ...draftData,
@@ -449,12 +470,14 @@ function reducerCore(state, action) {
     }
 
     case 'UPDATE_RAMS':
+      if (!state.rams) return state;
       return {
         ...state,
         rams: { ...state.rams, ...action.updates },
       };
 
     case 'SET_RAMS_WORK_TYPES': {
+      if (!state.rams) return state;
       const workTypes = action.workTypes;
       const workStages = [];
       workTypes.forEach(wt => {
@@ -470,6 +493,7 @@ function reducerCore(state, action) {
     }
 
     case 'ADD_RAMS_RISK': {
+      if (!state.rams) return state;
       return {
         ...state,
         rams: {
@@ -480,6 +504,7 @@ function reducerCore(state, action) {
     }
 
     case 'UPDATE_RAMS_RISK': {
+      if (!state.rams) return state;
       const riskAssessments = state.rams.riskAssessments.map(ra =>
         ra.id === action.id
           ? {
@@ -499,6 +524,7 @@ function reducerCore(state, action) {
     }
 
     case 'REMOVE_RAMS_RISK': {
+      if (!state.rams) return state;
       return {
         ...state,
         rams: {

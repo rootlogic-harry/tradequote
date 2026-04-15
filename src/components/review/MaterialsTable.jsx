@@ -19,7 +19,7 @@ function BlurNumberInput({ value: propValue, onCommit, className }) {
   );
 }
 
-export default function MaterialsTable({ materials, dispatch }) {
+export default function MaterialsTable({ materials = [], dispatch }) {
   const updateMaterial = (index, field, value) => {
     const updated = materials.map((m, i) => {
       if (i !== index) return m;

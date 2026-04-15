@@ -4,7 +4,7 @@ import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 
 export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp }) {
-  const { profile, jobDetails, reviewData, photos } = state;
+  const { profile, jobDetails, reviewData, photos = {} } = state;
 
   if (!reviewData) return null;
 

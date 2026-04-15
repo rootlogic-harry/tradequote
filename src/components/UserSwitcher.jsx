@@ -15,7 +15,7 @@ export default function UserSwitcher({ currentUser, allUsers, onSwitchUser, onSe
 
   if (!currentUser) return null;
 
-  const otherUsers = allUsers.filter(u => u.id !== currentUser.id);
+  const otherUsers = (allUsers || []).filter(u => u.id !== currentUser.id);
 
   return (
     <div className="relative" ref={ref}>
@@ -28,7 +28,7 @@ export default function UserSwitcher({ currentUser, allUsers, onSwitchUser, onSe
           className="rounded-full flex items-center justify-center font-bold shrink-0"
           style={{ width: 28, height: 28, fontSize: 12, backgroundColor: 'var(--tq-accent)', color: 'var(--tq-nav-bg)' }}
         >
-          {currentUser.name.charAt(0).toUpperCase()}
+          {(currentUser.name || '').charAt(0).toUpperCase()}
         </span>
         <span className="hidden sm:inline" style={{ color: 'var(--tq-nav-text)', fontSize: 13 }}>{currentUser.name}</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ color: 'var(--tq-nav-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}>
@@ -58,7 +58,7 @@ export default function UserSwitcher({ currentUser, allUsers, onSwitchUser, onSe
                   style={{ color: 'var(--tq-text)' }}
                 >
                   <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0" style={{ backgroundColor: 'var(--tq-accent)', opacity: 0.3, color: 'var(--tq-nav-bg)' }}>
-                    {user.name.charAt(0).toUpperCase()}
+                    {(user.name || '').charAt(0).toUpperCase()}
                   </span>
                   {user.name}
                 </button>

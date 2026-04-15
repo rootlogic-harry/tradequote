@@ -18,6 +18,16 @@ const app = express();
 app.set('trust proxy', 1); // trust first proxy (Railway)
 app.use(express.json({ limit: '50mb' }));
 
+// --- Security Headers ---
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0'); // modern browsers — CSP replaces this
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 // --- Postgres Pool ---
 
 const pool = new pg.Pool({
@@ -370,7 +380,8 @@ app.get('/auth/google/callback',
 app.get('/auth/logout', (req, res, next) => {
   req.logout((err) => {
     if (err) return next(err);
-    req.session.destroy(() => {
+    req.session.destroy((destroyErr) => {
+      if (destroyErr) console.error('[Logout] Session destroy error:', destroyErr.message);
       res.clearCookie('tq_session');
       res.redirect('/login');
     });
@@ -825,7 +836,7 @@ app.use('/api/users/:id', requireAuth, requireOwner);
 
 // --- User Registry Routes ---
 
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id, name, created_at AS "createdAt" FROM users ORDER BY name'
@@ -849,9 +860,9 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', requireAuth, async (req, res) => {
   try {
-    const { id, name } = req.body;
+    const { id, name } = req.body || {};
     if (!id || !name) return res.status(400).json({ error: 'id and name required' });
     await pool.query(
       'INSERT INTO users (id, name) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET name = $2',
@@ -917,6 +928,9 @@ app.get('/api/users/:id/settings/:key', async (req, res) => {
 
 app.put('/api/users/:id/settings/:key', async (req, res) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Request body is required' });
+    }
     await pool.query(
       `INSERT INTO settings (user_id, key, value) VALUES ($1, $2, $3)
        ON CONFLICT (user_id, key) DO UPDATE SET value = $3`,
@@ -980,20 +994,14 @@ app.get('/api/users/:id/quote-sequence', async (req, res) => {
 
 app.post('/api/users/:id/quote-sequence/increment', async (req, res) => {
   try {
-    // Get current value
+    // Atomic increment: INSERT or UPDATE in a single statement to avoid race conditions
     const { rows } = await pool.query(
-      "SELECT value FROM settings WHERE user_id = $1 AND key = 'quoteSequence'",
+      `INSERT INTO settings (user_id, key, value) VALUES ($1, 'quoteSequence', to_jsonb(2))
+       ON CONFLICT (user_id, key) DO UPDATE SET value = to_jsonb((settings.value::int) + 1)
+       RETURNING value`,
       [req.params.id]
     );
-    const current = (rows.length > 0 && rows[0].value) || 1;
-    const next = current + 1;
-
-    await pool.query(
-      `INSERT INTO settings (user_id, key, value) VALUES ($1, 'quoteSequence', $2)
-       ON CONFLICT (user_id, key) DO UPDATE SET value = $2`,
-      [req.params.id, JSON.stringify(next)]
-    );
-    res.json(next);
+    res.json(rows[0].value);
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
   }
@@ -1186,16 +1194,35 @@ app.put('/api/users/:id/jobs/:jobId/rams-not-required', requireAdminPlan, async 
 
 app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Request body is required' });
+    }
     const { status, sentAt, expiresAt, acceptedAt, declinedAt, declineReason, completionFeedback } = req.body;
     if (!['sent', 'accepted', 'declined', 'completed'].includes(status)) {
       return res.status(400).json({ error: `Invalid status: ${status}. Must be sent, accepted, declined, or completed.` });
     }
     const { rows } = await pool.query(
-      'SELECT id FROM jobs WHERE id = $1 AND user_id = $2',
+      'SELECT id, status AS current_status FROM jobs WHERE id = $1 AND user_id = $2',
       [req.params.jobId, req.params.id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: `Job ${req.params.jobId} not found` });
+    }
+
+    // Validate status transitions — prevent nonsensical backward transitions
+    const VALID_TRANSITIONS = {
+      draft:     ['sent', 'accepted', 'declined', 'completed'],
+      sent:      ['accepted', 'declined', 'completed'],
+      accepted:  ['completed'],
+      declined:  ['sent'],          // allow re-sending a declined quote
+      completed: [],                // terminal state
+    };
+    const currentStatus = rows[0].current_status || 'draft';
+    const allowed = VALID_TRANSITIONS[currentStatus] || [];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition from '${currentStatus}' to '${status}'.`,
+      });
     }
     await pool.query(
       `UPDATE jobs SET status = $1, sent_at = $2, expires_at = $3,
@@ -1289,6 +1316,12 @@ app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
       );
       let inserted = 0;
       for (const d of diffs) {
+        if (!d.fieldType || !d.fieldLabel || d.aiValue == null || d.confirmedValue == null) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Each diff must have fieldType, fieldLabel, aiValue, and confirmedValue',
+          });
+        }
         await client.query(
           `INSERT INTO quote_diffs (
             job_id, user_id, field_type, field_label,
@@ -1587,22 +1620,33 @@ app.delete('/api/users/:id/photos/:context/:slot', async (req, res) => {
 
 app.post('/api/users/:id/photos/copy', async (req, res) => {
   try {
-    const { fromContext, toContext } = req.body;
+    const { fromContext, toContext } = req.body || {};
     if (!fromContext || !toContext) {
       return res.status(400).json({ error: 'fromContext and toContext required' });
     }
-    // Delete existing target photos first
-    await pool.query(
-      'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
-      [req.params.id, toContext]
-    );
-    // Copy from source to target
-    await pool.query(
-      `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
-       SELECT user_id, $2, slot, data, label, name, NOW()
-       FROM user_photos WHERE user_id = $1 AND context = $3`,
-      [req.params.id, toContext, fromContext]
-    );
+    // Use transaction to prevent partial state if crash between DELETE and INSERT
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Delete existing target photos first
+      await client.query(
+        'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
+        [req.params.id, toContext]
+      );
+      // Copy from source to target
+      await client.query(
+        `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
+         SELECT user_id, $2, slot, data, label, name, NOW()
+         FROM user_photos WHERE user_id = $1 AND context = $3`,
+        [req.params.id, toContext, fromContext]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
     res.json({ ok: true });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
@@ -1614,13 +1658,24 @@ app.post('/api/users/:id/photos/copy', async (req, res) => {
 app.delete('/api/users/:id/data', async (req, res) => {
   try {
     const userId = req.params.id;
-    // CASCADE handles profiles, settings, jobs, drafts, user_photos, quote_diffs
-    await pool.query('DELETE FROM quote_diffs WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM user_photos WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM drafts WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM jobs WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM settings WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM profiles WHERE user_id = $1', [userId]);
+    // Use transaction to ensure all-or-nothing GDPR data deletion
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM agent_runs WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM quote_diffs WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM user_photos WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM drafts WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM jobs WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM settings WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM profiles WHERE user_id = $1', [userId]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
     res.json({ ok: true });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
@@ -1630,13 +1685,14 @@ app.delete('/api/users/:id/data', async (req, res) => {
 app.get('/api/users/:id/export', async (req, res) => {
   try {
     const userId = req.params.id;
-    const [profileRes, settingsRes, jobsRes, draftsRes, photosRes, diffsRes] = await Promise.all([
+    const [profileRes, settingsRes, jobsRes, draftsRes, photosRes, diffsRes, agentRunsRes] = await Promise.all([
       pool.query('SELECT data FROM profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT key, value FROM settings WHERE user_id = $1', [userId]),
       pool.query('SELECT quote_snapshot AS "quoteSnapshot", rams_snapshot AS "ramsSnapshot", saved_at AS "savedAt", client_name AS "clientName" FROM jobs WHERE user_id = $1', [userId]),
       pool.query('SELECT data FROM drafts WHERE user_id = $1', [userId]),
       pool.query('SELECT context, slot, label, name, updated_at AS "updatedAt" FROM user_photos WHERE user_id = $1', [userId]),
       pool.query('SELECT field_type, field_label, ai_value, confirmed_value, was_edited, edit_magnitude, created_at FROM quote_diffs WHERE user_id = $1', [userId]),
+      pool.query('SELECT agent_type, status, input_summary, output_summary, model, duration_ms, created_at FROM agent_runs WHERE user_id = $1', [userId]),
     ]);
 
     res.json({
@@ -1648,6 +1704,7 @@ app.get('/api/users/:id/export', async (req, res) => {
       drafts: draftsRes.rows.map(r => r.data),
       photos: photosRes.rows,
       diffs: diffsRes.rows,
+      agentRuns: agentRunsRes.rows,
     });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
@@ -1700,11 +1757,13 @@ function makeAnthropicRequest(body, apiKey) {
 const aiRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,
-  keyGenerator: (req) => req.user?.id ?? req.ip,
+  // requireAuth runs before this middleware, so req.user is always set
+  keyGenerator: (req) => req.user?.id || 'anonymous',
   message: { error: 'Too many analyses. Please wait before trying again.' },
+  validate: { xForwardedForHeader: false, default: true },
 });
 
-app.post('/api/anthropic/messages', aiRateLimit, async (req, res) => {
+app.post('/api/anthropic/messages', requireAuth, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
@@ -1742,7 +1801,7 @@ app.post('/api/anthropic/messages', aiRateLimit, async (req, res) => {
       }
       console.error('Anthropic proxy error after all retries:', err.message);
       if (!res.headersSent) {
-        res.status(502).json({ error: `Anthropic proxy error: ${err.message}` });
+        res.status(502).json({ error: 'Analysis service temporarily unavailable. Please try again.' });
       }
       return;
     }
@@ -1819,11 +1878,12 @@ app.put('/api/admin/calibration-notes/:noteId', requireAuth, requireAdminPlan, a
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Status must be approved or rejected' });
     }
+    const approvedAt = status === 'approved' ? new Date() : null;
     const { rowCount } = await pool.query(
       `UPDATE calibration_notes
-       SET status = $1, approved_by = $2, approved_at = ${status === 'approved' ? 'NOW()' : 'NULL'}
-       WHERE id = $3`,
-      [status, req.user.id, req.params.noteId]
+       SET status = $1, approved_by = $2, approved_at = $3
+       WHERE id = $4`,
+      [status, req.user.id, approvedAt, req.params.noteId]
     );
     if (rowCount === 0) return res.status(404).json({ error: 'Calibration note not found' });
     res.json({ ok: true });
@@ -1846,8 +1906,8 @@ app.post('/api/admin/calibration/run', requireAuth, requireAdminPlan, async (req
   }
 });
 
-// Public endpoint: approved calibration notes for system prompt assembly
-app.get('/api/calibration-notes/approved', async (req, res) => {
+// Approved calibration notes for system prompt assembly
+app.get('/api/calibration-notes/approved', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT field_type, field_label, note, evidence, approved_at
@@ -1953,8 +2013,7 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
       promptVersion,
     });
   } catch (err) {
-    console.error('[Analyse] Error:', err.message);
-    res.status(502).json({ error: `Analysis error: ${err.message}` });
+    safeError(res, err, `${req.method} ${req.path}`);
   }
 });
 

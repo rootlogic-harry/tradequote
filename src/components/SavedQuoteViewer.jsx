@@ -8,7 +8,7 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
 
   // Load photos from server on mount
   useEffect(() => {
-    if (!currentUserId || !quote.id) return;
+    if (!currentUserId || !quote?.id) return;
     loadPhotos(currentUserId, quote.id).then(({ photos, extraPhotos }) => {
       if (Object.keys(photos).length > 0 || extraPhotos.length > 0) {
         setRestoredPhotos({ photos, extraPhotos });

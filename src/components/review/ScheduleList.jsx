@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ScheduleList({ scheduleOfWorks, dispatch }) {
+export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
   const updateStep = (index, field, value) => {
     const updated = scheduleOfWorks.map((s, i) =>
       i === index ? { ...s, [field]: value } : s

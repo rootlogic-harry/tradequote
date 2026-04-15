@@ -21,7 +21,7 @@ export default function StepIndicator({
   onGoToAgents,
   quoteMode,
   onLogout,
-  isAdminPlan,
+  isAdminPlan = false,
 }) {
   const isEditor = currentView === 'editor';
   const isRams = currentView === 'rams';

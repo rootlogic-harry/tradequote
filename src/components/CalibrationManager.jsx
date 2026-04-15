@@ -12,7 +12,7 @@ export default function CalibrationManager() {
     try {
       const res = await fetch(`/api/admin/calibration-notes?status=${filter}`);
       const data = await res.json();
-      setNotes(data);
+      setNotes(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch calibration notes:', err);
     } finally {

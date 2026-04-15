@@ -170,7 +170,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         }
       }
 
-      const clientClean = jobDetails.clientName.replace(/[^a-zA-Z0-9]/g, '-');
+      const clientClean = (jobDetails.clientName || '').replace(/[^a-zA-Z0-9]/g, '-');
       pdf.save(`Quote-${jobDetails.quoteReference}-${clientClean}.pdf`);
       showToast?.('PDF downloaded', 'success');
     } catch (err) {
@@ -705,7 +705,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       });
 
       const blob = await Packer.toBlob(doc);
-      const clientClean = jobDetails.clientName.replace(/[^a-zA-Z0-9]/g, '-');
+      const clientClean = (jobDetails.clientName || '').replace(/[^a-zA-Z0-9]/g, '-');
       const filename = `Quote-${jobDetails.quoteReference}-${clientClean}.docx`;
 
       const url = URL.createObjectURL(blob);

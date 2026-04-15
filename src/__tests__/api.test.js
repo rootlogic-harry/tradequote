@@ -48,11 +48,19 @@ async function api(path, opts = {}) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
   }
-  // Auto-inject test auth header for any /api/users/:id(/...) route so the
+  // Auto-inject test auth header for protected routes so the
   // requireAuth + requireOwner middleware bypass kicks in under NODE_ENV=test.
   const userIdMatch = path.match(/^\/api\/users\/([^/?#]+)/);
   if (userIdMatch && !options.headers['x-test-user-id']) {
     options.headers['x-test-user-id'] = decodeURIComponent(userIdMatch[1]);
+    if (!options.headers['x-test-plan']) {
+      options.headers['x-test-plan'] = 'admin';
+    }
+  }
+  // Also inject auth for routes that now require requireAuth but have no :id
+  const needsAuth = /^\/(api\/users$|api\/anthropic|api\/admin|api\/calibration-notes)/.test(path);
+  if (needsAuth && !options.headers['x-test-user-id']) {
+    options.headers['x-test-user-id'] = 'test-admin';
     if (!options.headers['x-test-plan']) {
       options.headers['x-test-plan'] = 'admin';
     }
@@ -1059,10 +1067,14 @@ describe('Landing Page', () => {
 // --- Rate Limiting (4.4) ---
 
 describe('Rate Limiting', () => {
-  test('POST /api/anthropic/messages returns rate limit headers', async () => {
+  test('POST /api/anthropic/messages returns rate limit headers (with auth)', async () => {
     const res = await fetch(`${baseUrl}/api/anthropic/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-user-id': 'test-admin',
+        'x-test-plan': 'admin',
+      },
       body: JSON.stringify({ model: 'test', messages: [] }),
     });
     // The rate limiter adds these headers regardless of outcome
@@ -1070,16 +1082,29 @@ describe('Rate Limiting', () => {
     expect(limitHeader).toBeDefined();
   });
 
-  test('POST /api/anthropic/messages returns 500 when no API key set', async () => {
+  test('POST /api/anthropic/messages returns 500 when no API key set (with auth)', async () => {
     const res = await fetch(`${baseUrl}/api/anthropic/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-user-id': 'test-admin',
+        'x-test-plan': 'admin',
+      },
       body: JSON.stringify({ model: 'test', messages: [] }),
     });
     // No ANTHROPIC_API_KEY in test env — should return 500
     expect(res.status).toBe(500);
     const data = await res.json();
     expect(data.error).toContain('ANTHROPIC_API_KEY');
+  });
+
+  test('POST /api/anthropic/messages returns 401 without auth', async () => {
+    const res = await fetch(`${baseUrl}/api/anthropic/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'test', messages: [] }),
+    });
+    expect(res.status).toBe(401);
   });
 });
 

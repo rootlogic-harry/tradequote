@@ -32,7 +32,7 @@ export default function LearningDashboard({ currentUserId }) {
     );
   }
 
-  const { fieldBias, weeklyTrend, refCardImpact, userAccuracy } = data;
+  const { fieldBias = [], weeklyTrend = [], refCardImpact = [], userAccuracy = [] } = data || {};
 
   return (
     <div className="max-w-5xl mx-auto">

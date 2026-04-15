@@ -65,7 +65,7 @@ export default function AgentActivity() {
       if (typeFilter) params.set('type', typeFilter);
       const res = await fetch(`/api/admin/agent-runs?${params}`);
       const data = await res.json();
-      setRuns(data);
+      setRuns(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch agent runs:', err);
     } finally {
