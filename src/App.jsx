@@ -609,8 +609,18 @@ export default function App() {
       return <AgentActivity />;
     }
 
-    // Dashboard view
+    // Dashboard view — if a quote is selected, show it directly (no detour through "View All")
     if (currentView === 'dashboard') {
+      if (viewingQuote) {
+        return (
+          <SavedQuoteViewer
+            quote={viewingQuote}
+            onBack={() => setViewingQuote(null)}
+            onEditQuote={handleEditQuote}
+            currentUserId={state.currentUserId}
+          />
+        );
+      }
       return (
         <Dashboard
           userName={state.currentUser?.name}
