@@ -211,7 +211,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 524 tests across 24 suites (includes 3 plan regression tests).
+**Current count:** 889 tests across 34 suites (745 unit + 85 API integration + 59 security).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -235,6 +235,15 @@ Test files live in `src/__tests__/`. Key test suites:
 - `promptVersion.test.js` — prompt version hashing
 - `serverPrompt.test.js` — server-side system prompt validation
 - `promptRemoval.test.js` — confirms prompt removed from client
+- `savedQuoteViewer.test.js` — null-safe snapshot and photos crash resilience
+- `quoteSave.test.js` — quote duplication prevention (no POST retry, dedup, save-vs-update)
+- `dashboard.test.js` — site address in Needs Attention cards
+- `bugfixBehavioral.test.js` — behavioral tests for bug fix round-trips
+- `serverResilience.test.js` — server race conditions, transactions, validation, auth coverage
+- `reducerResilience.test.js` — null guard safety, reset completeness, draft isolation, aiValue immutability
+- `dataIntegrity.test.js` — save/load pipeline, allowlist consistency, GDPR, type coercion
+- `componentCrashSafety.test.js` — null-safety across all 42 components
+- `securityAudit.test.js` — auth bypass, IDOR, privilege escalation, headers (requires DATABASE_URL)
 
 ---
 
