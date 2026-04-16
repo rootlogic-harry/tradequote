@@ -36,6 +36,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
   const fileInputRefs = useRef({});
   const [dragOverSlot, setDragOverSlot] = useState(null); // key of slot being dragged over
   const [dragOverExtra, setDragOverExtra] = useState(false); // extra photos drop zone
+  const [uploadingSlot, setUploadingSlot] = useState(null); // which slot is processing
 
   const { jobDetails, photos, extraPhotos, profile } = state;
 
@@ -46,14 +47,26 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
   const handlePhotoUpload = async (slotKey, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await resizeImage(file);
-    dispatch({
-      type: 'SET_PHOTO',
-      slot: slotKey,
-      photo: { data: dataUrl, name: file.name },
-    });
-    if (state.currentUserId) {
-      savePhoto(state.currentUserId, 'draft', slotKey, { data: dataUrl, name: file.name });
+    // Warn on very large files (>15MB raw)
+    if (file.size > 15 * 1024 * 1024) {
+      showToast?.('Photo is very large. It will be compressed automatically.', 'info');
+    }
+    setUploadingSlot(slotKey);
+    try {
+      const dataUrl = await resizeImage(file);
+      dispatch({
+        type: 'SET_PHOTO',
+        slot: slotKey,
+        photo: { data: dataUrl, name: file.name },
+      });
+      if (state.currentUserId) {
+        savePhoto(state.currentUserId, 'draft', slotKey, { data: dataUrl, name: file.name });
+      }
+    } catch (err) {
+      console.error('Photo processing failed:', err);
+      showToast?.('Could not process this photo. Try a different image.', 'error');
+    } finally {
+      setUploadingSlot(null);
     }
   };
 
@@ -132,7 +145,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
 
   const hasAnyPhoto = Object.values(photos).some(p => p != null) || extraPhotos.length > 0;
   const canAnalyse =
-    hasAnyPhoto && jobDetails.siteAddress?.trim();
+    hasAnyPhoto && jobDetails.siteAddress?.trim() && !state.isAnalysing;
 
   // Count missing required photos for CTA label
   const filledCount = Object.values(photos).filter(p => p != null).length + extraPhotos.length;
@@ -158,6 +171,10 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             Client Name *
           </label>
           <input
+            type="text"
+            autoComplete="off"
+            enterKeyHint="next"
+            placeholder="e.g. Yorkshire Estates"
             className={inputClass('clientName')}
             value={jobDetails.clientName}
             onChange={(e) => updateJob('clientName', e.target.value)}
@@ -170,6 +187,10 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             Quote Reference
           </label>
           <input
+            type="text"
+            autoComplete="off"
+            enterKeyHint="next"
+            placeholder="Auto-generated if left blank"
             className={inputClass('quoteReference')}
             value={jobDetails.quoteReference}
             onChange={(e) => updateJob('quoteReference', e.target.value)}
@@ -181,10 +202,18 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             Site Address *
           </label>
           <textarea
+            autoComplete="street-address"
+            enterKeyHint="next"
+            placeholder="e.g. Malham Cove, Skipton BD23 4DA"
             className={inputClass('siteAddress')}
             rows={2}
             value={jobDetails.siteAddress}
-            onChange={(e) => updateJob('siteAddress', e.target.value)}
+            onChange={(e) => {
+              updateJob('siteAddress', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            style={{ overflow: 'hidden', resize: 'none' }}
           />
           {errors.siteAddress && <p className="text-tq-error text-xs mt-1">{errors.siteAddress}</p>}
         </div>
@@ -209,7 +238,12 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             className={inputClass('briefNotes')}
             rows={2}
             value={jobDetails.briefNotes}
-            onChange={(e) => updateJob('briefNotes', e.target.value)}
+            onChange={(e) => {
+              updateJob('briefNotes', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            style={{ overflow: 'hidden', resize: 'none' }}
             placeholder="Anything we should know — e.g. wall is on a slope, needs through stones replacing..."
           />
         </div>
@@ -314,9 +348,14 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
                 )}
               </div>
 
-              {/* Card body: drop zone or image */}
+              {/* Card body: drop zone, loading, or image */}
               <div className="p-3">
-                {photo ? (
+                {uploadingSlot === slot.key ? (
+                  <div className="flex flex-col items-center justify-center" style={{ minHeight: 110 }}>
+                    <div className="w-8 h-8 border-3 border-tq-accent border-t-transparent rounded-full animate-spin mb-2" />
+                    <span className="text-xs" style={{ color: 'var(--tq-muted)' }}>Processing photo...</span>
+                  </div>
+                ) : photo ? (
                   <div className="relative">
                     <img
                       src={photo.data}
@@ -348,10 +387,13 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
                     }}
                   >
                     <span className="text-2xl mb-1 opacity-30">📷</span>
-                    <span className="text-xs" style={{ color: 'var(--tq-muted)' }}>Click or drop photo</span>
+                    <span className="text-xs text-center px-2" style={{ color: 'var(--tq-muted)' }}>
+                      {slot.instruction || 'Tap to take photo or choose from gallery'}
+                    </span>
                     <input
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       className="hidden"
                       onChange={(e) => handlePhotoUpload(slot.key, e)}
                     />
@@ -402,11 +444,12 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
-          <label className="inline-flex items-center gap-2 text-sm text-tq-accent cursor-pointer hover:text-tq-accent-dark">
+          <label className="inline-flex items-center gap-2 text-sm text-tq-accent cursor-pointer hover:text-tq-accent-dark" style={{ minHeight: 44, padding: '8px 0' }}>
             + Add more photos ({extraPhotos.length}/10) — or drop here
             <input
               type="file"
               accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={handleExtraPhoto}
             />
@@ -492,13 +535,16 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
             color: canAnalyse ? '#ffffff' : 'var(--tq-muted)',
             opacity: canAnalyse ? 1 : 0.45,
             cursor: canAnalyse ? 'pointer' : 'not-allowed',
+            minHeight: 48,
           }}
         >
           {state.reviewData
-            ? 'RE-ANALYSE JOB'
+            ? 'RE-GENERATE QUOTE'
             : canAnalyse
-              ? 'ANALYSE JOB'
-              : `ANALYSE JOB — ${neededPhotos > 0 ? `${neededPhotos} PHOTO${neededPhotos !== 1 ? 'S' : ''} NEEDED` : 'ADD SITE ADDRESS'}`
+              ? 'GENERATE QUOTE'
+              : neededPhotos > 0
+                ? `ADD ${neededPhotos} PHOTO${neededPhotos !== 1 ? 'S' : ''} TO CONTINUE`
+                : 'ADD SITE ADDRESS TO CONTINUE'
           }
         </button>
       </div>

@@ -56,6 +56,10 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             Company Name
           </label>
           <input
+            type="text"
+            autoComplete="organization"
+            enterKeyHint="next"
+            placeholder="e.g. Doyle Stone Works"
             className={inputClass('companyName')}
             value={profile.companyName}
             onChange={(e) => update('companyName', e.target.value)}
@@ -68,6 +72,10 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             Full Name *
           </label>
           <input
+            type="text"
+            autoComplete="name"
+            enterKeyHint="next"
+            placeholder="e.g. Mark Doyle"
             className={inputClass('fullName')}
             value={profile.fullName}
             onChange={(e) => update('fullName', e.target.value)}
@@ -80,6 +88,11 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             Phone *
           </label>
           <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            enterKeyHint="next"
+            placeholder="e.g. 07700 900123"
             className={inputClass('phone')}
             value={profile.phone}
             onChange={(e) => update('phone', e.target.value)}
@@ -93,6 +106,10 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
           </label>
           <input
             type="email"
+            inputMode="email"
+            autoComplete="email"
+            enterKeyHint="next"
+            placeholder="e.g. mark@doylestone.co.uk"
             className={inputClass('email')}
             value={profile.email}
             onChange={(e) => update('email', e.target.value)}
@@ -105,10 +122,17 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             Business Address *
           </label>
           <textarea
+            autoComplete="street-address"
+            placeholder="e.g. 12 High Street, Skipton, BD23 1JD"
             className={inputClass('address')}
             rows={2}
             value={profile.address}
-            onChange={(e) => update('address', e.target.value)}
+            onChange={(e) => {
+              update('address', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            style={{ overflow: 'hidden', resize: 'none' }}
           />
           {errors.address && <p className="text-tq-error text-xs mt-1">{errors.address}</p>}
         </div>
@@ -132,10 +156,13 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Day Rate (£) *
+            Day Rate ({'\u00A3'}) *
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
+            enterKeyHint="done"
+            placeholder="e.g. 400"
             className={inputClass('dayRate')}
             value={profile.dayRate}
             onChange={(e) => update('dayRate', parseFloat(e.target.value) || 0)}
@@ -143,13 +170,13 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
           {errors.dayRate && <p className="text-tq-error text-xs mt-1">{errors.dayRate}</p>}
         </div>
 
-        <div className="sm:col-span-2 flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer">
+        <div className="sm:col-span-2 flex items-center gap-3" style={{ minHeight: 44 }}>
+          <label className="flex items-center gap-2 cursor-pointer" style={{ minHeight: 44 }}>
             <input
               type="checkbox"
               checked={profile.vatRegistered}
               onChange={(e) => update('vatRegistered', e.target.checked)}
-              className="w-4 h-4 accent-tq-accent"
+              className="w-5 h-5 accent-tq-accent"
             />
             <span className="text-sm text-tq-text">VAT Registered</span>
           </label>
@@ -161,6 +188,10 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
               VAT Number *
             </label>
             <input
+              type="text"
+              autoComplete="off"
+              enterKeyHint="done"
+              placeholder="e.g. GB123456789"
               className={inputClass('vatNumber')}
               value={profile.vatNumber}
               onChange={(e) => update('vatNumber', e.target.value)}
@@ -174,6 +205,9 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             Accreditations
           </label>
           <input
+            type="text"
+            autoComplete="off"
+            enterKeyHint="done"
             className={inputClass('accreditations')}
             value={profile.accreditations}
             onChange={(e) => update('accreditations', e.target.value)}
@@ -181,13 +215,13 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
           />
         </div>
 
-        <div className="sm:col-span-2 flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer">
+        <div className="sm:col-span-2 flex items-center gap-3" style={{ minHeight: 44 }}>
+          <label className="flex items-center gap-2 cursor-pointer" style={{ minHeight: 44 }}>
             <input
               type="checkbox"
               checked={profile.showNotesOnQuote !== false}
               onChange={(e) => update('showNotesOnQuote', e.target.checked)}
-              className="w-4 h-4 accent-tq-accent"
+              className="w-5 h-5 accent-tq-accent"
             />
             <span className="text-sm text-tq-text">Show Notes & Conditions on quotes</span>
           </label>

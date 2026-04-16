@@ -14,6 +14,8 @@ function formatDateSimple(iso) {
 
 export default function RamsOutput({ rams, profile, dispatch, showToast, onBackToEditor, jobId, currentUserId }) {
   const ramsRef = useRef(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [generatingDocx, setGeneratingDocx] = useState(false);
 
   // Photo selection & reorder
   const allPhotos = rams.photos || [];
@@ -45,6 +47,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
     const element = ramsRef.current;
     if (!element) return;
 
+    setGeneratingPDF(true);
     try {
       const canvas = await window.html2canvas(element, {
         scale: 2,
@@ -114,10 +117,13 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
     } catch (err) {
       console.error('RAMS PDF generation failed:', err);
       showToast?.('PDF generation failed. Please try again.', 'error');
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
   const handleDownloadDocx = async () => {
+    setGeneratingDocx(true);
     try {
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
               WidthType, AlignmentType, BorderStyle, ImageRun,
@@ -386,6 +392,8 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
     } catch (err) {
       console.error('RAMS Word export failed:', err);
       showToast?.('Word export failed. Please try again.', 'error');
+    } finally {
+      setGeneratingDocx(false);
     }
   };
 
@@ -421,15 +429,17 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
       <div className="flex flex-wrap gap-3 mb-6">
         <button
           onClick={handleDownloadPDF}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          disabled={generatingPDF}
+          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          Download PDF
+          {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
         </button>
         <button
           onClick={handleDownloadDocx}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+          disabled={generatingDocx}
+          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          Download Word
+          {generatingDocx ? 'Generating Word...' : 'Download Word'}
         </button>
         {jobId && (
           <button

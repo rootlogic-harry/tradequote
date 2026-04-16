@@ -5,11 +5,13 @@ import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
 
 const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
 
-export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isAdminPlan = false }) {
+export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isAdminPlan = false, showToast }) {
   const [localQuotes, setLocalQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Use recentJobs from reducer if available, otherwise fetch locally
   const quotes = recentJobs.length > 0 ? recentJobs : localQuotes;
@@ -17,11 +19,18 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
   useEffect(() => {
     if (recentJobs.length > 0) {
       setLoading(false);
+      setLoadError(null);
       return;
     }
     listJobs(currentUserId)
-      .then(setLocalQuotes)
-      .catch(err => console.error('Failed to load saved quotes:', err))
+      .then((data) => {
+        setLocalQuotes(data);
+        setLoadError(null);
+      })
+      .catch(err => {
+        console.error('Failed to load saved quotes:', err);
+        setLoadError('Could not load your saved jobs. Check your connection and try again.');
+      })
       .finally(() => setLoading(false));
   }, [currentUserId, recentJobs.length]);
 
@@ -32,16 +41,28 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
       setLocalQuotes(prev => prev.filter(q => q.id !== id));
       if (dispatch) dispatch({ type: 'DELETE_JOB', id });
       setConfirmDeleteId(null);
+      showToast?.('Job deleted', 'success');
     } catch (err) {
       console.error('Failed to delete quote:', err);
+      showToast?.('Failed to delete job. Check your connection and try again.', 'error');
+      setConfirmDeleteId(null);
     }
   };
 
   const getStatus = (job) => (job.status || 'draft').toUpperCase();
 
-  const filteredQuotes = activeFilter === 'All'
+  const statusFiltered = activeFilter === 'All'
     ? quotes
     : quotes.filter(q => getStatus(q) === activeFilter.toUpperCase());
+
+  const filteredQuotes = searchTerm.trim()
+    ? statusFiltered.filter(q => {
+        const term = searchTerm.toLowerCase();
+        return (q.clientName || '').toLowerCase().includes(term) ||
+               (q.quoteReference || '').toLowerCase().includes(term) ||
+               (q.siteAddress || '').toLowerCase().includes(term);
+      })
+    : statusFiltered;
 
   const openStatusModal = (e, jobId, targetStatus) => {
     e.stopPropagation();
@@ -51,7 +72,33 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
   if (loading) {
     return (
       <div className="text-center py-20" style={{ color: 'var(--tq-muted)' }}>
+        <div className="w-10 h-10 border-3 border-tq-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
         Loading saved jobs...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="text-center py-20">
+        <div className="text-4xl mb-4 opacity-30">&#9888;</div>
+        <h2 className="text-xl font-heading font-bold mb-2" style={{ color: 'var(--tq-text)' }}>Could not load jobs</h2>
+        <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
+          {loadError}
+        </p>
+        <button
+          onClick={() => {
+            setLoading(true);
+            setLoadError(null);
+            listJobs(currentUserId)
+              .then((data) => { setLocalQuotes(data); setLoadError(null); })
+              .catch(() => setLoadError('Still could not load jobs. Check your connection.'))
+              .finally(() => setLoading(false));
+          }}
+          className="bg-tq-accent text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -83,25 +130,81 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
         </p>
       </div>
 
-      {/* Filter tabs */}
-      <div
-        className="inline-flex rounded-lg overflow-hidden mb-6"
-        style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
-      >
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setActiveFilter(f)}
-            className="px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide transition-colors"
+      {/* Search and filter row */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1 sm:max-w-xs">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Search by client, reference, or address..."
+            className="w-full rounded-lg px-4 py-2 pl-9 text-sm"
             style={{
-              backgroundColor: activeFilter === f ? 'var(--tq-surface)' : 'transparent',
-              color: activeFilter === f ? 'var(--tq-text)' : 'var(--tq-muted)',
+              backgroundColor: 'var(--tq-card)',
+              border: '1px solid var(--tq-border)',
+              color: 'var(--tq-text)',
+              fontFamily: 'IBM Plex Sans, sans-serif',
+              minHeight: 40,
             }}
+          />
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2"
+            width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="var(--tq-muted)" strokeWidth="2" strokeLinecap="round"
           >
-            {f}
-          </button>
-        ))}
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-sm"
+              style={{ color: 'var(--tq-muted)', lineHeight: 1 }}
+            >
+              &times;
+            </button>
+          )}
+        </div>
+
+        {/* Filter tabs */}
+        <div
+          className="flex flex-wrap rounded-lg overflow-hidden self-start"
+          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
+        >
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setActiveFilter(f)}
+              className="px-4 py-3 text-xs font-heading font-bold uppercase tracking-wide transition-colors whitespace-nowrap"
+              style={{
+                backgroundColor: activeFilter === f ? 'var(--tq-surface)' : 'transparent',
+                color: activeFilter === f ? 'var(--tq-text)' : 'var(--tq-muted)',
+                minHeight: 44,
+              }}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Empty filter/search state */}
+      {filteredQuotes.length === 0 && (activeFilter !== 'All' || searchTerm.trim()) && (
+        <div className="text-center py-12">
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            {searchTerm.trim()
+              ? `No jobs matching "${searchTerm.trim()}"`
+              : `No ${activeFilter.toLowerCase()} jobs.`}
+          </p>
+          <button
+            onClick={() => { setActiveFilter('All'); setSearchTerm(''); }}
+            className="mt-2 text-xs"
+            style={{ color: 'var(--tq-accent)' }}
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
 
       {/* Job rows */}
       <div className="space-y-2">
@@ -142,10 +245,11 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   {quote.quoteReference}
                   {quote.siteAddress ? ` \u00b7 ${quote.siteAddress}` : ''}
                   {quote.quoteDate ? ` \u00b7 ${formatDate(quote.quoteDate)}` : ''}
+                  <span className="sm:hidden"> \u00b7 {formatCurrency(quote.totalAmount)}</span>
                 </div>
               </div>
 
-              {/* Middle: amount */}
+              {/* Middle: amount (desktop) */}
               <div
                 className="mx-4 shrink-0 hidden sm:block"
                 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}
@@ -153,20 +257,12 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 {formatCurrency(quote.totalAmount)}
               </div>
 
-              {/* Right: action buttons */}
-              <div className="flex gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                <button
-                  onClick={() => onViewQuote(quote)}
-                  className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                  style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-text)' }}
-                >
-                  View
-                </button>
-
+              {/* Action buttons */}
+              <div className="flex gap-2 shrink-0 flex-wrap" onClick={e => e.stopPropagation()}>
                 {status === 'DRAFT' && (
                   <button
                     onClick={(e) => openStatusModal(e, quote.id, 'sent')}
-                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
                     style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff' }}
                   >
                     Mark Sent
@@ -177,14 +273,14 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   <>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'accepted')}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
                       style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       {'\u2713'} Accepted
                     </button>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'declined')}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
                       style={{ border: '1.5px solid var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                     >
                       {'\u2717'} Declined
@@ -197,7 +293,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                     {isAdminPlan && hasRams && onViewRams ? (
                       <button
                         onClick={() => onViewRams(quote)}
-                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
                         style={{ border: '1px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                       >
                         View RAMS
@@ -205,7 +301,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                     ) : isAdminPlan && onCreateRams ? (
                       <button
                         onClick={() => onCreateRams(quote)}
-                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
                         style={{ border: '1px solid var(--tq-accent)', color: 'var(--tq-accent)' }}
                       >
                         Create RAMS
@@ -213,7 +309,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                     ) : null}
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'completed')}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors hidden sm:inline-block"
+                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
                       style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       Complete

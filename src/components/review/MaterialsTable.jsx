@@ -10,7 +10,10 @@ function BlurNumberInput({ value: propValue, onCommit, className }) {
 
   return (
     <input
-      type="number"
+      type="text"
+      inputMode="decimal"
+      enterKeyHint="next"
+      autoComplete="off"
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => onCommit(parseFloat(local) || 0)}
@@ -109,6 +112,8 @@ export default function MaterialsTable({ materials = [], dispatch }) {
               </td>
               <td className="px-1.5 py-1">
                 <input
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={mat.quantity}
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
                   className={inputClass}
@@ -185,6 +190,8 @@ export default function MaterialsTable({ materials = [], dispatch }) {
               <div>
                 <label className="block text-xs text-tq-muted mb-0.5">Qty</label>
                 <input
+                  inputMode="decimal"
+                  autoComplete="off"
                   value={mat.quantity}
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
                   className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm text-tq-text outline-none focus:border-tq-accent"
@@ -221,7 +228,8 @@ export default function MaterialsTable({ materials = [], dispatch }) {
 
       <button
         onClick={addMaterial}
-        className="text-tq-accent text-xs mt-2 hover:text-tq-accent-dark"
+        className="text-tq-accent text-sm mt-2 hover:text-tq-accent-dark"
+        style={{ minHeight: 44, padding: '8px 0' }}
       >
         + Add material
       </button>

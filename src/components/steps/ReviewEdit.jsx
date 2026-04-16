@@ -314,19 +314,25 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
     <div>
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-heading font-bold mb-1" style={{ color: 'var(--tq-text)' }}>
-            Review & Edit
-          </h2>
+          <div className="flex items-center gap-3 mb-1">
+            <button
+              onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
+              className="flex items-center gap-1 text-sm font-heading uppercase tracking-wide hover:text-tq-accent transition-colors"
+              style={{ color: 'var(--tq-muted)', minHeight: 44, padding: '8px 0' }}
+              title="Back to Job Details & Photos"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              <span className="hidden sm:inline">Job Details</span>
+            </button>
+            <h2 className="text-2xl font-heading font-bold" style={{ color: 'var(--tq-text)' }}>
+              Review & Edit
+            </h2>
+          </div>
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Review the analysis. Confirm or edit every measurement before generating your quote.
+            Check each measurement below, then hit Generate Quote when ready.
           </p>
-          <button
-            onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
-            className="text-xs mt-1 hover:underline"
-            style={{ color: 'var(--tq-accent)' }}
-          >
-            Edit job details &amp; photos
-          </button>
         </div>
         {unconfirmedCount > 0 && (
           <div
@@ -383,13 +389,14 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             color: generateEnabled ? '#ffffff' : 'var(--tq-muted)',
             opacity: generateEnabled ? 1 : 0.6,
             cursor: generateEnabled ? 'pointer' : 'not-allowed',
+            minHeight: 48,
           }}
         >
           {generateEnabled
             ? 'GENERATE QUOTE'
             : unconfirmedCount > 0
-              ? `${unconfirmedCount} UNCONFIRMED`
-              : 'GENERATE QUOTE — INCOMPLETE'
+              ? `CONFIRM ${unconfirmedCount} MEASUREMENT${unconfirmedCount !== 1 ? 'S' : ''} TO CONTINUE`
+              : 'COMPLETE ALL SECTIONS TO CONTINUE'
           }
         </button>
 
@@ -447,21 +454,20 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             color: generateEnabled ? '#ffffff' : 'var(--tq-muted)',
             opacity: generateEnabled ? 1 : 0.6,
             cursor: generateEnabled ? 'pointer' : 'not-allowed',
+            minHeight: 48,
           }}
         >
           {generateEnabled
             ? 'GENERATE QUOTE'
-            : `GENERATE QUOTE — ${
-                unconfirmedCount > 0
-                  ? `${unconfirmedCount} UNCONFIRMED`
-                  : !materials || materials.length === 0
-                    ? 'NO MATERIALS'
-                    : !labour.days || labour.days <= 0
-                      ? 'NO LABOUR DAYS'
-                      : !labour.dayRate || labour.dayRate <= 0
-                        ? 'NO DAY RATE'
-                        : 'INCOMPLETE'
-              }`
+            : unconfirmedCount > 0
+              ? `CONFIRM ${unconfirmedCount} MEASUREMENT${unconfirmedCount !== 1 ? 'S' : ''} FIRST`
+              : !materials || materials.length === 0
+                ? 'ADD MATERIALS TO CONTINUE'
+                : !labour.days || labour.days <= 0
+                  ? 'ADD LABOUR DAYS TO CONTINUE'
+                  : !labour.dayRate || labour.dayRate <= 0
+                    ? 'SET DAY RATE TO CONTINUE'
+                    : 'COMPLETE ALL SECTIONS'
           }
         </button>
       </div>

@@ -114,16 +114,22 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
       </div>
       {/* Input */}
       <input
+        type="text"
+        inputMode="text"
+        enterKeyHint="done"
+        autoComplete="off"
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm(); }}
         className="w-full rounded px-2 py-1.5 focus:outline-none"
         style={{
           fontFamily: 'IBM Plex Mono, monospace',
-          fontSize: 13,
+          fontSize: 16,
           border: '1.5px solid var(--tq-unconf-bd)',
           borderRadius: 6,
           backgroundColor: 'var(--tq-card)',
           color: 'var(--tq-text)',
+          minHeight: 44,
         }}
       />
       {confidence === 'low' && (

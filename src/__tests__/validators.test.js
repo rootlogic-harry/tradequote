@@ -126,16 +126,16 @@ describe('validateJobDetails', () => {
     expect(result.errors.siteAddress).toBeDefined();
   });
 
-  test('fails when quoteReference is missing', () => {
+  test('does not require quoteReference (auto-generated)', () => {
     const result = validateJobDetails({ ...validJob, quoteReference: '' });
-    expect(result.valid).toBe(false);
-    expect(result.errors.quoteReference).toBeDefined();
+    expect(result.valid).toBe(true);
+    expect(result.errors.quoteReference).toBeUndefined();
   });
 
-  test('fails when quoteDate is missing', () => {
+  test('does not require quoteDate (defaults to today)', () => {
     const result = validateJobDetails({ ...validJob, quoteDate: '' });
-    expect(result.valid).toBe(false);
-    expect(result.errors.quoteDate).toBeDefined();
+    expect(result.valid).toBe(true);
+    expect(result.errors.quoteDate).toBeUndefined();
   });
 });
 
@@ -171,11 +171,11 @@ describe('validateRequiredPhotoSlots', () => {
     expect(result.missingSlots).toContain('closeup');
   });
 
-  test('invalid when referenceCard is missing', () => {
+  test('valid when referenceCard is missing (recommended, not required)', () => {
     const photos = { ...allPhotos, referenceCard: null };
     const result = validateRequiredPhotoSlots(photos);
-    expect(result.valid).toBe(false);
-    expect(result.missingSlots).toContain('referenceCard');
+    expect(result.valid).toBe(true);
+    expect(result.missingSlots).not.toContain('referenceCard');
     expect(result.hasReferenceCard).toBe(false);
   });
 
@@ -190,7 +190,7 @@ describe('validateRequiredPhotoSlots', () => {
     const photos = { overview: null, closeup: null, sideProfile: null, referenceCard: null, access: null };
     const result = validateRequiredPhotoSlots(photos);
     expect(result.valid).toBe(false);
-    expect(result.missingSlots).toHaveLength(3);
+    expect(result.missingSlots).toHaveLength(2);
   });
 
   test('hasReferenceCard is true when referenceCard slot filled', () => {

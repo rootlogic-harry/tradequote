@@ -104,7 +104,8 @@ export default function App() {
       dispatch({ type: 'JOBS_UPDATED', jobs });
       const incomplete = jobs.filter(j => !j.hasRams && !j.ramsNotRequired);
       setIncompleteJobs(incomplete);
-    } catch {
+    } catch (err) {
+      console.warn('[Dashboard] Failed to load jobs:', err.message);
       setIncompleteJobs([]);
       setSavedJobs([]);
     }
@@ -456,9 +457,14 @@ export default function App() {
   const handleViewQuote = async (quoteSummary) => {
     try {
       const full = await getJob(state.currentUserId, quoteSummary.id);
+      if (!full) {
+        showToast('Could not load this quote. It may have been deleted.', 'error');
+        return;
+      }
       setViewingQuote(full);
     } catch (err) {
       console.error('Failed to load quote:', err);
+      showToast('Failed to load quote. Check your connection and try again.', 'error');
     }
   };
 
@@ -688,6 +694,7 @@ export default function App() {
           recentJobs={state.recentJobs}
           dispatch={dispatch}
           isAdminPlan={isAdmin}
+          showToast={showToast}
         />
       );
     }

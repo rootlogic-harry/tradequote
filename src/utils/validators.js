@@ -3,23 +3,23 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function validateProfile(profile) {
   const errors = {};
 
-  if (!profile.fullName?.trim()) errors.fullName = 'Full name is required';
-  if (!profile.phone?.trim()) errors.phone = 'Phone number is required';
+  if (!profile.fullName?.trim()) errors.fullName = 'Enter your full name so clients know who quoted';
+  if (!profile.phone?.trim()) errors.phone = 'Enter a phone number so clients can reach you';
 
   if (!profile.email?.trim()) {
-    errors.email = 'Email is required';
+    errors.email = 'Enter your email address';
   } else if (!EMAIL_REGEX.test(profile.email)) {
-    errors.email = 'Invalid email format';
+    errors.email = 'Check your email — it should look like name@example.com';
   }
 
-  if (!profile.address?.trim()) errors.address = 'Address is required';
+  if (!profile.address?.trim()) errors.address = 'Enter your business address for the quote header';
 
   if (!profile.dayRate || isNaN(profile.dayRate) || profile.dayRate <= 0) {
-    errors.dayRate = 'Day rate must be a positive number';
+    errors.dayRate = 'Enter your day rate (e.g. 400)';
   }
 
   if (profile.vatRegistered && !profile.vatNumber?.trim()) {
-    errors.vatNumber = 'VAT number is required when VAT registered';
+    errors.vatNumber = 'Enter your VAT number — required when VAT registered';
   }
 
   return { valid: Object.keys(errors).length === 0, errors };
@@ -28,16 +28,14 @@ export function validateProfile(profile) {
 export function validateJobDetails(jobDetails) {
   const errors = {};
 
-  if (!jobDetails.clientName?.trim()) errors.clientName = 'Client name is required';
-  if (!jobDetails.siteAddress?.trim()) errors.siteAddress = 'Site address is required';
-  if (!jobDetails.quoteReference?.trim()) errors.quoteReference = 'Quote reference is required';
-  if (!jobDetails.quoteDate?.trim()) errors.quoteDate = 'Quote date is required';
+  if (!jobDetails.clientName?.trim()) errors.clientName = 'Enter the client or landowner name';
+  if (!jobDetails.siteAddress?.trim()) errors.siteAddress = 'Enter the site address so the quote is location-specific';
 
   return { valid: Object.keys(errors).length === 0, errors };
 }
 
 export function validateRequiredPhotoSlots(photos) {
-  const requiredSlots = ['overview', 'closeup', 'referenceCard'];
+  const requiredSlots = ['overview', 'closeup'];
   const missingSlots = requiredSlots.filter(slot => !photos[slot]);
 
   return {
