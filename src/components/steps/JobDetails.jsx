@@ -154,9 +154,19 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
     if (!jobResult.valid) return;
     if (!videoFile) return;
 
+    // Client-side file size check (#20)
+    if (videoFile.size > 100 * 1024 * 1024) {
+      showToast?.('Video must be under 100MB', 'error');
+      return;
+    }
+
     dispatch({ type: 'ANALYSIS_START' });
 
     try {
+      const controller = new AbortController();
+      if (abortRef) abortRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('siteAddress', jobDetails.siteAddress);
@@ -169,8 +179,9 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       const res = await fetch(`/api/users/${state.currentUserId}/jobs/draft/video`, {
         method: 'POST',
         body: formData,
-        signal: abortRef?.current?.signal,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -282,6 +293,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           />
         </div>
 
+        {/* Brief notes — only in non-video modes to avoid duplicate (#24) */}
+        {captureMode !== 'video' && (
         <div className="sm:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Brief Notes (optional)
@@ -307,13 +320,13 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             placeholder="Anything we should know — e.g. wall is on a slope, needs through stones replacing..."
           />
         </div>
+        )}
       </div>
 
       {/* Capture mode choice */}
       {!captureMode && (
         <CaptureChoice
           onSelectMode={(mode) => dispatch({ type: 'SET_CAPTURE_MODE', payload: mode })}
-          defaultMode={captureMode}
         />
       )}
 

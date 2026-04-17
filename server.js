@@ -1,5 +1,6 @@
 import express from 'express';
 import pg from 'pg';
+import fs from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import https from 'https';
@@ -13,6 +14,7 @@ import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
 import { processVideo } from './src/utils/videoProcessor.js';
+import { parseAIResponse, validateAIResponse, normalizeAIResponse } from './src/utils/aiParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1875,7 +1877,11 @@ app.post('/api/dictate', requireAuth, dictationRateLimit, dictationUpload.single
 
 const videoStorage = multer.diskStorage({
   destination: '/tmp',
-  filename: (req, file, cb) => cb(null, `video_${req.params.jobId}_${Date.now()}`),
+  filename: (req, file, cb) => {
+    // Sanitize jobId to prevent path traversal (#13)
+    const safeJobId = String(req.params.jobId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    cb(null, `video_${safeJobId}_${Date.now()}`);
+  },
 });
 
 const videoUpload = multer({
@@ -1896,35 +1902,57 @@ const videoRateLimit = rateLimit({
 });
 
 app.post('/api/users/:id/jobs/:jobId/video',
+  requireAuth,
   videoRateLimit,
-  videoUpload.single('video'),
+  videoUpload.fields([
+    { name: 'video', maxCount: 1 },
+    { name: 'extraPhotos', maxCount: 10 },
+  ]),
   async (req, res) => {
     const userId = req.user.id;
     const { jobId } = req.params;
+    const videoFile = req.files?.video?.[0];
+    const extraPhotoFiles = req.files?.extraPhotos || [];
 
-    if (!req.file) {
+    if (!videoFile) {
       return res.status(400).json({ error: 'No video file provided' });
     }
 
-    if (!req.file.mimetype?.startsWith('video/')) {
+    if (!videoFile.mimetype?.startsWith('video/')) {
       return res.status(400).json({ error: 'File must be a video' });
     }
 
-    console.log(`[Video] user=${userId} job=${jobId} mime=${req.file.mimetype} size=${req.file.size}`);
+    console.log(`[Video] user=${userId} job=${jobId} mime=${videoFile.mimetype} size=${videoFile.size} extraPhotos=${extraPhotoFiles.length}`);
 
     try {
-      // Parse extra notes and photos from the multipart form
-      const extraNotes = req.body.extraNotes || '';
-      const extraPhotos = req.body.extraPhotos ? JSON.parse(req.body.extraPhotos) : [];
+      // Parse form fields — frontend sends briefNotes (#3) and profile JSON (#5)
+      const briefNotes = req.body.briefNotes || '';
       const siteAddress = req.body.siteAddress || '';
 
+      // Parse profile from JSON string sent by frontend (#5)
+      let profile = { dayRate: 400 };
+      try {
+        if (req.body.profile) {
+          const parsed = JSON.parse(req.body.profile);
+          profile = { ...profile, ...parsed };
+        }
+      } catch {
+        console.warn('[Video] Failed to parse profile JSON, using defaults');
+      }
+
+      // Convert extra photo files to data URL format for processVideo (#4)
+      const extraPhotos = extraPhotoFiles.map(f => ({
+        data: `data:${f.mimetype};base64,${fs.readFileSync(f.path).toString('base64')}`,
+        name: f.originalname,
+      }));
+
       const result = await processVideo({
-        videoPath: req.file.path,
+        videoPath: videoFile.path,
         jobId,
-        extraNotes,
+        extraNotes: briefNotes,
         extraPhotos,
         siteAddress,
-        profile: { dayRate: Number(req.body.dayRate) || 400 },
+        profile,
       });
 
       console.log(`[Video] SUCCESS user=${userId} job=${jobId} frames=${result.frames.length} transcript=${result.transcript.length}chars`);
@@ -1998,39 +2026,44 @@ app.post('/api/users/:id/jobs/:jobId/video',
 
       const rawText = analysisResponse.content?.[0]?.text || '';
 
-      let analysisJson = null;
-      try {
-        const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-        const toParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-        analysisJson = JSON.parse(toParse);
-      } catch {
-        return res.json({
-          content: [{ type: 'text', text: rawText }],
-          usage: analysisResponse.usage,
-          critiqueNotes: null,
-        });
+      // Parse, validate, and normalise using the same aiParser pipeline as the photo path (#1)
+      const parsed = parseAIResponse(rawText);
+      if (!parsed) {
+        return res.status(422).json({ error: 'Analysis returned an unreadable response. Try again.' });
       }
 
+      const aiValidation = validateAIResponse(parsed);
+      if (!aiValidation.valid) {
+        console.warn('[Video] AI response validation warnings:', aiValidation.errors);
+      }
+
+      const normalised = normalizeAIResponse(parsed);
+      normalised.referenceCardDetected = parsed.referenceCardDetected;
+      normalised.stoneType = parsed.stoneType;
+      normalised.additionalCosts = [];
+      normalised.labourEstimate.dayRate = profile.dayRate;
+
       // Self-critique
-      let finalAnalysis = analysisJson;
+      let finalNormalised = normalised;
       let critiqueNotes = null;
       try {
         const critiqueResult = await runSelfCritique({
           pool,
           userId,
           jobId: null,
-          analysis: analysisJson,
+          analysis: normalised,
           briefNotes: result.combinedNotes || '',
         });
-        finalAnalysis = critiqueResult.analysis;
+        finalNormalised = critiqueResult.analysis;
         critiqueNotes = critiqueResult.critique;
       } catch (err) {
         console.warn('[Video] Self-critique failed, returning original analysis:', err.message);
       }
 
+      // Return the same shape the frontend expects: { normalised, rawResponse, critiqueNotes } (#1)
       res.json({
-        content: [{ type: 'text', text: JSON.stringify(finalAnalysis) }],
-        usage: analysisResponse.usage,
+        normalised: finalNormalised,
+        rawResponse: rawText,
         critiqueNotes,
         promptVersion,
         transcript: result.transcript,
@@ -2042,8 +2075,11 @@ app.post('/api/users/:id/jobs/:jobId/video',
       }
       safeError(res, err, `POST /api/users/:id/jobs/:jobId/video user=${userId}`);
     } finally {
-      // Clean up the uploaded video file
-      try { if (req.file?.path) { const fs = await import('node:fs'); fs.default.unlinkSync(req.file.path); } } catch {}
+      // Clean up uploaded files (#7)
+      try { if (videoFile?.path) fs.unlinkSync(videoFile.path); } catch {}
+      for (const f of extraPhotoFiles) {
+        try { if (f?.path) fs.unlinkSync(f.path); } catch {}
+      }
     }
   }
 );

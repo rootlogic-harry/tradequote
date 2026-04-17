@@ -34,7 +34,7 @@ export async function processVideo({
   siteAddress,
   profile,
 }) {
-  const workDir = `/tmp/job_${jobId}`;
+  const workDir = `/tmp/job_${jobId}_${Date.now()}`;
 
   try {
     // 1. Validate duration
@@ -60,7 +60,7 @@ export async function processVideo({
     }
 
     // 5. Extract frames (reduce maxFrames when extra photos are present)
-    const maxFrames = DEFAULT_MAX_FRAMES - (extraPhotos?.length || 0);
+    const maxFrames = Math.max(1, DEFAULT_MAX_FRAMES - (extraPhotos?.length || 0));
     const framePaths = await extractFrames(videoPath, workDir, {
       maxFrames,
       intervalSeconds: FRAME_INTERVAL,

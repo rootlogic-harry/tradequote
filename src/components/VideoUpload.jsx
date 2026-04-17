@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 
 const MAX_EXTRA_PHOTOS = 3;
 
@@ -60,9 +60,9 @@ export default function VideoUpload({
   }, [video]);
 
   const handleFile = useCallback((file) => {
-    if (file && file.type.startsWith('video/')) {
-      onVideoChange(file);
-    }
+    if (!file || !file.type.startsWith('video/')) return;
+    if (file.size > 100 * 1024 * 1024) return; // 100MB client-side cap
+    onVideoChange(file);
   }, [onVideoChange]);
 
   const handleDrop = useCallback((e) => {
@@ -107,6 +107,12 @@ export default function VideoUpload({
     const updated = extraPhotos.filter((_, i) => i !== index);
     onExtraPhotosChange(updated);
   }, [extraPhotos, onExtraPhotosChange]);
+
+  // Stable object URLs for extra photo thumbnails — revoked on change (#9)
+  const extraPhotoUrls = useMemo(() => extraPhotos.map(f => URL.createObjectURL(f)), [extraPhotos]);
+  useEffect(() => {
+    return () => extraPhotoUrls.forEach(url => URL.revokeObjectURL(url));
+  }, [extraPhotoUrls]);
 
   const formatDuration = (secs) => {
     if (!secs) return '';
@@ -256,7 +262,7 @@ export default function VideoUpload({
             {extraPhotos.map((photo, i) => (
               <div key={i} style={{ position: 'relative', width: '80px', height: '80px' }}>
                 <img
-                  src={URL.createObjectURL(photo)}
+                  src={extraPhotoUrls[i]}
                   alt={`Extra photo ${i + 1}`}
                   style={{
                     width: '100%',

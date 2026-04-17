@@ -53,20 +53,34 @@ function writeTestJpegs(paths) {
   }
 }
 
-function setupSuccessfulMocks(framePaths = ['/tmp/job_job-123/frame_0000.jpg']) {
+// Track the workDir that processVideo creates so mocks use the right paths
+let capturedWorkDir = null;
+const origMkdirSync = fs.mkdirSync;
+const mkdirSpy = jest.spyOn(fs, 'mkdirSync').mockImplementation((dir, opts) => {
+  if (String(dir).startsWith('/tmp/job_')) capturedWorkDir = dir;
+  return origMkdirSync(dir, opts);
+});
+
+function setupSuccessfulMocks() {
   mockGetVideoDuration.mockResolvedValue(60);
   mockValidateVideoDuration.mockReturnValue({ valid: true });
-  mockExtractFrames.mockResolvedValue(framePaths);
-  const audioPath = '/tmp/job_job-123/audio.m4a';
-  mockExtractAudio.mockImplementation(async () => {
-    // Create the fake audio file so readFileSync works
-    const dir = path.dirname(audioPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(audioPath, Buffer.from([0x00, 0x00, 0x00, 0x20]));
-    return audioPath;
+
+  // extractFrames mock: create fake frame in whatever workDir processVideo creates
+  mockExtractFrames.mockImplementation(async (_videoPath, workDir) => {
+    const framePath = path.join(workDir, 'frame_0000.jpg');
+    writeTestJpegs([framePath]);
+    return [framePath];
   });
+
+  // extractAudio mock: create fake audio file in the workDir
+  mockExtractAudio.mockImplementation(async (_videoPath, audioOutPath) => {
+    const dir = path.dirname(audioOutPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(audioOutPath, Buffer.from([0x00, 0x00, 0x00, 0x20]));
+    return audioOutPath;
+  });
+
   mockTranscribe.mockResolvedValue('The wall is about two metres high with a collapsed section');
-  writeTestJpegs(framePaths);
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -78,8 +92,10 @@ describe('processVideo', () => {
 
   afterEach(() => {
     // Clean up any test directories
-    const workDir = '/tmp/job_job-123';
-    if (fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
+    if (capturedWorkDir && fs.existsSync(capturedWorkDir)) {
+      fs.rmSync(capturedWorkDir, { recursive: true, force: true });
+    }
+    capturedWorkDir = null;
   });
 
   it('calls getVideoDuration with the video path', async () => {
@@ -137,11 +153,19 @@ describe('processVideo', () => {
   });
 
   it('converts extracted frames to base64', async () => {
-    const framePaths = [
-      '/tmp/job_job-123/frame_0000.jpg',
-      '/tmp/job_job-123/frame_0001.jpg',
-    ];
-    setupSuccessfulMocks(framePaths);
+    // Override extractFrames to return 2 frames
+    mockGetVideoDuration.mockResolvedValue(60);
+    mockValidateVideoDuration.mockReturnValue({ valid: true });
+    mockExtractFrames.mockImplementation(async (_videoPath, workDir) => {
+      const paths = [
+        path.join(workDir, 'frame_0000.jpg'),
+        path.join(workDir, 'frame_0001.jpg'),
+      ];
+      writeTestJpegs(paths);
+      return paths;
+    });
+    mockExtractAudio.mockResolvedValue(null);
+    mockTranscribe.mockResolvedValue('');
 
     const result = await processVideo(baseArgs());
     expect(result.frames.length).toBe(2);
@@ -212,8 +236,9 @@ describe('processVideo', () => {
   it('cleans up temporary files after success', async () => {
     setupSuccessfulMocks();
     await processVideo(baseArgs());
-    const workDir = '/tmp/job_job-123';
-    expect(fs.existsSync(workDir)).toBe(false);
+    // processVideo's finally block cleans up the dynamic workDir
+    expect(capturedWorkDir).toBeTruthy();
+    expect(fs.existsSync(capturedWorkDir)).toBe(false);
   });
 
   it('cleans up temporary files after failure', async () => {
@@ -223,7 +248,7 @@ describe('processVideo', () => {
     mockExtractAudio.mockResolvedValue(null);
 
     await expect(processVideo(baseArgs())).rejects.toThrow('ffmpeg failed');
-    const workDir = '/tmp/job_job-123';
-    expect(fs.existsSync(workDir)).toBe(false);
+    expect(capturedWorkDir).toBeTruthy();
+    expect(fs.existsSync(capturedWorkDir)).toBe(false);
   });
 });

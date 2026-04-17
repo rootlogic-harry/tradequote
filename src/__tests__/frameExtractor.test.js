@@ -103,12 +103,12 @@ describeIfFfmpeg('extractFrames (requires ffmpeg)', () => {
     expect(fs.existsSync(workDir)).toBe(true);
   });
 
-  it('cleans up working directory on failure', async () => {
+  it('propagates error on failure (caller handles cleanup)', async () => {
     await expect(
       extractFrames('/tmp/nonexistent_video_12345.mp4', workDir)
     ).rejects.toThrow();
-    // workDir should be cleaned up after failure
-    expect(fs.existsSync(workDir)).toBe(false);
+    // Cleanup is the caller's responsibility (processVideo's finally block)
+    // workDir may or may not exist depending on when the error occurred
   });
 
   it('creates the workDir if it does not exist', async () => {

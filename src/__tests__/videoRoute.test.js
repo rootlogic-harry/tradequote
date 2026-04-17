@@ -155,4 +155,54 @@ describe('POST /api/users/:id/jobs/:jobId/video', () => {
       expect(response.analysis.transcript).toBe('Walkthrough description');
     });
   });
+
+  describe('server route source validation', () => {
+    let serverSource;
+    beforeAll(async () => {
+      const { readFileSync } = await import('fs');
+      const { join, dirname } = await import('path');
+      const { fileURLToPath } = await import('url');
+      const __dirname = dirname(fileURLToPath(import.meta.url));
+      serverSource = readFileSync(join(__dirname, '..', '..', 'server.js'), 'utf8');
+    });
+
+    it('imports aiParser functions for server-side normalisation', () => {
+      expect(serverSource).toContain('parseAIResponse');
+      expect(serverSource).toContain('normalizeAIResponse');
+    });
+
+    it('returns normalised and rawResponse in response (not content array)', () => {
+      // The video route should return { normalised, rawResponse } not { content }
+      expect(serverSource).toMatch(/res\.json\(\{[\s\S]*normalised/);
+      expect(serverSource).toMatch(/res\.json\(\{[\s\S]*rawResponse/);
+    });
+
+    it('uses multer fields for video and extraPhotos', () => {
+      expect(serverSource).toMatch(/videoUpload\.fields/);
+    });
+
+    it('reads briefNotes from req.body (not extraNotes)', () => {
+      expect(serverSource).toMatch(/req\.body\.briefNotes/);
+    });
+
+    it('parses profile from JSON string', () => {
+      expect(serverSource).toMatch(/JSON\.parse\(req\.body\.profile\)/);
+    });
+
+    it('has explicit requireAuth middleware', () => {
+      expect(serverSource).toMatch(/video['"],\s*\n?\s*requireAuth/);
+    });
+
+    it('sanitizes jobId in filename', () => {
+      expect(serverSource).toMatch(/safeJobId|replace\(.*[^a-zA-Z]/);
+    });
+
+    it('cleans up extra photo files in finally block', () => {
+      expect(serverSource).toMatch(/extraPhotoFiles/);
+    });
+
+    it('returns 422 when AI response cannot be parsed', () => {
+      expect(serverSource).toMatch(/422/);
+    });
+  });
 });

@@ -53,8 +53,8 @@ export async function extractFrames(videoPath, workDir, options = {}) {
 
     return framePaths;
   } catch (err) {
-    // Clean up workDir on failure
-    try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
+    // Don't clean up workDir here — let the caller (processVideo) handle cleanup
+    // to avoid double-delete race conditions
     throw err;
   }
 }
@@ -68,7 +68,7 @@ function extractSingleFrame(videoPath, timestampSeconds, outputPath, maxDimensio
       .seekInput(timestampSeconds)
       .frames(1)
       .outputOptions([
-        '-vf', `scale='min(${maxDimension},iw)':min'(${maxDimension},ih)':force_original_aspect_ratio=decrease`,
+        '-vf', `scale='min(${maxDimension},iw)':'min(${maxDimension},ih)':force_original_aspect_ratio=decrease`,
         '-q:v', '2',
       ])
       .output(outputPath)
