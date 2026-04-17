@@ -18,6 +18,10 @@ const __dirname = dirname(__filename);
 
 const app = express();
 app.set('trust proxy', 1); // trust first proxy (Railway)
+
+// --- Healthcheck (before any middleware — must respond 200 for Railway) ---
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
 app.use(express.json({ limit: '50mb' }));
 
 // --- Security Headers ---
@@ -249,6 +253,30 @@ async function initDB() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
+
+    // Fix: if dictation_runs.user_id was created as INTEGER, drop and recreate
+    // (table may have been created with wrong type in a prior deploy)
+    const colCheck = await client.query(`
+      SELECT data_type FROM information_schema.columns
+      WHERE table_name = 'dictation_runs' AND column_name = 'user_id'
+    `);
+    if (colCheck.rows.length > 0 && colCheck.rows[0].data_type === 'integer') {
+      console.warn('[initDB] dictation_runs.user_id is INTEGER — recreating table with TEXT');
+      await client.query('DROP TABLE dictation_runs');
+      await client.query(`
+        CREATE TABLE dictation_runs (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id),
+          success BOOLEAN NOT NULL,
+          latency_ms INTEGER,
+          audio_bytes INTEGER,
+          duration_ms INTEGER,
+          transcript_chars INTEGER,
+          failure_category TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+    }
 
     // Migrate hardcoded calibration notes to DB (idempotent)
     const hardcodedNotes = [

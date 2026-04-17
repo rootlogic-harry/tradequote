@@ -1,5 +1,8 @@
 import { jest } from '@jest/globals';
 
+// Set fake key so getClient() doesn't throw before reaching the mock
+process.env.OPENAI_API_KEY = 'test-key-for-jest';
+
 // Mock the openai module before importing whisperClient
 const mockCreate = jest.fn();
 jest.unstable_mockModule('openai', () => ({

@@ -1,6 +1,15 @@
 import OpenAI from 'openai';
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Lazy-init: avoid throwing at module load if OPENAI_API_KEY is not yet set
+let _client = null;
+function getClient() {
+  if (!_client) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
+    _client = new OpenAI({ apiKey });
+  }
+  return _client;
+}
 
 export const TRADE_PROMPT =
   'Dry stone walling job description. Common terms: ' +
@@ -20,7 +29,7 @@ export async function transcribe(buffer, mimeType) {
   const ext = mimeType.split('/')[1] || 'webm';
   const file = new File([buffer], `dictation.${ext}`, { type: mimeType });
 
-  const res = await client.audio.transcriptions.create({
+  const res = await getClient().audio.transcriptions.create({
     file,
     model: 'whisper-1',
     prompt: TRADE_PROMPT,
