@@ -70,6 +70,7 @@ export const initialState = {
   diffs: [],
   quotePayload: null,
   captureMode: null,       // null | 'video' | 'photos'
+  videoProgress: null,     // SSE progress: { stage, progress, message }
   quoteMode: 'standard',  // 'standard' | 'quick'
   quoteSequence: 1,
   savedJobId: null,
@@ -109,6 +110,9 @@ function reducerCore(state, action) {
     case 'SET_CAPTURE_MODE':
       return { ...state, captureMode: action.payload };
 
+    case 'VIDEO_PROGRESS':
+      return { ...state, videoProgress: action.payload };
+
     case 'UPDATE_PROFILE':
       return { ...state, profile: { ...state.profile, ...action.updates } };
 
@@ -138,6 +142,7 @@ function reducerCore(state, action) {
         ...state,
         isAnalysing: true,
         analysisError: null,
+        videoProgress: null,
         step: 3,
       };
 
@@ -367,6 +372,7 @@ function reducerCore(state, action) {
       return {
         ...state,
         captureMode: null,
+        videoProgress: null,
         quoteMode: action.mode || 'standard',
         step: 2,
         jobDetails: {

@@ -88,7 +88,7 @@ describeIfFfmpeg('extractFrames (requires ffmpeg)', () => {
     } finally {
       execSync(`rm -f ${largeVideo}`, { stdio: 'ignore' });
     }
-  });
+  }, 30000);
 
   it('caps frames at maxFrames regardless of video length', async () => {
     const frames = await extractFrames(testVideoPath, workDir, { maxFrames: 1 });

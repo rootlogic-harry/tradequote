@@ -2,18 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { LOADING_MESSAGES } from '../../constants.js';
 
 const VIDEO_LOADING_STAGES = [
-  { label: 'Uploading video...', durationHint: 10 },
-  { label: 'Extracting frames from walkthrough...', durationHint: 15 },
-  { label: 'Transcribing audio...', durationHint: 20 },
-  { label: 'Analysing footage and generating quote...', durationHint: 60 },
+  { label: 'Uploading video...', durationHint: 10, sseStage: null },
+  { label: 'Processing video...', durationHint: 15, sseStage: 'processing' },
+  { label: 'Analysing footage...', durationHint: 20, sseStage: 'analysing' },
+  { label: 'Reviewing analysis...', durationHint: 60, sseStage: 'reviewing' },
 ];
+
+// Map SSE stage names to UI stage indices
+const SSE_STAGE_MAP = { processing: 1, analysing: 2, reviewing: 3, complete: 3 };
 
 export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [videoStage, setVideoStage] = useState(0);
 
-  const { captureMode } = state;
+  const { captureMode, videoProgress } = state;
   const isVideoMode = captureMode === 'video';
 
   useEffect(() => {
@@ -36,12 +39,20 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
     return () => clearInterval(timer);
   }, [state.isAnalysing]);
 
-  // Video mode: advance stages based on elapsed time
+  // Video mode: advance stages from SSE progress or fall back to time-based estimation
   useEffect(() => {
     if (!state.isAnalysing || !isVideoMode) {
       setVideoStage(0);
       return;
     }
+
+    // Prefer SSE progress if available
+    if (videoProgress?.stage && SSE_STAGE_MAP[videoProgress.stage] !== undefined) {
+      setVideoStage(SSE_STAGE_MAP[videoProgress.stage]);
+      return;
+    }
+
+    // Fallback: time-based estimation using durationHint
     let accumulated = 0;
     for (let i = 0; i < VIDEO_LOADING_STAGES.length; i++) {
       accumulated += VIDEO_LOADING_STAGES[i].durationHint;
@@ -51,7 +62,7 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
       }
     }
     setVideoStage(VIDEO_LOADING_STAGES.length - 1);
-  }, [elapsedSeconds, state.isAnalysing, isVideoMode]);
+  }, [elapsedSeconds, state.isAnalysing, isVideoMode, videoProgress]);
 
   const handleCancel = () => {
     if (cancelAnalysis) cancelAnalysis();

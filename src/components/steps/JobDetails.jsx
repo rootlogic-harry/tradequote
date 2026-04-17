@@ -162,6 +162,26 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
 
     dispatch({ type: 'ANALYSIS_START' });
 
+    // Open SSE connection for real-time progress before uploading
+    let eventSource = null;
+    try {
+      eventSource = new EventSource(
+        `/api/users/${state.currentUserId}/jobs/draft/video/progress`
+      );
+      eventSource.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          dispatch({ type: 'VIDEO_PROGRESS', payload: data });
+          if (data.stage === 'complete' || data.stage === 'error') {
+            eventSource.close();
+          }
+        } catch { /* ignore parse errors */ }
+      };
+      eventSource.onerror = () => {
+        eventSource.close();
+      };
+    } catch { /* SSE not critical — fall back to time-based */ }
+
     try {
       const controller = new AbortController();
       if (abortRef) abortRef.current = controller;
@@ -201,6 +221,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       } else {
         dispatch({ type: 'ANALYSIS_ERROR', error: err.message });
       }
+    } finally {
+      try { eventSource?.close(); } catch {}
     }
   };
 
