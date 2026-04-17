@@ -70,3 +70,42 @@ export function uploadWithProgress({ url, body, onProgress }) {
     abort: () => xhr.abort(),
   };
 }
+
+/**
+ * Upload with automatic retry on retryable errors.
+ *
+ * @param {object} opts — same as uploadWithProgress plus:
+ * @param {number} [opts.maxRetries=3]
+ * @param {number} [opts.backoffMs=2000] — base delay (doubled each retry)
+ * @param {(info: { attempt: number, maxRetries: number, error: Error }) => void} [opts.onRetry]
+ * @returns {Promise<any>}
+ */
+export async function uploadWithRetry({
+  url, body, onProgress, onRetry,
+  maxRetries = 3, backoffMs = 2000,
+}) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const { promise } = uploadWithProgress({ url, body, onProgress });
+      return await promise;
+    } catch (err) {
+      lastError = err;
+
+      // Don't retry non-retryable errors (4xx, user abort)
+      if (!err.retryable || attempt >= maxRetries) {
+        throw err;
+      }
+
+      // Notify caller of retry
+      onRetry?.({ attempt: attempt + 1, maxRetries, error: err });
+
+      // Exponential backoff
+      const delay = backoffMs * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  throw lastError;
+}

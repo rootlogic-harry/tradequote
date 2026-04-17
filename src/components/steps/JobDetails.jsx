@@ -6,7 +6,7 @@ import { savePhoto, deletePhoto, saveDraft } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
-import { uploadWithProgress } from '../../utils/uploadWithProgress.js';
+import { uploadWithRetry } from '../../utils/uploadWithProgress.js';
 
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
@@ -194,17 +194,17 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         formData.append('extraPhotos', photo);
       });
 
-      const { promise, abort } = uploadWithProgress({
+      const data = await uploadWithRetry({
         url: `/api/users/${state.currentUserId}/jobs/draft/video`,
         body: formData,
         onProgress: (progress) => {
           dispatch({ type: 'UPLOAD_PROGRESS', payload: progress });
         },
+        onRetry: ({ attempt, maxRetries }) => {
+          dispatch({ type: 'UPLOAD_PROGRESS', payload: { percent: 0, retry: attempt, maxRetries } });
+        },
+        maxRetries: 3,
       });
-      uploadAbort = abort;
-      if (abortRef) abortRef.current = { abort };
-
-      const data = await promise;
       dispatch({
         type: 'ANALYSIS_SUCCESS',
         normalised: data.normalised,
