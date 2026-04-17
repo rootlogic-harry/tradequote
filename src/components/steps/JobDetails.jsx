@@ -6,6 +6,7 @@ import { savePhoto, deletePhoto, saveDraft } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
+import { uploadWithProgress } from '../../utils/uploadWithProgress.js';
 
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
@@ -182,11 +183,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       };
     } catch { /* SSE not critical — fall back to time-based */ }
 
+    let uploadAbort = null;
     try {
-      const controller = new AbortController();
-      if (abortRef) abortRef.current = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
-
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('siteAddress', jobDetails.siteAddress);
@@ -196,19 +194,17 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         formData.append('extraPhotos', photo);
       });
 
-      const res = await fetch(`/api/users/${state.currentUserId}/jobs/draft/video`, {
-        method: 'POST',
+      const { promise, abort } = uploadWithProgress({
+        url: `/api/users/${state.currentUserId}/jobs/draft/video`,
         body: formData,
-        signal: controller.signal,
+        onProgress: (progress) => {
+          dispatch({ type: 'UPLOAD_PROGRESS', payload: progress });
+        },
       });
-      clearTimeout(timeoutId);
+      uploadAbort = abort;
+      if (abortRef) abortRef.current = { abort };
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Video analysis failed (${res.status})`);
-      }
-
-      const data = await res.json();
+      const data = await promise;
       dispatch({
         type: 'ANALYSIS_SUCCESS',
         normalised: data.normalised,
@@ -223,6 +219,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       }
     } finally {
       try { eventSource?.close(); } catch {}
+      try { uploadAbort = null; } catch {}
     }
   };
 

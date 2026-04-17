@@ -71,6 +71,7 @@ export const initialState = {
   quotePayload: null,
   captureMode: null,       // null | 'video' | 'photos'
   videoProgress: null,     // SSE progress: { stage, progress, message }
+  uploadProgress: null,    // XHR upload: { percent, loaded, total, speed, eta }
   quoteMode: 'standard',  // 'standard' | 'quick'
   quoteSequence: 1,
   savedJobId: null,
@@ -113,6 +114,9 @@ function reducerCore(state, action) {
     case 'VIDEO_PROGRESS':
       return { ...state, videoProgress: action.payload };
 
+    case 'UPLOAD_PROGRESS':
+      return { ...state, uploadProgress: action.payload };
+
     case 'UPDATE_PROFILE':
       return { ...state, profile: { ...state.profile, ...action.updates } };
 
@@ -143,6 +147,7 @@ function reducerCore(state, action) {
         isAnalysing: true,
         analysisError: null,
         videoProgress: null,
+        uploadProgress: null,
         step: 3,
       };
 
@@ -373,6 +378,7 @@ function reducerCore(state, action) {
         ...state,
         captureMode: null,
         videoProgress: null,
+        uploadProgress: null,
         quoteMode: action.mode || 'standard',
         step: 2,
         jobDetails: {

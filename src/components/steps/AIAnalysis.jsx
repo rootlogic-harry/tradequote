@@ -16,7 +16,7 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [videoStage, setVideoStage] = useState(0);
 
-  const { captureMode, videoProgress } = state;
+  const { captureMode, videoProgress, uploadProgress } = state;
   const isVideoMode = captureMode === 'video';
 
   useEffect(() => {
@@ -108,34 +108,59 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
 
         {/* Stage indicators */}
         <div className="flex flex-col gap-3 mb-8 text-left max-w-xs mx-auto">
-          {VIDEO_LOADING_STAGES.map((stage, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <span
-                className="flex items-center justify-center rounded-full shrink-0"
-                style={{
-                  width: 24,
-                  height: 24,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  backgroundColor: i <= videoStage ? 'var(--tq-accent)' : 'var(--tq-surface)',
-                  color: i <= videoStage ? '#ffffff' : 'var(--tq-muted)',
-                  transition: 'background-color 0.3s, color 0.3s',
-                }}
-              >
-                {i < videoStage ? '✓' : i + 1}
-              </span>
-              <span
-                className="text-sm"
-                style={{
-                  color: i === videoStage ? 'var(--tq-text)' : 'var(--tq-muted)',
-                  fontWeight: i === videoStage ? 600 : 400,
-                  transition: 'color 0.3s, font-weight 0.3s',
-                }}
-              >
-                {stage.label}
-              </span>
-            </div>
-          ))}
+          {VIDEO_LOADING_STAGES.map((stage, i) => {
+            // Stage 0 (upload): show real uploadProgress percent and ETA when available
+            const isUploadStage = i === 0 && videoStage === 0 && uploadProgress?.percent != null;
+            const formatEta = (s) => s > 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : `${s}s`;
+            const stageLabel = isUploadStage
+              ? `Uploading... ${uploadProgress.percent}%${uploadProgress.eta > 0 ? ` • ${formatEta(uploadProgress.eta)} remaining` : ''}`
+              : stage.label;
+
+            return (
+              <div key={i} className="flex items-center gap-3">
+                <span
+                  className="flex items-center justify-center rounded-full shrink-0"
+                  style={{
+                    width: 24,
+                    height: 24,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    backgroundColor: i <= videoStage ? 'var(--tq-accent)' : 'var(--tq-surface)',
+                    color: i <= videoStage ? '#ffffff' : 'var(--tq-muted)',
+                    transition: 'background-color 0.3s, color 0.3s',
+                  }}
+                >
+                  {i < videoStage ? '✓' : i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span
+                    className="text-sm"
+                    style={{
+                      color: i === videoStage ? 'var(--tq-text)' : 'var(--tq-muted)',
+                      fontWeight: i === videoStage ? 600 : 400,
+                      transition: 'color 0.3s, font-weight 0.3s',
+                    }}
+                  >
+                    {stageLabel}
+                  </span>
+                  {/* Upload progress bar for stage 0 */}
+                  {isUploadStage && (
+                    <div style={{ height: 4, borderRadius: 2, background: 'var(--tq-surface)', marginTop: 4 }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          borderRadius: 2,
+                          background: 'var(--tq-accent)',
+                          width: `${uploadProgress.percent}%`,
+                          transition: 'width 0.3s',
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {state.isAnalysing && elapsedSeconds > 0 && (

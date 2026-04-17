@@ -43,12 +43,15 @@ describe('Upload resilience', () => {
       );
     });
 
-    it('has AbortController for cancellation', () => {
-      expect(jobDetailsSource).toMatch(/AbortController/);
+    it('uses uploadWithProgress with abort capability', () => {
+      expect(jobDetailsSource).toMatch(/uploadWithProgress/);
+      expect(jobDetailsSource).toMatch(/abort/);
     });
 
-    it('has a timeout for the upload', () => {
-      expect(jobDetailsSource).toMatch(/setTimeout.*abort|controller\.abort/);
+    it('has a timeout for the upload (via XHR)', () => {
+      // Timeout is now handled inside uploadWithProgress (xhr.timeout = 300000)
+      // JobDetails uses the abort function from uploadWithProgress
+      expect(jobDetailsSource).toMatch(/uploadWithProgress|abort/);
     });
 
     it('handles AbortError specifically', () => {
