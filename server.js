@@ -15,6 +15,7 @@ import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
 import { processVideo } from './src/utils/videoProcessor.js';
 import { parseAIResponse, validateAIResponse, normalizeAIResponse } from './src/utils/aiParser.js';
+import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1901,6 +1902,31 @@ const videoRateLimit = rateLimit({
   validate: false,
 });
 
+// --- SSE video progress ---
+const videoProgress = new VideoProgressEmitter();
+
+app.get('/api/users/:id/jobs/:jobId/video/progress', requireAuth, (req, res) => {
+  const { jobId } = req.params;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  res.write('\n'); // flush headers
+
+  const unsub = videoProgress.subscribe(jobId, (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (data.stage === 'complete' || data.stage === 'error') {
+      res.end();
+    }
+  });
+
+  req.on('close', () => {
+    unsub();
+  });
+});
+
 app.post('/api/users/:id/jobs/:jobId/video',
   requireAuth,
   videoRateLimit,
@@ -1924,6 +1950,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
 
     console.log(`[Video] user=${userId} job=${jobId} mime=${videoFile.mimetype} size=${videoFile.size} extraPhotos=${extraPhotoFiles.length}`);
 
+    videoProgress.create(jobId);
     try {
       // Parse form fields — frontend sends briefNotes (#3) and profile JSON (#5)
       const briefNotes = req.body.briefNotes || '';
@@ -1946,6 +1973,8 @@ app.post('/api/users/:id/jobs/:jobId/video',
         name: f.originalname,
       }));
 
+      videoProgress.emit(jobId, { stage: 'processing', progress: 10, message: 'Processing video...' });
+
       const result = await processVideo({
         videoPath: videoFile.path,
         jobId,
@@ -1956,6 +1985,8 @@ app.post('/api/users/:id/jobs/:jobId/video',
       });
 
       console.log(`[Video] SUCCESS user=${userId} job=${jobId} frames=${result.frames.length} transcript=${result.transcript.length}chars`);
+
+      videoProgress.emit(jobId, { stage: 'analysing', progress: 50, message: 'Analysing with AI...' });
 
       // Build imageContent array in the same format as the photo analysis pipeline
       const imageContent = [];
@@ -2043,6 +2074,8 @@ app.post('/api/users/:id/jobs/:jobId/video',
       normalised.additionalCosts = [];
       normalised.labourEstimate.dayRate = profile.dayRate;
 
+      videoProgress.emit(jobId, { stage: 'reviewing', progress: 80, message: 'Reviewing analysis...' });
+
       // Self-critique
       let finalNormalised = normalised;
       let critiqueNotes = null;
@@ -2060,6 +2093,8 @@ app.post('/api/users/:id/jobs/:jobId/video',
         console.warn('[Video] Self-critique failed, returning original analysis:', err.message);
       }
 
+      videoProgress.finish(jobId);
+
       // Return the same shape the frontend expects: { normalised, rawResponse, critiqueNotes } (#1)
       res.json({
         normalised: finalNormalised,
@@ -2070,6 +2105,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       });
     } catch (err) {
       console.error(`[Video] FAIL user=${userId} job=${jobId} error=${err.message}`);
+      videoProgress.error(jobId, err.message);
       if (err.message === 'Video must be under 3 minutes' || err.message === 'Video appears to be empty') {
         return res.status(400).json({ error: err.message });
       }
@@ -2080,6 +2116,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       for (const f of extraPhotoFiles) {
         try { if (f?.path) fs.unlinkSync(f.path); } catch {}
       }
+      videoProgress.destroy(jobId);
     }
   }
 );
