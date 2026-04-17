@@ -239,7 +239,7 @@ async function initDB() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS dictation_runs (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id),
+        user_id TEXT NOT NULL REFERENCES users(id),
         success BOOLEAN NOT NULL,
         latency_ms INTEGER,
         audio_bytes INTEGER,
