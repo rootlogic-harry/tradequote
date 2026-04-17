@@ -29,6 +29,7 @@ export default function VideoUpload({
   const [dragOver, setDragOver] = useState(false);
   const [duration, setDuration] = useState(null);
   const [thumbnailUrl, setThumbnailUrl] = useState(null);
+  const [videoUrl, setVideoUrl] = useState(null);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const fileInputRef = useRef(null);
   const photoInputRef = useRef(null);
@@ -38,10 +39,12 @@ export default function VideoUpload({
     if (!video) {
       setDuration(null);
       setThumbnailUrl(null);
+      setVideoUrl(null);
       return;
     }
 
     const url = URL.createObjectURL(video);
+    setVideoUrl(url);
     const videoEl = document.createElement('video');
     videoEl.preload = 'metadata';
     videoEl.src = url;
@@ -66,7 +69,7 @@ export default function VideoUpload({
       const ctx = canvas.getContext('2d');
       ctx.drawImage(videoEl, 0, 0);
       setThumbnailUrl(canvas.toDataURL('image/jpeg', 0.7));
-      URL.revokeObjectURL(url);
+      // Don't revoke url here — it's used by the <video> playback preview
     };
 
     return () => URL.revokeObjectURL(url);
@@ -188,61 +191,62 @@ export default function VideoUpload({
   // --- Video selected: show preview ---
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Video preview */}
+      {/* Video playback preview */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
         padding: '16px',
         border: '1px solid var(--border, #e0e0e0)',
         borderRadius: '12px',
         background: 'var(--card-bg, #fff)',
       }}>
-        {thumbnailUrl && (
-          <img
-            src={thumbnailUrl}
-            alt="Video thumbnail"
+        {videoUrl && (
+          <video
+            src={videoUrl}
+            controls
+            playsInline
+            preload="metadata"
+            poster={thumbnailUrl || undefined}
             style={{
-              width: '120px',
-              maxWidth: '120px',
-              height: '80px',
-              objectFit: 'cover',
+              width: '100%',
+              maxHeight: '240px',
               borderRadius: '8px',
-              flexShrink: 0,
+              marginBottom: '12px',
+              background: '#000',
             }}
           />
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontWeight: 600,
-            fontSize: '14px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
-            {video.name}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontWeight: 600,
+              fontSize: '14px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {video.name}
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #666)', marginTop: '4px' }}>
+              {duration ? formatDuration(duration) : 'Loading...'}
+              {video.size ? ` · ${(video.size / (1024 * 1024)).toFixed(1)}MB` : ''}
+            </div>
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--text-secondary, #666)', marginTop: '4px' }}>
-            {duration ? formatDuration(duration) : 'Loading...'}
-            {video.size ? ` · ${(video.size / (1024 * 1024)).toFixed(1)}MB` : ''}
-          </div>
+          <button
+            type="button"
+            onClick={handleReplace}
+            style={{
+              padding: '8px 16px',
+              minHeight: '44px',
+              borderRadius: '8px',
+              border: '1px solid var(--border, #ccc)',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: '13px',
+              flexShrink: 0,
+            }}
+          >
+            Replace
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleReplace}
-          style={{
-            padding: '8px 16px',
-            minHeight: '44px',
-            borderRadius: '8px',
-            border: '1px solid var(--border, #ccc)',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: '13px',
-            flexShrink: 0,
-          }}
-        >
-          Replace
-        </button>
       </div>
 
       {/* Add photos toggle */}
