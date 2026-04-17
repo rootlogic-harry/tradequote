@@ -5,12 +5,14 @@ process.env.OPENAI_API_KEY = 'test-key-for-jest';
 
 // Mock the openai module before importing whisperClient
 const mockCreate = jest.fn();
+const mockToFile = jest.fn(async (buf, name, opts) => ({ _buf: buf, name, type: opts?.type }));
 jest.unstable_mockModule('openai', () => ({
   default: class OpenAI {
     constructor() {
       this.audio = { transcriptions: { create: mockCreate } };
     }
   },
+  toFile: mockToFile,
 }));
 
 const { transcribe, TRADE_PROMPT } = await import('../utils/whisperClient.js');
@@ -18,6 +20,7 @@ const { transcribe, TRADE_PROMPT } = await import('../utils/whisperClient.js');
 describe('whisperClient', () => {
   beforeEach(() => {
     mockCreate.mockReset();
+    mockToFile.mockClear();
   });
 
   describe('transcribe', () => {
@@ -67,11 +70,27 @@ describe('whisperClient', () => {
       expect(result).toBe('');
     });
 
-    it('passes a file object to the API', async () => {
+    it('passes a file object to the API via toFile()', async () => {
       mockCreate.mockResolvedValue({ text: 'wall needs rebuilding' });
       await transcribe(Buffer.from('audio-data'), 'audio/mp4');
       const callArgs = mockCreate.mock.calls[0][0];
       expect(callArgs.file).toBeDefined();
+      // Verify toFile was called with the buffer
+      expect(mockToFile).toHaveBeenCalledTimes(1);
+      expect(mockToFile.mock.calls[0][1]).toBe('dictation.mp4');
+    });
+
+    it('strips codec params from MIME type when building filename', async () => {
+      mockCreate.mockResolvedValue({ text: 'test' });
+      await transcribe(Buffer.from('audio'), 'audio/webm;codecs=opus');
+      // toFile should get 'dictation.webm', not 'dictation.webm;codecs=opus'
+      expect(mockToFile.mock.calls[0][1]).toBe('dictation.webm');
+    });
+
+    it('defaults to webm extension for unknown MIME types', async () => {
+      mockCreate.mockResolvedValue({ text: 'test' });
+      await transcribe(Buffer.from('audio'), '');
+      expect(mockToFile.mock.calls[0][1]).toBe('dictation.webm');
     });
   });
 
