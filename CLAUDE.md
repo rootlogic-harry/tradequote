@@ -279,7 +279,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - RAMS mobile navigation relies on scroll-to with pill bar — no native anchor support
 - Draft auto-save is per-user in PostgreSQL, but active in-tab reducer state is lost on page refresh if not saved
 - Self-critique agent runs synchronously after analysis — adds ~2s to Step 3 load time
-- Voice dictation requires `OPENAI_API_KEY` env var on Railway; feature is gated per-user via `voice_dictation` setting (not coupled to plan). Audio is in-memory only — never persisted to disk or DB
+- Voice dictation requires `OPENAI_API_KEY` env var on Railway; enabled for all users by default (opt-out via `voice_dictation = false` in settings). Audio is in-memory only — never persisted to disk or DB
 
 ---
 
@@ -463,6 +463,7 @@ railway logs --tail 50  # Check for startup errors
 | Component renders but looks wrong | CSS class doesn't exist or Tailwind CDN issue | Grep for the class in the codebase — ensure it's defined |
 | Save works but data missing on reload | Field not in `SAVE_ALLOWLIST` | Add to allowlist (requires approval — see Do-Not-Touch List) |
 | Basic user sees admin content | Missing `isAdminPlan` gate | Add `{isAdminPlan && ...}` conditional or check component defaults |
+| Railway healthcheck fails on deploy | `express-rate-limit` validation rejects custom `keyGenerator` | Set `validate: false` on rate limiters that key by user ID, not IP |
 
 ---
 
