@@ -5,6 +5,8 @@ const MAX_EXTRA_PHOTOS = 3;
 /**
  * Video upload component with drag-and-drop, thumbnail preview,
  * duration display, and optional extra photos.
+ * Mobile-optimised: capture="environment" for rear camera,
+ * 44px minimum touch targets, client-side duration check.
  *
  * @param {object} props
  * @param {File|null} props.video            — currently selected video file
@@ -12,6 +14,8 @@ const MAX_EXTRA_PHOTOS = 3;
  * @param {File[]} props.extraPhotos         — extra photo files
  * @param {(files: File[]) => void} props.onExtraPhotosChange
  * @param {number} [props.maxExtraPhotos=3]
+ * @param {number} [props.maxDuration=180]   — max video length in seconds
+ * @param {(msg: string) => void} [props.onDurationError] — called when video exceeds maxDuration
  */
 export default function VideoUpload({
   video = null,
@@ -19,6 +23,8 @@ export default function VideoUpload({
   extraPhotos = [],
   onExtraPhotosChange,
   maxExtraPhotos = MAX_EXTRA_PHOTOS,
+  maxDuration = 180,
+  onDurationError,
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [duration, setDuration] = useState(null);
@@ -42,6 +48,13 @@ export default function VideoUpload({
 
     videoEl.onloadedmetadata = () => {
       setDuration(videoEl.duration);
+      // Client-side duration check — reject before uploading
+      if (videoEl.duration > maxDuration) {
+        onDurationError?.(`Video must be under ${Math.floor(maxDuration / 60)} minutes`);
+        onVideoChange(null);
+        URL.revokeObjectURL(url);
+        return;
+      }
       // Seek to 1 second for thumbnail
       videoEl.currentTime = Math.min(1, videoEl.duration / 2);
     };
@@ -141,10 +154,10 @@ export default function VideoUpload({
       >
         <div style={{ fontSize: '36px', marginBottom: '12px' }}>🎬</div>
         <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
-          Drop a video here
+          Tap to record or drop a video
         </div>
         <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '16px' }}>
-          or click to browse (max 3 minutes, 100MB)
+          or choose from your files (max 3 minutes, 100MB)
         </div>
         <button
           type="button"
@@ -164,6 +177,7 @@ export default function VideoUpload({
           ref={fileInputRef}
           type="file"
           accept="video/*"
+          capture="environment"
           onChange={handleInputChange}
           style={{ display: 'none' }}
         />
@@ -190,6 +204,7 @@ export default function VideoUpload({
             alt="Video thumbnail"
             style={{
               width: '120px',
+              maxWidth: '120px',
               height: '80px',
               objectFit: 'cover',
               borderRadius: '8px',
@@ -217,6 +232,7 @@ export default function VideoUpload({
           onClick={handleReplace}
           style={{
             padding: '8px 16px',
+            minHeight: '44px',
             borderRadius: '8px',
             border: '1px solid var(--border, #ccc)',
             background: 'transparent',
@@ -276,15 +292,15 @@ export default function VideoUpload({
                   onClick={() => handlePhotoRemove(i)}
                   style={{
                     position: 'absolute',
-                    top: '-6px',
-                    right: '-6px',
-                    width: '24px',
-                    height: '24px',
+                    top: '-10px',
+                    right: '-10px',
+                    width: '44px',
+                    height: '44px',
                     borderRadius: '50%',
                     border: 'none',
                     background: '#ef4444',
                     color: '#fff',
-                    fontSize: '14px',
+                    fontSize: '18px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
