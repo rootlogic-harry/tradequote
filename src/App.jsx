@@ -150,9 +150,15 @@ export default function App() {
       quoteSequence: sessionState?.quoteSequence || quoteSequence,
     });
 
-    // If session state exists with active work, restore it but stay on dashboard
+    // If session state exists with active work, restore it and return to editor
+    // This handles mid-workflow page reloads (e.g. mobile mic permission prompt
+    // causing browser to reload the tab) — the user lands back in the editor
+    // instead of being dumped on the dashboard.
     if (sessionState && sessionState.step > 1) {
       dispatch({ type: 'RESTORE_DRAFT', draft: sessionState });
+      setCurrentView('editor');
+    } else {
+      setCurrentView('dashboard');
     }
 
     // Store last user
@@ -168,9 +174,6 @@ export default function App() {
         }
       } catch {}
     }
-
-    // Always land on dashboard first
-    setCurrentView('dashboard');
 
     // Fetch jobs for dashboard
     fetchIncompleteJobs(userId);
