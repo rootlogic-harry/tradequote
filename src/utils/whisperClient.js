@@ -1,3 +1,6 @@
+import { File as NodeFile } from 'node:buffer';
+if (!globalThis.File) globalThis.File = NodeFile;
+
 import OpenAI, { toFile } from 'openai';
 
 // Lazy-init: avoid throwing at module load if OPENAI_API_KEY is not yet set
