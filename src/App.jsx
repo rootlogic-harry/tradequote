@@ -53,7 +53,7 @@ export default function App() {
   const [dismissedSaveErrorKey, setDismissedSaveErrorKey] = useState(0);
 
   // Feature flag: voice dictation (per-user setting, not coupled to plan)
-  const [voiceDictationEnabled, setVoiceDictationEnabled] = useState(false);
+  const [voiceDictationEnabled, setVoiceDictationEnabled] = useState(true);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -138,7 +138,7 @@ export default function App() {
 
     // Load feature flags
     const voiceFlag = await getSetting(userId, 'voice_dictation');
-    setVoiceDictationEnabled(!!voiceFlag);
+    setVoiceDictationEnabled(voiceFlag !== false);
 
     // Dispatch SELECT_USER — always use DB profile (source of truth)
     const user = state.allUsers.find(u => u.id === userId);
