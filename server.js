@@ -10,6 +10,8 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 import { safeError } from './safeError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
+import multer from 'multer';
+import { transcribe } from './src/utils/whisperClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -230,6 +232,21 @@ async function initDB() {
         last_error TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         next_retry_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+
+    // Dictation telemetry — voice-to-text usage tracking
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dictation_runs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        success BOOLEAN NOT NULL,
+        latency_ms INTEGER,
+        audio_bytes INTEGER,
+        duration_ms INTEGER,
+        transcript_chars INTEGER,
+        failure_category TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
 
@@ -1761,6 +1778,65 @@ const aiRateLimit = rateLimit({
   keyGenerator: (req) => req.user?.id || 'anonymous',
   message: { error: 'Too many analyses. Please wait before trying again.' },
   validate: { xForwardedForHeader: false, default: true },
+});
+
+// --- Dictation (voice-to-text) ---
+
+const dictationUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
+const dictationRateLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 30,
+  keyGenerator: (req) => req.user?.id || 'anonymous',
+  message: { error: 'Too many dictation requests. Please wait a moment.' },
+  validate: { xForwardedForHeader: false, default: true },
+});
+
+app.post('/api/dictate', requireAuth, dictationRateLimit, dictationUpload.single('audio'), async (req, res) => {
+  const startTime = Date.now();
+  const userId = req.user.id;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No audio file provided' });
+  }
+
+  if (!req.file.mimetype?.startsWith('audio/')) {
+    return res.status(400).json({ error: 'File must be an audio recording' });
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    console.error('[Dictation] OPENAI_API_KEY not configured');
+    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+
+  try {
+    const text = await transcribe(req.file.buffer, req.file.mimetype);
+    const latencyMs = Date.now() - startTime;
+
+    // Log telemetry (non-blocking)
+    pool.query(
+      `INSERT INTO dictation_runs (user_id, success, latency_ms, audio_bytes, transcript_chars)
+       VALUES ($1, true, $2, $3, $4)`,
+      [userId, latencyMs, req.file.size, text.length]
+    ).catch(err => console.warn('[Dictation] Telemetry insert failed:', err.message));
+
+    res.json({ text });
+  } catch (err) {
+    const latencyMs = Date.now() - startTime;
+
+    // Log failed attempt (non-blocking)
+    pool.query(
+      `INSERT INTO dictation_runs (user_id, success, latency_ms, audio_bytes, transcript_chars, failure_category)
+       VALUES ($1, false, $2, $3, 0, $4)`,
+      [userId, latencyMs, req.file.size, err.constructor?.name || 'unknown']
+    ).catch(telErr => console.warn('[Dictation] Telemetry insert failed:', telErr.message));
+
+    safeError(res, err, `POST /api/dictate user=${userId}`);
+  }
 });
 
 app.post('/api/anthropic/messages', requireAuth, aiRateLimit, async (req, res) => {

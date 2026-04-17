@@ -19,6 +19,7 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 | DOCX | `docx` library (v9.6.1) |
 | Auth | Google OAuth 2.0 + legacy session switcher |
 | Sessions | connect-pg-simple (PostgreSQL-backed) |
+| Voice-to-text | OpenAI Whisper (`openai` SDK), `multer` for upload |
 | Testing | Jest 29 (ESM), TDD |
 | Hosting | Railway (auto-deploy on push to `main`) |
 | Fonts | Barlow Condensed (headings), IBM Plex Sans (body), IBM Plex Mono (money) |
@@ -38,6 +39,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 - **Photos**: Slot-based upload (overview, closeup, sideProfile, referenceCard, access) stored as TEXT in `user_photos`
 - **Drafts**: Auto-save/restore via `drafts` table
 - **AI Proxy**: `/api/anthropic/messages` and `/api/users/:id/analyse` with rate limiting
+- **Dictation**: `POST /api/dictate` — multipart audio upload → OpenAI Whisper → transcript. Rate limited (30/5min), session-derived user, in-memory audio only (no disk)
 - **Admin**: Learning dashboard, agent runs, calibration notes (all behind `requireAdminPlan` middleware)
 
 ### Frontend
@@ -45,7 +47,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 Single-page React app. All state in one `useReducer` in `App.jsx`. Five-step workflow:
 
 1. **Profile Setup** — company details, day rate, VAT
-2. **Job Details** — client info, 5 photo slots, brief notes
+2. **Job Details** — client info, 5 photo slots, brief notes (optional voice dictation via `VoiceRecorder`)
 3. **AI Analysis** — loading screen (auto-advances)
 4. **Review & Edit** — three-column desktop, accordion mobile. Measurements must all be confirmed
 5. **Quote Output** — document preview, PDF/DOCX export, email
@@ -74,6 +76,7 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `agent_runs` | Agent execution log (type, status, tokens, duration) |
 | `calibration_notes` | Proposed/approved system prompt adjustments |
 | `agent_retry_queue` | Exponential-backoff retry for failed agent runs |
+| `dictation_runs` | Voice-to-text telemetry (user, success, latency, audio size, transcript chars) |
 | `session` | Express session store (connect-pg-simple) |
 
 ### JSONB Snapshot Contract
@@ -211,7 +214,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 889 tests across 34 suites (745 unit + 85 API integration + 59 security).
+**Current count:** 948 tests across 37 suites (804 unit + 85 API integration + 59 security).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -244,6 +247,9 @@ Test files live in `src/__tests__/`. Key test suites:
 - `dataIntegrity.test.js` — save/load pipeline, allowlist consistency, GDPR, type coercion
 - `componentCrashSafety.test.js` — null-safety across all 42 components
 - `securityAudit.test.js` — auth bypass, IDOR, privilege escalation, headers (requires DATABASE_URL)
+- `whisperClient.test.js` — Whisper API wrapper (model, prompt bias, error propagation)
+- `dictation.test.js` — dictation route contract (auth, validation, MIME, telemetry shape)
+- `voiceRecorder.test.js` — VoiceRecorder helpers (insertion, removal, segment edit detection, design-law compliance)
 
 ---
 
@@ -273,6 +279,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - RAMS mobile navigation relies on scroll-to with pill bar — no native anchor support
 - Draft auto-save is per-user in PostgreSQL, but active in-tab reducer state is lost on page refresh if not saved
 - Self-critique agent runs synchronously after analysis — adds ~2s to Step 3 load time
+- Voice dictation requires `OPENAI_API_KEY` env var on Railway; feature is gated per-user via `voice_dictation` setting (not coupled to plan). Audio is in-memory only — never persisted to disk or DB
 
 ---
 

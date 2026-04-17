@@ -3,6 +3,7 @@ import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
 import { runAnalysis } from '../../utils/analyseJob.js';
 import { savePhoto, deletePhoto, saveDraft } from '../../utils/userDB.js';
+import VoiceRecorder from '../VoiceRecorder.jsx';
 
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
@@ -30,7 +31,7 @@ function resizeImage(file, maxSize = 2048) {
   });
 }
 
-export default function JobDetails({ state, dispatch, abortRef, showToast }) {
+export default function JobDetails({ state, dispatch, abortRef, showToast, voiceDictationEnabled = false }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
   const fileInputRefs = useRef({});
@@ -234,6 +235,14 @@ export default function JobDetails({ state, dispatch, abortRef, showToast }) {
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Brief Notes (optional)
           </label>
+          {voiceDictationEnabled && (
+            <VoiceRecorder
+              value={jobDetails.briefNotes}
+              onUpdateText={(text) => updateJob('briefNotes', text)}
+              currentUserId={state.currentUserId}
+              disabled={!navigator.onLine}
+            />
+          )}
           <textarea
             className={inputClass('briefNotes')}
             rows={2}

@@ -21,7 +21,7 @@ import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 // Sidebar import removed — nav is now in StepIndicator
 import { runAnalysis } from './utils/analyseJob.js';
-import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
+import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
 
@@ -51,6 +51,9 @@ export default function App() {
 
   // Save error banner dismiss state — matches against a key that increments per failure
   const [dismissedSaveErrorKey, setDismissedSaveErrorKey] = useState(0);
+
+  // Feature flag: voice dictation (per-user setting, not coupled to plan)
+  const [voiceDictationEnabled, setVoiceDictationEnabled] = useState(false);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -132,6 +135,10 @@ export default function App() {
     const userTheme = await getTheme(userId);
     if (userTheme) setTheme(userTheme);
     else setTheme(getStoredTheme(userId));
+
+    // Load feature flags
+    const voiceFlag = await getSetting(userId, 'voice_dictation');
+    setVoiceDictationEnabled(!!voiceFlag);
 
     // Dispatch SELECT_USER — always use DB profile (source of truth)
     const user = state.allUsers.find(u => u.id === userId);
@@ -714,7 +721,7 @@ export default function App() {
           />
         );
       case 2:
-        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} />;
+        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} />;
       case 3:
         return <AIAnalysis state={state} dispatch={dispatch} cancelAnalysis={cancelAnalysis} />;
       case 4:
