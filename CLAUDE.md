@@ -41,7 +41,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 - **Drafts**: Auto-save/restore via `drafts` table
 - **AI Proxy**: `/api/anthropic/messages` and `/api/users/:id/analyse` with rate limiting
 - **Dictation**: `POST /api/dictate` — multipart audio upload → OpenAI Whisper → transcript. Rate limited (30/5min), session-derived user, in-memory audio only (no disk)
-- **Video**: `POST /api/users/:id/jobs/:jobId/video` — multer disk storage (100MB), ffmpeg frame extraction + audio extraction, Whisper transcription, Claude analysis. Rate limited (5/hour). Cleans up temp files. Server-side AI normalisation via aiParser pipeline.
+- **Video**: `POST /api/users/:id/jobs/:jobId/video` — multer disk storage (100MB), ffmpeg frame extraction + audio extraction, Whisper transcription, Claude analysis. Rate limited (5/hour). Cleans up temp files. Server-side AI normalisation via aiParser pipeline. Client uploads via XHR with real progress tracking and automatic retry (3 attempts, exponential backoff).
 - **Video Progress**: `GET /api/users/:id/jobs/:jobId/video/progress` — SSE endpoint for real-time progress. Emits stages: processing (10%), analysing (50%), reviewing (80%), complete (100%). Client connects before upload, falls back to time-based estimation if SSE unavailable.
 - **Admin**: Learning dashboard, agent runs, calibration notes (all behind `requireAdminPlan` middleware)
 
@@ -50,7 +50,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 Single-page React app. All state in one `useReducer` in `App.jsx`. Five-step workflow:
 
 1. **Profile Setup** — company details, day rate, VAT
-2. **Job Details** — client info, capture mode choice (video walkthrough or photos), 5 photo slots or video upload with optional extra photos, brief notes (optional voice dictation via `VoiceRecorder`). Video upload is mobile-optimised with `capture="environment"` for native camera, 44px touch targets, and client-side duration validation (3-minute max).
+2. **Job Details** — client info, capture mode choice (video walkthrough or photos), 5 photo slots or video upload with optional extra photos, brief notes (optional voice dictation via `VoiceRecorder`). Video upload: mobile-optimised (`capture="environment"`, 44px targets, 3-min client-side check), full playback preview with native controls, XHR upload with real progress % and automatic retry.
 3. **AI Analysis** — loading screen with SSE-driven staged progress for video mode (falls back to time-based estimation) or rotating messages for photo mode (auto-advances)
 4. **Review & Edit** — three-column desktop, accordion mobile. Measurements must all be confirmed
 5. **Quote Output** — document preview, PDF/DOCX export, email
@@ -217,7 +217,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 970 tests across 48 suites (unit + video processing). API integration (85) and security (59) suites run separately.
+**Current count:** 1007 tests across 52 suites (unit + video processing). API integration (85) and security (59) suites run separately.
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -266,6 +266,10 @@ Test files live in `src/__tests__/`. Key test suites:
 - `videoProgress.test.js` — SSE progress emitter unit tests + server route validation
 - `videoProgressClient.test.js` — client-side SSE wiring (reducer, JobDetails, AIAnalysis)
 - `uploadResilience.test.js` — error handling contract tests across video pipeline
+- `uploadWithProgress.test.js` — XHR upload utility with progress tracking
+- `uploadProgressUI.test.js` — upload progress wiring (reducer, JobDetails, AIAnalysis)
+- `uploadRetry.test.js` — retry logic with exponential backoff
+- `videoPreview.test.js` — video playback preview with native controls
 
 ---
 
@@ -296,7 +300,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - Draft auto-save is per-user in PostgreSQL, but active in-tab reducer state is lost on page refresh if not saved
 - Self-critique agent runs synchronously after analysis — adds ~2s to Step 3 load time
 - Voice dictation requires `OPENAI_API_KEY` env var on Railway; enabled for all users by default (opt-out via `voice_dictation = false` in settings). Audio is in-memory only — never persisted to disk or DB
-- Video walkthrough requires ffmpeg on the server (installed via `nixpacks.toml` aptPkgs). Max 3 minutes, 100MB. Mobile-optimised with native camera capture and SSE real-time progress. Video files stored temporarily in `/tmp` during processing, cleaned up after.
+- Video walkthrough requires ffmpeg on the server (installed via `nixpacks.toml` aptPkgs). Max 3 minutes, 100MB. Mobile-optimised with native camera capture, SSE real-time progress, XHR upload with real % tracking, automatic retry (3 attempts), and full playback preview. Video files stored temporarily in `/tmp` during processing, cleaned up after. No chunked/resumable upload yet (single XHR).
 - Video processing pipeline: validate duration → extract frames (max 50) → extract audio → transcribe via Whisper → analyse via Claude. All server-side.
 
 ---
