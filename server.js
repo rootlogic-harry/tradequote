@@ -12,6 +12,7 @@ import { safeError } from './safeError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
+import { processVideo } from './src/utils/videoProcessor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1869,6 +1870,183 @@ app.post('/api/dictate', requireAuth, dictationRateLimit, dictationUpload.single
     safeError(res, err, `POST /api/dictate user=${userId}`);
   }
 });
+
+// --- Video Upload (walkthrough) ---
+
+const videoStorage = multer.diskStorage({
+  destination: '/tmp',
+  filename: (req, file, cb) => cb(null, `video_${req.params.jobId}_${Date.now()}`),
+});
+
+const videoUpload = multer({
+  storage: videoStorage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('video/')) cb(null, true);
+    else cb(new Error('File must be a video'), false);
+  },
+});
+
+const videoRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  keyGenerator: (req) => String(req.user?.id ?? 0),
+  message: { error: 'Too many video analyses. Please wait before trying again.' },
+  validate: false,
+});
+
+app.post('/api/users/:id/jobs/:jobId/video',
+  videoRateLimit,
+  videoUpload.single('video'),
+  async (req, res) => {
+    const userId = req.user.id;
+    const { jobId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    if (!req.file.mimetype?.startsWith('video/')) {
+      return res.status(400).json({ error: 'File must be a video' });
+    }
+
+    console.log(`[Video] user=${userId} job=${jobId} mime=${req.file.mimetype} size=${req.file.size}`);
+
+    try {
+      // Parse extra notes and photos from the multipart form
+      const extraNotes = req.body.extraNotes || '';
+      const extraPhotos = req.body.extraPhotos ? JSON.parse(req.body.extraPhotos) : [];
+      const siteAddress = req.body.siteAddress || '';
+
+      const result = await processVideo({
+        videoPath: req.file.path,
+        jobId,
+        extraNotes,
+        extraPhotos,
+        siteAddress,
+        profile: { dayRate: Number(req.body.dayRate) || 400 },
+      });
+
+      console.log(`[Video] SUCCESS user=${userId} job=${jobId} frames=${result.frames.length} transcript=${result.transcript.length}chars`);
+
+      // Build imageContent array in the same format as the photo analysis pipeline
+      const imageContent = [];
+
+      // Video frames
+      for (let i = 0; i < result.frames.length; i++) {
+        imageContent.push({ type: 'text', text: `--- Video Frame ${i + 1} ---` });
+        imageContent.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: result.frames[i].mediaType,
+            data: result.frames[i].base64,
+          },
+        });
+      }
+
+      // Extra photos
+      for (let i = 0; i < result.extraPhotoFrames.length; i++) {
+        imageContent.push({ type: 'text', text: `--- Additional Photo ${i + 1} ---` });
+        imageContent.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: result.extraPhotoFrames[i].mediaType,
+            data: result.extraPhotoFrames[i].base64,
+          },
+        });
+      }
+
+      // Text (site address + combined notes)
+      imageContent.push({
+        type: 'text',
+        text: `Site address: ${siteAddress}${result.combinedNotes ? `\nTradesman notes: ${result.combinedNotes}` : ''}`,
+      });
+
+      // Now call the same Anthropic analysis pipeline the photo path uses
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
+      }
+
+      // Load calibration notes
+      let augmentedPrompt = SYSTEM_PROMPT;
+      try {
+        const { rows: calNotes } = await pool.query(
+          `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
+        );
+        if (calNotes.length > 0) {
+          const dynamicSection = calNotes.map((n, i) =>
+            `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
+          ).join('\n');
+          augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES:\n${dynamicSection}`;
+        }
+      } catch (err) {
+        console.warn('[Video] Failed to load calibration notes:', err.message);
+      }
+
+      const promptVersion = computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
+
+      const analysisResponse = await callAnthropicRaw({
+        systemPrompt: augmentedPrompt,
+        messages: [{ role: 'user', content: imageContent }],
+        model: 'claude-sonnet-4-20250514',
+        maxTokens: 4000,
+        apiKey,
+      });
+
+      const rawText = analysisResponse.content?.[0]?.text || '';
+
+      let analysisJson = null;
+      try {
+        const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        const toParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+        analysisJson = JSON.parse(toParse);
+      } catch {
+        return res.json({
+          content: [{ type: 'text', text: rawText }],
+          usage: analysisResponse.usage,
+          critiqueNotes: null,
+        });
+      }
+
+      // Self-critique
+      let finalAnalysis = analysisJson;
+      let critiqueNotes = null;
+      try {
+        const critiqueResult = await runSelfCritique({
+          pool,
+          userId,
+          jobId: null,
+          analysis: analysisJson,
+          briefNotes: result.combinedNotes || '',
+        });
+        finalAnalysis = critiqueResult.analysis;
+        critiqueNotes = critiqueResult.critique;
+      } catch (err) {
+        console.warn('[Video] Self-critique failed, returning original analysis:', err.message);
+      }
+
+      res.json({
+        content: [{ type: 'text', text: JSON.stringify(finalAnalysis) }],
+        usage: analysisResponse.usage,
+        critiqueNotes,
+        promptVersion,
+        transcript: result.transcript,
+      });
+    } catch (err) {
+      console.error(`[Video] FAIL user=${userId} job=${jobId} error=${err.message}`);
+      if (err.message === 'Video must be under 3 minutes' || err.message === 'Video appears to be empty') {
+        return res.status(400).json({ error: err.message });
+      }
+      safeError(res, err, `POST /api/users/:id/jobs/:jobId/video user=${userId}`);
+    } finally {
+      // Clean up the uploaded video file
+      try { if (req.file?.path) { const fs = await import('node:fs'); fs.default.unlinkSync(req.file.path); } } catch {}
+    }
+  }
+);
 
 app.post('/api/anthropic/messages', requireAuth, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
