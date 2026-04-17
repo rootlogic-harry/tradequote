@@ -69,6 +69,7 @@ export const initialState = {
   reviewData: null,
   diffs: [],
   quotePayload: null,
+  captureMode: null,       // null | 'video' | 'photos'
   quoteMode: 'standard',  // 'standard' | 'quick'
   quoteSequence: 1,
   savedJobId: null,
@@ -104,6 +105,9 @@ function reducerCore(state, action) {
   switch (action.type) {
     case 'SET_STEP':
       return { ...state, step: action.step };
+
+    case 'SET_CAPTURE_MODE':
+      return { ...state, captureMode: action.payload };
 
     case 'UPDATE_PROFILE':
       return { ...state, profile: { ...state.profile, ...action.updates } };
@@ -362,6 +366,7 @@ function reducerCore(state, action) {
       const year = new Date().getFullYear();
       return {
         ...state,
+        captureMode: null,
         quoteMode: action.mode || 'standard',
         step: 2,
         jobDetails: {

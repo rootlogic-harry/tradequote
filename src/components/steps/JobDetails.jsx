@@ -4,6 +4,8 @@ import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/vali
 import { runAnalysis } from '../../utils/analyseJob.js';
 import { savePhoto, deletePhoto, saveDraft } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
+import CaptureChoice from '../CaptureChoice.jsx';
+import VideoUpload from '../VideoUpload.jsx';
 
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
@@ -39,7 +41,9 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
   const [dragOverExtra, setDragOverExtra] = useState(false); // extra photos drop zone
   const [uploadingSlot, setUploadingSlot] = useState(null); // which slot is processing
 
-  const { jobDetails, photos, extraPhotos, profile } = state;
+  const { jobDetails, photos, extraPhotos, profile, captureMode } = state;
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoExtraPhotos, setVideoExtraPhotos] = useState([]);
 
   const updateJob = (field, value) => {
     dispatch({ type: 'UPDATE_JOB_DETAILS', updates: { [field]: value } });
@@ -144,9 +148,56 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
     });
   };
 
+  const handleVideoAnalyse = async () => {
+    const jobResult = validateJobDetails(jobDetails);
+    setErrors(jobResult.errors);
+    if (!jobResult.valid) return;
+    if (!videoFile) return;
+
+    dispatch({ type: 'ANALYSIS_START' });
+
+    try {
+      const formData = new FormData();
+      formData.append('video', videoFile);
+      formData.append('siteAddress', jobDetails.siteAddress);
+      formData.append('briefNotes', jobDetails.briefNotes || '');
+      formData.append('profile', JSON.stringify(profile));
+      videoExtraPhotos.forEach((photo) => {
+        formData.append('extraPhotos', photo);
+      });
+
+      const res = await fetch(`/api/users/${state.currentUserId}/jobs/draft/video`, {
+        method: 'POST',
+        body: formData,
+        signal: abortRef?.current?.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Video analysis failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      dispatch({
+        type: 'ANALYSIS_SUCCESS',
+        normalised: data.normalised,
+        rawResponse: data.rawResponse,
+        critiqueNotes: data.critiqueNotes || null,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        dispatch({ type: 'ANALYSIS_CANCEL' });
+      } else {
+        dispatch({ type: 'ANALYSIS_ERROR', error: err.message });
+      }
+    }
+  };
+
   const hasAnyPhoto = Object.values(photos).some(p => p != null) || extraPhotos.length > 0;
   const canAnalyse =
     hasAnyPhoto && jobDetails.siteAddress?.trim() && !state.isAnalysing;
+  const canAnalyseVideo =
+    videoFile && jobDetails.siteAddress?.trim() && !state.isAnalysing;
 
   // Count missing required photos for CTA label
   const filledCount = Object.values(photos).filter(p => p != null).length + extraPhotos.length;
@@ -256,6 +307,116 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             placeholder="Anything we should know — e.g. wall is on a slope, needs through stones replacing..."
           />
         </div>
+      </div>
+
+      {/* Capture mode choice */}
+      {!captureMode && (
+        <CaptureChoice
+          onSelectMode={(mode) => dispatch({ type: 'SET_CAPTURE_MODE', payload: mode })}
+          defaultMode={captureMode}
+        />
+      )}
+
+      {/* Video upload mode */}
+      {captureMode === 'video' && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-heading font-bold text-tq-text">
+              Video Walkthrough
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({ type: 'SET_CAPTURE_MODE', payload: null });
+                setVideoFile(null);
+                setVideoExtraPhotos([]);
+              }}
+              className="text-sm text-tq-accent hover:underline"
+            >
+              Change capture method
+            </button>
+          </div>
+          <VideoUpload
+            video={videoFile}
+            onVideoChange={setVideoFile}
+            extraPhotos={videoExtraPhotos}
+            onExtraPhotosChange={setVideoExtraPhotos}
+          />
+
+          {/* Brief notes in video mode */}
+          <div className="mt-6">
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Brief Notes (optional)
+            </label>
+            {voiceDictationEnabled && (
+              <VoiceRecorder
+                value={jobDetails.briefNotes}
+                onUpdateText={(text) => updateJob('briefNotes', text)}
+                currentUserId={state.currentUserId}
+                disabled={!navigator.onLine}
+              />
+            )}
+            <textarea
+              className={inputClass('briefNotes')}
+              rows={2}
+              value={jobDetails.briefNotes}
+              onChange={(e) => {
+                updateJob('briefNotes', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              style={{ overflow: 'hidden', resize: 'none' }}
+              placeholder="Anything we should know — e.g. wall is on a slope, needs through stones replacing..."
+            />
+          </div>
+
+          {/* Video analyse CTA */}
+          <div className="flex justify-end gap-3 mt-6">
+            {state.currentUserId && (
+              <button
+                onClick={async () => {
+                  try {
+                    await saveDraft(state.currentUserId, state);
+                    if (showToast) showToast('Progress saved', 'success');
+                  } catch {
+                    if (showToast) showToast('Failed to save progress', 'error');
+                  }
+                }}
+                className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-3 rounded transition-colors"
+              >
+                Save Progress
+              </button>
+            )}
+            <button
+              disabled={!canAnalyseVideo}
+              onClick={handleVideoAnalyse}
+              className="font-heading font-bold uppercase tracking-wide px-8 py-3 rounded transition-colors"
+              style={{
+                backgroundColor: canAnalyseVideo ? 'var(--tq-accent)' : 'var(--tq-surface)',
+                color: canAnalyseVideo ? '#ffffff' : 'var(--tq-muted)',
+                opacity: canAnalyseVideo ? 1 : 0.45,
+                cursor: canAnalyseVideo ? 'pointer' : 'not-allowed',
+                minHeight: 48,
+              }}
+            >
+              {canAnalyseVideo ? 'GENERATE QUOTE' : 'ADD VIDEO TO CONTINUE'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Photo mode: existing flow unchanged */}
+      {captureMode === 'photos' && (
+        <>
+      {/* Change capture method link */}
+      <div className="flex justify-end mb-4">
+        <button
+          type="button"
+          onClick={() => dispatch({ type: 'SET_CAPTURE_MODE', payload: null })}
+          className="text-sm text-tq-accent hover:underline"
+        >
+          Change capture method
+        </button>
       </div>
 
       {/* Reference card banner */}
@@ -557,6 +718,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           }
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }
