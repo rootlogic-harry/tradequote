@@ -2151,6 +2151,13 @@ app.get('/{*path}', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+// Start listening BEFORE DB init so healthcheck can respond immediately
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`FastQuote server running on port ${PORT}`);
+  });
+}
+
 const dbReady = initDB()
   .then(async () => {
     // Sweep retry queue on startup
@@ -2178,15 +2185,10 @@ const dbReady = initDB()
       } catch (err) {
         console.error('[RetryQueue] Startup sweep failed:', err.message);
       }
-
-      app.listen(PORT, () => {
-        console.log(`FastQuote server running on port ${PORT}`);
-      });
     }
   })
   .catch((err) => {
     console.error('Failed to initialise database:', err);
-    if (process.env.NODE_ENV !== 'test') process.exit(1);
   });
 
 export { app, pool, dbReady };
