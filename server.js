@@ -1840,8 +1840,11 @@ app.post('/api/dictate', requireAuth, dictationRateLimit, dictationUpload.single
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 
+  console.log(`[Dictation] user=${userId} mime=${req.file.mimetype} size=${req.file.size} hasKey=${!!apiKey}`);
+
   try {
     const text = await transcribe(req.file.buffer, req.file.mimetype);
+    console.log(`[Dictation] SUCCESS user=${userId} chars=${text.length}`);
     const latencyMs = Date.now() - startTime;
 
     // Log telemetry (non-blocking)
@@ -1862,6 +1865,7 @@ app.post('/api/dictate', requireAuth, dictationRateLimit, dictationUpload.single
       [userId, latencyMs, req.file.size, err.constructor?.name || 'unknown']
     ).catch(telErr => console.warn('[Dictation] Telemetry insert failed:', telErr.message));
 
+    console.error(`[Dictation] FAIL user=${userId} error=${err.message} stack=${err.stack?.split('\n')[1]?.trim()}`);
     safeError(res, err, `POST /api/dictate user=${userId}`);
   }
 });
