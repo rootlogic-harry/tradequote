@@ -1774,10 +1774,9 @@ function makeAnthropicRequest(body, apiKey) {
 const aiRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,
-  // requireAuth runs before this middleware, so req.user is always set
-  keyGenerator: (req) => req.user?.id || 'anonymous',
+  keyGenerator: (req) => String(req.user?.id ?? 0),
   message: { error: 'Too many analyses. Please wait before trying again.' },
-  validate: { xForwardedForHeader: false, default: true },
+  validate: false,
 });
 
 // --- Dictation (voice-to-text) ---
