@@ -1790,9 +1790,9 @@ const dictationUpload = multer({
 const dictationRateLimit = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: 30,
-  keyGenerator: (req) => req.user?.id || 'anonymous',
+  keyGenerator: (req) => String(req.user?.id ?? 0),
   message: { error: 'Too many dictation requests. Please wait a moment.' },
-  validate: { xForwardedForHeader: false, default: true },
+  validate: false,
 });
 
 app.post('/api/dictate', requireAuth, dictationRateLimit, dictationUpload.single('audio'), async (req, res) => {
