@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { LOADING_MESSAGES } from '../../constants.js';
 
+const VIDEO_LOADING_STAGES = [
+  { label: 'Uploading video...', durationHint: 10 },
+  { label: 'Extracting frames from walkthrough...', durationHint: 15 },
+  { label: 'Transcribing audio...', durationHint: 20 },
+  { label: 'Analysing footage and generating quote...', durationHint: 60 },
+];
+
 export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [videoStage, setVideoStage] = useState(0);
+
+  const { captureMode } = state;
+  const isVideoMode = captureMode === 'video';
 
   useEffect(() => {
     if (!state.isAnalysing) {
@@ -24,6 +35,23 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
     }, 1000);
     return () => clearInterval(timer);
   }, [state.isAnalysing]);
+
+  // Video mode: advance stages based on elapsed time
+  useEffect(() => {
+    if (!state.isAnalysing || !isVideoMode) {
+      setVideoStage(0);
+      return;
+    }
+    let accumulated = 0;
+    for (let i = 0; i < VIDEO_LOADING_STAGES.length; i++) {
+      accumulated += VIDEO_LOADING_STAGES[i].durationHint;
+      if (elapsedSeconds < accumulated) {
+        setVideoStage(i);
+        return;
+      }
+    }
+    setVideoStage(VIDEO_LOADING_STAGES.length - 1);
+  }, [elapsedSeconds, state.isAnalysing, isVideoMode]);
 
   const handleCancel = () => {
     if (cancelAnalysis) cancelAnalysis();
@@ -59,6 +87,64 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
     );
   }
 
+  // Video mode: staged progress
+  if (isVideoMode) {
+    return (
+      <div className="max-w-xl mx-auto text-center py-20">
+        <div className="mb-8">
+          <div className="w-16 h-16 border-4 border-tq-accent border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+
+        {/* Stage indicators */}
+        <div className="flex flex-col gap-3 mb-8 text-left max-w-xs mx-auto">
+          {VIDEO_LOADING_STAGES.map((stage, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <span
+                className="flex items-center justify-center rounded-full shrink-0"
+                style={{
+                  width: 24,
+                  height: 24,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  backgroundColor: i <= videoStage ? 'var(--tq-accent)' : 'var(--tq-surface)',
+                  color: i <= videoStage ? '#ffffff' : 'var(--tq-muted)',
+                  transition: 'background-color 0.3s, color 0.3s',
+                }}
+              >
+                {i < videoStage ? '✓' : i + 1}
+              </span>
+              <span
+                className="text-sm"
+                style={{
+                  color: i === videoStage ? 'var(--tq-text)' : 'var(--tq-muted)',
+                  fontWeight: i === videoStage ? 600 : 400,
+                  transition: 'color 0.3s, font-weight 0.3s',
+                }}
+              >
+                {stage.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {state.isAnalysing && elapsedSeconds > 0 && (
+          <p className="text-tq-muted text-xs mb-4" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+            {elapsedSeconds}s elapsed
+          </p>
+        )}
+
+        <button
+          onClick={handleCancel}
+          className="border border-tq-border text-tq-muted font-heading uppercase text-sm tracking-wide px-6 py-2 rounded hover:text-tq-text hover:border-tq-text transition-colors"
+          style={{ minHeight: 44 }}
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  // Photo mode: existing flow unchanged
   return (
     <div className="max-w-xl mx-auto text-center py-20">
       <div className="mb-8">
