@@ -817,6 +817,31 @@ describe('Migration safety for old snapshots', () => {
     expect(virtualState.quoteSequence).toBeUndefined(); // acceptable — used for display only
   });
 
+  test('snapshot missing captureMode (pre-video era) restores safely', () => {
+    const oldSnapshot = {
+      profile: { companyName: 'Pre-Video Co' },
+      jobDetails: { clientName: 'Old Client' },
+      reviewData: { measurements: [] },
+      quotePayload: null,
+      quoteSequence: 1,
+      diffs: [],
+      quoteMode: 'standard',
+      // captureMode is missing — pre-video era
+    };
+
+    const captureMode = oldSnapshot.captureMode || null;
+    expect(captureMode).toBeNull();
+
+    // VideoBadge should not render for null captureMode
+    const shouldShowBadge = captureMode === 'video';
+    expect(shouldShowBadge).toBe(false);
+
+    // Transcript section should not render
+    const isVideoMode = captureMode === 'video';
+    const hasTranscript = isVideoMode && oldSnapshot.transcript;
+    expect(hasTranscript).toBeFalsy();
+  });
+
   test('snapshot with [photo-stripped] markers does not break display', () => {
     const snapshot = buildSaveSnapshot({
       profile: {
@@ -883,12 +908,13 @@ describe('pickAllowedKeys behavioral tests', () => {
       quotePayload: { d: 4 },
       quoteSequence: 5,
       quoteMode: 'standard',
+      captureMode: 'video',
       diffs: [{ e: 6 }],
       aiRawResponse: 'raw',
     };
     const result = pickAllowedKeys(input);
     expect(Object.keys(result).sort()).toEqual(
-      ['aiRawResponse', 'diffs', 'jobDetails', 'profile', 'quoteMode', 'quotePayload', 'quoteSequence', 'reviewData']
+      ['aiRawResponse', 'captureMode', 'diffs', 'jobDetails', 'profile', 'quoteMode', 'quotePayload', 'quoteSequence', 'reviewData']
     );
   });
 

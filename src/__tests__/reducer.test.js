@@ -458,6 +458,12 @@ describe('reducer', () => {
       expect(result.analysisError).toBeNull();
       expect(result.isAnalysing).toBe(true);
     });
+
+    test('clears stale transcript from previous video analysis', () => {
+      const state = { ...initialState, transcript: 'old video transcript', step: 2 };
+      const result = reducer(state, { type: 'ANALYSIS_START' });
+      expect(result.transcript).toBeNull();
+    });
   });
 
   describe('ANALYSIS_SUCCESS (standard mode)', () => {

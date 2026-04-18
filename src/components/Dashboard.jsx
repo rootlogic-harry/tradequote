@@ -223,6 +223,7 @@ export default function Dashboard({
                     >
                       Needs RAMS
                     </span>
+                    <VideoBadge captureMode={job.snapshot?.captureMode} />
                     <span className="font-mono text-sm font-bold" style={{ color: 'var(--tq-accent)' }}>
                       {job.quoteReference}
                     </span>

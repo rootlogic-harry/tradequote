@@ -149,6 +149,7 @@ function reducerCore(state, action) {
         analysisError: null,
         videoProgress: null,
         uploadProgress: null,
+        transcript: null,
         step: 3,
       };
 

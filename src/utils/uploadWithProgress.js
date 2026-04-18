@@ -85,12 +85,24 @@ export async function uploadWithRetry({
   maxRetries = 3, backoffMs = 2000,
 }) {
   let lastError;
+  let cancelled = false;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (cancelled) {
+      const err = new Error('Upload cancelled');
+      err.name = 'AbortError';
+      err.retryable = false;
+      throw err;
+    }
+
     try {
       const { promise, abort } = uploadWithProgress({ url, body, onProgress });
-      // Expose abort so callers can cancel the current XHR
-      if (abortRef) abortRef.current = { abort };
+      // Expose abort so callers can cancel the current XHR or interrupt backoff
+      if (abortRef) {
+        abortRef.current = {
+          abort: () => { cancelled = true; abort(); },
+        };
+      }
       return await promise;
     } catch (err) {
       lastError = err;
@@ -103,7 +115,7 @@ export async function uploadWithRetry({
       // Notify caller of retry
       onRetry?.({ attempt: attempt + 1, maxRetries, error: err });
 
-      // Exponential backoff
+      // Exponential backoff — check cancelled flag after sleep
       const delay = backoffMs * Math.pow(2, attempt);
       await new Promise((r) => setTimeout(r, delay));
     }

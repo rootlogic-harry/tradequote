@@ -266,4 +266,51 @@ describe('uploadWithRetry abort support', () => {
 
     global.XMLHttpRequest = originalXHR;
   });
+
+  it('cancel during backoff delay stops retry loop', async () => {
+    const originalXHR = global.XMLHttpRequest;
+    let callCount = 0;
+
+    global.XMLHttpRequest = jest.fn(() => {
+      callCount++;
+      const mockXHR = {
+        open: jest.fn(),
+        send: jest.fn(),
+        setRequestHeader: jest.fn(),
+        abort: jest.fn(),
+        upload: {},
+        readyState: 4,
+        status: 0,
+        responseText: '',
+        timeout: 0,
+      };
+      setTimeout(() => mockXHR.onerror?.(), 0);
+      return mockXHR;
+    });
+
+    let uploadWithRetry;
+    ({ uploadWithRetry } = await import('../utils/uploadWithProgress.js'));
+
+    const abortRef = { current: null };
+    const resultPromise = uploadWithRetry({
+      url: '/api/test',
+      body: new FormData(),
+      onProgress: () => {},
+      onRetry: ({ attempt }) => {
+        // Cancel during the first backoff delay (after first retry notification)
+        if (attempt === 1) {
+          setTimeout(() => abortRef.current?.abort(), 0);
+        }
+      },
+      abortRef,
+      maxRetries: 5,
+      backoffMs: 50,
+    });
+
+    await expect(resultPromise).rejects.toThrow();
+    // Should NOT exhaust all 5 retries — cancelled flag stops the loop
+    expect(callCount).toBeLessThan(4);
+
+    global.XMLHttpRequest = originalXHR;
+  });
 });

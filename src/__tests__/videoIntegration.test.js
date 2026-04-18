@@ -160,8 +160,9 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(savedQuotesSource).toMatch(/VideoBadge.*captureMode/);
     });
 
-    it('SavedQuoteViewer includes captureMode in virtualState', () => {
-      expect(savedQuoteViewerSource).toMatch(/captureMode.*snapshot\.captureMode/);
+    it('SavedQuoteViewer does not include captureMode in virtualState (QuoteOutput does not use it)', () => {
+      // captureMode is used for badges at Dashboard/SavedQuotes level, not inside the quote viewer
+      expect(savedQuoteViewerSource).not.toMatch(/captureMode.*snapshot\.captureMode/);
     });
   });
 
