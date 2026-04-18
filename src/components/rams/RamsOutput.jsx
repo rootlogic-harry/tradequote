@@ -515,7 +515,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
       )}
 
       {/* RAMS Document preview */}
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden" ref={ramsRef}>
+      <div className="bg-white shadow-lg overflow-hidden" style={{ borderRadius: 2 }} ref={ramsRef}>
         <RamsDocument rams={ramsForDoc} profile={profile} showPhotos={false} />
       </div>
     </div>

@@ -415,8 +415,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           {/* Draft resume: show banner if analysis exists but no video file (draft restored) */}
           {!videoFile && state.reviewData && (
             <div
-              className="rounded-lg p-4 mb-4"
-              style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1px solid var(--tq-accent)' }}
+              className="p-4 mb-4"
+              style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1px solid var(--tq-accent)', borderRadius: 2 }}
             >
               <p className="text-sm font-heading font-bold" style={{ color: 'var(--tq-accent)' }}>
                 Your video analysis is preserved.
@@ -527,8 +527,8 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
 
       {/* Reference card banner */}
       <div
-        className="flex items-start gap-3 rounded-lg p-4 mb-6"
-        style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)', borderRadius: 10 }}
+        className="flex items-start gap-3 p-4 mb-6"
+        style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)', borderRadius: 2 }}
       >
         <span className="text-2xl shrink-0">📐</span>
         <div>
@@ -705,7 +705,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
               savePhoto(state.currentUserId, 'draft', `extra-${newIndex}`, { data: dataUrl, name: file.name, label: extraPhotoLabel });
             }
           }}
-          className={`mb-6 flex items-center gap-3 flex-wrap p-3 rounded-lg border-2 transition-all ${
+          className={`mb-6 flex items-center gap-3 flex-wrap p-3 rounded border-2 transition-all ${
             dragOverExtra
               ? 'border-tq-accent ring-2 ring-tq-accent/50 border-solid bg-tq-accent/5'
               : 'border-transparent'

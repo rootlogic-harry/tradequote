@@ -90,7 +90,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
         {risks.map((risk) => {
           const level = getRiskLevel(risk.riskRating);
           return (
-            <div key={risk.id} className="bg-tq-card border border-tq-border rounded-lg p-4">
+            <div key={risk.id} className="bg-tq-card border border-tq-border p-4" style={{ borderRadius: 2 }}>
               <div className="flex items-start justify-between gap-2 mb-3">
                 <input
                   type="text"

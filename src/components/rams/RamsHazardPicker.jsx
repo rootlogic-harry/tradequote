@@ -24,7 +24,7 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-tq-surface rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col border border-tq-border">
+      <div className="bg-tq-surface max-w-4xl w-full max-h-[90vh] flex flex-col border border-tq-border" style={{ borderRadius: 2 }}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-tq-border">
           <h2 className="text-lg font-heading font-bold text-tq-accent">Construction Hazard Database</h2>
@@ -89,7 +89,7 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
               const rating = hazard.typicalLikelihood * hazard.typicalConsequence;
               const level = getRiskLevel(rating);
               return (
-                <div key={hazard.id} className="bg-tq-card border border-tq-border rounded-lg p-3">
+                <div key={hazard.id} className="bg-tq-card border border-tq-border p-3" style={{ borderRadius: 2 }}>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1">
                       <div className="font-bold text-sm text-tq-text">{hazard.task}</div>

@@ -91,7 +91,7 @@ export default function CalibrationManager() {
 
       {lastRunResult && (
         <div
-          className="rounded-lg p-4 mb-4"
+          className="rounded p-4 mb-4"
           style={{
             backgroundColor: lastRunResult.error ? 'var(--tq-error-bg)' : 'var(--tq-confirmed-bg)',
             border: `1.5px solid ${lastRunResult.error ? 'var(--tq-error-bd)' : 'var(--tq-confirmed-bd)'}`,
@@ -136,7 +136,7 @@ export default function CalibrationManager() {
           {notes.map(note => (
             <div
               key={note.id}
-              className="rounded-lg p-4"
+              className="rounded p-4"
               style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
             >
               <div className="flex items-start justify-between mb-2">

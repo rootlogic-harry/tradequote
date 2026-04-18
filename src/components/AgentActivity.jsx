@@ -117,8 +117,8 @@ export default function AgentActivity() {
               return (
                 <div
                   key={run.id}
-                  className="rounded-lg p-4"
-                  style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
+                  className="p-4"
+                  style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span
@@ -201,8 +201,8 @@ export default function AgentActivity() {
           {runs.map(run => (
             <div
               key={run.id}
-              className="rounded-lg overflow-hidden"
-              style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
+              className="overflow-hidden"
+              style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}
             >
               <button
                 onClick={() => setExpandedRun(expandedRun === run.id ? null : run.id)}
@@ -280,7 +280,7 @@ function TabBar({ activeTab, setActiveTab }) {
     { key: 'calibration', label: 'Calibration' },
   ];
   return (
-    <div className="flex gap-1 mb-6 p-1 rounded-lg" style={{ backgroundColor: 'var(--tq-surface)' }}>
+    <div className="flex gap-1 mb-6 p-1" style={{ backgroundColor: 'var(--tq-surface)', borderRadius: 2 }}>
       {tabs.map(t => (
         <button
           key={t.key}

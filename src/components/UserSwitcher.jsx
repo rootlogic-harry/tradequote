@@ -21,7 +21,7 @@ export default function UserSwitcher({ currentUser, allUsers, onSwitchUser, onSe
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 transition-colors text-sm font-heading px-2 py-1.5 rounded-lg"
+        className="flex items-center gap-2 transition-colors text-sm font-heading px-2 py-1.5 rounded"
         style={{ color: 'var(--tq-nav-muted)', backgroundColor: open ? 'var(--tq-nav-active)' : 'transparent' }}
       >
         <span
@@ -37,7 +37,7 @@ export default function UserSwitcher({ currentUser, allUsers, onSwitchUser, onSe
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 border rounded-lg shadow-lg py-1.5 min-w-[180px] z-50" style={{ backgroundColor: 'var(--tq-surface)', borderColor: 'var(--tq-border)' }}>
+        <div className="absolute right-0 top-full mt-2 border rounded shadow-lg py-1.5 min-w-[180px] z-50" style={{ backgroundColor: 'var(--tq-surface)', borderColor: 'var(--tq-border)' }}>
           {/* Current user header */}
           <div className="px-3.5 py-2 border-b" style={{ borderColor: 'var(--tq-border)' }}>
             <p className="font-heading font-bold text-sm" style={{ color: 'var(--tq-text)' }}>{currentUser.name}</p>

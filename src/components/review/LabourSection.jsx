@@ -51,7 +51,7 @@ export default function LabourSection({ labourEstimate = {}, dispatch }) {
 
       {/* Calculator layout */}
       <div
-        className="rounded-lg p-3"
+        className="rounded p-3"
         style={{ backgroundColor: 'var(--tq-surface)', borderRadius: 2 }}
       >
         <div className="flex items-end gap-2">

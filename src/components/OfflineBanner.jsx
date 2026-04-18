@@ -31,7 +31,7 @@ export default function OfflineBanner() {
   if (!isOffline && wasOffline) {
     return (
       <div
-        className="rounded-lg px-4 py-3 mb-4 flex items-center gap-3 text-sm"
+        className="rounded px-4 py-3 mb-4 flex items-center gap-3 text-sm"
         style={{
           backgroundColor: 'rgba(74, 222, 128, 0.1)',
           border: '1px solid rgba(74, 222, 128, 0.3)',
@@ -45,7 +45,7 @@ export default function OfflineBanner() {
 
   return (
     <div
-      className="rounded-lg px-4 py-3 mb-4 flex items-center gap-3 text-sm"
+      className="rounded px-4 py-3 mb-4 flex items-center gap-3 text-sm"
       style={{
         backgroundColor: 'rgba(251, 191, 36, 0.1)',
         border: '1px solid rgba(251, 191, 36, 0.3)',

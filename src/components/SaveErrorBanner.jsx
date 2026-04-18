@@ -5,7 +5,7 @@ export default function SaveErrorBanner({ error, onDismiss, onRetry }) {
 
   return (
     <div
-      className="rounded-lg px-4 py-3 mb-4 flex items-start justify-between gap-3"
+      className="px-4 py-3 mb-4 flex items-start justify-between gap-3"
       style={{
         backgroundColor: 'rgba(248, 113, 113, 0.1)',
         border: '1px solid rgba(248, 113, 113, 0.3)',

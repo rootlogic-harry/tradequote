@@ -286,7 +286,7 @@ export default function VoiceRecorder({
     return (
       <button
         disabled
-        className="w-full rounded-lg px-4 py-3 text-sm font-heading uppercase tracking-wide mb-2"
+        className="w-full rounded px-4 py-3 text-sm font-heading uppercase tracking-wide mb-2"
         style={{
           backgroundColor: 'var(--tq-card)',
           border: '1px solid var(--tq-border)',
@@ -309,7 +309,7 @@ export default function VoiceRecorder({
           <button
             onClick={startRecording}
             disabled={disabled}
-            className="flex-1 rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
+            className="flex-1 rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
             style={{
               backgroundColor: 'var(--tq-accent)',
               color: '#ffffff',
@@ -324,7 +324,7 @@ export default function VoiceRecorder({
         {(voiceState === VOICE_STATES.RECORDING || voiceState === VOICE_STATES.WARNING) && (
           <button
             onClick={() => stopRecording()}
-            className="flex-1 rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+            className="flex-1 rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
             style={{
               backgroundColor: voiceState === VOICE_STATES.WARNING ? '#991b1b' : '#dc2626',
               color: '#ffffff',
@@ -344,7 +344,7 @@ export default function VoiceRecorder({
         {voiceState === VOICE_STATES.PROCESSING && (
           <button
             disabled
-            className="flex-1 rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide flex items-center justify-center gap-2"
+            className="flex-1 rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide flex items-center justify-center gap-2"
             style={{
               backgroundColor: 'var(--tq-card)',
               border: '1px solid var(--tq-border)',
@@ -362,7 +362,7 @@ export default function VoiceRecorder({
             <button
               onClick={handleRecordAgain}
               disabled={disabled}
-              className="flex-1 rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
+              className="flex-1 rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
               style={{
                 backgroundColor: 'var(--tq-accent)',
                 color: '#ffffff',
@@ -374,7 +374,7 @@ export default function VoiceRecorder({
             </button>
             <button
               onClick={handleRemoveRecording}
-              className="rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
+              className="rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
               style={{
                 backgroundColor: 'transparent',
                 border: '1px solid rgba(248, 113, 113, 0.4)',
@@ -391,7 +391,7 @@ export default function VoiceRecorder({
           <button
             onClick={startRecording}
             disabled={disabled}
-            className="flex-1 rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
+            className="flex-1 rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-colors"
             style={{
               backgroundColor: 'var(--tq-accent)',
               color: '#ffffff',
@@ -406,7 +406,7 @@ export default function VoiceRecorder({
         {voiceState === VOICE_STATES.PERMISSION_DENIED && (
           <button
             disabled
-            className="flex-1 rounded-lg px-4 py-3 text-sm font-heading uppercase tracking-wide"
+            className="flex-1 rounded px-4 py-3 text-sm font-heading uppercase tracking-wide"
             style={{
               backgroundColor: 'var(--tq-card)',
               border: '1px solid var(--tq-border)',
@@ -455,7 +455,7 @@ export default function VoiceRecorder({
           onClick={() => handleModalChoice('cancel')}
         >
           <div
-            className="rounded-xl p-6 max-w-sm mx-4"
+            className="p-6 max-w-sm mx-4"
             style={{
               backgroundColor: 'var(--tq-card)',
               border: '1px solid var(--tq-border)',
@@ -468,7 +468,7 @@ export default function VoiceRecorder({
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => handleModalChoice('replace')}
-                className="w-full rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide"
+                className="w-full rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide"
                 style={{
                   backgroundColor: 'var(--tq-accent)',
                   color: '#ffffff',
@@ -479,7 +479,7 @@ export default function VoiceRecorder({
               </button>
               <button
                 onClick={() => handleModalChoice('append')}
-                className="w-full rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide"
+                className="w-full rounded px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide"
                 style={{
                   backgroundColor: 'var(--tq-surface)',
                   color: 'var(--tq-text)',
@@ -491,7 +491,7 @@ export default function VoiceRecorder({
               </button>
               <button
                 onClick={() => handleModalChoice('cancel')}
-                className="w-full rounded-lg px-4 py-3 text-sm font-heading uppercase tracking-wide"
+                className="w-full rounded px-4 py-3 text-sm font-heading uppercase tracking-wide"
                 style={{
                   color: 'var(--tq-muted)',
                   minHeight: 44,

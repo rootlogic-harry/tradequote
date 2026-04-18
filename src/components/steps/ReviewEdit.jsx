@@ -133,7 +133,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   };
 
   const transcriptContent = isVideoMode && state.transcript ? (
-    <div className="border border-tq-border rounded-lg overflow-hidden">
+    <div className="border border-tq-border overflow-hidden" style={{ borderRadius: 2 }}>
       <button
         onClick={() => toggleSection('transcript')}
         className="w-full bg-tq-card px-4 py-3 flex items-center justify-between text-left"

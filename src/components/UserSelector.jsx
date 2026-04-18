@@ -18,7 +18,7 @@ export default function UserSelector({ users = [], onSelectUser }) {
             <button
               key={user.id}
               onClick={() => onSelectUser(user.id)}
-              className="bg-tq-surface border border-tq-border rounded-lg p-5 flex items-center gap-4 hover:border-tq-accent hover:bg-tq-card transition-all group"
+              className="bg-tq-surface border border-tq-border rounded p-5 flex items-center gap-4 hover:border-tq-accent hover:bg-tq-card transition-all group"
             >
               <div className="w-12 h-12 rounded-full bg-tq-accent/20 text-tq-accent flex items-center justify-center text-xl font-heading font-bold group-hover:bg-tq-accent group-hover:text-tq-bg transition-colors">
                 {(user.name || '').charAt(0).toUpperCase()}

@@ -153,7 +153,7 @@ export default function MaterialsTable({ materials = [], dispatch }) {
       {/* Mobile cards */}
       <div className="fq:hidden space-y-3">
         {materials.map((mat, i) => (
-          <div key={mat.id || i} className="border border-tq-border rounded-lg p-3">
+          <div key={mat.id || i} className="border border-tq-border rounded p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1 mr-2">
                 <button

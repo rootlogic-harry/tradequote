@@ -937,7 +937,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 <div
                   key={photoIdx}
                   {...getItemProps(orderPos)}
-                  className={`relative rounded-lg transition-all ${isDragged ? 'opacity-50 scale-105' : ''}`}
+                  className={`relative rounded transition-all ${isDragged ? 'opacity-50 scale-105' : ''}`}
                   style={{
                     border: isDropTarget
                       ? '2px solid var(--tq-accent)'
@@ -991,7 +991,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       {/* Quote Document — showPhotos=false to prevent white band artefact in PDF;
            photos are rendered separately in the PDF/Word appendix */}
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden" ref={quoteRef}>
+      <div className="bg-white shadow-lg overflow-hidden" ref={quoteRef} style={{ borderRadius: 2 }}>
         <QuoteDocument state={state} showPhotos={false} />
       </div>
     </div>

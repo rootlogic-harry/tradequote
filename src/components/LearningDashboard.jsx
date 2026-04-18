@@ -182,8 +182,8 @@ export default function LearningDashboard({ currentUserId }) {
 function Section({ title, children }) {
   return (
     <div
-      className="mb-6 rounded-lg"
-      style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', padding: '20px' }}
+      className="mb-6"
+      style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', padding: '20px', borderRadius: 2 }}
     >
       <h3
         className="mb-4"

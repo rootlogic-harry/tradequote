@@ -105,12 +105,15 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
 
   if (quotes.length === 0) {
     return (
-      <div className="text-center py-20">
-        <div className="text-4xl mb-4 opacity-30">&#128193;</div>
-        <h2 className="text-xl font-heading font-bold mb-2" style={{ color: 'var(--tq-text)' }}>No saved jobs yet</h2>
-        <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-          Generate a quote and click "Save Quote" to store it here for later.
-        </p>
+      <div className="max-w-5xl mx-auto">
+        <h2 className="page-title mb-6" style={{ fontSize: 28 }}>My Quotes</h2>
+        <div className="text-center py-20">
+          <div className="text-4xl mb-4 opacity-30">&#128193;</div>
+          <h2 className="text-xl font-heading font-bold mb-2" style={{ color: 'var(--tq-text)' }}>No saved jobs yet</h2>
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            Generate a quote and click "Save Quote" to store it here for later.
+          </p>
+        </div>
       </div>
     );
   }

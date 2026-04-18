@@ -18,7 +18,7 @@ export default function LivePreview({ state }) {
         <h3 className="text-lg font-heading font-bold text-tq-text mb-3">
           Live Preview
         </h3>
-        <div className="bg-white rounded-lg shadow-lg max-h-[600px] overflow-y-auto">
+        <div className="bg-white shadow-lg max-h-[600px] overflow-y-auto" style={{ borderRadius: 2 }}>
           <QuoteDocument state={deferredState} />
         </div>
       </div>

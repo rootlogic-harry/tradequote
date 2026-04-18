@@ -72,7 +72,7 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
   if (state.analysisError) {
     return (
       <div className="max-w-xl mx-auto text-center py-20">
-        <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--tq-error-bg)', border: '1.5px solid var(--tq-error-bd)' }}>
+        <div className="p-6" style={{ backgroundColor: 'var(--tq-error-bg)', border: '1.5px solid var(--tq-error-bd)', borderRadius: 2 }}>
           <p className="font-heading font-bold text-lg mb-2" style={{ color: 'var(--tq-error-txt)' }}>
             Something Went Wrong
           </p>
