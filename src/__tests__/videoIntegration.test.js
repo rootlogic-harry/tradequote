@@ -171,8 +171,8 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(jobDetailsSource).toMatch(/function\s+dataUrlToBlob/);
     });
 
-    it('compresses video extra photos with resizeImage before upload', () => {
-      // The video upload path should call resizeImage on each extra photo
+    it('compresses video extra photos with resizeImage via Promise.all', () => {
+      expect(jobDetailsSource).toMatch(/Promise\.all/);
       expect(jobDetailsSource).toMatch(/resizeImage\(photo\)/);
     });
 
@@ -182,6 +182,24 @@ describe('Video integration into Step 2 (JobDetails)', () => {
 
     it('appends compressed blob to FormData with filename', () => {
       expect(jobDetailsSource).toMatch(/formData\.append\('extraPhotos',\s*blob/);
+    });
+
+    it('dataUrlToBlob rejects null/undefined input', () => {
+      // The function should guard against invalid input
+      expect(jobDetailsSource).toMatch(/typeof dataUrl\s*!==\s*'string'/);
+    });
+
+    it('dataUrlToBlob falls back to image/jpeg if mime parse fails', () => {
+      // Safe default if regex match fails
+      expect(jobDetailsSource).toMatch(/mimeMatch\s*\?\s*mimeMatch\[1\]\s*:\s*'image\/jpeg'/);
+    });
+
+    it('resizeImage rejects on image load error', () => {
+      expect(jobDetailsSource).toMatch(/img\.onerror\s*=.*reject/);
+    });
+
+    it('resizeImage rejects on file read error', () => {
+      expect(jobDetailsSource).toMatch(/reader\.onerror\s*=.*reject/);
     });
   });
 
@@ -223,7 +241,7 @@ describe('Video integration into Step 2 (JobDetails)', () => {
     });
 
     it('maps codec/format errors to friendly message', () => {
-      expect(jobDetailsSource).toMatch(/codec.*format.*unsupported.*cannot decode/s);
+      expect(jobDetailsSource).toMatch(/video.*codec.*format.*unsupported.*cannot decode/s);
     });
   });
 });

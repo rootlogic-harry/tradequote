@@ -563,6 +563,7 @@ describe('Reducer RESTORE_DRAFT round-trip', () => {
       quotePayload: { old: true },
       videoProgress: { stage: 'processing', progress: 50 },
       uploadProgress: { percent: 75 },
+      transcript: 'stale transcript from previous video',
     };
     const draft = { jobDetails: { clientName: 'New' }, quoteMode: 'standard' };
     const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
@@ -571,6 +572,7 @@ describe('Reducer RESTORE_DRAFT round-trip', () => {
     expect(newState.quotePayload).toBeNull();
     expect(newState.videoProgress).toBeNull();
     expect(newState.uploadProgress).toBeNull();
+    expect(newState.transcript).toBeNull();
   });
 
   test('RESTORE_DRAFT with missing quoteMode defaults to standard', () => {

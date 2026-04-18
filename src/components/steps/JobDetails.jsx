@@ -15,7 +15,7 @@ const VIDEO_ERROR_MAP = [
   [/appears to be empty|no video data/i, 'The video file appears to be empty or corrupted. Please try recording again.'],
   [/unreadable response/i, 'We had trouble reading the analysis. Please try again.'],
   [/Upload failed \(5\d\d\)/i, 'Something went wrong on our end. Please try again.'],
-  [/codec|format|unsupported.*video|cannot decode/i, 'This video format is not supported. Try recording with your default camera app.'],
+  [/video.*(codec|format)|unsupported.*video|cannot decode/i, 'This video format is not supported. Try recording with your default camera app.'],
   [/Something went wrong/i, 'Something went wrong processing your video. Try again or use photos instead.'],
 ];
 
@@ -27,8 +27,15 @@ function friendlyVideoError(message) {
 }
 
 function dataUrlToBlob(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') {
+    throw new Error('Photo compression failed — invalid image data');
+  }
   const [header, b64] = dataUrl.split(',');
-  const mime = header.match(/:(.*?);/)[1];
+  if (!header || !b64) {
+    throw new Error('Photo compression failed — malformed image data');
+  }
+  const mimeMatch = header.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -36,10 +43,12 @@ function dataUrlToBlob(dataUrl) {
 }
 
 function resizeImage(file, maxSize = 2048) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file'));
     reader.onload = (e) => {
       const img = new Image();
+      img.onerror = () => reject(new Error('Image could not be loaded — file may be corrupted'));
       img.onload = () => {
         let { width, height } = img;
         // Always re-encode to JPEG to ensure consistent compression
@@ -216,12 +225,14 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       formData.append('siteAddress', jobDetails.siteAddress);
       formData.append('briefNotes', jobDetails.briefNotes || '');
       formData.append('profile', JSON.stringify(profile));
-      // Compress extra photos before upload (same resizeImage as photo mode)
-      for (const photo of videoExtraPhotos) {
-        const dataUrl = await resizeImage(photo);
-        const blob = dataUrlToBlob(dataUrl);
-        formData.append('extraPhotos', blob, photo.name || 'extra.jpg');
-      }
+      // Compress extra photos in parallel before upload (same resizeImage as photo mode)
+      const compressed = await Promise.all(
+        videoExtraPhotos.map(async (photo) => {
+          const dataUrl = await resizeImage(photo);
+          return { blob: dataUrlToBlob(dataUrl), name: photo.name || 'extra.jpg' };
+        })
+      );
+      compressed.forEach(({ blob, name }) => formData.append('extraPhotos', blob, name));
 
       const data = await uploadWithRetry({
         url: `/api/users/${state.currentUserId}/jobs/draft/video`,
