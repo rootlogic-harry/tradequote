@@ -29,6 +29,7 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
     diffs: snapshot.diffs || [],
     quotePayload: snapshot.quotePayload || null,
     quoteSequence: snapshot.quoteSequence,
+    captureMode: snapshot.captureMode || null,
     aiRawResponse: snapshot.aiRawResponse,
   };
 

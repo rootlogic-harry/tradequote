@@ -491,6 +491,20 @@ describe('reducer', () => {
       expect(result.critiqueNotes).toBeNull();
     });
 
+    test('stores transcript from video analysis', () => {
+      const state = { ...initialState, isAnalysing: true, step: 3, quoteMode: 'standard' };
+      const normalised = { measurements: [], materials: [], labourEstimate: {} };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '', transcript: 'The wall is about two metres high' });
+      expect(result.transcript).toBe('The wall is about two metres high');
+    });
+
+    test('defaults transcript to null when not provided', () => {
+      const state = { ...initialState, isAnalysing: true, step: 3, quoteMode: 'standard' };
+      const normalised = { measurements: [], materials: [], labourEstimate: {} };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '' });
+      expect(result.transcript).toBeNull();
+    });
+
     test('measurements remain unconfirmed in standard mode', () => {
       const state = { ...initialState, isAnalysing: true, step: 3, quoteMode: 'standard' };
       const normalised = {

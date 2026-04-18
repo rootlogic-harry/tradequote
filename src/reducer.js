@@ -77,6 +77,7 @@ export const initialState = {
   savedJobId: null,
   quoteSaveError: null,
   critiqueNotes: null,
+  transcript: null,         // Whisper transcript from video walkthrough
   quoteSaveErrorKey: 0,
   rams: null,
   retryCount: 0,
@@ -154,6 +155,7 @@ function reducerCore(state, action) {
     case 'ANALYSIS_SUCCESS': {
       const reviewData = action.normalised;
       const critiqueNotes = action.critiqueNotes || null;
+      const transcript = action.transcript || null;
 
       if (state.quoteMode === 'quick') {
         // Auto-confirm all measurements
@@ -190,6 +192,7 @@ function reducerCore(state, action) {
           diffs: allDiffs,
           quotePayload: payload,
           critiqueNotes,
+          transcript,
           step: 5,
         };
       }
@@ -201,6 +204,7 @@ function reducerCore(state, action) {
         aiRawResponse: action.rawResponse,
         reviewData,
         critiqueNotes,
+        transcript,
         step: 4,
       };
     }
@@ -408,6 +412,7 @@ function reducerCore(state, action) {
         savedJobId: null,
         quoteSaveError: null,
         critiqueNotes: null,
+        transcript: null,
         quoteSaveErrorKey: 0,
         retryCount: 0,
         rams: null,

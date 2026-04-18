@@ -77,11 +77,13 @@ describe('Save snapshot completeness', () => {
     diffs: [{ fieldType: 'measurement', fieldLabel: 'Height', aiValue: '1200', confirmedValue: '1200', wasEdited: false, editMagnitude: 0 }],
     quotePayload: { totals: { total: 5000, materialsSubtotal: 360, labourTotal: 1200 } },
     quoteSequence: 42,
+    captureMode: 'video',
     quoteMode: 'standard',
     savedJobId: 'sq-123',
     quoteSaveError: null,
     quoteSaveErrorKey: 0,
     critiqueNotes: 'some agent notes',
+    transcript: 'The wall is about two metres high with loose capping stones',
     rams: { id: 'rams-1', status: 'draft' },
     retryCount: 0,
     statusModal: { open: false, jobId: null, targetStatus: null },
@@ -93,7 +95,8 @@ describe('Save snapshot completeness', () => {
     const excluded = ['currentUserId', 'currentUser', 'allUsers', 'initComplete', 'step',
       'photos', 'extraPhotos', 'isAnalysing', 'analysisError', 'aiRawResponse',
       'savedJobId', 'quoteSaveError', 'quoteSaveErrorKey', 'critiqueNotes',
-      'rams', 'retryCount', 'statusModal', 'recentJobs'];
+      'rams', 'retryCount', 'statusModal', 'recentJobs',
+      'videoProgress', 'uploadProgress', 'transcript'];
     for (const key of excluded) {
       expect(snapshot[key]).toBeUndefined();
     }
@@ -111,6 +114,7 @@ describe('Save snapshot completeness', () => {
     expect(snapshot.quotePayload.totals.total).toBe(5000);
     expect(snapshot.quoteSequence).toBe(42);
     expect(snapshot.quoteMode).toBe('standard');
+    expect(snapshot.captureMode).toBe('video');
     expect(snapshot.diffs).toHaveLength(1);
   });
 

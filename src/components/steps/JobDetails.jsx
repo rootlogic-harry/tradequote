@@ -8,6 +8,20 @@ import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
 import { uploadWithRetry } from '../../utils/uploadWithProgress.js';
 
+const VIDEO_ERROR_MAP = [
+  [/ANTHROPIC_API_KEY/i, 'Our analysis service is temporarily unavailable. Please try again later.'],
+  [/File too large/i, 'Video file is too large. Please record a shorter video (under 100MB).'],
+  [/Upload failed \(5\d\d\)/i, 'Something went wrong on our end. Please try again.'],
+  [/Something went wrong/i, 'Something went wrong processing your video. Try again or use photos instead.'],
+];
+
+function friendlyVideoError(message) {
+  for (const [pattern, friendly] of VIDEO_ERROR_MAP) {
+    if (pattern.test(message)) return friendly;
+  }
+  return message;
+}
+
 function resizeImage(file, maxSize = 2048) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -196,6 +210,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       const data = await uploadWithRetry({
         url: `/api/users/${state.currentUserId}/jobs/draft/video`,
         body: formData,
+        abortRef,
         onProgress: (progress) => {
           dispatch({ type: 'UPLOAD_PROGRESS', payload: progress });
         },
@@ -209,12 +224,13 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         normalised: data.normalised,
         rawResponse: data.rawResponse,
         critiqueNotes: data.critiqueNotes || null,
+        transcript: data.transcript || null,
       });
     } catch (err) {
       if (err.name === 'AbortError') {
         dispatch({ type: 'ANALYSIS_CANCEL' });
       } else {
-        dispatch({ type: 'ANALYSIS_ERROR', error: err.message });
+        dispatch({ type: 'ANALYSIS_ERROR', error: friendlyVideoError(err.message) });
       }
     } finally {
       try { eventSource?.close(); } catch {}

@@ -87,7 +87,7 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 Jobs store a `quote_snapshot` containing only keys from `SAVE_ALLOWLIST` (defined in `src/utils/stripBlobs.js`):
 
 ```
-profile, jobDetails, reviewData, quotePayload, quoteSequence, quoteMode, diffs
+profile, jobDetails, reviewData, quotePayload, quoteSequence, quoteMode, captureMode, diffs
 ```
 
 New state fields must be added to `SAVE_ALLOWLIST` consciously to be persisted. Photos are stored separately in `user_photos`, not in the snapshot.
@@ -160,7 +160,7 @@ Two plans only: `admin` and `basic`. No `standard` plan (legacy references were 
 `SAVE_ALLOWLIST` in `src/utils/stripBlobs.js` defines exactly which state keys are persisted:
 
 ```javascript
-['profile', 'jobDetails', 'reviewData', 'quotePayload', 'quoteSequence', 'quoteMode', 'diffs']
+['profile', 'jobDetails', 'reviewData', 'quotePayload', 'quoteSequence', 'quoteMode', 'captureMode', 'diffs']
 ```
 
 `buildSaveSnapshot(state)` picks only these keys, then strips base64 blobs. Adding a new field to saved state requires adding it to the allowlist — this is intentionally a conscious decision.
@@ -217,7 +217,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 1020 tests across 52 suites (unit + video processing). API integration (85) and security (59) suites run separately.
+**Current count:** 1044 tests across 52 suites (unit + video processing). API integration (85) and security (59) suites run separately.
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 

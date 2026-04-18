@@ -81,14 +81,16 @@ export function uploadWithProgress({ url, body, onProgress }) {
  * @returns {Promise<any>}
  */
 export async function uploadWithRetry({
-  url, body, onProgress, onRetry,
+  url, body, onProgress, onRetry, abortRef,
   maxRetries = 3, backoffMs = 2000,
 }) {
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const { promise } = uploadWithProgress({ url, body, onProgress });
+      const { promise, abort } = uploadWithProgress({ url, body, onProgress });
+      // Expose abort so callers can cancel the current XHR
+      if (abortRef) abortRef.current = { abort };
       return await promise;
     } catch (err) {
       lastError = err;

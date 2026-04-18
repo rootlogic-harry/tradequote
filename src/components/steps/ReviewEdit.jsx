@@ -101,9 +101,35 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
     });
   };
 
+  const isVideoMode = state.captureMode === 'video';
+
   const toggleSection = (key) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Transcript section — video mode only
+  const transcriptContent = isVideoMode && state.transcript ? (
+    <div className="border border-tq-border rounded-lg overflow-hidden">
+      <button
+        onClick={() => toggleSection('transcript')}
+        className="w-full bg-tq-card px-4 py-3 flex items-center justify-between text-left"
+      >
+        <span className="font-heading font-bold text-tq-text text-sm">
+          Video Transcript
+        </span>
+        <span className={`text-tq-muted transition-transform ${openSections.transcript ? 'rotate-180' : ''}`}>
+          &#9660;
+        </span>
+      </button>
+      {openSections.transcript && (
+        <div className="px-4 py-3 border-t border-tq-border">
+          <p className="text-sm text-tq-text whitespace-pre-wrap leading-relaxed">
+            {state.transcript}
+          </p>
+        </div>
+      )}
+    </div>
+  ) : null;
 
   // Extracted content blocks shared between desktop and mobile
   const damageDescriptionContent = (
@@ -364,7 +390,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
 
       {/* Desktop: three column layout — costs column wider for materials table */}
       <div className="hidden md:grid gap-6" style={{ gridTemplateColumns: '1fr 1fr 1.4fr' }}>
-        <div className="space-y-6">{damageDescriptionContent}{measurementsContent}</div>
+        <div className="space-y-6">{transcriptContent}{damageDescriptionContent}{measurementsContent}</div>
         <div>{scheduleContent}</div>
         <div>{costsContent}</div>
       </div>
@@ -423,6 +449,8 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         >
           {damageDescriptionContent}
         </AccordionSection>
+
+        {transcriptContent}
       </div>
 
       {/* Live Preview */}

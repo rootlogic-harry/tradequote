@@ -63,3 +63,15 @@ export function RamsBadge({ hasRams }) {
     </span>
   );
 }
+
+export function VideoBadge({ captureMode }) {
+  if (captureMode !== 'video') return null;
+  return (
+    <span
+      className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded shrink-0 inline-block"
+      style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: 'var(--tq-accent-bg)', color: 'var(--tq-accent)' }}
+    >
+      {'\uD83C\uDFA5'} VIDEO
+    </span>
+  );
+}

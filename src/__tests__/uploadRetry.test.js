@@ -224,4 +224,46 @@ describe('JobDetails retry wiring', () => {
   it('passes onRetry callback', () => {
     expect(jobDetailsSource).toMatch(/onRetry/);
   });
+
+  it('passes abortRef to uploadWithRetry for cancel support', () => {
+    expect(jobDetailsSource).toMatch(/abortRef/);
+  });
+});
+
+describe('uploadWithRetry abort support', () => {
+  it('sets abortRef.current when provided', async () => {
+    const originalXHR = global.XMLHttpRequest;
+    const mockXHR = {
+      open: jest.fn(),
+      send: jest.fn(),
+      setRequestHeader: jest.fn(),
+      abort: jest.fn(),
+      upload: {},
+      readyState: 4,
+      status: 200,
+      responseText: '{"ok":true}',
+      timeout: 0,
+    };
+    global.XMLHttpRequest = jest.fn(() => mockXHR);
+
+    let uploadWithRetry;
+    ({ uploadWithRetry } = await import('../utils/uploadWithProgress.js'));
+
+    const abortRef = { current: null };
+    const resultPromise = uploadWithRetry({
+      url: '/api/test',
+      body: new FormData(),
+      onProgress: () => {},
+      abortRef,
+    });
+
+    // abortRef should be set before XHR completes
+    expect(abortRef.current).not.toBeNull();
+    expect(typeof abortRef.current.abort).toBe('function');
+
+    mockXHR.onload?.();
+    await resultPromise;
+
+    global.XMLHttpRequest = originalXHR;
+  });
 });

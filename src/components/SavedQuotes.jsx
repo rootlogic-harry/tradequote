@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { listJobs, deleteJob, deletePhotos } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
-import { StatusBadge, ExpiryBadge, RamsBadge } from './badges.jsx';
+import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 
 const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
 
@@ -238,6 +238,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                     {quote.clientName || 'Unnamed client'}
                   </span>
                   <StatusBadge status={status} />
+                  <VideoBadge captureMode={quote.snapshot?.captureMode} />
                   {status === 'SENT' && <ExpiryBadge expiresAt={quote.expiresAt} />}
                   {status === 'ACCEPTED' && <RamsBadge hasRams={hasRams} />}
                 </div>
