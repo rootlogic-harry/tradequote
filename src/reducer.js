@@ -438,6 +438,8 @@ function reducerCore(state, action) {
         isAnalysing: false,
         analysisError: null,
         quotePayload: null,
+        videoProgress: null,
+        uploadProgress: null,
       };
     }
 

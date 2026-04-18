@@ -561,12 +561,16 @@ describe('Reducer RESTORE_DRAFT round-trip', () => {
       isAnalysing: true,
       analysisError: 'old error',
       quotePayload: { old: true },
+      videoProgress: { stage: 'processing', progress: 50 },
+      uploadProgress: { percent: 75 },
     };
     const draft = { jobDetails: { clientName: 'New' }, quoteMode: 'standard' };
     const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
     expect(newState.isAnalysing).toBe(false);
     expect(newState.analysisError).toBeNull();
     expect(newState.quotePayload).toBeNull();
+    expect(newState.videoProgress).toBeNull();
+    expect(newState.uploadProgress).toBeNull();
   });
 
   test('RESTORE_DRAFT with missing quoteMode defaults to standard', () => {
@@ -574,6 +578,27 @@ describe('Reducer RESTORE_DRAFT round-trip', () => {
     const state = { ...initialState, currentUserId: 'mark' };
     const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
     expect(newState.quoteMode).toBe('standard');
+  });
+
+  test('RESTORE_DRAFT preserves captureMode from video-mode draft', () => {
+    const draft = { jobDetails: { clientName: 'Video Job' }, captureMode: 'video' };
+    const state = { ...initialState, currentUserId: 'mark' };
+    const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
+    expect(newState.captureMode).toBe('video');
+  });
+
+  test('RESTORE_DRAFT preserves captureMode from photos-mode draft', () => {
+    const draft = { jobDetails: { clientName: 'Photo Job' }, captureMode: 'photos' };
+    const state = { ...initialState, currentUserId: 'mark' };
+    const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
+    expect(newState.captureMode).toBe('photos');
+  });
+
+  test('RESTORE_DRAFT with no captureMode (pre-video draft) keeps null', () => {
+    const draft = { jobDetails: { clientName: 'Old Draft' } };
+    const state = { ...initialState, currentUserId: 'mark' };
+    const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
+    expect(newState.captureMode).toBeNull();
   });
 });
 

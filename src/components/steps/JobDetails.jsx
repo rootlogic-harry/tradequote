@@ -11,7 +11,11 @@ import { uploadWithRetry } from '../../utils/uploadWithProgress.js';
 const VIDEO_ERROR_MAP = [
   [/ANTHROPIC_API_KEY/i, 'Our analysis service is temporarily unavailable. Please try again later.'],
   [/File too large/i, 'Video file is too large. Please record a shorter video (under 100MB).'],
+  [/under 3 minutes|too long/i, 'Video is too long. Please record a shorter video (under 3 minutes).'],
+  [/appears to be empty|no video data/i, 'The video file appears to be empty or corrupted. Please try recording again.'],
+  [/unreadable response/i, 'We had trouble reading the analysis. Please try again.'],
   [/Upload failed \(5\d\d\)/i, 'Something went wrong on our end. Please try again.'],
+  [/codec|format|unsupported.*video|cannot decode/i, 'This video format is not supported. Try recording with your default camera app.'],
   [/Something went wrong/i, 'Something went wrong processing your video. Try again or use photos instead.'],
 ];
 
@@ -20,6 +24,15 @@ function friendlyVideoError(message) {
     if (pattern.test(message)) return friendly;
   }
   return message;
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header, b64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
 }
 
 function resizeImage(file, maxSize = 2048) {
@@ -203,9 +216,12 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       formData.append('siteAddress', jobDetails.siteAddress);
       formData.append('briefNotes', jobDetails.briefNotes || '');
       formData.append('profile', JSON.stringify(profile));
-      videoExtraPhotos.forEach((photo) => {
-        formData.append('extraPhotos', photo);
-      });
+      // Compress extra photos before upload (same resizeImage as photo mode)
+      for (const photo of videoExtraPhotos) {
+        const dataUrl = await resizeImage(photo);
+        const blob = dataUrlToBlob(dataUrl);
+        formData.append('extraPhotos', blob, photo.name || 'extra.jpg');
+      }
 
       const data = await uploadWithRetry({
         url: `/api/users/${state.currentUserId}/jobs/draft/video`,

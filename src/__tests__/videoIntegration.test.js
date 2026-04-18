@@ -166,6 +166,25 @@ describe('Video integration into Step 2 (JobDetails)', () => {
     });
   });
 
+  describe('Video extra photos compression', () => {
+    it('JobDetails has dataUrlToBlob helper', () => {
+      expect(jobDetailsSource).toMatch(/function\s+dataUrlToBlob/);
+    });
+
+    it('compresses video extra photos with resizeImage before upload', () => {
+      // The video upload path should call resizeImage on each extra photo
+      expect(jobDetailsSource).toMatch(/resizeImage\(photo\)/);
+    });
+
+    it('converts compressed data URL to blob via dataUrlToBlob', () => {
+      expect(jobDetailsSource).toMatch(/dataUrlToBlob\(dataUrl\)/);
+    });
+
+    it('appends compressed blob to FormData with filename', () => {
+      expect(jobDetailsSource).toMatch(/formData\.append\('extraPhotos',\s*blob/);
+    });
+  });
+
   describe('Friendly video error mapping', () => {
     it('JobDetails has VIDEO_ERROR_MAP constant', () => {
       expect(jobDetailsSource).toMatch(/VIDEO_ERROR_MAP/);
@@ -189,6 +208,22 @@ describe('Video integration into Step 2 (JobDetails)', () => {
 
     it('maps 5xx Upload failed to generic retry message', () => {
       expect(jobDetailsSource).toMatch(/Upload failed.*try again/si);
+    });
+
+    it('maps video duration error to friendly message', () => {
+      expect(jobDetailsSource).toMatch(/under 3 minutes.*too long/s);
+    });
+
+    it('maps empty video error to friendly message', () => {
+      expect(jobDetailsSource).toMatch(/appears to be empty.*corrupted/s);
+    });
+
+    it('maps unreadable response to friendly message', () => {
+      expect(jobDetailsSource).toMatch(/unreadable response.*try again/si);
+    });
+
+    it('maps codec/format errors to friendly message', () => {
+      expect(jobDetailsSource).toMatch(/codec.*format.*unsupported.*cannot decode/s);
     });
   });
 });

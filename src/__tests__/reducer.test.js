@@ -637,6 +637,37 @@ describe('reducer', () => {
       const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '' });
       expect(result.isAnalysing).toBe(false);
     });
+
+    test('stores transcript from video walkthrough in quick mode', () => {
+      const state = makeReviewState({ isAnalysing: true, step: 3, quoteMode: 'quick', captureMode: 'video', reviewData: null, diffs: [] });
+      const normalised = {
+        measurements: [
+          { id: 'm1', item: 'Height', aiValue: '1200', value: '1200', confirmed: false },
+        ],
+        materials: [],
+        labourEstimate: { estimatedDays: 2, numberOfWorkers: 1, dayRate: 400, aiEstimatedDays: 2 },
+        scheduleOfWorks: [],
+        siteConditions: {},
+      };
+      const transcript = 'This wall is about 1.2 metres high, gritstone, showing frost damage on the coping.';
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '{}', transcript });
+      expect(result.transcript).toBe(transcript);
+      expect(result.step).toBe(5);
+      expect(result.quotePayload).not.toBeNull();
+    });
+
+    test('transcript defaults to null when not provided in quick mode', () => {
+      const state = makeReviewState({ isAnalysing: true, step: 3, quoteMode: 'quick', reviewData: null, diffs: [] });
+      const normalised = {
+        measurements: [],
+        materials: [],
+        labourEstimate: { estimatedDays: 2, numberOfWorkers: 1, dayRate: 400 },
+        scheduleOfWorks: [],
+        siteConditions: {},
+      };
+      const result = reducer(state, { type: 'ANALYSIS_SUCCESS', normalised, rawResponse: '' });
+      expect(result.transcript).toBeNull();
+    });
   });
 
   describe('ANALYSIS_CANCEL', () => {
