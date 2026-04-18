@@ -160,9 +160,9 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(savedQuotesSource).toMatch(/VideoBadge.*captureMode/);
     });
 
-    it('SavedQuoteViewer does not include captureMode in virtualState (QuoteOutput does not use it)', () => {
-      // captureMode is used for badges at Dashboard/SavedQuotes level, not inside the quote viewer
-      expect(savedQuoteViewerSource).not.toMatch(/captureMode.*snapshot\.captureMode/);
+    it('SavedQuoteViewer includes captureMode and transcript in virtualState', () => {
+      expect(savedQuoteViewerSource).toMatch(/captureMode.*snapshot\.captureMode/);
+      expect(savedQuoteViewerSource).toMatch(/transcript.*snapshot\.transcript/);
     });
   });
 
@@ -388,12 +388,71 @@ describe('Video integration into Step 2 (JobDetails)', () => {
   });
 
   describe('Transcript reset paths (reducer)', () => {
-    it('RESTORE_DRAFT explicitly sets transcript to null', () => {
-      expect(reducerSource).toMatch(/RESTORE_DRAFT[\s\S]*transcript:\s*null/);
+    it('RESTORE_DRAFT preserves transcript from draft or defaults to null', () => {
+      expect(reducerSource).toMatch(/RESTORE_DRAFT[\s\S]*transcript:\s*action\.draft\.transcript\s*\|\|\s*null/);
     });
 
     it('ANALYSIS_CANCEL clears transcript', () => {
       expect(reducerSource).toMatch(/ANALYSIS_CANCEL[\s\S]*?transcript:\s*null/);
+    });
+  });
+
+  // =====================================================================
+  // Phase 7: Hardening & saved quote viewer
+  // =====================================================================
+
+  describe('Duplicate analysis guard (JobDetails)', () => {
+    it('handleVideoAnalyse bails early if already analysing', () => {
+      expect(jobDetailsSource).toMatch(/handleVideoAnalyse[\s\S]*?if\s*\(\s*state\.isAnalysing\s*\)\s*return/);
+    });
+  });
+
+  describe('Expanded video error mapping', () => {
+    it('maps ffprobe duration errors to friendly message', () => {
+      expect(jobDetailsSource).toMatch(/could not determine.*duration.*corrupted/s);
+    });
+
+    it('maps invalid data / unknown encoder errors to friendly message', () => {
+      expect(jobDetailsSource).toMatch(/invalid data found.*unknown.*encoder.*error.*decoding/s);
+    });
+  });
+
+  describe('RESTORE_DRAFT preserves transcript from draft', () => {
+    let reducer, initialState;
+    beforeAll(async () => {
+      const mod = await import('../reducer.js');
+      reducer = mod.reducer;
+      initialState = mod.initialState;
+    });
+
+    it('preserves transcript from video-mode draft', () => {
+      const draft = {
+        jobDetails: { clientName: 'Video Client' },
+        captureMode: 'video',
+        transcript: 'The wall is approximately two metres high',
+      };
+      const state = { ...initialState, currentUserId: 'mark' };
+      const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
+      expect(newState.transcript).toBe('The wall is approximately two metres high');
+      expect(newState.captureMode).toBe('video');
+    });
+
+    it('defaults transcript to null when draft has no transcript', () => {
+      const draft = { jobDetails: { clientName: 'Photo Client' }, captureMode: 'photos' };
+      const state = { ...initialState, currentUserId: 'mark' };
+      const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
+      expect(newState.transcript).toBeNull();
+    });
+
+    it('clears stale in-memory transcript when draft has no transcript', () => {
+      const state = {
+        ...initialState,
+        currentUserId: 'mark',
+        transcript: 'stale transcript from current session',
+      };
+      const draft = { jobDetails: { clientName: 'New' }, quoteMode: 'standard' };
+      const newState = reducer(state, { type: 'RESTORE_DRAFT', draft });
+      expect(newState.transcript).toBeNull();
     });
   });
 });

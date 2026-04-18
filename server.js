@@ -1960,6 +1960,12 @@ app.post('/api/users/:id/jobs/:jobId/video',
       return res.status(400).json({ error: 'File must be a video' });
     }
 
+    // Validate extra photo MIME types
+    const invalidPhoto = extraPhotoFiles.find(f => !f.mimetype?.startsWith('image/'));
+    if (invalidPhoto) {
+      return res.status(400).json({ error: `Extra photo must be an image (got ${invalidPhoto.mimetype})` });
+    }
+
     console.log(`[Video] user=${userId} job=${jobId} mime=${videoFile.mimetype} size=${videoFile.size} extraPhotos=${extraPhotoFiles.length}`);
 
     videoProgress.create(jobId);

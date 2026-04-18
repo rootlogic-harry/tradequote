@@ -16,6 +16,8 @@ const VIDEO_ERROR_MAP = [
   [/unreadable response/i, 'We had trouble reading the analysis. Please try again.'],
   [/Upload failed \(5\d\d\)/i, 'Something went wrong on our end. Please try again.'],
   [/video.*(codec|format)|unsupported.*video|cannot decode/i, 'This video format is not supported. Try recording with your default camera app.'],
+  [/could not determine.*duration|ffprobe.*error/i, 'The video file appears corrupted or unreadable. Please try recording again.'],
+  [/invalid data found|unknown.*encoder|error.*decoding/i, 'This video file could not be processed. Try recording with your default camera app.'],
   [/Something went wrong/i, 'Something went wrong processing your video. Try again or use photos instead.'],
 ];
 
@@ -186,6 +188,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
   };
 
   const handleVideoAnalyse = async () => {
+    if (state.isAnalysing) return;
     const jobResult = validateJobDetails(jobDetails);
     setErrors(jobResult.errors);
     if (!jobResult.valid) return;

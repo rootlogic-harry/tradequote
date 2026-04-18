@@ -440,7 +440,7 @@ function reducerCore(state, action) {
         quotePayload: null,
         videoProgress: null,
         uploadProgress: null,
-        transcript: null,
+        transcript: action.draft.transcript || null,
       };
     }
 
