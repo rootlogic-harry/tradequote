@@ -11,7 +11,7 @@ function storageKey(userId) {
 
 function saveState(state) {
   try {
-    const toSave = { ...state, isAnalysing: false, analysisError: null };
+    const toSave = { ...state, isAnalysing: false, analysisError: null, videoProgress: null, uploadProgress: null };
     sessionStorage.setItem(storageKey(state.currentUserId), JSON.stringify(toSave));
   } catch { /* quota exceeded — ignore */ }
 }
@@ -206,13 +206,15 @@ function reducerCore(state, action) {
     }
 
     case 'ANALYSIS_CANCEL':
-      return { ...state, isAnalysing: false, analysisError: null, step: 2 };
+      return { ...state, isAnalysing: false, analysisError: null, videoProgress: null, uploadProgress: null, step: 2 };
 
     case 'ANALYSIS_ERROR':
       return {
         ...state,
         isAnalysing: false,
         analysisError: action.error,
+        videoProgress: null,
+        uploadProgress: null,
       };
 
     case 'CONFIRM_MEASUREMENT': {

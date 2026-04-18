@@ -217,7 +217,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 1007 tests across 52 suites (unit + video processing). API integration (85) and security (59) suites run separately.
+**Current count:** 1020 tests across 52 suites (unit + video processing). API integration (85) and security (59) suites run separately.
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 

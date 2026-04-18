@@ -293,6 +293,12 @@ describe('Error handling completeness', () => {
     expect(serverSource).toContain("413");
   });
 
+  test('multer error handler returns 413 for LIMIT_FILE_SIZE', () => {
+    expect(serverSource).toMatch(/MulterError/);
+    expect(serverSource).toMatch(/LIMIT_FILE_SIZE/);
+    expect(serverSource).toMatch(/File too large/);
+  });
+
   test('Anthropic proxy handles timeout', () => {
     expect(serverSource).toContain("proxyReq.on('timeout'");
     expect(serverSource).toContain('Request timed out');

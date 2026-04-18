@@ -183,7 +183,6 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       };
     } catch { /* SSE not critical — fall back to time-based */ }
 
-    let uploadAbort = null;
     try {
       const formData = new FormData();
       formData.append('video', videoFile);
@@ -219,7 +218,6 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       }
     } finally {
       try { eventSource?.close(); } catch {}
-      try { uploadAbort = null; } catch {}
     }
   };
 

@@ -121,6 +121,35 @@ describe('VideoProgressEmitter', () => {
     expect(received[0].error).toBe('Video too long');
     emitter.destroy('job-7');
   });
+
+  it('subscribe lazy-creates stream if it does not exist (SSE race fix)', () => {
+    const emitter = new VideoProgressEmitter();
+    // Subscribe BEFORE create — simulates SSE client connecting before POST handler
+    const received = [];
+    const unsub = emitter.subscribe('race-job', (data) => received.push(data));
+
+    // Now emit as if the POST handler started processing
+    emitter.emit('race-job', { stage: 'processing', progress: 10 });
+
+    expect(received).toHaveLength(1);
+    expect(received[0].stage).toBe('processing');
+    unsub();
+    emitter.destroy('race-job');
+  });
+
+  it('create is idempotent — does not drop existing subscribers', () => {
+    const emitter = new VideoProgressEmitter();
+    // Subscribe lazy-creates
+    const received = [];
+    emitter.subscribe('idem-job', (data) => received.push(data));
+
+    // POST handler calls create() again — should NOT wipe listeners
+    emitter.create('idem-job');
+
+    emitter.emit('idem-job', { stage: 'analysing', progress: 50 });
+    expect(received).toHaveLength(1);
+    emitter.destroy('idem-job');
+  });
 });
 
 describe('SSE video progress route (source validation)', () => {
@@ -161,5 +190,17 @@ describe('SSE video progress route (source validation)', () => {
 
   it('emits progress from the video processing route', () => {
     expect(serverSource).toMatch(/videoProgress\.emit|progressEmitter\.emit/);
+  });
+
+  it('has SSE timeout to prevent indefinite hangs', () => {
+    expect(serverSource).toMatch(/setTimeout[\s\S]*sseTimeout|sseTimeout[\s\S]*setTimeout/);
+  });
+
+  it('guards against writes after res.end (writableEnded)', () => {
+    expect(serverSource).toMatch(/writableEnded/);
+  });
+
+  it('delays destroy to let SSE complete event flush', () => {
+    expect(serverSource).toMatch(/setTimeout[\s\S]*destroy/);
   });
 });

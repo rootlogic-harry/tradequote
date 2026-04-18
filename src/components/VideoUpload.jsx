@@ -34,6 +34,15 @@ export default function VideoUpload({
   const fileInputRef = useRef(null);
   const photoInputRef = useRef(null);
 
+  // Stable refs for callbacks used inside video effect — avoids stale closures
+  // without re-triggering the effect when parent re-renders
+  const onVideoChangeRef = useRef(onVideoChange);
+  const onDurationErrorRef = useRef(onDurationError);
+  const maxDurationRef = useRef(maxDuration);
+  useEffect(() => { onVideoChangeRef.current = onVideoChange; }, [onVideoChange]);
+  useEffect(() => { onDurationErrorRef.current = onDurationError; }, [onDurationError]);
+  useEffect(() => { maxDurationRef.current = maxDuration; }, [maxDuration]);
+
   // Generate thumbnail and read duration when video changes
   useEffect(() => {
     if (!video) {
@@ -52,10 +61,9 @@ export default function VideoUpload({
     videoEl.onloadedmetadata = () => {
       setDuration(videoEl.duration);
       // Client-side duration check — reject before uploading
-      if (videoEl.duration > maxDuration) {
-        onDurationError?.(`Video must be under ${Math.floor(maxDuration / 60)} minutes`);
-        onVideoChange(null);
-        URL.revokeObjectURL(url);
+      if (videoEl.duration > maxDurationRef.current) {
+        onDurationErrorRef.current?.(`Video must be under ${Math.floor(maxDurationRef.current / 60)} minutes`);
+        onVideoChangeRef.current(null);
         return;
       }
       // Seek to 1 second for thumbnail

@@ -678,6 +678,20 @@ describe('Session persistence', () => {
     const saved = JSON.parse(sessionStorage.getItem('tq_session_mark'));
     expect(saved.isAnalysing).toBe(false);
   });
+
+  test('persisted state excludes transient videoProgress and uploadProgress', () => {
+    const state = {
+      ...initialState,
+      currentUserId: 'mark',
+      videoProgress: { stage: 'processing', progress: 50 },
+      uploadProgress: { percent: 42 },
+    };
+    reducer(state, { type: 'SET_STEP', step: 3 });
+
+    const saved = JSON.parse(sessionStorage.getItem('tq_session_mark'));
+    expect(saved.videoProgress).toBeNull();
+    expect(saved.uploadProgress).toBeNull();
+  });
 });
 
 // ======================================================================

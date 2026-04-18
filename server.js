@@ -1916,13 +1916,25 @@ app.get('/api/users/:id/jobs/:jobId/video/progress', requireAuth, (req, res) => 
   res.write('\n'); // flush headers
 
   const unsub = videoProgress.subscribe(jobId, (data) => {
+    if (res.writableEnded) return;
     res.write(`data: ${JSON.stringify(data)}\n\n`);
     if (data.stage === 'complete' || data.stage === 'error') {
+      clearTimeout(sseTimeout);
       res.end();
     }
   });
 
+  // Timeout: close SSE after 5 minutes if no complete/error (matches XHR timeout)
+  const sseTimeout = setTimeout(() => {
+    unsub();
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ stage: 'error', progress: 0, error: 'Progress timeout' })}\n\n`);
+      res.end();
+    }
+  }, 300000);
+
   req.on('close', () => {
+    clearTimeout(sseTimeout);
     unsub();
   });
 });
@@ -2116,7 +2128,8 @@ app.post('/api/users/:id/jobs/:jobId/video',
       for (const f of extraPhotoFiles) {
         try { if (f?.path) fs.unlinkSync(f.path); } catch {}
       }
-      videoProgress.destroy(jobId);
+      // Delay destroy to let SSE "complete" event flush to client
+      setTimeout(() => videoProgress.destroy(jobId), 1000);
     }
   }
 );
@@ -2400,6 +2413,20 @@ app.get('/{*path}', (req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
   res.sendFile(join(__dirname, 'dist', 'index.html'));
+});
+
+// --- Multer error handler (file size limit, type rejection) ---
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large' });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err.message === 'File must be a video') {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
 });
 
 // --- Start Server ---

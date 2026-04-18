@@ -11,14 +11,19 @@ export class VideoProgressEmitter {
   }
 
   create(jobId) {
+    const existing = this._streams.get(jobId);
+    if (existing) return existing;
     const stream = { jobId, listeners: new Set() };
     this._streams.set(jobId, stream);
     return stream;
   }
 
   subscribe(jobId, callback) {
-    const stream = this._streams.get(jobId);
-    if (!stream) return () => {};
+    // Lazy-create: SSE client may subscribe before the POST handler calls create()
+    let stream = this._streams.get(jobId);
+    if (!stream) {
+      stream = this.create(jobId);
+    }
     stream.listeners.add(callback);
     return () => stream.listeners.delete(callback);
   }

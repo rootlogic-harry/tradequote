@@ -86,7 +86,15 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
               Back to Job Details
             </button>
             <button
-              onClick={() => dispatch({ type: 'RETRY_ANALYSIS' })}
+              onClick={() => {
+                if (isVideoMode) {
+                  // Video retry: go back to step 2 so user can re-trigger upload
+                  dispatch({ type: 'SET_STEP', step: 2 });
+                  dispatch({ type: 'ANALYSIS_CANCEL' });
+                } else {
+                  dispatch({ type: 'RETRY_ANALYSIS' });
+                }
+              }}
               className="px-6 py-2 rounded bg-tq-accent text-tq-bg font-heading uppercase text-sm hover:bg-tq-accent-dark"
               style={{ minHeight: 44 }}
             >

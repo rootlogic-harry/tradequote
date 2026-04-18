@@ -26,6 +26,22 @@ describe('Client-side video progress wiring', () => {
       // videoProgress should reset when a new analysis begins
       expect(reducerSource).toMatch(/ANALYSIS_START[\s\S]*videoProgress:\s*null/);
     });
+
+    it('clears videoProgress on ANALYSIS_CANCEL', () => {
+      expect(reducerSource).toMatch(/ANALYSIS_CANCEL[\s\S]*videoProgress:\s*null/);
+    });
+
+    it('clears uploadProgress on ANALYSIS_CANCEL', () => {
+      expect(reducerSource).toMatch(/ANALYSIS_CANCEL[\s\S]*uploadProgress:\s*null/);
+    });
+
+    it('clears videoProgress on ANALYSIS_ERROR', () => {
+      expect(reducerSource).toMatch(/ANALYSIS_ERROR[\s\S]*videoProgress:\s*null/);
+    });
+
+    it('clears uploadProgress on ANALYSIS_ERROR', () => {
+      expect(reducerSource).toMatch(/ANALYSIS_ERROR[\s\S]*uploadProgress:\s*null/);
+    });
   });
 
   describe('AIAnalysis uses SSE progress', () => {
@@ -54,6 +70,12 @@ describe('Client-side video progress wiring', () => {
     it('falls back to time-based estimation when no SSE data', () => {
       // Should still have the durationHint-based fallback
       expect(analysisSource).toMatch(/durationHint|elapsedSeconds/);
+    });
+
+    it('video mode Try Again goes back to step 2 instead of RETRY_ANALYSIS', () => {
+      // In video mode, retry should dispatch SET_STEP + ANALYSIS_CANCEL, not RETRY_ANALYSIS
+      expect(analysisSource).toMatch(/isVideoMode[\s\S]*SET_STEP[\s\S]*step:\s*2/);
+      expect(analysisSource).toMatch(/isVideoMode[\s\S]*ANALYSIS_CANCEL/);
     });
   });
 
@@ -85,6 +107,10 @@ describe('Client-side video progress wiring', () => {
 
     it('closes EventSource on completion or error', () => {
       expect(jobDetailsSource).toMatch(/\.close\(\)/);
+    });
+
+    it('does not have dead uploadAbort variable', () => {
+      expect(jobDetailsSource).not.toMatch(/let\s+uploadAbort/);
     });
   });
 });
