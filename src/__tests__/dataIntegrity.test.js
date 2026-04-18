@@ -96,7 +96,7 @@ describe('Save snapshot completeness', () => {
       'photos', 'extraPhotos', 'isAnalysing', 'analysisError', 'aiRawResponse',
       'savedJobId', 'quoteSaveError', 'quoteSaveErrorKey', 'critiqueNotes',
       'rams', 'retryCount', 'statusModal', 'recentJobs',
-      'videoProgress', 'uploadProgress', 'transcript'];
+      'videoProgress', 'uploadProgress'];
     for (const key of excluded) {
       expect(snapshot[key]).toBeUndefined();
     }
@@ -116,6 +116,7 @@ describe('Save snapshot completeness', () => {
     expect(snapshot.quoteMode).toBe('standard');
     expect(snapshot.captureMode).toBe('video');
     expect(snapshot.diffs).toHaveLength(1);
+    expect(snapshot.transcript).toBe('The wall is about two metres high with loose capping stones');
   });
 
   test('snapshot is fully JSON-serialisable (no undefined, no circular refs)', () => {
@@ -937,11 +938,12 @@ describe('pickAllowedKeys behavioral tests', () => {
       quoteMode: 'standard',
       captureMode: 'video',
       diffs: [{ e: 6 }],
+      transcript: 'Wall description from video',
       aiRawResponse: 'raw',
     };
     const result = pickAllowedKeys(input);
     expect(Object.keys(result).sort()).toEqual(
-      ['aiRawResponse', 'captureMode', 'diffs', 'jobDetails', 'profile', 'quoteMode', 'quotePayload', 'quoteSequence', 'reviewData']
+      ['aiRawResponse', 'captureMode', 'diffs', 'jobDetails', 'profile', 'quoteMode', 'quotePayload', 'quoteSequence', 'reviewData', 'transcript']
     );
   });
 

@@ -361,6 +361,22 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
 
+      // Video Walkthrough Transcript (only for video-mode quotes)
+      if (state.captureMode === 'video' && state.transcript) {
+        children.push(
+          new Paragraph({
+            children: [txt('SITE WALKTHROUGH NOTES', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
+            spacing: { before: 300, after: 120 },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' } },
+          }),
+          new Paragraph({
+            children: [txt(state.transcript, { size: 22 })],
+            spacing: { after: 300 },
+          }),
+          new Paragraph({ spacing: { after: 200 }, children: [] }),
+        );
+      }
+
       // Measurements
       children.push(
         new Paragraph({

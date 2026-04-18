@@ -4,7 +4,7 @@ import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 
 export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp }) {
-  const { profile, jobDetails, reviewData, photos = {} } = state;
+  const { profile, jobDetails, reviewData, photos = {}, transcript, captureMode } = state;
 
   if (!reviewData) return null;
 
@@ -123,6 +123,16 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </h2>
         {renderDescription(damageDescription)}
       </div>
+
+      {/* Video Walkthrough Transcript (only for video-mode quotes with transcript) */}
+      {captureMode === 'video' && transcript && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Site Walkthrough Notes
+          </h2>
+          <p className="text-lg text-gray-700 whitespace-pre-wrap">{transcript}</p>
+        </div>
+      )}
 
       {/* Section 2: Measurements */}
       <div className="mb-8">

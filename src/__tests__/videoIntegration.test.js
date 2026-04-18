@@ -244,4 +244,138 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(jobDetailsSource).toMatch(/video.*codec.*format.*unsupported.*cannot decode/s);
     });
   });
+
+  // =====================================================================
+  // Phase 6: Transcript persistence & export integration
+  // =====================================================================
+
+  describe('Transcript in PDF export (QuoteDocument)', () => {
+    let quoteDocSource;
+
+    beforeAll(() => {
+      quoteDocSource = readFileSync(join(srcDir, 'components/QuoteDocument.jsx'), 'utf8');
+    });
+
+    it('destructures transcript and captureMode from state', () => {
+      expect(quoteDocSource).toMatch(/transcript.*captureMode|captureMode.*transcript/);
+    });
+
+    it('renders Site Walkthrough Notes section for video mode', () => {
+      expect(quoteDocSource).toContain('Site Walkthrough Notes');
+    });
+
+    it('only shows transcript section when captureMode is video and transcript exists', () => {
+      expect(quoteDocSource).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*transcript/);
+    });
+
+    it('renders transcript text in whitespace-pre-wrap paragraph', () => {
+      expect(quoteDocSource).toMatch(/whitespace-pre-wrap.*\{transcript\}/s);
+    });
+  });
+
+  describe('Transcript in DOCX export (QuoteOutput)', () => {
+    let quoteOutputSource;
+
+    beforeAll(() => {
+      quoteOutputSource = readFileSync(join(srcDir, 'components/steps/QuoteOutput.jsx'), 'utf8');
+    });
+
+    it('adds SITE WALKTHROUGH NOTES heading to DOCX', () => {
+      expect(quoteOutputSource).toContain('SITE WALKTHROUGH NOTES');
+    });
+
+    it('conditionally includes transcript in DOCX for video mode', () => {
+      expect(quoteOutputSource).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*state\.transcript/);
+    });
+
+    it('renders transcript text in DOCX paragraph', () => {
+      expect(quoteOutputSource).toMatch(/txt\(state\.transcript/);
+    });
+  });
+
+  describe('Draft resume UX for video mode (JobDetails)', () => {
+    it('shows analysis-preserved banner when draft has reviewData but no video file', () => {
+      expect(jobDetailsSource).toContain('Your video analysis is preserved');
+    });
+
+    it('shows REVIEW QUOTE button to skip re-upload', () => {
+      expect(jobDetailsSource).toContain('REVIEW QUOTE');
+    });
+
+    it('REVIEW QUOTE dispatches SET_STEP to skip to review', () => {
+      // Should dispatch SET_STEP with the correct step (4 for standard, 5 for quick)
+      expect(jobDetailsSource).toMatch(/SET_STEP.*quoteMode.*quick.*5.*4|SET_STEP.*step.*quoteMode/s);
+    });
+
+    it('banner only appears when no videoFile and reviewData exists', () => {
+      expect(jobDetailsSource).toMatch(/!videoFile\s*&&\s*state\.reviewData/);
+    });
+  });
+
+  describe('Transcript copy-to-clipboard (ReviewEdit)', () => {
+    let reviewEditSource;
+
+    beforeAll(() => {
+      reviewEditSource = readFileSync(join(srcDir, 'components/steps/ReviewEdit.jsx'), 'utf8');
+    });
+
+    it('has transcriptCopied state', () => {
+      expect(reviewEditSource).toMatch(/transcriptCopied/);
+    });
+
+    it('has copyTranscript function', () => {
+      expect(reviewEditSource).toMatch(/copyTranscript/);
+    });
+
+    it('uses navigator.clipboard.writeText as primary method', () => {
+      expect(reviewEditSource).toMatch(/navigator\.clipboard\.writeText/);
+    });
+
+    it('falls back to execCommand copy for older browsers', () => {
+      expect(reviewEditSource).toMatch(/execCommand\s*\(\s*['"]copy['"]\s*\)/);
+    });
+
+    it('shows header as Video Transcript (read-only)', () => {
+      expect(reviewEditSource).toContain('Video Transcript (read-only)');
+    });
+
+    it('shows Copy/Copied button text', () => {
+      expect(reviewEditSource).toMatch(/Copied|Copy/);
+    });
+  });
+
+  describe('Fallback-to-photos suggestion on video error (AIAnalysis)', () => {
+    let aiAnalysisSource;
+
+    beforeAll(() => {
+      aiAnalysisSource = readFileSync(join(srcDir, 'components/steps/AIAnalysis.jsx'), 'utf8');
+    });
+
+    it('shows fallback suggestion text for video mode errors', () => {
+      expect(aiAnalysisSource).toContain('try using photos instead');
+    });
+
+    it('has Use Photos Instead button for video mode', () => {
+      expect(aiAnalysisSource).toContain('Use Photos Instead');
+    });
+
+    it('fallback button dispatches SET_CAPTURE_MODE to photos', () => {
+      expect(aiAnalysisSource).toMatch(/SET_CAPTURE_MODE.*photos/s);
+    });
+
+    it('fallback button also dispatches ANALYSIS_CANCEL and SET_STEP', () => {
+      expect(aiAnalysisSource).toMatch(/ANALYSIS_CANCEL/);
+      expect(aiAnalysisSource).toMatch(/SET_STEP.*step:\s*2/);
+    });
+
+    it('fallback suggestion only appears for isVideoMode', () => {
+      expect(aiAnalysisSource).toMatch(/isVideoMode\s*&&/);
+    });
+  });
+
+  describe('RESTORE_DRAFT clears transcript (reducer)', () => {
+    it('RESTORE_DRAFT explicitly sets transcript to null', () => {
+      expect(reducerSource).toMatch(/RESTORE_DRAFT[\s\S]*transcript:\s*null/);
+    });
+  });
 });

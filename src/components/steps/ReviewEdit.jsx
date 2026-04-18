@@ -108,6 +108,27 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   };
 
   // Transcript section — video mode only
+  const [transcriptCopied, setTranscriptCopied] = useState(false);
+  const copyTranscript = async () => {
+    try {
+      await navigator.clipboard.writeText(state.transcript);
+      setTranscriptCopied(true);
+      setTimeout(() => setTranscriptCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = state.transcript;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setTranscriptCopied(true);
+      setTimeout(() => setTranscriptCopied(false), 2000);
+    }
+  };
+
   const transcriptContent = isVideoMode && state.transcript ? (
     <div className="border border-tq-border rounded-lg overflow-hidden">
       <button
@@ -115,7 +136,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         className="w-full bg-tq-card px-4 py-3 flex items-center justify-between text-left"
       >
         <span className="font-heading font-bold text-tq-text text-sm">
-          Video Transcript
+          Video Transcript (read-only)
         </span>
         <span className={`text-tq-muted transition-transform ${openSections.transcript ? 'rotate-180' : ''}`}>
           &#9660;
@@ -123,6 +144,15 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       </button>
       {openSections.transcript && (
         <div className="px-4 py-3 border-t border-tq-border">
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={copyTranscript}
+              className="text-xs px-2 py-1 rounded border border-tq-border text-tq-muted hover:text-tq-text transition-colors"
+              type="button"
+            >
+              {transcriptCopied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
           <p className="text-sm text-tq-text whitespace-pre-wrap leading-relaxed">
             {state.transcript}
           </p>

@@ -6,7 +6,7 @@
 export const SERVER_SAVE_ALLOWLIST = [
   'profile', 'jobDetails', 'reviewData',
   'quotePayload', 'quoteSequence', 'quoteMode', 'captureMode', 'diffs',
-  'aiRawResponse',
+  'transcript', 'aiRawResponse',
 ];
 
 /**

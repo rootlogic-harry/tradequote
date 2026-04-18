@@ -77,7 +77,12 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
             Something Went Wrong
           </p>
           <p className="text-sm mb-6" style={{ color: 'var(--tq-text)' }}>{state.analysisError}</p>
-          <div className="flex gap-3 justify-center">
+          {isVideoMode && (
+            <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
+              You can also try using photos instead of a video walkthrough.
+            </p>
+          )}
+          <div className="flex gap-3 justify-center flex-wrap">
             <button
               onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
               className="px-6 py-2 rounded border border-tq-border text-tq-text font-heading uppercase text-sm hover:bg-tq-card"
@@ -100,6 +105,19 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
             >
               Try Again
             </button>
+            {isVideoMode && (
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_CAPTURE_MODE', mode: 'photos' });
+                  dispatch({ type: 'ANALYSIS_CANCEL' });
+                  dispatch({ type: 'SET_STEP', step: 2 });
+                }}
+                className="px-6 py-2 rounded border border-tq-border text-tq-text font-heading uppercase text-sm hover:bg-tq-card"
+                style={{ minHeight: 44 }}
+              >
+                Use Photos Instead
+              </button>
+            )}
           </div>
         </div>
       </div>

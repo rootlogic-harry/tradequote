@@ -409,6 +409,22 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
               Change capture method
             </button>
           </div>
+
+          {/* Draft resume: show banner if analysis exists but no video file (draft restored) */}
+          {!videoFile && state.reviewData && (
+            <div
+              className="rounded-lg p-4 mb-4"
+              style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1px solid var(--tq-accent)' }}
+            >
+              <p className="text-sm font-heading font-bold" style={{ color: 'var(--tq-accent)' }}>
+                Your video analysis is preserved.
+              </p>
+              <p className="text-sm text-tq-muted mt-1">
+                You can proceed to review your quote, or record a new video to re-analyse.
+              </p>
+            </div>
+          )}
+
           <VideoUpload
             video={videoFile}
             onVideoChange={setVideoFile}
@@ -458,6 +474,21 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
                 className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-3 rounded transition-colors"
               >
                 Save Progress
+              </button>
+            )}
+            {/* Resume: go to review with existing analysis (no new video needed) */}
+            {!videoFile && state.reviewData && (
+              <button
+                onClick={() => dispatch({ type: 'SET_STEP', step: state.quoteMode === 'quick' ? 5 : 4 })}
+                className="font-heading font-bold uppercase tracking-wide px-8 py-3 rounded transition-colors"
+                style={{
+                  backgroundColor: 'var(--tq-accent)',
+                  color: '#ffffff',
+                  minHeight: 48,
+                  cursor: 'pointer',
+                }}
+              >
+                REVIEW QUOTE
               </button>
             )}
             <button

@@ -31,6 +31,7 @@ export function stripBlobs(obj) {
 export const SAVE_ALLOWLIST = [
   'profile', 'jobDetails', 'reviewData',
   'quotePayload', 'quoteSequence', 'quoteMode', 'captureMode', 'diffs',
+  'transcript',
 ];
 
 /**
