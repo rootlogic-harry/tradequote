@@ -745,8 +745,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     const subject = encodeURIComponent(
       `Quote ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
     );
+    const transcriptSection = state.captureMode === 'video' && state.transcript
+      ? `\n\nSite Walkthrough Notes:\n${state.transcript}\n`
+      : '';
     const body = encodeURIComponent(
-      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
+      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.${transcriptSection}\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };

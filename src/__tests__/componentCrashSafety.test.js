@@ -138,6 +138,11 @@ describe('QuoteDocument crash safety', () => {
     // Must have photos = {} in destructuring
     expect(/photos\s*=\s*\{\}/.test(src)).toBe(true);
   });
+
+  test('transcript section guarded by captureMode === video AND transcript', () => {
+    // Must check both conditions to prevent crash on non-video quotes
+    expect(src).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*transcript/);
+  });
 });
 
 // ─── 7. QuoteOutput clientName.replace null-safe ───
@@ -154,6 +159,11 @@ describe('QuoteOutput crash safety', () => {
       const safe = /\(.*clientName\s*\|\|\s*['"]['"]\)\.replace|clientName\?\.replace/.test(line);
       expect(safe).toBe(true);
     });
+  });
+
+  test('DOCX transcript section guarded by captureMode === video AND transcript', () => {
+    // Must check both conditions to prevent crash on non-video quotes
+    expect(src).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*state\.transcript/);
   });
 });
 

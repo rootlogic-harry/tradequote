@@ -110,7 +110,12 @@ function reducerCore(state, action) {
       return { ...state, step: action.step };
 
     case 'SET_CAPTURE_MODE':
-      return { ...state, captureMode: action.payload };
+      return {
+        ...state,
+        captureMode: action.payload,
+        // Clear video-specific state when switching away from video
+        ...(action.payload !== 'video' && { transcript: null, videoProgress: null, uploadProgress: null }),
+      };
 
     case 'VIDEO_PROGRESS':
       return { ...state, videoProgress: action.payload };

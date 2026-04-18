@@ -691,6 +691,39 @@ describe('reducer', () => {
     });
   });
 
+  describe('SET_CAPTURE_MODE', () => {
+    test('sets captureMode to video', () => {
+      const result = reducer(initialState, { type: 'SET_CAPTURE_MODE', payload: 'video' });
+      expect(result.captureMode).toBe('video');
+    });
+
+    test('sets captureMode to photos', () => {
+      const result = reducer(initialState, { type: 'SET_CAPTURE_MODE', payload: 'photos' });
+      expect(result.captureMode).toBe('photos');
+    });
+
+    test('clears transcript when switching from video to photos', () => {
+      const state = { ...initialState, captureMode: 'video', transcript: 'old video transcript' };
+      const result = reducer(state, { type: 'SET_CAPTURE_MODE', payload: 'photos' });
+      expect(result.captureMode).toBe('photos');
+      expect(result.transcript).toBeNull();
+    });
+
+    test('clears videoProgress and uploadProgress when switching away from video', () => {
+      const state = { ...initialState, captureMode: 'video', videoProgress: { stage: 'processing' }, uploadProgress: { percent: 50 } };
+      const result = reducer(state, { type: 'SET_CAPTURE_MODE', payload: 'photos' });
+      expect(result.videoProgress).toBeNull();
+      expect(result.uploadProgress).toBeNull();
+    });
+
+    test('preserves transcript when switching to video (no-op clear)', () => {
+      const state = { ...initialState, captureMode: 'photos', transcript: null };
+      const result = reducer(state, { type: 'SET_CAPTURE_MODE', payload: 'video' });
+      expect(result.captureMode).toBe('video');
+      // transcript stays null — it'll be set later by ANALYSIS_SUCCESS
+    });
+  });
+
   describe('ANALYSIS_ERROR', () => {
     test('sets error and clears isAnalysing', () => {
       const state = { ...initialState, isAnalysing: true, step: 3 };

@@ -148,7 +148,7 @@ describe('Restore cycle integrity', () => {
   test('SavedQuoteViewer virtualState handles all SAVE_ALLOWLIST keys', () => {
     const src = readFileSync(join(__dirname, '../components/SavedQuoteViewer.jsx'), 'utf8');
     // The virtualState construction must reference each SAVE_ALLOWLIST key with a safe fallback
-    const snapshotKeys = ['profile', 'jobDetails', 'reviewData', 'quotePayload', 'quoteSequence', 'diffs'];
+    const snapshotKeys = ['profile', 'jobDetails', 'reviewData', 'quotePayload', 'quoteSequence', 'diffs', 'captureMode', 'transcript'];
     for (const key of snapshotKeys) {
       // Must reference snapshot.<key> somewhere
       expect(src).toMatch(new RegExp(`snapshot\\.${key}`));

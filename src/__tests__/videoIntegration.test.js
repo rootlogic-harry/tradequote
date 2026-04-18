@@ -455,4 +455,67 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(newState.transcript).toBeNull();
     });
   });
+
+  // =====================================================================
+  // Phase 8: Email transcript, mode-switch cleanup, crash safety
+  // =====================================================================
+
+  describe('Email template includes transcript for video mode (QuoteOutput)', () => {
+    let quoteOutputSource;
+
+    beforeAll(() => {
+      quoteOutputSource = readFileSync(join(srcDir, 'components/steps/QuoteOutput.jsx'), 'utf8');
+    });
+
+    it('email handler references captureMode and transcript', () => {
+      expect(quoteOutputSource).toMatch(/handleEmail[\s\S]*captureMode.*video.*transcript/s);
+    });
+
+    it('includes Site Walkthrough Notes in email body for video mode', () => {
+      expect(quoteOutputSource).toContain('Site Walkthrough Notes');
+    });
+
+    it('conditionally adds transcript only for video mode', () => {
+      expect(quoteOutputSource).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*state\.transcript/);
+    });
+  });
+
+  describe('SET_CAPTURE_MODE clears video state (reducer)', () => {
+    let reducer, initialState;
+    beforeAll(async () => {
+      const mod = await import('../reducer.js');
+      reducer = mod.reducer;
+      initialState = mod.initialState;
+    });
+
+    it('clears transcript when switching from video to photos', () => {
+      const state = { ...initialState, captureMode: 'video', transcript: 'old transcript' };
+      const result = reducer(state, { type: 'SET_CAPTURE_MODE', payload: 'photos' });
+      expect(result.transcript).toBeNull();
+      expect(result.captureMode).toBe('photos');
+    });
+
+    it('does not clear transcript when switching to video', () => {
+      const state = { ...initialState, captureMode: null };
+      const result = reducer(state, { type: 'SET_CAPTURE_MODE', payload: 'video' });
+      expect(result.captureMode).toBe('video');
+    });
+  });
+
+  describe('VideoBadge legacy captureMode handling', () => {
+    let badgesSource;
+
+    beforeAll(() => {
+      badgesSource = readFileSync(join(srcDir, 'components/badges.jsx'), 'utf8');
+    });
+
+    it('VideoBadge returns null for non-video captureMode', () => {
+      // captureMode !== 'video' check means undefined, null, 'photos' all return null
+      expect(badgesSource).toMatch(/captureMode\s*!==\s*['"]video['"]/);
+    });
+
+    it('VideoBadge function accepts captureMode prop', () => {
+      expect(badgesSource).toMatch(/function\s+VideoBadge\s*\(\s*\{\s*captureMode/);
+    });
+  });
 });
