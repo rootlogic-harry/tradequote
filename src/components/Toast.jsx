@@ -18,7 +18,7 @@ export default function Toast({ message, type = 'info', onDismiss }) {
   if (!message) return null;
 
   return (
-    <div className={`fixed bottom-6 left-4 right-4 fq:left-auto fq:right-6 z-50 border px-4 py-3 shadow-lg max-w-sm text-sm font-body animate-[slideUp_0.3s_ease-out] flex items-center justify-between gap-2 ${TYPE_STYLES[type] || TYPE_STYLES.info}`}>
+    <div className={`fixed bottom-6 left-4 right-4 fq:left-auto fq:right-6 z-50 border rounded px-4 py-3 shadow-lg max-w-sm text-sm font-body animate-[slideUp_0.3s_ease-out] flex items-center justify-between gap-2 ${TYPE_STYLES[type] || TYPE_STYLES.info}`}>
       <span>{message}</span>
       {type === 'error' && (
         <button onClick={onDismiss} className="shrink-0 text-lg leading-none opacity-70 hover:opacity-100">&times;</button>

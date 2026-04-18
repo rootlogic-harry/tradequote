@@ -775,7 +775,7 @@ export default function App() {
           quoteMode={state.quoteMode}
           isAdminPlan={isAdmin}
         />
-        <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
+        <div className="max-w-5xl mx-auto px-4 py-6">
           <OfflineBanner />
           <SaveErrorBanner
             error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}
