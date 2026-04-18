@@ -211,7 +211,7 @@ function reducerCore(state, action) {
     }
 
     case 'ANALYSIS_CANCEL':
-      return { ...state, isAnalysing: false, analysisError: null, videoProgress: null, uploadProgress: null, step: 2 };
+      return { ...state, isAnalysing: false, analysisError: null, videoProgress: null, uploadProgress: null, transcript: null, step: 2 };
 
     case 'ANALYSIS_ERROR':
       return {

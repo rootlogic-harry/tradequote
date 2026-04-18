@@ -38,6 +38,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
     costs: false,
     schedule: false,
     damage: false,
+    transcript: false,
   });
 
   if (!reviewData) {
@@ -110,6 +111,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   // Transcript section — video mode only
   const [transcriptCopied, setTranscriptCopied] = useState(false);
   const copyTranscript = async () => {
+    if (!state.transcript) return;
     try {
       await navigator.clipboard.writeText(state.transcript);
       setTranscriptCopied(true);
@@ -147,8 +149,9 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
           <div className="flex justify-end mb-2">
             <button
               onClick={copyTranscript}
-              className="text-xs px-2 py-1 rounded border border-tq-border text-tq-muted hover:text-tq-text transition-colors"
+              className="text-xs px-3 py-2 rounded border border-tq-border text-tq-muted hover:text-tq-text transition-colors"
               type="button"
+              style={{ minHeight: 44 }}
             >
               {transcriptCopied ? 'Copied' : 'Copy'}
             </button>

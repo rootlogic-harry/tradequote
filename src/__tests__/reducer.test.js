@@ -683,6 +683,12 @@ describe('reducer', () => {
       const result = reducer(state, { type: 'ANALYSIS_CANCEL' });
       expect(result.analysisError).toBeNull();
     });
+
+    test('clears stale transcript from previous video analysis', () => {
+      const state = { ...initialState, isAnalysing: true, step: 3, transcript: 'old video transcript' };
+      const result = reducer(state, { type: 'ANALYSIS_CANCEL' });
+      expect(result.transcript).toBeNull();
+    });
   });
 
   describe('ANALYSIS_ERROR', () => {

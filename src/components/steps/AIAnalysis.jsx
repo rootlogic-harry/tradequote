@@ -108,7 +108,7 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
             {isVideoMode && (
               <button
                 onClick={() => {
-                  dispatch({ type: 'SET_CAPTURE_MODE', mode: 'photos' });
+                  dispatch({ type: 'SET_CAPTURE_MODE', payload: 'photos' });
                   dispatch({ type: 'ANALYSIS_CANCEL' });
                   dispatch({ type: 'SET_STEP', step: 2 });
                 }}

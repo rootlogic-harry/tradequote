@@ -342,6 +342,18 @@ describe('Video integration into Step 2 (JobDetails)', () => {
     it('shows Copy/Copied button text', () => {
       expect(reviewEditSource).toMatch(/Copied|Copy/);
     });
+
+    it('copyTranscript guards against null transcript', () => {
+      expect(reviewEditSource).toMatch(/if\s*\(\s*!state\.transcript\s*\)\s*return/);
+    });
+
+    it('transcript accordion key is initialized in openSections', () => {
+      expect(reviewEditSource).toMatch(/transcript:\s*false/);
+    });
+
+    it('copy button has 44px minimum touch target', () => {
+      expect(reviewEditSource).toMatch(/minHeight:\s*44/);
+    });
   });
 
   describe('Fallback-to-photos suggestion on video error (AIAnalysis)', () => {
@@ -359,8 +371,10 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(aiAnalysisSource).toContain('Use Photos Instead');
     });
 
-    it('fallback button dispatches SET_CAPTURE_MODE to photos', () => {
-      expect(aiAnalysisSource).toMatch(/SET_CAPTURE_MODE.*photos/s);
+    it('fallback button dispatches SET_CAPTURE_MODE with payload (not mode)', () => {
+      expect(aiAnalysisSource).toMatch(/SET_CAPTURE_MODE.*payload:\s*['"]photos['"]/s);
+      // Must NOT use 'mode' — reducer expects 'payload'
+      expect(aiAnalysisSource).not.toMatch(/SET_CAPTURE_MODE.*mode:\s*['"]photos['"]/s);
     });
 
     it('fallback button also dispatches ANALYSIS_CANCEL and SET_STEP', () => {
@@ -373,9 +387,13 @@ describe('Video integration into Step 2 (JobDetails)', () => {
     });
   });
 
-  describe('RESTORE_DRAFT clears transcript (reducer)', () => {
+  describe('Transcript reset paths (reducer)', () => {
     it('RESTORE_DRAFT explicitly sets transcript to null', () => {
       expect(reducerSource).toMatch(/RESTORE_DRAFT[\s\S]*transcript:\s*null/);
+    });
+
+    it('ANALYSIS_CANCEL clears transcript', () => {
+      expect(reducerSource).toMatch(/ANALYSIS_CANCEL[\s\S]*?transcript:\s*null/);
     });
   });
 });
