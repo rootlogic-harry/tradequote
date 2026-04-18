@@ -797,7 +797,7 @@ export default function App() {
       />
 
       {/* Profile modal */}
-      {showProfileModal && state.step > 1 && (
+      {showProfileModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-tq-surface rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 border border-tq-border">
             <div className="flex justify-between items-center mb-4">
