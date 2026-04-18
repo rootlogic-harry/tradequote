@@ -42,10 +42,10 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
+        <div className="flex flex-col fq:flex-row flex-1 min-h-0">
           {/* Category tabs */}
           {!search.trim() && (
-            <div className="w-48 flex-shrink-0 border-r border-tq-border overflow-y-auto hidden sm:block">
+            <div className="w-48 flex-shrink-0 border-r border-tq-border overflow-y-auto hidden fq:block">
               {HAZARD_CATEGORIES.map(cat => {
                 const count = CONSTRUCTION_HAZARDS.filter(h => h.category === cat).length;
                 return (
@@ -67,7 +67,7 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
 
           {/* Mobile category select */}
           {!search.trim() && (
-            <div className="sm:hidden p-2 border-b border-tq-border">
+            <div className="fq:hidden p-2 border-b border-tq-border">
               <select
                 value={activeCategory}
                 onChange={e => setActiveCategory(e.target.value)}

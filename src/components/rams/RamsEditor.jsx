@@ -42,7 +42,7 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-2xl font-heading font-bold text-tq-accent mb-1">
+          <h2 className="page-title mb-1" style={{ fontSize: 28 }}>
             RAMS Editor
           </h2>
           <p className="text-tq-muted text-sm">
@@ -92,11 +92,7 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
                 setOpenSections(prev => new Set([...prev, id]));
                 document.getElementById(`rams-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-heading font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${
-                openSections.has(id)
-                  ? 'bg-tq-accent text-white'
-                  : 'bg-tq-card text-tq-muted border border-tq-border'
-              }`}
+              className={`pill ${openSections.has(id) ? 'active' : ''}`}
             >
               {label}
             </button>
@@ -112,7 +108,7 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
           const isMatrix = id === 'matrix';
 
           return (
-            <div key={id} id={`rams-${id}`} className="bg-tq-surface border border-tq-border rounded-lg overflow-hidden">
+            <div key={id} id={`rams-${id}`} className="bg-tq-surface border border-tq-border overflow-hidden" style={{ borderRadius: 2 }}>
               <button
                 onClick={() => toggleSection(id)}
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-tq-card transition-colors"

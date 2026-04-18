@@ -23,7 +23,7 @@ export default function RamsDocument({ rams, profile, showPhotos = true }) {
   const ppeLabels = COMMON_PPE.filter(p => (rams.ppeRequirements || []).includes(p.id));
 
   return (
-    <div id="rams-document" className="bg-white text-gray-900 px-20 py-16 text-sm leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div id="rams-document" className="bg-white text-gray-900 px-20 py-16 text-sm leading-relaxed" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">

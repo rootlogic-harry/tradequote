@@ -165,7 +165,7 @@ export default function AgentActivity() {
 
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-2xl font-heading font-bold" style={{ color: 'var(--tq-text)' }}>
+          <h2 className="page-title" style={{ fontSize: 28 }}>
             Agent Activity
           </h2>
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
@@ -185,13 +185,7 @@ export default function AgentActivity() {
           <button
             key={f.value}
             onClick={() => setTypeFilter(f.value)}
-            className="px-3 py-1.5 rounded text-xs uppercase tracking-wide"
-            style={{
-              fontFamily: 'Barlow Condensed, sans-serif',
-              fontWeight: 700,
-              backgroundColor: typeFilter === f.value ? 'var(--tq-accent)' : 'var(--tq-surface)',
-              color: typeFilter === f.value ? '#ffffff' : 'var(--tq-muted)',
-            }}
+            className={`pill ${typeFilter === f.value ? 'active' : ''}`}
           >
             {f.label}
           </button>
@@ -254,7 +248,7 @@ export default function AgentActivity() {
                       <h4 className="text-xs uppercase tracking-wide mb-1" style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, color: 'var(--tq-muted)' }}>
                         Input
                       </h4>
-                      <pre className="text-xs rounded p-2 overflow-x-auto" style={{ backgroundColor: 'var(--tq-surface)', color: 'var(--tq-text)', fontFamily: 'IBM Plex Mono, monospace' }}>
+                      <pre className="text-xs rounded p-2 overflow-x-auto" style={{ backgroundColor: 'var(--tq-surface)', color: 'var(--tq-text)', fontFamily: 'JetBrains Mono, monospace' }}>
                         {JSON.stringify(run.input_summary, null, 2)}
                       </pre>
                     </div>
@@ -264,7 +258,7 @@ export default function AgentActivity() {
                       <h4 className="text-xs uppercase tracking-wide mb-1" style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, color: 'var(--tq-muted)' }}>
                         Output
                       </h4>
-                      <pre className="text-xs rounded p-2 overflow-x-auto max-h-64" style={{ backgroundColor: 'var(--tq-surface)', color: 'var(--tq-text)', fontFamily: 'IBM Plex Mono, monospace' }}>
+                      <pre className="text-xs rounded p-2 overflow-x-auto max-h-64" style={{ backgroundColor: 'var(--tq-surface)', color: 'var(--tq-text)', fontFamily: 'JetBrains Mono, monospace' }}>
                         {JSON.stringify(run.output_summary, null, 2)}
                       </pre>
                     </div>

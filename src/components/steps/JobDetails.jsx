@@ -278,20 +278,19 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
   const neededPhotos = canAnalyse ? 0 : Math.max(0, 1 - filledCount);
 
   const inputClass = (field) =>
-    `w-full bg-tq-card border-1.5 ${
-      errors[field] ? 'border-tq-error' : 'border-tq-border'
-    } rounded px-3 py-2.5 text-tq-text font-body text-sm focus:outline-none focus:border-tq-accent`;
+    `nq-field ${errors[field] ? '!border-tq-error' : ''}`;
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-heading font-bold text-tq-accent mb-1">
+      <h2 className="page-title mb-1" style={{ fontSize: 32 }}>
         Job Details & Photos
       </h2>
-      <p className="text-tq-muted text-sm mb-6">
+      <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
         Enter the job details and upload photos of the damaged wall.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="eyebrow mb-3">Client & Site</div>
+      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Client Name *
@@ -323,7 +322,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           />
         </div>
 
-        <div className="sm:col-span-2">
+        <div className="fq:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Site Address *
           </label>
@@ -358,7 +357,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
 
         {/* Brief notes — only in non-video modes to avoid duplicate (#24) */}
         {captureMode !== 'video' && (
-        <div className="sm:col-span-2">
+        <div className="fq:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Brief Notes (optional)
           </label>
@@ -556,7 +555,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         Photo Upload
       </h3>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-6">
         {PHOTO_SLOTS.map((slot, slotIndex) => {
           const photo = photos[slot.key];
           const isMissing = photoWarnings.missingSlots?.includes(slot.key);
@@ -567,7 +566,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
 
           // Number circle colors
           const circleStyle = isReference
-            ? { backgroundColor: '#c07e12', color: '#ffffff' }
+            ? { backgroundColor: 'var(--tq-accent)', color: '#ffffff' }
             : isRequired
               ? { backgroundColor: '#1a1714', color: '#f5f0e8' }
               : { backgroundColor: '#7a6f5e', color: '#f5f0e8' };
@@ -618,7 +617,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
                   <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-muted)', fontWeight: 600 }}>Recommended</span>
                 )}
                 {isReference && (
-                  <span className="text-[10px] uppercase tracking-wide" style={{ color: '#c07e12', fontWeight: 600 }}>Recommended</span>
+                  <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-accent)', fontWeight: 600 }}>Recommended</span>
                 )}
                 {photo && (
                   <span className="text-xs" style={{ color: 'var(--tq-confirmed-txt)' }}>✓</span>

@@ -40,7 +40,7 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
         <div className="mb-4">
           <button
             onClick={() => onEditQuote(virtualState)}
-            className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
+            className="btn-primary"
           >
             Edit &amp; Re-generate
           </button>

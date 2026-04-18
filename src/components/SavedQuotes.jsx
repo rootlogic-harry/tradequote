@@ -95,7 +95,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
               .catch(() => setLoadError('Still could not load jobs. Check your connection.'))
               .finally(() => setLoading(false));
           }}
-          className="bg-tq-accent text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded"
+          className="btn-primary"
         >
           Retry
         </button>
@@ -119,10 +119,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
     <div className="max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h2
-          className="mb-1"
-          style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 28, color: 'var(--tq-text)' }}
-        >
+        <h2 className="page-title mb-1" style={{ fontSize: 28 }}>
           Saved jobs
         </h2>
         <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
@@ -131,21 +128,15 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
       </div>
 
       {/* Search and filter row */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1 sm:max-w-xs">
+      <div className="flex flex-col fq:flex-row gap-3 mb-6">
+        <div className="relative flex-1 fq:max-w-xs">
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search by client, reference, or address..."
-            className="w-full rounded-lg px-4 py-2 pl-9 text-sm"
-            style={{
-              backgroundColor: 'var(--tq-card)',
-              border: '1px solid var(--tq-border)',
-              color: 'var(--tq-text)',
-              fontFamily: 'IBM Plex Sans, sans-serif',
-              minHeight: 40,
-            }}
+            className="nq-field w-full pl-9"
+            style={{ minHeight: 40 }}
           />
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -166,21 +157,13 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
           )}
         </div>
 
-        {/* Filter tabs */}
-        <div
-          className="flex flex-wrap rounded-lg overflow-hidden self-start"
-          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)' }}
-        >
+        {/* Filter pills */}
+        <div className="flex flex-wrap gap-2 self-start">
           {FILTERS.map((f) => (
             <button
               key={f}
               onClick={() => setActiveFilter(f)}
-              className="px-4 py-3 text-xs font-heading font-bold uppercase tracking-wide transition-colors whitespace-nowrap"
-              style={{
-                backgroundColor: activeFilter === f ? 'var(--tq-surface)' : 'transparent',
-                color: activeFilter === f ? 'var(--tq-text)' : 'var(--tq-muted)',
-                minHeight: 44,
-              }}
+              className={`pill ${activeFilter === f ? 'active' : ''}`}
             >
               {f}
             </button>
@@ -220,40 +203,33 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
           return (
             <div
               key={quote.id}
-              className="flex items-center rounded-lg transition-colors"
-              style={{
-                backgroundColor: 'var(--tq-card)',
-                border: '1px solid var(--tq-border)',
-                borderLeft,
-                borderRadius: 10,
-                padding: '16px 20px',
-                cursor: 'pointer',
-              }}
+              className="job-row"
+              style={{ borderLeft }}
               onClick={() => onViewQuote(quote)}
             >
               {/* Left: name, status, metadata */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--tq-text)' }}>
-                    {quote.clientName || 'Unnamed client'}
-                  </span>
+                  <span className="jr-ref">{quote.quoteReference}</span>
                   <StatusBadge status={status} />
                   <VideoBadge captureMode={quote.snapshot?.captureMode} />
                   {status === 'SENT' && <ExpiryBadge expiresAt={quote.expiresAt} />}
                   {status === 'ACCEPTED' && <RamsBadge hasRams={hasRams} />}
                 </div>
+                <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
+                  {quote.clientName || 'Unnamed client'}
+                </div>
                 <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
-                  {quote.quoteReference}
-                  {quote.siteAddress ? ` \u00b7 ${quote.siteAddress}` : ''}
+                  {quote.siteAddress || ''}
                   {quote.quoteDate ? ` \u00b7 ${formatDate(quote.quoteDate)}` : ''}
-                  <span className="sm:hidden"> \u00b7 {formatCurrency(quote.totalAmount)}</span>
+                  <span className="fq:hidden"> \u00b7 {formatCurrency(quote.totalAmount)}</span>
                 </div>
               </div>
 
               {/* Middle: amount (desktop) */}
               <div
-                className="mx-4 shrink-0 hidden sm:block"
-                style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}
+                className="mx-4 shrink-0 hidden fq:block"
+                style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--tq-text)' }}
               >
                 {formatCurrency(quote.totalAmount)}
               </div>
@@ -261,11 +237,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
               {/* Action buttons */}
               <div className="flex gap-2 shrink-0 flex-wrap" onClick={e => e.stopPropagation()}>
                 {status === 'DRAFT' && (
-                  <button
-                    onClick={(e) => openStatusModal(e, quote.id, 'sent')}
-                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                    style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff' }}
-                  >
+                  <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="btn-primary text-xs" style={{ height: 36, padding: '0 16px' }}>
                     Mark Sent
                   </button>
                 )}
@@ -274,15 +246,15 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   <>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'accepted')}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                      style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                      className="btn-ghost text-xs"
+                      style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       {'\u2713'} Accepted
                     </button>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'declined')}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                      style={{ border: '1.5px solid var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                      className="btn-ghost text-xs"
+                      style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                     >
                       {'\u2717'} Declined
                     </button>
@@ -292,26 +264,22 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 {status === 'ACCEPTED' && (
                   <>
                     {isAdminPlan && hasRams && onViewRams ? (
-                      <button
-                        onClick={() => onViewRams(quote)}
-                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                        style={{ border: '1px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
-                      >
+                      <button onClick={() => onViewRams(quote)} className="btn-ghost text-xs" style={{ height: 36, padding: '0 16px' }}>
                         View RAMS
                       </button>
                     ) : isAdminPlan && onCreateRams ? (
                       <button
                         onClick={() => onCreateRams(quote)}
-                        className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                        style={{ border: '1px solid var(--tq-accent)', color: 'var(--tq-accent)' }}
+                        className="btn-ghost text-xs"
+                        style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
                       >
                         Create RAMS
                       </button>
                     ) : null}
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'completed')}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                      style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                      className="btn-ghost text-xs"
+                      style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       Complete
                     </button>
@@ -322,25 +290,17 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   <>
                     <button
                       onClick={() => handleDelete(quote.id)}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                      style={{ backgroundColor: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)', border: '1px solid var(--tq-error-bd)' }}
+                      className="btn-ghost text-xs"
+                      style={{ height: 36, padding: '0 16px', backgroundColor: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)', borderColor: 'var(--tq-error-bd)' }}
                     >
                       Confirm
                     </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                      style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)' }}
-                    >
+                    <button onClick={() => setConfirmDeleteId(null)} className="btn-ghost text-xs" style={{ height: 36, padding: '0 16px' }}>
                       Cancel
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(quote.id)}
-                    className="font-heading font-bold uppercase tracking-wide text-xs px-3 py-2 rounded transition-colors"
-                    style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)' }}
-                  >
+                  <button onClick={() => setConfirmDeleteId(quote.id)} className="btn-ghost text-xs" style={{ height: 36, padding: '0 16px', color: 'var(--tq-muted)' }}>
                     Delete
                   </button>
                 )}

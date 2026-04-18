@@ -32,42 +32,45 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
 
   return (
     <div>
-      <h3 className="text-lg font-heading font-bold text-tq-text mb-3">
-        Schedule of Works
-      </h3>
+      <div className="eyebrow mb-3">Schedule of Works</div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {scheduleOfWorks.map((step, i) => (
           <div
             key={step.id || i}
-            className="bg-tq-card border border-tq-border rounded p-3"
+            className="flex items-start gap-3 p-3"
+            style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}
           >
-            <div className="flex items-start gap-3">
-              <span className="bg-tq-accent text-tq-bg w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold flex-shrink-0 mt-0.5">
-                {i + 1}
-              </span>
-              <div className="flex-1">
-                <input
-                  value={step.title}
-                  onChange={(e) => updateStep(i, 'title', e.target.value)}
-                  className="w-full bg-transparent text-tq-text font-heading font-bold text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none mb-1"
-                  placeholder="Step title"
-                />
-                <textarea
-                  value={step.description}
-                  onChange={(e) => updateStep(i, 'description', e.target.value)}
-                  rows={2}
-                  className="w-full bg-transparent text-tq-text text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none resize-none"
-                  placeholder="Description"
-                />
-              </div>
-              <button
-                onClick={() => removeStep(i)}
-                className="text-tq-muted hover:text-tq-error text-sm flex-shrink-0"
-              >
-                ×
-              </button>
+            <span
+              className="flex items-center justify-center text-xs font-mono font-bold flex-shrink-0 mt-0.5"
+              style={{
+                width: 28, height: 28, borderRadius: 2,
+                backgroundColor: 'var(--tq-accent)', color: '#ffffff',
+              }}
+            >
+              {i + 1}
+            </span>
+            <div className="flex-1">
+              <input
+                value={step.title}
+                onChange={(e) => updateStep(i, 'title', e.target.value)}
+                className="w-full bg-transparent text-tq-text font-heading font-bold text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none mb-1"
+                placeholder="Step title"
+              />
+              <textarea
+                value={step.description}
+                onChange={(e) => updateStep(i, 'description', e.target.value)}
+                rows={2}
+                className="w-full bg-transparent text-tq-text text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none resize-none"
+                placeholder="Description"
+              />
             </div>
+            <button
+              onClick={() => removeStep(i)}
+              className="text-tq-muted hover:text-tq-error text-sm flex-shrink-0"
+            >
+              {'\u00D7'}
+            </button>
           </div>
         ))}
       </div>
@@ -75,6 +78,7 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
       <button
         onClick={addStep}
         className="text-tq-accent text-xs mt-3 hover:text-tq-accent-dark"
+        style={{ minHeight: 44, padding: '8px 0' }}
       >
         + Add step
       </button>

@@ -7,7 +7,7 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
         minHeight: '100vh',
         backgroundColor: '#0a0a0a',
         color: '#ffffff',
-        fontFamily: '"IBM Plex Sans", sans-serif',
+        fontFamily: '"Inter", sans-serif',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -276,7 +276,7 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
                   <div key={step.num} style={{ display: 'flex', gap: '1rem' }}>
                     <span
                       style={{
-                        fontFamily: '"IBM Plex Mono", monospace',
+                        fontFamily: '"JetBrains Mono", monospace',
                         fontWeight: 500,
                         fontSize: '1.5rem',
                         color: '#FFD600',
@@ -327,7 +327,7 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
           borderTop: '1px solid #222',
           color: '#555',
           fontSize: '0.8rem',
-          fontFamily: '"IBM Plex Sans", sans-serif',
+          fontFamily: '"Inter", sans-serif',
         }}
       >
         TradeQuote 2026

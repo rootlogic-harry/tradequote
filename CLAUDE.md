@@ -23,7 +23,7 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 | Video processing | ffmpeg (apt), fluent-ffmpeg (frame extraction, audio extraction) |
 | Testing | Jest 29 (ESM), TDD |
 | Hosting | Railway (auto-deploy on push to `main`) |
-| Fonts | Barlow Condensed (headings), IBM Plex Sans (body), IBM Plex Mono (money) |
+| Fonts | Barlow Condensed (headings), Inter (body), JetBrains Mono (money) |
 
 ---
 
@@ -47,7 +47,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 
 ### Frontend
 
-Single-page React app. All state in one `useReducer` in `App.jsx`. Five-step workflow:
+Single-page React app. All state in one `useReducer` in `App.jsx`. Layout: 240px side rail (desktop ≥900px) + 64px bottom nav (mobile <900px). Five-step workflow:
 
 1. **Profile Setup** — company details, day rate, VAT
 2. **Job Details** — client info, capture mode choice (video walkthrough or photos), 5 photo slots or video upload with optional extra photos, brief notes (optional voice dictation via `VoiceRecorder`). Video upload: mobile-optimised (`capture="environment"`, 44px targets, 3-min client-side check), full playback preview with native controls, XHR upload with real progress % and automatic retry.
@@ -285,7 +285,8 @@ Test files live in `src/__tests__/`. Key test suites:
 
 ## Mobile
 
-- Accordion layout below `md` breakpoint for Review & Edit (measurements, costs, schedule, damage description)
+- Single breakpoint: `fq: 900px` (desktop ≥900px side rail, mobile <900px bottom nav)
+- Accordion layout below `fq` breakpoint for Review & Edit (measurements, costs, schedule, damage description)
 - 44px minimum touch targets on all interactive elements
 - Single-column photo grid
 - Required photo slots: solid primary border. Recommended: dashed grey border

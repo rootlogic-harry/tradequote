@@ -12,18 +12,19 @@ import { saveDraft } from '../../utils/userDB.js';
 
 function AccordionSection({ title, isOpen, onToggle, children }) {
   return (
-    <div className="border border-tq-border rounded-lg overflow-hidden">
+    <div style={{ border: '1px solid var(--tq-border)', borderRadius: 2, overflow: 'hidden' }}>
       <button
         onClick={onToggle}
-        className="w-full bg-tq-card px-4 py-3 flex items-center justify-between text-left"
+        className="w-full px-4 py-3 flex items-center justify-between text-left"
+        style={{ backgroundColor: 'var(--tq-card)' }}
       >
         <span className="font-heading font-bold text-tq-text">{title}</span>
         <span className={`text-tq-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}>
-          &#9660;
+          {'\u25BC'}
         </span>
       </button>
       {isOpen && (
-        <div className="px-4 py-4 border-t border-tq-border">
+        <div className="px-4 py-4" style={{ borderTop: '1px solid var(--tq-border)' }}>
           {children}
         </div>
       )}
@@ -47,7 +48,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         <p className="text-tq-muted">No analysis data available.</p>
         <button
           onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
-          className="mt-4 px-6 py-2 bg-tq-accent text-tq-bg rounded font-heading uppercase"
+          className="mt-4 btn-primary"
         >
           Back to Job Details
         </button>
@@ -167,16 +168,14 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   // Extracted content blocks shared between desktop and mobile
   const damageDescriptionContent = (
     <div>
-      <h3 className="text-lg font-heading font-bold text-tq-text mb-2">
-        Damage Description
-      </h3>
+      <div className="eyebrow mb-2">Damage Description</div>
       <textarea
         value={damageDescription}
         onChange={(e) =>
           dispatch({ type: 'UPDATE_DAMAGE_DESCRIPTION', value: e.target.value })
         }
         rows={5}
-        className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-sm text-tq-text focus:outline-none focus:border-tq-accent resize-none"
+        className="nq-field w-full resize-none"
       />
     </div>
   );
@@ -184,36 +183,23 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   const measurementsContent = (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-lg font-heading font-bold text-tq-text">
+        <div className="eyebrow">
           Measurements
           {unconfirmedCount > 0 && (
-            <span className="text-tq-unconfirmed text-sm font-body ml-2">
+            <span className="text-tq-unconfirmed text-sm font-body ml-2" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
               ({unconfirmedCount} to confirm)
             </span>
           )}
-        </h3>
+        </div>
         {unconfirmedCount > 0 && (
-          <button
-            onClick={() => dispatch({ type: 'CONFIRM_ALL_MEASUREMENTS' })}
-            className="uppercase tracking-wide rounded"
-            style={{
-              fontFamily: 'Barlow Condensed, sans-serif',
-              fontWeight: 700,
-              fontSize: 13,
-              backgroundColor: 'var(--tq-accent)',
-              color: '#ffffff',
-              padding: '10px 16px',
-              borderRadius: 6,
-              minHeight: 44,
-            }}
-          >
+          <button onClick={() => dispatch({ type: 'CONFIRM_ALL_MEASUREMENTS' })} className="btn-primary text-xs" style={{ minHeight: 44 }}>
             CONFIRM ALL ({unconfirmedCount})
           </button>
         )}
       </div>
 
       {/* Measurement cards */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {measurements.map((m) => (
           <MeasurementRow
             key={m.id}
@@ -239,9 +225,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
 
       {/* Additional Costs */}
       <div>
-        <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
-          Additional Costs
-        </h4>
+        <div className="eyebrow mb-2">Additional Costs</div>
         {additionalCosts.map((cost, i) => (
           <div key={cost.id || i} className="flex items-center gap-2 mb-2">
             <input
@@ -283,7 +267,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       <LabourSection labourEstimate={labourEstimate} dispatch={dispatch} />
 
       {/* Financial Summary */}
-      <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}>
+      <div className="p-4" style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span style={{ color: 'var(--tq-muted)' }}>Materials</span>
@@ -324,9 +308,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       {/* Notes & Conditions Editor — hidden when disabled in profile */}
       {state.profile.showNotesOnQuote !== false && (
         <div>
-          <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
-            Notes & Conditions
-          </h4>
+          <div className="eyebrow mb-2">Notes & Conditions</div>
           {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => {
             const notes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
             return (
@@ -383,9 +365,9 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
-              <span className="hidden sm:inline">Job Details</span>
+              <span className="hidden fq:inline">Job Details</span>
             </button>
-            <h2 className="text-2xl font-heading font-bold" style={{ color: 'var(--tq-text)' }}>
+            <h2 className="page-title" style={{ fontSize: 28 }}>
               Review & Edit
             </h2>
           </div>
@@ -395,10 +377,10 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         </div>
         {unconfirmedCount > 0 && (
           <div
-            className="shrink-0 text-center rounded-lg px-3 py-2"
-            style={{ backgroundColor: 'var(--tq-unconf-bg)', border: '1.5px solid var(--tq-unconf-bd)' }}
+            className="shrink-0 text-center px-3 py-2"
+            style={{ backgroundColor: 'var(--tq-unconf-bg)', border: '1.5px solid var(--tq-unconf-bd)', borderRadius: 2 }}
           >
-            <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 20, fontWeight: 600, color: 'var(--tq-unconf-txt)' }}>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 600, color: 'var(--tq-unconf-txt)' }}>
               {unconfirmedCount}
             </div>
             <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--tq-unconf-txt)', fontWeight: 600 }}>
@@ -422,14 +404,14 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       </div>
 
       {/* Desktop: three column layout — costs column wider for materials table */}
-      <div className="hidden md:grid gap-6" style={{ gridTemplateColumns: '1fr 1fr 1.4fr' }}>
+      <div className="hidden fq:grid gap-6" style={{ gridTemplateColumns: '1fr 1fr 1.4fr' }}>
         <div className="space-y-6">{transcriptContent}{damageDescriptionContent}{measurementsContent}</div>
         <div>{scheduleContent}</div>
         <div>{costsContent}</div>
       </div>
 
       {/* Mobile: accordion — reordered for field usability */}
-      <div className="md:hidden space-y-3">
+      <div className="fq:hidden space-y-3">
         <AccordionSection
           title="Measurements"
           isOpen={openSections.measurements}
@@ -442,17 +424,14 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         <button
           disabled={!generateEnabled}
           onClick={() => dispatch({ type: 'GENERATE_QUOTE' })}
-          className="w-full font-heading font-bold uppercase tracking-wide px-6 py-3 rounded text-sm transition-colors"
+          className={`w-full ${generateEnabled ? 'btn-primary' : 'btn-ghost'}`}
           style={{
-            backgroundColor: generateEnabled ? 'var(--tq-accent)' : 'var(--tq-surface)',
-            color: generateEnabled ? '#ffffff' : 'var(--tq-muted)',
             opacity: generateEnabled ? 1 : 0.6,
             cursor: generateEnabled ? 'pointer' : 'not-allowed',
-            minHeight: 48,
           }}
         >
           {generateEnabled
-            ? 'GENERATE QUOTE'
+            ? 'GENERATE QUOTE \u2192'
             : unconfirmedCount > 0
               ? `CONFIRM ${unconfirmedCount} MEASUREMENT${unconfirmedCount !== 1 ? 'S' : ''} TO CONTINUE`
               : 'COMPLETE ALL SECTIONS TO CONTINUE'
@@ -489,8 +468,11 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       {/* Live Preview */}
       <LivePreview state={state} />
 
-      {/* Generate Quote CTA */}
-      <div className="mt-8 flex items-center justify-end gap-3">
+      {/* Generate Quote CTA — sticky bar */}
+      <div
+        className="sticky bottom-0 mt-8 py-4 flex items-center justify-end gap-3"
+        style={{ backgroundColor: 'var(--tq-bg)', borderTop: '1px solid var(--tq-border)' }}
+      >
         {state.currentUserId && (
           <button
             onClick={async () => {
@@ -501,7 +483,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
                 if (showToast) showToast('Failed to save progress', 'error');
               }
             }}
-            className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-3 rounded transition-colors"
+            className="btn-ghost"
           >
             Save Progress
           </button>
@@ -509,17 +491,16 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
         <button
           disabled={!generateEnabled}
           onClick={() => dispatch({ type: 'GENERATE_QUOTE' })}
-          className="font-heading font-bold uppercase tracking-wide px-10 py-3 rounded text-lg transition-colors"
+          className={generateEnabled ? 'btn-primary' : 'btn-ghost'}
           style={{
-            backgroundColor: generateEnabled ? 'var(--tq-accent)' : 'var(--tq-surface)',
-            color: generateEnabled ? '#ffffff' : 'var(--tq-muted)',
+            fontSize: 16,
+            padding: '12px 40px',
             opacity: generateEnabled ? 1 : 0.6,
             cursor: generateEnabled ? 'pointer' : 'not-allowed',
-            minHeight: 48,
           }}
         >
           {generateEnabled
-            ? 'GENERATE QUOTE'
+            ? 'GENERATE QUOTE \u2192'
             : unconfirmedCount > 0
               ? `CONFIRM ${unconfirmedCount} MEASUREMENT${unconfirmedCount !== 1 ? 'S' : ''} FIRST`
               : !materials || materials.length === 0

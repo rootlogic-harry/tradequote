@@ -33,13 +33,13 @@ export default function LabourSection({ labourEstimate = {}, dispatch }) {
   };
 
   const inputStyle = {
-    fontFamily: 'IBM Plex Mono, monospace',
+    fontFamily: 'JetBrains Mono, monospace',
     fontSize: 16,
     fontWeight: 500,
     textAlign: 'center',
     backgroundColor: 'var(--tq-card)',
     border: '1.5px solid var(--tq-border)',
-    borderRadius: 6,
+    borderRadius: 2,
     color: 'var(--tq-text)',
     width: '100%',
     padding: '6px 4px',
@@ -47,14 +47,12 @@ export default function LabourSection({ labourEstimate = {}, dispatch }) {
 
   return (
     <div>
-      <h4 className="font-heading font-bold text-sm uppercase tracking-wide mb-3" style={{ color: 'var(--tq-muted)' }}>
-        Labour
-      </h4>
+      <div className="eyebrow mb-3">Labour</div>
 
       {/* Calculator layout */}
       <div
         className="rounded-lg p-3"
-        style={{ backgroundColor: 'var(--tq-surface)', borderRadius: 8 }}
+        style={{ backgroundColor: 'var(--tq-surface)', borderRadius: 2 }}
       >
         <div className="flex items-end gap-2">
           {/* Days */}
@@ -107,7 +105,7 @@ export default function LabourSection({ labourEstimate = {}, dispatch }) {
           <span className="text-xs uppercase tracking-wide" style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, color: 'var(--tq-muted)' }}>
             LABOUR TOTAL
           </span>
-          <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 16, fontWeight: 500, color: 'var(--tq-text)' }}>
             {formatCurrency(labourTotal)}
           </span>
         </div>

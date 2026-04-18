@@ -1,220 +1,200 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 
 export default function Sidebar({
   currentView,
   onNavigate,
   onStartNewQuote,
   onGoToDashboard,
-  incompleteJobs,
-  onResumeJob,
-  onMarkRamsNotRequired,
-  currentQuoteSummary,
-  isCollapsed,
-  onToggleCollapse,
-  onCreateRamsFromSaved,
-  savedJobCount,
+  onGoToSaved,
+  onGoToLearning,
+  onGoToAgents,
+  theme,
+  toggleTheme,
+  currentUser,
+  onSettingsClick,
+  onLogout,
+  isAdminPlan = false,
+  className = '',
 }) {
-  const drawerRef = useRef(null);
+  const navItems = [
+    { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon, action: onGoToDashboard },
+    { key: 'new', label: 'New Quote', icon: PlusIcon, action: onStartNewQuote },
+    { key: 'saved', label: 'My Quotes', icon: FolderIcon, action: onGoToSaved },
+    ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', icon: ChartIcon, action: onGoToLearning }] : []),
+    ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', icon: CpuIcon, action: onGoToAgents }] : []),
+  ];
 
-  // Mobile: close drawer on outside click
-  useEffect(() => {
-    if (isCollapsed) return;
-    function handleClick(e) {
-      if (window.innerWidth >= 768) return;
-      if (drawerRef.current && !drawerRef.current.contains(e.target)) {
-        onToggleCollapse();
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isCollapsed, onToggleCollapse]);
-
-  // Expanded sidebar content
-  const content = (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-tq-border">
-        <span className="font-heading font-bold text-tq-accent text-sm uppercase tracking-wide">
-          Navigation
-        </span>
-        <button
-          onClick={onToggleCollapse}
-          className="text-tq-muted hover:text-tq-accent text-sm transition-colors"
-          title="Collapse sidebar"
-        >
-          &#x00AB;
-        </button>
-      </div>
-
-      {/* Nav Links */}
-      <nav className="flex-1 overflow-y-auto py-2">
-        <NavItem
-          label="Dashboard"
-          icon="&#9632;"
-          active={currentView === 'dashboard'}
-          onClick={onGoToDashboard}
-        />
-        <NavItem
-          label="New Quote"
-          icon="+"
-          onClick={onStartNewQuote}
-        />
-        <NavItem
-          label={`Saved Jobs${savedJobCount ? ` (${savedJobCount})` : ''}`}
-          icon="&#128193;"
-          active={currentView === 'saved'}
-          onClick={() => onNavigate('saved')}
-        />
-
-        {/* In Progress Section */}
-        {(currentQuoteSummary || (incompleteJobs && incompleteJobs.length > 0)) && (
-          <div className="mt-4">
-            <div className="px-4 py-1">
-              <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-tq-muted">
-                In Progress
-              </span>
-            </div>
-
-            {/* Current session quote */}
-            {currentQuoteSummary && (
-              <div className="mx-2 mb-1 p-3 bg-tq-card rounded border border-tq-accent/30">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="font-mono text-tq-accent text-xs font-bold">
-                    {currentQuoteSummary.reference}
-                  </span>
-                  <span className="text-[9px] font-heading font-bold uppercase px-1.5 py-0.5 rounded bg-tq-accent/20 text-tq-accent">
-                    Active
-                  </span>
-                </div>
-                <div className="text-tq-text text-xs font-heading truncate">
-                  {currentQuoteSummary.clientName || 'New Quote'}
-                </div>
-                <div className="text-tq-muted text-[11px] mb-2">
-                  Step {currentQuoteSummary.step}
-                </div>
-                {currentView !== 'editor' && (
-                  <button
-                    onClick={() => onNavigate('editor')}
-                    className="w-full bg-tq-accent/20 hover:bg-tq-accent/30 text-tq-accent font-heading font-bold uppercase tracking-wide text-[10px] px-2 py-1.5 rounded transition-colors"
-                  >
-                    Resume
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Incomplete saved jobs */}
-            {incompleteJobs?.map(job => (
-              <div key={job.id} className="mx-2 mb-1 p-3 bg-tq-card rounded border border-tq-border">
-                <div className="font-mono text-tq-accent text-xs font-bold mb-0.5">
-                  {job.quoteReference}
-                </div>
-                <div className="text-tq-text text-xs font-heading truncate">
-                  {job.clientName || 'Unnamed'}
-                </div>
-                <div className="text-amber-400 text-[11px] mb-2">Needs RAMS</div>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => onCreateRamsFromSaved(job)}
-                    className="flex-1 bg-tq-accent/20 hover:bg-tq-accent/30 text-tq-accent font-heading font-bold uppercase tracking-wide text-[10px] px-2 py-1.5 rounded transition-colors"
-                  >
-                    RAMS
-                  </button>
-                  <button
-                    onClick={() => onMarkRamsNotRequired(job.id)}
-                    className="flex-1 border border-tq-border text-tq-muted hover:text-tq-text font-heading font-bold uppercase tracking-wide text-[10px] px-2 py-1.5 rounded transition-colors"
-                    title="Mark as complete (no RAMS needed)"
-                  >
-                    N/A
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </nav>
-    </div>
-  );
-
-  // Collapsed sidebar (desktop only)
-  const collapsedContent = (
-    <div className="flex flex-col items-center py-2 gap-1">
-      <button
-        onClick={onToggleCollapse}
-        className="w-10 h-10 flex items-center justify-center text-tq-muted hover:text-tq-accent transition-colors"
-        title="Expand sidebar"
-      >
-        &#x00BB;
-      </button>
-      <button
-        onClick={onGoToDashboard}
-        className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-          currentView === 'dashboard' ? 'text-tq-accent bg-tq-card' : 'text-tq-muted hover:text-tq-accent'
-        }`}
-        title="Dashboard"
-      >
-        &#9632;
-      </button>
-      <button
-        onClick={onStartNewQuote}
-        className="w-10 h-10 flex items-center justify-center text-tq-muted hover:text-tq-accent transition-colors"
-        title="New Quote"
-      >
-        +
-      </button>
-      <button
-        onClick={() => onNavigate('saved')}
-        className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-          currentView === 'saved' ? 'text-tq-accent bg-tq-card' : 'text-tq-muted hover:text-tq-accent'
-        }`}
-        title="Saved Jobs"
-      >
-        &#128193;
-      </button>
-    </div>
-  );
+  const isActive = (key) =>
+    (key === 'dashboard' && currentView === 'dashboard') ||
+    (key === 'saved' && currentView === 'saved') ||
+    (key === 'new' && currentView === 'editor') ||
+    (key === 'learning' && currentView === 'learning') ||
+    (key === 'agents' && currentView === 'agents');
 
   return (
-    <>
-      {/* Desktop sidebar */}
-      <div className="hidden md:block flex-shrink-0">
-        <div
-          className={`h-full bg-tq-surface border-r border-tq-border transition-all duration-200 ${
-            isCollapsed ? 'w-12' : 'w-64'
-          }`}
+    <aside
+      className={`w-60 flex-shrink-0 flex flex-col h-screen sticky top-0 ${className}`}
+      style={{ backgroundColor: 'var(--tq-rail-bg)' }}
+    >
+      {/* Brand lockup */}
+      <div className="px-5 pt-6 pb-4">
+        <span
+          className="cursor-pointer"
+          style={{
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontWeight: 800,
+            fontSize: 22,
+            letterSpacing: '0.05em',
+            color: 'var(--tq-accent)',
+          }}
+          onClick={onGoToDashboard}
         >
-          {isCollapsed ? collapsedContent : content}
-        </div>
+          FASTQUOTE
+        </span>
       </div>
 
-      {/* Mobile drawer overlay */}
-      {!isCollapsed && (
-        <div className="md:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/60" />
-          <div
-            ref={drawerRef}
-            className="absolute left-0 top-0 bottom-0 w-72 bg-tq-surface border-r border-tq-border shadow-xl animate-slide-in"
+      {/* Nav items */}
+      <nav className="flex-1 px-3 space-y-0.5">
+        {navItems.map(({ key, label, icon: Icon, action }) => {
+          const active = isActive(key);
+          return (
+            <button
+              key={key}
+              onClick={action}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded text-left transition-colors"
+              style={{
+                backgroundColor: active ? 'var(--tq-nav-active)' : 'transparent',
+                color: active ? 'var(--tq-nav-text)' : 'var(--tq-nav-muted)',
+              }}
+            >
+              <Icon size={18} />
+              <span
+                className="text-sm"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: active ? 500 : 400,
+                }}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom section: theme toggle + user */}
+      <div className="px-3 pb-4 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="pt-3 flex items-center justify-between">
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 rounded transition-colors"
+            style={{ color: 'var(--tq-nav-muted)' }}
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
           >
-            {content}
-          </div>
+            {theme === 'light' ? <MoonIcon size={16} /> : <SunIcon size={16} />}
+          </button>
+          {onSettingsClick && (
+            <button
+              onClick={onSettingsClick}
+              className="flex items-center justify-center w-8 h-8 rounded transition-colors"
+              style={{ color: 'var(--tq-nav-muted)' }}
+              title="Settings"
+            >
+              <GearIcon size={16} />
+            </button>
+          )}
         </div>
-      )}
-    </>
+        {currentUser && (
+          <div className="flex items-center gap-2 px-1">
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+              style={{ backgroundColor: 'var(--tq-nav-active)', color: 'var(--tq-nav-text)' }}
+            >
+              {(currentUser.name || currentUser.email || '?')[0].toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs truncate" style={{ color: 'var(--tq-nav-text)' }}>
+                {currentUser.name || currentUser.email}
+              </div>
+            </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="text-xs transition-colors flex-shrink-0"
+                style={{ color: 'var(--tq-nav-muted)' }}
+                title="Log out"
+              >
+                <LogoutIcon size={14} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }
 
-function NavItem({ label, icon, active, onClick }) {
+/* ── Inline SVG icons ── */
+function DashboardIcon({ size = 18 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-        active
-          ? 'text-tq-accent bg-tq-card'
-          : 'text-tq-text hover:bg-tq-card hover:text-tq-accent'
-      }`}
-    >
-      <span className="text-base w-5 text-center flex-shrink-0">{icon}</span>
-      <span className="font-heading text-sm font-medium truncate">{label}</span>
-    </button>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  );
+}
+function PlusIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+function FolderIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function ChartIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  );
+}
+function CpuIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+    </svg>
+  );
+}
+function MoonIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+function SunIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+function GearIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+function LogoutIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
   );
 }

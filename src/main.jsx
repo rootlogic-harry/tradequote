@@ -23,7 +23,7 @@ class ErrorBoundary extends React.Component {
           minHeight: '100vh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', textAlign: 'center',
           background: '#1a1714', color: '#f0ede8', padding: 20,
-          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontFamily: 'Inter, sans-serif',
         }}>
           <div style={{
             fontFamily: 'Barlow Condensed, sans-serif', fontSize: 32,
@@ -44,7 +44,7 @@ class ErrorBoundary extends React.Component {
               style={{
                 color: '#1a1714', background: '#e8a838', border: 'none',
                 borderRadius: 8, padding: '10px 24px', fontSize: 14, cursor: 'pointer',
-                fontFamily: 'IBM Plex Sans, sans-serif', fontWeight: 600,
+                fontFamily: 'Inter, sans-serif', fontWeight: 600,
               }}
             >
               Refresh
@@ -54,7 +54,7 @@ class ErrorBoundary extends React.Component {
               style={{
                 color: '#e8a838', background: 'none', border: '1px solid #3a3630',
                 borderRadius: 8, padding: '10px 24px', fontSize: 14, cursor: 'pointer',
-                fontFamily: 'IBM Plex Sans, sans-serif',
+                fontFamily: 'Inter, sans-serif',
               }}
             >
               Go to Dashboard

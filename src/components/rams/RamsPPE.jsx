@@ -12,7 +12,7 @@ export default function RamsPPE({ rams, dispatch }) {
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="grid grid-cols-2 fq:grid-cols-4 gap-2">
       {COMMON_PPE.map(ppe => {
         const isSelected = selected.includes(ppe.id);
         return (

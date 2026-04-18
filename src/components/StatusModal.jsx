@@ -127,7 +127,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'var(--tq-muted)', fontSize: 12 }}>Quote value</span>
-                  <span style={{ fontFamily: 'IBM Plex Mono, monospace', color: 'var(--tq-text)', fontSize: 14, fontWeight: 500 }}>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--tq-text)', fontSize: 14, fontWeight: 500 }}>
                     {job ? formatCurrency(job.totalAmount || 0) : '-'}
                   </span>
                 </div>
@@ -152,7 +152,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
                   style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6,
                     backgroundColor: 'var(--tq-surface)', border: '1px solid var(--tq-border)',
-                    color: 'var(--tq-text)', fontSize: 14, fontFamily: 'IBM Plex Sans, sans-serif',
+                    color: 'var(--tq-text)', fontSize: 14, fontFamily: 'Inter, sans-serif',
                   }}
                 >
                   {DECLINE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
@@ -209,7 +209,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
                     style={{
                       width: '100%', padding: '8px 12px', borderRadius: 6,
                       backgroundColor: 'var(--tq-surface)', border: '1px solid var(--tq-border)',
-                      color: 'var(--tq-text)', fontSize: 13, fontFamily: 'IBM Plex Sans, sans-serif',
+                      color: 'var(--tq-text)', fontSize: 13, fontFamily: 'Inter, sans-serif',
                       resize: 'vertical',
                     }}
                   />

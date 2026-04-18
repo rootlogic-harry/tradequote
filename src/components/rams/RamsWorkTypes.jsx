@@ -11,7 +11,7 @@ export default function RamsWorkTypes({ rams, dispatch }) {
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 fq:grid-cols-3 gap-2">
       {WORK_TYPES.map(wt => {
         const selected = (rams.workTypes || []).includes(wt);
         return (

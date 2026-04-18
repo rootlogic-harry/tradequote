@@ -19,7 +19,8 @@ import LearningDashboard from './components/LearningDashboard.jsx';
 import AgentActivity from './components/AgentActivity.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
-// Sidebar import removed — nav is now in StepIndicator
+import Sidebar from './components/Sidebar.jsx';
+import BottomNav from './components/BottomNav.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
@@ -746,31 +747,34 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-tq-bg text-tq-text font-body flex flex-col">
-      <StepIndicator
-        currentStep={state.step}
-        dispatch={dispatch}
-        onSettingsClick={() => setShowProfileModal(true)}
-        theme={theme}
-        toggleTheme={toggleTheme}
+    <div className="min-h-screen bg-tq-bg text-tq-text font-body flex flex-col fq:flex-row">
+      {/* Desktop side rail */}
+      <Sidebar
+        className="hidden fq:flex"
         currentView={currentView}
-        onViewChange={handleViewChange}
-        onBackToQuote={handleBackToQuote}
-        currentUser={state.currentUser}
-        allUsers={state.allUsers}
-        onSwitchUser={handleSwitchUser}
-        onGoToDashboard={handleGoToDashboard}
+        onNavigate={handleViewChange}
         onStartNewQuote={handleStartNewQuote}
+        onGoToDashboard={handleGoToDashboard}
         onGoToSaved={handleGoToSaved}
-        quoteMode={state.quoteMode}
-        onLogout={handleLogout}
         onGoToLearning={() => setCurrentView('learning')}
         onGoToAgents={() => setCurrentView('agents')}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        currentUser={state.currentUser}
+        onSettingsClick={() => setShowProfileModal(true)}
+        onLogout={handleLogout}
         isAdminPlan={isAdmin}
       />
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto">
+      <main className="flex-1 min-w-0 pb-16 fq:pb-0">
+        <StepIndicator
+          currentStep={state.step}
+          dispatch={dispatch}
+          currentView={currentView}
+          quoteMode={state.quoteMode}
+          isAdminPlan={isAdmin}
+        />
         <div className={`${currentView === 'dashboard' ? '' : 'max-w-7xl'} mx-auto px-4 py-6`}>
           <OfflineBanner />
           <SaveErrorBanner
@@ -779,7 +783,18 @@ export default function App() {
           />
           {renderContent()}
         </div>
-      </div>
+      </main>
+
+      {/* Mobile bottom nav */}
+      <BottomNav
+        className="fq:hidden"
+        currentView={currentView}
+        onGoToDashboard={handleGoToDashboard}
+        onStartNewQuote={handleStartNewQuote}
+        onGoToSaved={handleGoToSaved}
+        onSettingsClick={() => setShowProfileModal(true)}
+        isAdminPlan={isAdmin}
+      />
 
       {/* Profile modal */}
       {showProfileModal && state.step > 1 && (

@@ -7,19 +7,11 @@ function daysUntilExpiry(expiresAt) {
 }
 
 export function StatusBadge({ status }) {
-  const styles = {
-    SENT: { bg: 'var(--tq-status-sent)', color: 'var(--tq-status-sent-txt)' },
-    ACCEPTED: { bg: 'var(--tq-status-acc)', color: 'var(--tq-status-acc-txt)' },
-    DECLINED: { bg: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)' },
-    COMPLETED: { bg: 'var(--tq-confirmed-bg)', color: 'var(--tq-confirmed-txt)' },
-    DRAFT: { bg: 'var(--tq-status-draft)', color: 'var(--tq-status-draft-txt)' },
-  };
-  const s = styles[status] || styles.DRAFT;
+  const statusKey = (status || 'DRAFT').toLowerCase();
+  const statusMap = { accepted: 'accepted', completed: 'accepted', declined: 'declined' };
+  const dataStatus = statusMap[statusKey] || (statusKey === 'sent' ? 'sent' : 'draft');
   return (
-    <span
-      className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded shrink-0 inline-block"
-      style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: s.bg, color: s.color }}
-    >
+    <span className="jr-stamp shrink-0 inline-block" data-status={dataStatus}>
       {status}
     </span>
   );

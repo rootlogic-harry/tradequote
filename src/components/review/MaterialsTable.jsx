@@ -75,12 +75,10 @@ export default function MaterialsTable({ materials = [], dispatch }) {
 
   return (
     <div>
-      <h4 className="font-heading font-bold text-sm text-tq-muted uppercase tracking-wide mb-2">
-        Materials
-      </h4>
+      <div className="eyebrow mb-2">Materials</div>
 
       {/* Desktop table */}
-      <div className="hidden sm:block overflow-x-auto">
+      <div className="hidden fq:block overflow-x-auto">
       <table className="w-full text-sm" style={{ minWidth: 420 }}>
         <thead>
           <tr className="border-b border-tq-border text-tq-muted text-xs">
@@ -153,7 +151,7 @@ export default function MaterialsTable({ materials = [], dispatch }) {
       </div>
 
       {/* Mobile cards */}
-      <div className="sm:hidden space-y-3">
+      <div className="fq:hidden space-y-3">
         {materials.map((mat, i) => (
           <div key={mat.id || i} className="border border-tq-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">

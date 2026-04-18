@@ -7,7 +7,7 @@ export default function RamsContact({ rams, dispatch }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 fq:grid-cols-3 gap-4">
         <div>
           <label className="block text-xs font-heading font-bold text-tq-muted uppercase tracking-wide mb-1">Title</label>
           <input

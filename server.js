@@ -499,7 +499,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       background: #1a1714;
       color: #f0ede8;
       display: flex;
@@ -537,7 +537,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       text-decoration: none;
       font-weight: 600;
       font-size: 15px;
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       transition: background 0.15s;
       width: 100%;
     }
@@ -589,7 +589,7 @@ app.get('/login', (req, res) => {
 
 const LEGAL_PAGE_STYLE = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'IBM Plex Sans', sans-serif; background: #1a1714; color: #f0ede8; min-height: 100vh; }
+  body { font-family: 'Inter', sans-serif; background: #1a1714; color: #f0ede8; min-height: 100vh; }
   .wrap { max-width: 680px; margin: 0 auto; padding: 40px 24px 60px; }
   .brand { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 800; color: #e8a838; letter-spacing: 0.05em; text-decoration: none; }
   h1 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; margin: 32px 0 8px; color: #f0ede8; }
@@ -698,7 +698,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       background: #1a1714;
       color: #f0ede8;
       min-height: 100vh;
@@ -764,7 +764,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
       text-decoration: none;
       font-weight: 600;
       font-size: 16px;
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: 'Inter', sans-serif;
       transition: background 0.15s;
     }
     .cta:hover { background: #d49a30; }
@@ -2407,7 +2407,7 @@ app.use((err, req, res, _next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
     return res.status(500).json({ error: 'Internal server error' });
   }
-  res.status(500).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'IBM Plex Sans',sans-serif;background:#1a1714;color:#f0ede8;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}.brand{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;color:#e8a838;letter-spacing:.05em;margin-bottom:24px}h1{font-size:20px;font-weight:500;margin-bottom:8px}p{color:#999;font-size:14px;margin-bottom:24px}a{color:#e8a838;text-decoration:none;font-size:14px;padding:10px 24px;border:1px solid #3a3630;border-radius:8px;transition:all .15s}a:hover{border-color:#e8a838}</style></head><body><div class="brand">FASTQUOTE</div><h1>Something went wrong</h1><p>Please try again in a moment.</p><a href="/">Go to Dashboard</a></body></html>`);
+  res.status(500).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;background:#1a1714;color:#f0ede8;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}.brand{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;color:#e8a838;letter-spacing:.05em;margin-bottom:24px}h1{font-size:20px;font-weight:500;margin-bottom:8px}p{color:#999;font-size:14px;margin-bottom:24px}a{color:#e8a838;text-decoration:none;font-size:14px;padding:10px 24px;border:1px solid #3a3630;border-radius:8px;transition:all .15s}a:hover{border-color:#e8a838}</style></head><body><div class="brand">FASTQUOTE</div><h1>Something went wrong</h1><p>Please try again in a moment.</p><a href="/">Go to Dashboard</a></body></html>`);
 });
 
 // --- Static Files + SPA Fallback ---

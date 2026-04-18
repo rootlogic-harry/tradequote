@@ -818,7 +818,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
-            <span className="hidden sm:inline">Review</span>
+            <span className="hidden fq:inline">Review</span>
           </button>
         )}
         {onBack && (
@@ -830,10 +830,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
-            <span className="hidden sm:inline">Back</span>
+            <span className="hidden fq:inline">Back</span>
           </button>
         )}
-        <h2 className="text-2xl font-heading font-bold text-tq-accent">
+        <h2 className="page-title" style={{ fontSize: 28 }}>
           Your Quote
         </h2>
       </div>
@@ -842,42 +842,35 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       </p>
 
       {/* Primary actions: export/download */}
-      <div className="flex flex-col sm:flex-row flex-wrap gap-3 mb-4">
+      <div className="flex flex-col fq:flex-row flex-wrap gap-3 mb-4">
         <button
           onClick={handleDownloadPDF}
           disabled={generatingPDF}
-          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff', minHeight: 44 }}
+          className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
         </button>
         <button
           onClick={handleDownloadDocx}
           disabled={generatingDocx}
-          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent', minHeight: 44 }}
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {generatingDocx ? 'Generating Word...' : 'Download Word'}
         </button>
-        <button
-          onClick={handleEmail}
-          className="font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
-          style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent', minHeight: 44 }}
-        >
+        <button onClick={handleEmail} className="btn-ghost">
           Send via Email
         </button>
         {!isReadOnly && (
           <button
             onClick={handleSave}
             disabled={saving || saved}
-            className={`border font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors ${
+            className={`btn-ghost ${
               saved
                 ? 'border-tq-confirmed text-tq-confirmed'
                 : saveError
                   ? 'border-red-500 text-red-400'
-                  : 'border-tq-accent text-tq-accent hover:bg-tq-accent/10'
+                  : ''
             }`}
-            style={{ minHeight: 44 }}
           >
             {saving ? 'Saving...' : saved ? 'Saved \u2713' : 'Save Quote'}
           </button>
@@ -892,20 +885,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       {/* Secondary actions: edit, RAMS, new quote */}
       <div className="flex flex-wrap gap-3 mb-4">
         {!isReadOnly && state.quoteMode === 'quick' && (
-          <button
-            onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })}
-            className="font-heading font-bold uppercase tracking-wide px-5 py-2 rounded transition-colors text-sm"
-            style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-text)', backgroundColor: 'transparent', minHeight: 44 }}
-          >
+          <button onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })} className="btn-ghost text-sm">
             Full Review & Edit
           </button>
         )}
         {!isReadOnly && (
-          <button
-            onClick={() => dispatch({ type: 'SET_STEP', step: 2 })}
-            className="font-heading font-bold uppercase tracking-wide px-5 py-2 rounded transition-colors text-sm"
-            style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)', backgroundColor: 'transparent', minHeight: 44 }}
-          >
+          <button onClick={() => dispatch({ type: 'SET_STEP', step: 2 })} className="btn-ghost text-sm" style={{ color: 'var(--tq-muted)' }}>
             Edit Job Details
           </button>
         )}
@@ -913,19 +898,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           <button
             onClick={() => onCreateRams(savedJobId)}
             disabled={!savedJobId}
-            className="border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide px-5 py-2 rounded transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-ghost text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
             title={savedJobId ? 'Create RAMS for this job' : 'Save the quote first to create a RAMS'}
-            style={{ minHeight: 44 }}
           >
             Create RAMS
           </button>
         )}
         {!isReadOnly && !onBack && (
-          <button
-            onClick={handleNewQuote}
-            className="font-heading font-bold uppercase tracking-wide px-5 py-2 rounded transition-colors text-sm"
-            style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)', backgroundColor: 'transparent', minHeight: 44 }}
-          >
+          <button onClick={handleNewQuote} className="btn-ghost text-sm" style={{ color: 'var(--tq-muted)' }}>
             Start New Quote
           </button>
         )}
@@ -938,12 +919,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       {/* Photo selection & reorder grid */}
       {allPhotos.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-sm font-heading font-bold text-tq-text mb-3 uppercase tracking-wide">
+          <div className="eyebrow mb-3">
             Photos to Include ({filteredPhotos.length}/{allPhotos.length})
-            <span className="font-normal text-tq-muted ml-2 normal-case tracking-normal">
+            <span className="font-normal text-tq-muted ml-2" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
               Drag to reorder
             </span>
-          </h3>
+          </div>
           <div className="flex gap-3 flex-wrap">
             {photoOrder.map((photoIdx, orderPos) => {
               const photo = allPhotos[photoIdx];
@@ -969,7 +950,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                   {/* Drag handle — 6-dot grip icon, top-left */}
                   <span
                     {...getDragHandleProps(orderPos)}
-                    className="absolute top-1 left-1 z-10 w-5 h-5 flex items-center justify-center rounded bg-black/40 text-white text-[10px] cursor-grab hover:bg-black/60 md:opacity-0 md:group-hover:opacity-100"
+                    className="absolute top-1 left-1 z-10 w-5 h-5 flex items-center justify-center rounded bg-black/40 text-white text-[10px] cursor-grab hover:bg-black/60 fq:opacity-0 fq:group-hover:opacity-100"
                     style={{ touchAction: 'none' }}
                     title="Drag to reorder"
                   >

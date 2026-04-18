@@ -67,122 +67,54 @@ export default function Dashboard({
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Header row */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+    <div className="max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col fq:flex-row fq:items-end fq:justify-between gap-4 mb-8">
         <div>
-          <h1
-            className="mb-1"
-            style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 32, color: 'var(--tq-text)' }}
-          >
+          <div className="eyebrow mb-2">{todayFormatted()}</div>
+          <h1 className="page-title" style={{ fontSize: 'clamp(32px, 5vw, 56px)' }}>
             {getGreeting()}{userName ? `, ${userName}` : ''}
           </h1>
-          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            {todayFormatted()}
-          </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button
-            onClick={onStartQuickQuote}
-            className="rounded transition-colors flex-1 sm:flex-none"
-            style={{
-              fontFamily: 'Barlow Condensed, sans-serif',
-              fontWeight: 700,
-              fontSize: 15,
-              border: '1.5px solid var(--tq-accent)',
-              color: 'var(--tq-accent)',
-              backgroundColor: 'transparent',
-              padding: '12px 20px',
-              minHeight: 44,
-            }}
-            title="Skip the review step — auto-confirms all measurements"
-          >
+          <button onClick={onStartQuickQuote} className="btn-ghost" title="Skip the review step">
             QUICK QUOTE
           </button>
-          <button
-            onClick={onStartNewQuote}
-            className="rounded transition-colors flex-1 sm:flex-none"
-            style={{
-              fontFamily: 'Barlow Condensed, sans-serif',
-              fontWeight: 700,
-              fontSize: 15,
-              backgroundColor: 'var(--tq-accent)',
-              color: '#ffffff',
-              padding: '12px 20px',
-              minHeight: 44,
-            }}
-            title="Full workflow — review all measurements before generating"
-          >
+          <button onClick={onStartNewQuote} className="btn-primary">
             + NEW QUOTE
           </button>
         </div>
       </div>
 
-      {/* Stat cards — 4 cards, 2-col on mobile */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <div
-          className="rounded-lg p-4"
-          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
-        >
-          <div className="text-xs sm:text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em', fontSize: 'max(12px, 0.75rem)' }}>This month</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 22, fontWeight: 500, color: 'var(--tq-text)' }}>
-            {formatCurrency(thisMonthTotal)}
-          </div>
-          <div className="mt-1" style={{ color: 'var(--tq-muted)', fontSize: 13 }}>
-            {thisMonthJobs.length} quote{thisMonthJobs.length !== 1 ? 's' : ''} issued
-          </div>
+      {/* Stats strip */}
+      <div className="stats-strip mb-8" style={{ borderRadius: 2 }}>
+        <div className="stat-cell">
+          <div className="stat-label">This month</div>
+          <div className="stat-value">{formatCurrency(thisMonthTotal)}</div>
         </div>
-
-        <div
-          className="rounded-lg p-4"
-          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
-        >
-          <div className="text-xs sm:text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em', fontSize: 'max(12px, 0.75rem)' }}>Awaiting</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 22, fontWeight: 500, color: 'var(--tq-text)' }}>
-            {awaitingCount}
-          </div>
-          <div className="mt-1" style={{ color: 'var(--tq-muted)', fontSize: 13 }}>quotes sent</div>
+        <div className="stat-cell">
+          <div className="stat-label">Awaiting</div>
+          <div className="stat-value">{awaitingCount}</div>
         </div>
-
-        <div
-          className="rounded-lg p-4"
-          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
-        >
-          <div className="text-xs sm:text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em', fontSize: 'max(12px, 0.75rem)' }}>Accepted</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 22, fontWeight: 500, color: 'var(--tq-text)' }}>
-            {formatCurrency(acceptedValue)}
-          </div>
-          <div className="mt-1" style={{ color: 'var(--tq-muted)', fontSize: 13 }}>
-            {acceptedThisMonth.length} job{acceptedThisMonth.length !== 1 ? 's' : ''} this month
-          </div>
+        <div className="stat-cell">
+          <div className="stat-label">Accepted</div>
+          <div className="stat-value">{formatCurrency(acceptedValue)}</div>
         </div>
-
-        <div
-          className="rounded-lg p-4"
-          style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
-        >
-          <div className="text-xs sm:text-xs uppercase mb-2" style={{ color: 'var(--tq-muted)', letterSpacing: '0.05em', fontSize: 'max(12px, 0.75rem)' }}>Conversion</div>
-          <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 22, fontWeight: 500, color: 'var(--tq-text)' }}>
-            {conversionRate !== null ? `${conversionRate}%` : '\u2014'}
-          </div>
-          <div className="mt-1" style={{ color: 'var(--tq-muted)', fontSize: 13 }}>accepted / sent</div>
+        <div className="stat-cell">
+          <div className="stat-label">Conversion</div>
+          <div className="stat-value">{conversionRate !== null ? `${conversionRate}%` : '\u2014'}</div>
         </div>
       </div>
 
       {/* Current draft banner */}
       {currentDraft && (
         <div
-          className="rounded-lg p-4 flex items-center justify-between mb-6"
-          style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)' }}
+          className="flex items-center justify-between gap-4 p-4 mb-6"
+          style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)', borderRadius: 2 }}
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span
-                className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: 'var(--tq-status-draft)', color: 'var(--tq-status-draft-txt)' }}
-              >
-                Draft
-              </span>
+              <span className="jr-stamp" data-status="draft">Draft</span>
               <span className="font-heading font-bold text-tq-text truncate">
                 {currentDraft.jobDetails?.clientName || 'Untitled'}
               </span>
@@ -192,41 +124,27 @@ export default function Dashboard({
               {currentDraft.step ? ` \u2014 Step ${currentDraft.step}` : ''}
             </p>
           </div>
-          <button
-            onClick={onResumeDraft}
-            className="ml-4 font-heading font-bold uppercase tracking-wide text-sm px-5 py-3 rounded transition-colors whitespace-nowrap"
-            style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff', minHeight: 44 }}
-          >
+          <button onClick={onResumeDraft} className="btn-primary whitespace-nowrap">
             Resume
           </button>
         </div>
       )}
 
-      {/* Incomplete jobs (needs RAMS) — full plan only */}
+      {/* Incomplete jobs (needs RAMS) — admin only */}
       {isAdminPlan && incompleteJobs && incompleteJobs.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-sm font-heading font-bold uppercase tracking-wide mb-3" style={{ color: 'var(--tq-muted)' }}>
-            Needs Attention
-          </h2>
+          <div className="eyebrow mb-3">Needs Attention</div>
           <div className="space-y-2">
             {incompleteJobs.map(job => (
               <div
                 key={job.id}
-                className="rounded-lg p-4 flex items-center justify-between"
-                style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
+                className="job-row flex-col fq:flex-row"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span
-                      className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded"
-                      style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, backgroundColor: 'var(--tq-status-sent)', color: 'var(--tq-status-sent-txt)' }}
-                    >
-                      Needs RAMS
-                    </span>
+                    <span className="jr-stamp" data-status="sent">Needs RAMS</span>
                     <VideoBadge captureMode={job.snapshot?.captureMode} />
-                    <span className="font-mono text-sm font-bold" style={{ color: 'var(--tq-accent)' }}>
-                      {job.quoteReference}
-                    </span>
+                    <span className="jr-ref">{job.quoteReference}</span>
                   </div>
                   <div className="font-heading font-bold truncate" style={{ color: 'var(--tq-text)' }}>
                     {job.clientName || 'Unnamed client'}
@@ -237,19 +155,11 @@ export default function Dashboard({
                     </div>
                   )}
                 </div>
-                <div className="ml-4 flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => onCreateRamsFromSaved(job)}
-                    className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                    style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff', minHeight: 44 }}
-                  >
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => onCreateRamsFromSaved(job)} className="btn-primary text-xs">
                     Create RAMS
                   </button>
-                  <button
-                    onClick={() => onMarkRamsNotRequired(job.id)}
-                    className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                    style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-muted)', minHeight: 44 }}
-                  >
+                  <button onClick={() => onMarkRamsNotRequired(job.id)} className="btn-ghost text-xs">
                     Not Needed
                   </button>
                 </div>
@@ -259,72 +169,62 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Recent jobs card */}
-      <div
-        className="rounded-lg overflow-hidden"
-        style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 10 }}
-      >
-        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid var(--tq-border-soft)' }}>
-          <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--tq-text)' }}>
-            RECENT JOBS
-          </span>
+      {/* Recent jobs */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <div className="eyebrow">RECENT JOBS</div>
           <button
             onClick={onViewJobs}
-            className="text-sm px-3 py-2"
-            style={{ color: 'var(--tq-accent)', fontWeight: 500, minHeight: 44, minWidth: 44 }}
+            className="text-sm"
+            style={{ color: 'var(--tq-accent)', fontWeight: 500 }}
           >
             View all &rarr;
           </button>
         </div>
 
         {displayJobs.length === 0 ? (
-          <div className="px-5 py-10 text-center">
+          <div
+            className="px-5 py-10 text-center"
+            style={{ backgroundColor: 'var(--tq-card)', border: '1.5px solid var(--tq-border)', borderRadius: 2 }}
+          >
             <div className="text-3xl mb-3 opacity-20">&#128221;</div>
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
               No jobs yet. Create your first quote to get started.
             </p>
-            <button
-              onClick={onStartNewQuote}
-              className="font-heading font-bold uppercase tracking-wide text-sm px-5 py-2.5 rounded transition-colors"
-              style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff', minHeight: 44 }}
-            >
+            <button onClick={onStartNewQuote} className="btn-primary">
               + New Quote
             </button>
           </div>
         ) : (
-          <div>
+          <div className="space-y-2">
             {displayJobs.map((job) => {
               const status = getStatus(job);
               const hasRams = job.hasRams || !!job.ramsSnapshot;
-              const borderLeft = status === 'ACCEPTED' || status === 'COMPLETED'
-                ? '3px solid var(--tq-confirmed-bd)'
-                : status === 'DECLINED'
-                  ? '3px solid var(--tq-error-bd)'
-                  : '3px solid transparent';
 
               return (
                 <div
                   key={job.id}
-                  className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4"
-                  style={{ borderBottom: '1px solid var(--tq-border-soft)', borderLeft, cursor: 'pointer', minHeight: 56 }}
+                  className="job-row flex-col fq:flex-row"
                   onClick={() => handleRowClick(job)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
-                        {job.clientName || 'Unnamed'}
-                      </span>
+                      <span className="jr-ref">{job.quoteReference}</span>
                       <StatusBadge status={status} />
                       <VideoBadge captureMode={job.snapshot?.captureMode} />
                       {status === 'SENT' && <ExpiryBadge expiresAt={job.expiresAt} />}
                       {status === 'ACCEPTED' && isAdminPlan && <RamsBadge hasRams={hasRams} />}
                     </div>
-                    <div className="truncate" style={{ color: 'var(--tq-muted)', fontSize: 13 }}>
-                      {job.quoteReference}{job.siteAddress ? ` \u00b7 ${job.siteAddress}` : ''}
-                      <span className="sm:hidden"> \u00b7 {formatCurrency(job.totalAmount || 0)}</span>
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
+                      {job.clientName || 'Unnamed'}
                     </div>
+                    {job.siteAddress && (
+                      <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
+                        {job.siteAddress}
+                      </div>
+                    )}
                   </div>
-                  <div className="shrink-0 hidden sm:block" style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--tq-text)' }}>
+                  <div className="shrink-0 hidden fq:block" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--tq-text)' }}>
                     {formatCurrency(job.totalAmount || 0)}
                   </div>
 
@@ -333,8 +233,8 @@ export default function Dashboard({
                     {status === 'DRAFT' && (
                       <button
                         onClick={(e) => openStatusModal(e, job.id, 'sent')}
-                        className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                        style={{ backgroundColor: 'var(--tq-accent)', color: '#ffffff', minHeight: 44 }}
+                        className="btn-primary text-xs"
+                        style={{ height: 36, padding: '0 16px' }}
                       >
                         Mark Sent
                       </button>
@@ -343,15 +243,15 @@ export default function Dashboard({
                       <>
                         <button
                           onClick={(e) => openStatusModal(e, job.id, 'accepted')}
-                          className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                          style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)', backgroundColor: 'transparent', minHeight: 44 }}
+                          className="btn-ghost text-xs"
+                          style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                         >
                           {'\u2713'} Accepted
                         </button>
                         <button
                           onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                          className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                          style={{ border: '1.5px solid var(--tq-error-bd)', color: 'var(--tq-error-txt)', backgroundColor: 'transparent', minHeight: 44 }}
+                          className="btn-ghost text-xs"
+                          style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                         >
                           {'\u2717'} Declined
                         </button>
@@ -362,24 +262,24 @@ export default function Dashboard({
                         {isAdminPlan && hasRams ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
-                            className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                            style={{ border: '1px solid var(--tq-border)', color: 'var(--tq-text)', backgroundColor: 'transparent', minHeight: 44 }}
+                            className="btn-ghost text-xs"
+                            style={{ height: 36, padding: '0 16px' }}
                           >
                             View RAMS
                           </button>
                         ) : isAdminPlan ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
-                            className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                            style={{ border: '1.5px solid var(--tq-accent)', color: 'var(--tq-accent)', backgroundColor: 'transparent', minHeight: 44 }}
+                            className="btn-ghost text-xs"
+                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
                           >
                             Create RAMS
                           </button>
                         ) : null}
                         <button
                           onClick={(e) => openStatusModal(e, job.id, 'completed')}
-                          className="font-heading font-bold uppercase tracking-wide text-xs px-4 py-3 rounded transition-colors whitespace-nowrap"
-                          style={{ border: '1.5px solid var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)', backgroundColor: 'transparent', minHeight: 44 }}
+                          className="btn-ghost text-xs"
+                          style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                         >
                           Complete
                         </button>

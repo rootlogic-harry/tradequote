@@ -81,7 +81,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   };
 
   return (
-    <div id="quote-document" className="bg-white text-gray-900 px-10 py-8 font-['IBM_Plex_Sans',sans-serif] text-lg leading-relaxed" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div id="quote-document" className="bg-white text-gray-900 px-10 py-8 font-['Inter',sans-serif] text-lg leading-relaxed" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">
@@ -143,7 +143,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           {measurements.map((m) => (
             <li key={m.id} className="flex items-center gap-2 text-lg">
               <span className="text-gray-700">{m.item}:</span>
-              <span className="font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <span className="font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 {m.confirmed ? m.value : <em className="text-amber-500">(unconfirmed)</em>}
               </span>
             </li>
@@ -188,26 +188,26 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
                 <td className="py-1">{mat.description}</td>
                 <td className="py-1">{mat.quantity}</td>
                 <td className="py-1">{mat.unit || '\u2014'}</td>
-                <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(mat.unitCost)}</td>
-                <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(mat.totalCost)}</td>
+                <td className="py-1 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(mat.unitCost)}</td>
+                <td className="py-1 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(mat.totalCost)}</td>
               </tr>
             ))}
             <tr className="border-b border-gray-100">
               <td className="py-1" colSpan={4}>
                 Labour
               </td>
-              <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(totals.labourTotal)}</td>
+              <td className="py-1 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(totals.labourTotal)}</td>
             </tr>
             {additionalCosts.map((cost) => (
               <tr key={cost.id} className="border-b border-gray-100">
                 <td className="py-1" colSpan={4}>{cost.label}</td>
-                <td className="py-1 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatCurrency(cost.amount)}</td>
+                <td className="py-1 text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(cost.amount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="space-y-1 text-lg text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <div className="space-y-1 text-lg text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           <div className="flex justify-end gap-8">
             <span className="text-gray-500">Subtotal (ex VAT)</span>
             <span>{formatCurrency(totals.subtotal)}</span>

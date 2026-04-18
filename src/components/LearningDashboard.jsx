@@ -36,10 +36,7 @@ export default function LearningDashboard({ currentUserId }) {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <h2
-        className="mb-1"
-        style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 28, color: 'var(--tq-text)' }}
-      >
+      <h2 className="page-title mb-1" style={{ fontSize: 28 }}>
         AI Learning Dashboard
       </h2>
       <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
@@ -257,7 +254,7 @@ function PromptGuidance({ fieldBias, refCardImpact }) {
   }
 
   return (
-    <div className="text-sm" style={{ color: 'var(--tq-text)', fontFamily: 'IBM Plex Mono, monospace', fontSize: 13 }}>
+    <div className="text-sm" style={{ color: 'var(--tq-text)', fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
       <p className="mb-3" style={{ color: 'var(--tq-muted)' }}>
         Based on {totalSamples} field comparisons:
       </p>
