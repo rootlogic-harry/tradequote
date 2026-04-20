@@ -239,8 +239,13 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </div>
       )}
 
-      {/* Footer — single line */}
-      <div className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500 text-center">
+      {/* Footer — preview only. handleDownloadPDF overlays a pdf.text footer
+          on every page, so we tell html2canvas to skip this element during
+          PDF capture; otherwise the final page shows two footers. */}
+      <div
+        data-html2canvas-ignore="true"
+        className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500 text-center"
+      >
         <p>{[profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean).join(' · ')}</p>
       </div>
 

@@ -35,4 +35,23 @@ describe('QuoteDocument layout — printed quote output', () => {
     });
   });
 
+  // TRQ-103: The PDF was showing the footer twice — once because html2canvas
+  // captured the inline <div> footer at the end of the document, and again
+  // because handleDownloadPDF overlays a pdf.text() footer at the bottom of
+  // every page. Fix: mark the inline footer with data-html2canvas-ignore so
+  // the preview still shows it but the PDF capture skips it, leaving only the
+  // overlay (which also handles multi-page quotes correctly).
+  describe('Footer appears once in PDF (TRQ-103)', () => {
+    it('the inline footer <div> is marked data-html2canvas-ignore', () => {
+      const footerBlock = source.match(/\{\/\*\s*Footer[^*]*\*\/\}[\s\S]{0,400}VAT No:\s*\$\{profile\.vatNumber\}/);
+      expect(footerBlock).not.toBeNull();
+      expect(footerBlock[0]).toMatch(/data-html2canvas-ignore/);
+    });
+
+    it('only one inline footer block exists in the component', () => {
+      const matches = source.match(/VAT No:\s*\$\{profile\.vatNumber\}/g) || [];
+      expect(matches.length).toBe(1);
+    });
+  });
+
 });
