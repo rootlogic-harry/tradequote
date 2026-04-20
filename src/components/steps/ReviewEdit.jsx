@@ -4,6 +4,7 @@ import MaterialsTable from '../review/MaterialsTable.jsx';
 import LabourSection from '../review/LabourSection.jsx';
 import ScheduleList from '../review/ScheduleList.jsx';
 import LivePreview from '../review/LivePreview.jsx';
+import AutoGrowTextarea from '../common/AutoGrowTextarea.jsx';
 import { allMeasurementsConfirmed, countUnconfirmedMeasurements, canGenerateQuote } from '../../utils/validators.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { formatCurrency } from '../../utils/quoteBuilder.js';
@@ -169,13 +170,13 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   const damageDescriptionContent = (
     <div>
       <div className="eyebrow mb-2">Damage Description</div>
-      <textarea
+      <AutoGrowTextarea
         value={damageDescription}
         onChange={(e) =>
           dispatch({ type: 'UPDATE_DAMAGE_DESCRIPTION', value: e.target.value })
         }
-        rows={5}
-        className="nq-field w-full resize-none"
+        minHeight={160}
+        className="nq-field w-full"
       />
     </div>
   );

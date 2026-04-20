@@ -1,29 +1,5 @@
-import React, { useRef, useLayoutEffect } from 'react';
-
-// Textarea that grows to fit its content. useLayoutEffect runs synchronously
-// after DOM mutations and before the browser paints, so the height is correct
-// on the first frame the user sees — important for read-mostly description
-// fields that are pre-populated by the analyser.
-function AutoGrowTextarea({ value, onChange, onBlur, minHeight = 140, ...rest }) {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = Math.max(minHeight, el.scrollHeight) + 'px';
-  }, [value, minHeight]);
-
-  return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={onChange}
-      onBlur={onBlur}
-      style={{ minHeight, overflow: 'hidden', resize: 'none' }}
-      {...rest}
-    />
-  );
-}
+import React from 'react';
+import AutoGrowTextarea from '../common/AutoGrowTextarea.jsx';
 
 export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
   const updateStep = (index, field, value) => {
