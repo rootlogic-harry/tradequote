@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import QuoteOutput from './steps/QuoteOutput.jsx';
-import { loadPhotos } from '../utils/userDB.js';
+import { loadPhotos, getProfile } from '../utils/userDB.js';
 
 export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId }) {
   const snapshot = quote?.snapshot || {};
   const [restoredPhotos, setRestoredPhotos] = useState(null);
+  const [restoredLogo, setRestoredLogo] = useState(null);
 
   // Load photos from server on mount
   useEffect(() => {
@@ -16,12 +17,30 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
     }).catch(() => {});
   }, [currentUserId, quote.id]);
 
+  // Rehydrate the user's logo from their live profile. buildSaveSnapshot replaces
+  // profile.logo with the string "[photo-stripped]" to keep snapshots lean, which
+  // otherwise renders as a broken <img> when the saved quote is re-opened.
+  useEffect(() => {
+    if (!currentUserId) return;
+    const snapshotLogo = snapshot.profile?.logo;
+    const stripped = !snapshotLogo || snapshotLogo === '[photo-stripped]';
+    if (!stripped) return;
+    getProfile(currentUserId).then((p) => {
+      if (p?.logo) setRestoredLogo(p.logo);
+    }).catch(() => {});
+  }, [currentUserId, snapshot.profile?.logo]);
+
   // Reconstruct the state shape that QuoteOutput expects
   // Note: photos are NOT in SAVE_ALLOWLIST, so snapshot.photos is always undefined.
   // Photos come exclusively from restoredPhotos (loaded from user_photos table).
+  const snapshotProfile = snapshot.profile || {};
+  const profileLogoIsStripped =
+    !snapshotProfile.logo || snapshotProfile.logo === '[photo-stripped]';
   const virtualState = {
     step: 5,
-    profile: snapshot.profile || {},
+    profile: profileLogoIsStripped
+      ? { ...snapshotProfile, logo: restoredLogo || null }
+      : snapshotProfile,
     jobDetails: snapshot.jobDetails || {},
     photos: restoredPhotos?.photos || {},
     extraPhotos: restoredPhotos?.extraPhotos?.length ? restoredPhotos.extraPhotos : (snapshot.extraPhotos || []),

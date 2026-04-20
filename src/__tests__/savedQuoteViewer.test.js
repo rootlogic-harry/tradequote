@@ -38,6 +38,21 @@ describe('SavedQuoteViewer crash resilience', () => {
       (src.includes('restoredPhotos') && !src.includes('snapshot.photos'))
     ).toBe(true);
   });
+
+  // buildSaveSnapshot replaces profile.logo with "[photo-stripped]" to keep the
+  // saved snapshot lean. Previously the viewer passed that string straight to
+  // <img src> which rendered a broken-image icon with alt="Logo".
+  it('rehydrates the logo from the live profile when the snapshot has [photo-stripped]', () => {
+    expect(src).toMatch(/getProfile/);
+    expect(src).toMatch(/\[photo-stripped\]/);
+  });
+
+  it('passes null (not [photo-stripped]) to QuoteOutput when the live logo is not yet loaded', () => {
+    // The virtualState.profile.logo must fall back to null when we haven't
+    // fetched the real logo yet, so the <img> guard `{profile.logo && ...}`
+    // doesn't render a broken image.
+    expect(src).toMatch(/logo:\s*restoredLogo\s*\|\|\s*null/);
+  });
 });
 
 describe('QuoteOutput photos safety', () => {
