@@ -53,6 +53,16 @@ describe('SavedQuoteViewer crash resilience', () => {
     // doesn't render a broken image.
     expect(src).toMatch(/logo:\s*restoredLogo\s*\|\|\s*null/);
   });
+
+  // QuoteOutput's `selectedPhotoIndices` state initializes once via `new Set(allPhotos.map(...))`.
+  // If photos arrive async (SavedQuoteViewer → loadPhotos useEffect), the initializer
+  // already ran with an empty `allPhotos`, so every photo stays de-selected (0/N).
+  // The fix keys QuoteOutput on the loaded photo count so React remounts it once
+  // photos arrive, letting the initializer see the real count.
+  it('remounts QuoteOutput via a key once restoredPhotos arrive, so photo selection is correct', () => {
+    expect(src).toMatch(/key=\{restoredPhotos/);
+    expect(src).toMatch(/photos-pending/);
+  });
 });
 
 describe('QuoteOutput photos safety', () => {

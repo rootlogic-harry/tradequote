@@ -65,7 +65,14 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
           </button>
         </div>
       )}
+      {/* Remount when restored photos arrive so QuoteOutput's photo-selection
+          state initializer (`new Set(allPhotos.map(...))`) sees the loaded
+          photos instead of an empty array. Without this, the initial render
+          captures `allPhotos = []` and every photo stays de-selected (0/N). */}
       <QuoteOutput
+        key={restoredPhotos
+          ? `photos-${Object.keys(restoredPhotos.photos).length}-${restoredPhotos.extraPhotos.length}`
+          : 'photos-pending'}
         state={virtualState}
         dispatch={() => {}}
         onBack={onBack}
