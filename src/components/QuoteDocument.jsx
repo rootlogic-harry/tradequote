@@ -231,7 +231,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Notes &amp; Conditions
           </h2>
-          <ol className="list-decimal list-inside space-y-1 text-lg text-gray-600">
+          <ol className="list-decimal list-outside pl-6 space-y-1 text-lg text-gray-600">
             {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => (
               <li key={i} className="pl-1">{note}</li>
             ))}
