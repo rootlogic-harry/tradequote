@@ -50,7 +50,7 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
             >
               {i + 1}
             </span>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <input
                 value={step.title}
                 onChange={(e) => updateStep(i, 'title', e.target.value)}
@@ -59,9 +59,26 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
               />
               <textarea
                 value={step.description}
-                onChange={(e) => updateStep(i, 'description', e.target.value)}
-                rows={2}
-                className="w-full bg-transparent text-tq-text text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none resize-none"
+                onChange={(e) => {
+                  updateStep(i, 'description', e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onBlur={(e) => {
+                  updateStep(i, 'description', e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                ref={(el) => {
+                  // Auto-size on mount so existing descriptions aren't clipped.
+                  if (el && el.scrollHeight > el.clientHeight) {
+                    el.style.height = 'auto';
+                    el.style.height = el.scrollHeight + 'px';
+                  }
+                }}
+                rows={3}
+                className="w-full bg-transparent text-tq-text text-sm border-b border-tq-border/30 hover:border-tq-border focus:border-tq-accent outline-none resize-none leading-relaxed"
+                style={{ minHeight: 72, overflow: 'hidden' }}
                 placeholder="Description"
               />
             </div>
