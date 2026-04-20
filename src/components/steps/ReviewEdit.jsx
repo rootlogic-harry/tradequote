@@ -182,13 +182,25 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
 
   const measurementsContent = (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="eyebrow">
-          Measurements
-          {unconfirmedCount > 0 && (
-            <span className="text-tq-unconfirmed text-sm font-body ml-2" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
-              ({unconfirmedCount} to confirm)
-            </span>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="eyebrow">Measurements</div>
+          {unconfirmedCount === 0 ? (
+            <div
+              className="text-xs mt-1"
+              style={{ color: 'var(--tq-confirmed-txt)', textTransform: 'none', letterSpacing: 'normal' }}
+            >
+              All confirmed {'\u2713'}
+            </div>
+          ) : (
+            <div
+              className="text-sm mt-1"
+              style={{ color: 'var(--tq-unconf-txt)', textTransform: 'none', letterSpacing: 'normal' }}
+            >
+              {unconfirmedCount === measurements.length
+                ? `${measurements.length} to confirm`
+                : `${unconfirmedCount} of ${measurements.length} to confirm`}
+            </div>
           )}
         </div>
         {unconfirmedCount > 0 && (
