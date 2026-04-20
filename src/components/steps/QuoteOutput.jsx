@@ -223,14 +223,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       const monoTxt = (text, opts = {}) => txt(text, { ...opts, font: MONO_FONT });
 
-      // Table column widths in twips (A4 usable width ~9360 twips = 6.5in)
-      const COL_DESC = 3500;  // ~37%
-      const COL_QTY = 1100;   // ~12%
-      const COL_UNIT_COL = 1060; // ~11%
-      const COL_RATE = 1800;  // ~19%
-      const COL_TOTAL = 1900; // ~20%
-      const COL_SPAN_4 = COL_DESC + COL_QTY + COL_UNIT_COL + COL_RATE; // 7460
-      const COL_SPAN_5 = COL_SPAN_4 + COL_TOTAL;                       // 9360
+      // Table column widths in twips. A4 page = 11906 twips, with our 1in
+      // margins each side that leaves 9026 twips usable. Previously this
+      // table was 9360 — wider than usable width — which made Pages (and
+      // sometimes Word) collapse the Description column to ~1ch. Sized
+      // conservatively to 8800 to give a 226-twip (~4mm) safety margin.
+      const COL_DESC = 3300;  // ~37%
+      const COL_QTY = 1000;   // ~11%
+      const COL_UNIT_COL = 1000; // ~11%
+      const COL_RATE = 1700;  // ~19%
+      const COL_TOTAL = 1800; // ~20%
+      const COL_SPAN_4 = COL_DESC + COL_QTY + COL_UNIT_COL + COL_RATE; // 7000
+      const COL_SPAN_5 = COL_SPAN_4 + COL_TOTAL;                       // 8800
 
       // Build main document children
       const children = [];
@@ -548,11 +552,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       children.push(
         new Table({
           rows: tableRows,
-          width: { size: 9360, type: WidthType.DXA },
-          // Fixed layout + explicit columnWidths is required, otherwise Word
-          // ignores the per-cell widths and auto-fits based on content — which
-          // in practice collapses the Description column so text wraps
-          // character-by-character down the page.
+          width: { size: COL_SPAN_5, type: WidthType.DXA },
+          // Fixed layout + explicit columnWidths is required, otherwise Word /
+          // Pages ignores the per-cell widths and auto-fits based on content,
+          // which collapsed the Description column so text wrapped one char
+          // per line. Total width must also fit within the page's usable area
+          // (9026 twips on 1-inch-margin A4) — we use 8800 with safety.
           columnWidths: [COL_DESC, COL_QTY, COL_UNIT_COL, COL_RATE, COL_TOTAL],
           layout: TableLayoutType.FIXED,
         })
