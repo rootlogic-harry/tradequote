@@ -185,7 +185,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     setGeneratingDocx(true);
     try {
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-              WidthType, AlignmentType, BorderStyle, ImageRun,
+              WidthType, AlignmentType, BorderStyle, ImageRun, TableLayoutType,
               convertInchesToTwip, SectionType, Footer } = await import('docx');
 
       if (!reviewData) return;
@@ -549,6 +549,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         new Table({
           rows: tableRows,
           width: { size: 9360, type: WidthType.DXA },
+          // Fixed layout + explicit columnWidths is required, otherwise Word
+          // ignores the per-cell widths and auto-fits based on content — which
+          // in practice collapses the Description column so text wraps
+          // character-by-character down the page.
+          columnWidths: [COL_DESC, COL_QTY, COL_UNIT_COL, COL_RATE, COL_TOTAL],
+          layout: TableLayoutType.FIXED,
         })
       );
 

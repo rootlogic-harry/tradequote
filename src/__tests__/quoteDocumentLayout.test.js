@@ -35,6 +35,34 @@ describe('QuoteDocument layout — printed quote output', () => {
     });
   });
 
+  // DOCX cost-breakdown table column widths: docx 9.x requires the Table
+  // constructor to declare both `columnWidths` and `layout: TableLayoutType.FIXED`
+  // for the per-cell widths to be respected. Without them Word auto-fits the
+  // columns to content, which collapsed the Description column to ~1ch wide
+  // and wrapped text character-by-character down the page.
+  describe('DOCX cost breakdown table column widths', () => {
+    let quoteOutputSrc;
+    beforeAll(() => {
+      quoteOutputSrc = readFileSync(
+        join(srcDir, 'components/steps/QuoteOutput.jsx'),
+        'utf8'
+      );
+    });
+
+    it('imports TableLayoutType from docx', () => {
+      expect(quoteOutputSrc).toMatch(/TableLayoutType/);
+    });
+
+    it('cost-breakdown Table declares columnWidths so Word honours the DXA widths', () => {
+      // The one-and-only `new Table(` call must include both columnWidths
+      // and layout: TableLayoutType.FIXED.
+      const tableBlock = quoteOutputSrc.match(/new Table\(\{[\s\S]*?\}\)/);
+      expect(tableBlock).not.toBeNull();
+      expect(tableBlock[0]).toMatch(/columnWidths/);
+      expect(tableBlock[0]).toMatch(/layout:\s*TableLayoutType\.FIXED/);
+    });
+  });
+
   // TRQ-103: The PDF was showing the footer twice — once because html2canvas
   // captured the inline <div> footer at the end of the document, and again
   // because handleDownloadPDF overlays a pdf.text() footer at the bottom of
