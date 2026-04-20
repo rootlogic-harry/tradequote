@@ -403,10 +403,11 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
           : '⚠ No reference card detected — all measurements require on-site verification before the quote is issued'}
       </div>
 
-      {/* Desktop: three column layout — costs column wider for materials table */}
-      <div className="hidden fq:grid gap-6" style={{ gridTemplateColumns: '1fr 1fr 1.4fr' }}>
-        <div className="space-y-6">{transcriptContent}{damageDescriptionContent}{measurementsContent}</div>
-        <div>{scheduleContent}</div>
+      {/* Desktop: two column layout — costs column wider for materials table.
+          Three columns cramped everything at typical laptop widths (~1200px), so
+          Schedule of Works now stacks under Measurements in the left column. */}
+      <div className="hidden fq:grid gap-6" style={{ gridTemplateColumns: '1fr 1.25fr' }}>
+        <div className="space-y-6">{transcriptContent}{damageDescriptionContent}{measurementsContent}{scheduleContent}</div>
         <div>{costsContent}</div>
       </div>
 
