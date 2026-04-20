@@ -1,4 +1,29 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
+
+// Textarea that grows to fit its content. useLayoutEffect runs synchronously
+// after DOM mutations and before the browser paints, so the height is correct
+// on the first frame the user sees — important for read-mostly description
+// fields that are pre-populated by the analyser.
+function AutoGrowTextarea({ value, onChange, onBlur, minHeight = 140, ...rest }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(minHeight, el.scrollHeight) + 'px';
+  }, [value, minHeight]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      onBlur={onBlur}
+      style={{ minHeight, overflow: 'hidden', resize: 'none' }}
+      {...rest}
+    />
+  );
+}
 
 export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
   const updateStep = (index, field, value) => {
@@ -57,28 +82,13 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
                 className="w-full bg-transparent text-tq-text font-heading font-bold text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none mb-1"
                 placeholder="Step title"
               />
-              <textarea
+              <AutoGrowTextarea
                 value={step.description}
-                onChange={(e) => {
-                  updateStep(i, 'description', e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = e.target.scrollHeight + 'px';
-                }}
-                onBlur={(e) => {
-                  updateStep(i, 'description', e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = e.target.scrollHeight + 'px';
-                }}
-                ref={(el) => {
-                  // Auto-size on mount so existing descriptions aren't clipped.
-                  if (el && el.scrollHeight > el.clientHeight) {
-                    el.style.height = 'auto';
-                    el.style.height = el.scrollHeight + 'px';
-                  }
-                }}
-                rows={3}
-                className="w-full bg-transparent text-tq-text text-sm border-b border-tq-border/30 hover:border-tq-border focus:border-tq-accent outline-none resize-none leading-relaxed"
-                style={{ minHeight: 72, overflow: 'hidden' }}
+                onChange={(e) => updateStep(i, 'description', e.target.value)}
+                onBlur={(e) => updateStep(i, 'description', e.target.value)}
+                rows={6}
+                minHeight={140}
+                className="w-full bg-transparent text-tq-text text-sm border border-tq-border/40 hover:border-tq-border focus:border-tq-accent outline-none leading-relaxed p-2 rounded"
                 placeholder="Description"
               />
             </div>
