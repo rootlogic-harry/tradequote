@@ -14,7 +14,12 @@ import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
 import { processVideo } from './src/utils/videoProcessor.js';
-import { parseAIResponse, validateAIResponse, normalizeAIResponse } from './src/utils/aiParser.js';
+import {
+  parseAIResponse,
+  validateAIResponse,
+  normalizeAIResponse,
+  applyMeasurementPlausibilityBounds,
+} from './src/utils/aiParser.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1973,6 +1978,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       // Parse form fields — frontend sends briefNotes (#3) and profile JSON (#5)
       const briefNotes = req.body.briefNotes || '';
       const siteAddress = req.body.siteAddress || '';
+      const scaleReferences = req.body.scaleReferences || '';
 
       // Parse profile from JSON string sent by frontend (#5)
       let profile = { dayRate: 400 };
@@ -2035,10 +2041,13 @@ app.post('/api/users/:id/jobs/:jobId/video',
         });
       }
 
-      // Text (site address + combined notes)
+      // Text (site address + combined notes + scale references)
+      const videoScaleBlock = scaleReferences.trim()
+        ? `\nUSER-PROVIDED SCALE REFERENCES: ${scaleReferences.trim()}`
+        : '';
       imageContent.push({
         type: 'text',
-        text: `Site address: ${siteAddress}${result.combinedNotes ? `\nTradesman notes: ${result.combinedNotes}` : ''}`,
+        text: `Site address: ${siteAddress}${result.combinedNotes ? `\nTradesman notes: ${result.combinedNotes}` : ''}${videoScaleBlock}`,
       });
 
       // Now call the same Anthropic analysis pipeline the photo path uses
@@ -2086,11 +2095,15 @@ app.post('/api/users/:id/jobs/:jobId/video',
         console.warn('[Video] AI response validation warnings:', aiValidation.errors);
       }
 
-      const normalised = normalizeAIResponse(parsed);
+      let normalised = normalizeAIResponse(parsed);
       normalised.referenceCardDetected = parsed.referenceCardDetected;
       normalised.stoneType = parsed.stoneType;
       normalised.additionalCosts = [];
       normalised.labourEstimate.dayRate = profile.dayRate;
+
+      // Enforce confidence floor based on scale-anchor availability and
+      // plausibility bounds — same post-processing the photo path uses.
+      normalised = applyMeasurementPlausibilityBounds(normalised, { scaleReferences });
 
       videoProgress.emit(jobId, { stage: 'reviewing', progress: 80, message: 'Reviewing analysis...' });
 

@@ -1,5 +1,10 @@
 import { PHOTO_SLOTS } from '../constants.js';
-import { parseAIResponse, validateAIResponse, normalizeAIResponse } from './aiParser.js';
+import {
+  parseAIResponse,
+  validateAIResponse,
+  normalizeAIResponse,
+  applyMeasurementPlausibilityBounds,
+} from './aiParser.js';
 
 export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId }) {
   try {
@@ -39,9 +44,12 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
       });
     }
 
+    const scaleBlock = jobDetails.scaleReferences?.trim()
+      ? `\nUSER-PROVIDED SCALE REFERENCES: ${jobDetails.scaleReferences.trim()}`
+      : '';
     imageContent.push({
       type: 'text',
-      text: `Site address: ${jobDetails.siteAddress}${jobDetails.briefNotes ? `\nTradesman notes: ${jobDetails.briefNotes}` : ''}`,
+      text: `Site address: ${jobDetails.siteAddress}${jobDetails.briefNotes ? `\nTradesman notes: ${jobDetails.briefNotes}` : ''}${scaleBlock}`,
     });
 
     const controller = new AbortController();
@@ -120,11 +128,18 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
       console.warn('AI response validation warnings:', validation.errors);
     }
 
-    const normalised = normalizeAIResponse(parsed);
+    let normalised = normalizeAIResponse(parsed);
     normalised.referenceCardDetected = parsed.referenceCardDetected;
     normalised.stoneType = parsed.stoneType;
     normalised.additionalCosts = [];
     normalised.labourEstimate.dayRate = profile.dayRate;
+
+    // Enforce the confidence floor based on scale-anchor availability and
+    // plausibility bounds. Runs after normalisation so aiValue is already set
+    // and will not be touched — this only adjusts `confidence`.
+    normalised = applyMeasurementPlausibilityBounds(normalised, {
+      scaleReferences: jobDetails.scaleReferences,
+    });
 
     dispatch({
       type: 'ANALYSIS_SUCCESS',

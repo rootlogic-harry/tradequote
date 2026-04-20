@@ -227,6 +227,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
       formData.append('video', videoFile);
       formData.append('siteAddress', jobDetails.siteAddress);
       formData.append('briefNotes', jobDetails.briefNotes || '');
+      formData.append('scaleReferences', jobDetails.scaleReferences || '');
       formData.append('profile', JSON.stringify(profile));
       // Compress extra photos in parallel before upload (same resizeImage as photo mode)
       const compressed = await Promise.all(
@@ -395,6 +396,32 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           />
         </div>
         )}
+
+        <div className="fq:col-span-2">
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Scale References (optional)
+          </label>
+          <textarea
+            className={inputClass('scaleReferences')}
+            rows={2}
+            value={jobDetails.scaleReferences || ''}
+            onChange={(e) => {
+              updateJob('scaleReferences', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onBlur={(e) => {
+              updateJob('scaleReferences', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            style={{ overflow: 'hidden', resize: 'none' }}
+            placeholder="Anything in the photos we can use to measure against? e.g. 'The gate on the left is 1.2m wide', 'That fence post is 1.8m tall', 'The door is a standard 2m'"
+          />
+          <p className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>
+            If you don't have a reference card, tell us the size of something visible — a gate, door, fence post, vehicle. This makes measurements much more accurate.
+          </p>
+        </div>
       </div>
 
       {/* Capture mode choice */}
@@ -478,6 +505,33 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             />
           </div>
 
+          {/* Scale references in video mode */}
+          <div className="mt-4">
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Scale References (optional)
+            </label>
+            <textarea
+              className={inputClass('scaleReferences')}
+              rows={2}
+              value={jobDetails.scaleReferences || ''}
+              onChange={(e) => {
+                updateJob('scaleReferences', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              onBlur={(e) => {
+                updateJob('scaleReferences', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              style={{ overflow: 'hidden', resize: 'none' }}
+              placeholder="Anything in the video we can use to measure against? e.g. 'The gate is 1.2m wide', 'That fence post is 1.8m tall'"
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>
+              Without a reference card, tell us the size of something visible in the walkthrough. Measurements become much more accurate.
+            </p>
+          </div>
+
           {/* Video analyse CTA */}
           <div className="flex justify-end gap-3 mt-6">
             {state.currentUserId && (
@@ -547,7 +601,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         </button>
       </div>
 
-      {/* Reference card banner */}
+      {/* Reference card / scale anchor banner */}
       <div
         className="flex items-start gap-3 p-4 mb-6"
         style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)', borderRadius: 2 }}
@@ -555,10 +609,11 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         <span className="text-2xl shrink-0">📐</span>
         <div>
           <p className="font-heading font-bold text-sm" style={{ color: 'var(--tq-accent)' }}>
-            Using your FastQuote Reference Card?
+            For accurate measurements, include a scale reference
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--tq-text)' }}>
-            Place it flat against the wall in Slot 4. The system uses the known 148×210mm dimensions to calculate real measurements.
+            <strong>Best:</strong> your FastQuote Reference Card placed flat against the wall in Slot 4 (known 148×210mm).<br />
+            <strong>Or:</strong> include a tape measure, or any known-size object (a gate, door, fence post, brick) in at least one photo — and tell us its size in the <em>Scale References</em> field below.
           </p>
         </div>
       </div>

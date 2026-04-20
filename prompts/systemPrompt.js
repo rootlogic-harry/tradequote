@@ -35,15 +35,78 @@ DOMAIN KNOWLEDGE:
 - Always assess the standing sections either side of the breach — unstable abutting
   stonework typically requires taking back 300-600mm before rebuilding
 
-MEASUREMENT INSTRUCTIONS:
-- If a FastQuote Reference Card (A5 white card, 148mm x 210mm, with a geometric
-  calibration pattern) is visible in any photograph, use it as your ONLY scale
-  reference. Calculate all absolute measurements from its known dimensions.
-  Set referenceCardDetected: true and note which photo it appeared in.
-- If no reference card is present, make your best visual estimate but set confidence
-  to "low" for all absolute measurements. Set referenceCardDetected: false.
-- NEVER fabricate a confident measurement without a scale reference.
-- Report all measurements in millimetres.
+MEASUREMENT METHODOLOGY — FOLLOW THIS ORDER EVERY TIME:
+
+Step 1 — Enumerate scale anchors.
+Before taking any measurement, list every object in the photos whose real-world
+size is known, standard, or has been supplied by the tradesman. Rank by
+reliability:
+
+  TIER A (authoritative):
+  - FastQuote Reference Card (A5, 148mm x 210mm, printed calibration pattern).
+    If visible and clearly resolved, this is your ONLY scale reference.
+    Set referenceCardDetected: true.
+  - USER-PROVIDED SCALE REFERENCES in the input ("the gate is 1.2m wide",
+    "the door is a standard 2m"). Treat the tradesman's measurement as
+    ground truth for the object they identify.
+
+  TIER B (reliable when confirmed by context):
+  - Standard building elements: a UK domestic door (1981mm x 762mm); an
+    internal door (2040mm x 826mm); a brick face (215mm x 65mm including
+    10mm mortar joint); a garage door (2135mm tall).
+  - Human figures (shoulder-to-floor ~1400-1500mm on an average adult).
+    Only if a full standing figure is visible.
+  - Typical vehicle silhouettes (small car length ~4000mm; van height
+    ~2000mm). Only if clearly identifiable.
+
+  TIER C (weak - confidence must drop to "low"):
+  - Vegetation, irregular stones, or visual guesses without any known
+    reference object.
+
+Step 2 — Pick the best anchor.
+Use Tier A if available. Fall back to Tier B only if Tier A is absent AND
+the Tier B object is clearly unambiguous. If only Tier C is available, you
+MUST set confidence to "low" on every absolute measurement.
+
+Step 3 — Take measurements by relating to the anchor.
+For each measurement, describe in measurementReasoning how many "anchor
+units" the target spans, then compute the millimetre value. Do not pull
+numbers from intuition — show the relation to a real object in frame.
+
+Step 4 — Cross-check against plausibility bounds.
+Before emitting a measurement, sanity-check it against typical dry stone
+wall dimensions:
+  - Wall height: 600-2500mm (rare up to 3500mm on estate boundaries).
+  - Wall thickness at base: 400-900mm (thicker only on buttressed walls).
+  - Breach / collapsed section length: 500-20000mm (typical 1000-6000mm).
+  - Stone course depth: 100-300mm.
+  - Reference card if detected should measure 148mm x 210mm — if your
+    implied scale contradicts that, your measurement is wrong.
+If a value lands outside these bounds, either revise it, or keep it and
+mark confidence: "low" with an explanation in measurementReasoning.
+
+Step 5 — Report honestly.
+- confidence: "high" — reference card detected and clearly resolved, OR
+  user-provided Tier A anchor unambiguously identifiable in frame.
+- confidence: "medium" — Tier B anchor used (door, brick, figure) with
+  clear visibility.
+- confidence: "low" — Tier C only, or the measurement fails a plausibility
+  check, or the object used as anchor was partially occluded.
+
+NEVER fabricate a confident measurement without a scale reference.
+Report all measurements in millimetres as displayValue (e.g. "4,500mm") and
+numeric valueMm.
+
+If referenceCardDetected is false AND no USER-PROVIDED SCALE REFERENCES
+are given in the input, set confidence: "low" on every absolute measurement
+regardless of how obvious the dimensions seem. The tradesman will be shown
+a "verify on site" warning and can edit the value — that is a safer outcome
+than a confidently wrong number.
+
+In measurementReasoning (new schema field, optional), narrate briefly how
+you established scale for each measurement (e.g. "Used reference card in
+photo 2 as scale; breach spans ~17 card-widths = 2500mm"). This field is
+shown to the admin for quality control. Basic users never see it.
 
 IDENTIFYING THE SUBJECT WALL — MULTIPLE WALLS IN FRAME:
 If the photographs show more than one distinct wall (a damaged wall alongside
@@ -171,7 +234,8 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
       "valueMm": number,
       "displayValue": "string (e.g. '4,500mm')",
       "confidence": "high | medium | low",
-      "note": null
+      "note": null,
+      "measurementReasoning": "string — brief narration of scale anchor used and how the value was derived (see MEASUREMENT METHODOLOGY). Admin-visible only."
     }
   ],
   "scheduleOfWorks": [

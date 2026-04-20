@@ -54,6 +54,11 @@ export const initialState = {
     quoteReference: `QT-${new Date().getFullYear()}-0001`,
     quoteDate: new Date().toISOString().split('T')[0],
     briefNotes: '',
+    // Free-text anchor the tradesman can supply when no reference card is in
+    // the photos, e.g. "The gate on the left is 1.2m wide". Drives both the
+    // prompt's scale-establishment step and the confidence-floor logic in
+    // applyMeasurementPlausibilityBounds.
+    scaleReferences: '',
   },
   photos: {
     overview: null,
@@ -399,6 +404,7 @@ function reducerCore(state, action) {
           quoteReference: `QT-${year}-${String(nextSeq).padStart(4, '0')}`,
           quoteDate: new Date().toISOString().split('T')[0],
           briefNotes: '',
+          scaleReferences: '',
         },
         photos: {
           overview: null,

@@ -6,8 +6,8 @@ describe('Server-side SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
-  test('contains measurement instructions', () => {
-    expect(SYSTEM_PROMPT).toContain('MEASUREMENT INSTRUCTIONS');
+  test('contains measurement methodology', () => {
+    expect(SYSTEM_PROMPT).toContain('MEASUREMENT METHODOLOGY');
   });
 
   test('contains domain knowledge section', () => {
@@ -35,5 +35,45 @@ describe('Server-side SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/briefNotes/);
     // Must not combine measurements across walls
     expect(SYSTEM_PROMPT).toMatch(/do not combine|Do NOT combine/i);
+  });
+
+  // Measurement accuracy v2: methodology rigor. The prompt drives Claude
+  // through an explicit 5-step scale/measure/check loop, recognises Tier A/B/C
+  // scale anchors, and respects the new USER-PROVIDED SCALE REFERENCES channel
+  // that the UI now sends as part of the text payload.
+  describe('measurement methodology rigor', () => {
+    test('prompt defines a stepwise measurement methodology', () => {
+      expect(SYSTEM_PROMPT).toContain('MEASUREMENT METHODOLOGY');
+      expect(SYSTEM_PROMPT).toMatch(/Step 1/);
+      expect(SYSTEM_PROMPT).toMatch(/Step 2/);
+      expect(SYSTEM_PROMPT).toMatch(/Step 3/);
+      expect(SYSTEM_PROMPT).toMatch(/Step 4/);
+      expect(SYSTEM_PROMPT).toMatch(/Step 5/);
+    });
+
+    test('prompt ranks scale anchors in TIER A / B / C', () => {
+      expect(SYSTEM_PROMPT).toMatch(/TIER A/);
+      expect(SYSTEM_PROMPT).toMatch(/TIER B/);
+      expect(SYSTEM_PROMPT).toMatch(/TIER C/);
+    });
+
+    test('prompt teaches Claude to consume USER-PROVIDED SCALE REFERENCES', () => {
+      expect(SYSTEM_PROMPT).toMatch(/USER-PROVIDED SCALE REFERENCES/);
+    });
+
+    test('prompt names plausibility bounds for typical wall dimensions', () => {
+      expect(SYSTEM_PROMPT).toMatch(/Wall height/);
+      expect(SYSTEM_PROMPT).toMatch(/Wall thickness/);
+      expect(SYSTEM_PROMPT).toMatch(/Breach/);
+    });
+
+    test('prompt requires a measurementReasoning field for admin QA', () => {
+      expect(SYSTEM_PROMPT).toMatch(/measurementReasoning/);
+    });
+
+    test('prompt enforces low confidence when no anchor is available', () => {
+      expect(SYSTEM_PROMPT).toMatch(/referenceCardDetected is false AND no USER-PROVIDED SCALE REFERENCES/);
+      expect(SYSTEM_PROMPT).toMatch(/set confidence: "low"/);
+    });
   });
 });

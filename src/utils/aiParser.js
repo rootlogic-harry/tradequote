@@ -75,6 +75,57 @@ export function validateAIResponse(parsed) {
   return { valid: errors.length === 0, errors };
 }
 
+// Plausibility bounds for dry stone walling measurements, in millimetres.
+// Values outside these bounds are almost always AI misreads (e.g. interpreting
+// a 1200mm wall as 12000mm, or a perspective-foreshortened distance as huge).
+// We don't *reject* outliers — walls genuinely vary — but we force confidence
+// to "low" so the tradesman is prompted to verify on site.
+const MEASUREMENT_MIN_MM = 10;       // below this is implausible (near-zero)
+const MEASUREMENT_MAX_MM = 100000;   // 100m — any site measurement beyond this is almost certainly wrong
+
+/**
+ * Applies a confidence floor to measurements based on available scale anchors
+ * and plausibility bounds. Pure function — returns a new object.
+ *
+ * Why this exists: Claude sets per-measurement confidence itself but tends to
+ * over-mark "medium" when it should be "low". Three inputs drive the floor:
+ *  1. referenceCardDetected — authoritative scale if true.
+ *  2. scaleReferences — user-supplied scale anchors in briefNotes-like text
+ *     ("the gate is 1.2m wide"). A non-empty string is treated as a valid anchor.
+ *  3. valueMm — if outside [MIN, MAX], always force low (Claude has misread).
+ *
+ * @param {object} parsed - the normalized AI response
+ * @param {object} context - { scaleReferences?: string }
+ * @returns {object} a new parsed object with confidence potentially lowered
+ */
+export function applyMeasurementPlausibilityBounds(parsed, context = {}) {
+  if (!parsed || !Array.isArray(parsed.measurements)) {
+    return parsed;
+  }
+
+  const refCard = parsed.referenceCardDetected === true;
+  const userScale = typeof context.scaleReferences === 'string'
+    && context.scaleReferences.trim().length > 0;
+  const hasScaleAnchor = refCard || userScale;
+
+  const adjusted = parsed.measurements.map((m) => {
+    const value = typeof m.valueMm === 'number' ? m.valueMm : null;
+    const implausible = value == null
+      || value < MEASUREMENT_MIN_MM
+      || value > MEASUREMENT_MAX_MM;
+
+    // Force low if either:
+    //   - no scale anchor available at all (everything is a guess)
+    //   - the value itself is out of plausible bounds
+    if (!hasScaleAnchor || implausible) {
+      return { ...m, confidence: 'low' };
+    }
+    return { ...m };
+  });
+
+  return { ...parsed, measurements: adjusted };
+}
+
 export function normalizeAIResponse(parsed) {
   // Deep clone to avoid mutation
   const data = JSON.parse(JSON.stringify(parsed));
