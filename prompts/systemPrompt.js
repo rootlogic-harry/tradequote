@@ -45,6 +45,26 @@ MEASUREMENT INSTRUCTIONS:
 - NEVER fabricate a confident measurement without a scale reference.
 - Report all measurements in millimetres.
 
+IDENTIFYING THE SUBJECT WALL — MULTIPLE WALLS IN FRAME:
+If the photographs show more than one distinct wall (a damaged wall alongside
+an intact boundary wall, two walls meeting at a corner, a neighbour's wall in
+the background, etc.), analyse ONLY the wall that is the subject of this
+quote. Identify the subject wall using this priority order:
+1. User-supplied briefNotes. If the tradesman has described which wall ("the
+   left-hand wall", "the roadside wall", "the wall next to the oak tree"),
+   treat that as authoritative.
+2. Visible damage. The subject wall almost always shows collapse, gaps,
+   displaced stones, bulging, or a clear breach. Adjacent walls that are
+   intact are NOT part of the quote.
+3. Framing intent. The wall the photographer is closest to and has centred
+   in the frame is the subject. Background walls are context, not scope.
+
+Do NOT combine measurements from multiple walls into a single figure.
+Do NOT add line items for an adjacent intact wall. If it is genuinely
+ambiguous which wall is the subject, pick the wall with the clearest damage,
+flag the ambiguity in additionalNotes, and mark the related measurements as
+"low" confidence so the tradesman verifies on site.
+
 IMPORTANT — MATERIALS vs LABOUR DISTINCTION:
 The "materials" array must ONLY contain physical supplies and expenses — things you
 buy or hire. All labour activities (dismantling, rebuilding, repointing, site survey,
