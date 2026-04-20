@@ -63,6 +63,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className={fieldClass('companyName')}
             value={profile.companyName}
             onChange={(e) => update('companyName', e.target.value)}
+            onBlur={(e) => update('companyName', e.target.value)}
           />
           {errors.companyName && <p className="text-tq-error text-xs mt-1">{errors.companyName}</p>}
         </div>
@@ -79,6 +80,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className={fieldClass('fullName')}
             value={profile.fullName}
             onChange={(e) => update('fullName', e.target.value)}
+            onBlur={(e) => update('fullName', e.target.value)}
           />
           {errors.fullName && <p className="text-tq-error text-xs mt-1">{errors.fullName}</p>}
         </div>
@@ -96,6 +98,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className={fieldClass('phone')}
             value={profile.phone}
             onChange={(e) => update('phone', e.target.value)}
+            onBlur={(e) => update('phone', e.target.value)}
           />
           {errors.phone && <p className="text-tq-error text-xs mt-1">{errors.phone}</p>}
         </div>
@@ -113,6 +116,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className={fieldClass('email')}
             value={profile.email}
             onChange={(e) => update('email', e.target.value)}
+            onBlur={(e) => update('email', e.target.value)}
           />
           {errors.email && <p className="text-tq-error text-xs mt-1">{errors.email}</p>}
         </div>
@@ -128,6 +132,11 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             rows={2}
             value={profile.address}
             onChange={(e) => {
+              update('address', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onBlur={(e) => {
               update('address', e.target.value);
               e.target.style.height = 'auto';
               e.target.style.height = e.target.scrollHeight + 'px';
@@ -166,6 +175,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className={fieldClass('accreditations')}
             value={profile.accreditations}
             onChange={(e) => update('accreditations', e.target.value)}
+            onBlur={(e) => update('accreditations', e.target.value)}
             placeholder="e.g. DSWA Professional Member"
           />
         </div>
@@ -186,6 +196,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className={fieldClass('dayRate')}
             value={profile.dayRate}
             onChange={(e) => update('dayRate', parseFloat(e.target.value) || 0)}
+            onBlur={(e) => update('dayRate', parseFloat(e.target.value) || 0)}
           />
           {errors.dayRate && <p className="text-tq-error text-xs mt-1">{errors.dayRate}</p>}
         </div>
@@ -215,6 +226,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
               className={fieldClass('vatNumber')}
               value={profile.vatNumber}
               onChange={(e) => update('vatNumber', e.target.value)}
+              onBlur={(e) => update('vatNumber', e.target.value)}
             />
             {errors.vatNumber && <p className="text-tq-error text-xs mt-1">{errors.vatNumber}</p>}
           </div>

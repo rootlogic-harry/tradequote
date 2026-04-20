@@ -303,6 +303,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             className={inputClass('clientName')}
             value={jobDetails.clientName}
             onChange={(e) => updateJob('clientName', e.target.value)}
+            onBlur={(e) => updateJob('clientName', e.target.value)}
           />
           {errors.clientName && <p className="text-tq-error text-xs mt-1">{errors.clientName}</p>}
         </div>
@@ -319,6 +320,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             className={inputClass('quoteReference')}
             value={jobDetails.quoteReference}
             onChange={(e) => updateJob('quoteReference', e.target.value)}
+            onBlur={(e) => updateJob('quoteReference', e.target.value)}
           />
         </div>
 
@@ -334,6 +336,11 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             rows={2}
             value={jobDetails.siteAddress}
             onChange={(e) => {
+              updateJob('siteAddress', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onBlur={(e) => {
               updateJob('siteAddress', e.target.value);
               e.target.style.height = 'auto';
               e.target.style.height = e.target.scrollHeight + 'px';
@@ -374,6 +381,11 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             rows={2}
             value={jobDetails.briefNotes}
             onChange={(e) => {
+              updateJob('briefNotes', e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onBlur={(e) => {
               updateJob('briefNotes', e.target.value);
               e.target.style.height = 'auto';
               e.target.style.height = e.target.scrollHeight + 'px';
@@ -456,6 +468,11 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
                 e.target.style.height = 'auto';
                 e.target.style.height = e.target.scrollHeight + 'px';
               }}
+              onBlur={(e) => {
+                updateJob('briefNotes', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
               style={{ overflow: 'hidden', resize: 'none' }}
               placeholder="Anything we should know — e.g. wall is on a slope, needs through stones replacing..."
             />
@@ -505,7 +522,12 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
                 minHeight: 48,
               }}
             >
-              {canAnalyseVideo ? 'GENERATE QUOTE' : 'ADD VIDEO TO CONTINUE'}
+              {canAnalyseVideo
+                ? 'GENERATE QUOTE'
+                : !videoFile
+                  ? 'ADD VIDEO TO CONTINUE'
+                  : 'ADD SITE ADDRESS TO CONTINUE'
+              }
             </button>
           </div>
         </div>

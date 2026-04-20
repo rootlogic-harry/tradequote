@@ -106,6 +106,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
         autoComplete="off"
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
+        onBlur={(e) => setEditValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm(); }}
         className="nq-field w-full"
         style={{
