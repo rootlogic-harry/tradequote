@@ -563,42 +563,101 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         })
       );
 
-      // Totals
-      children.push(new Paragraph({ spacing: { before: 300 }, children: [] }));
+      // Totals — built as a 3-column table (spacer / label / value) because
+      // Pages.app silently ignores AlignmentType.RIGHT on plain paragraphs.
+      // A fixed-layout table is the only reliable way to push totals to the
+      // right edge across both Word and Pages.
+      const TOT_SPACER = 4400; // pushes the totals block to the right
+      const TOT_LABEL = 2400;
+      const TOT_VALUE = 2000;
+      const noBorder = {
+        top:    { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left:   { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right:  { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      };
+      const totalRowBorder = {
+        top:    { style: BorderStyle.SINGLE, size: 8, color: '333333' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left:   { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right:  { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      };
 
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
+      const totalsRows = [];
+
+      // Subtotal
+      totalsRows.push(
+        new TableRow({
           children: [
-            txt('Subtotal (ex VAT):   ', { size: 22, color: '666666' }),
-            monoTxt(formatCurrency(totals.subtotal), { size: 22, bold: true }),
+            new TableCell({ children: [new Paragraph('')], borders: noBorder, width: { size: TOT_SPACER, type: WidthType.DXA } }),
+            new TableCell({
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('Subtotal (ex VAT)', { size: 22, color: '666666' })] })],
+              borders: noBorder,
+              width: { size: TOT_LABEL, type: WidthType.DXA },
+            }),
+            new TableCell({
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(totals.subtotal), { size: 22 })] })],
+              borders: noBorder,
+              width: { size: TOT_VALUE, type: WidthType.DXA },
+            }),
           ],
         })
       );
 
+      // VAT (conditional)
       if (profile.vatRegistered) {
-        children.push(
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
+        totalsRows.push(
+          new TableRow({
             children: [
-              txt('VAT (20%):   ', { size: 22, color: '666666' }),
-              monoTxt(formatCurrency(totals.vatAmount), { size: 22, bold: true }),
+              new TableCell({ children: [new Paragraph('')], borders: noBorder, width: { size: TOT_SPACER, type: WidthType.DXA } }),
+              new TableCell({
+                children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('VAT (20%)', { size: 22, color: '666666' })] })],
+                borders: noBorder,
+                width: { size: TOT_LABEL, type: WidthType.DXA },
+              }),
+              new TableCell({
+                children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(totals.vatAmount), { size: 22 })] })],
+                borders: noBorder,
+                width: { size: TOT_VALUE, type: WidthType.DXA },
+              }),
             ],
           })
         );
       }
 
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
+      // TOTAL row — heavy top border, larger size, brand accent on the value
+      totalsRows.push(
+        new TableRow({
           children: [
-            txt('TOTAL:   ', { size: 32, bold: true, font: HEADING_FONT }),
-            monoTxt(formatCurrency(totals.total), { size: 32, bold: true }),
+            new TableCell({ children: [new Paragraph('')], borders: noBorder, width: { size: TOT_SPACER, type: WidthType.DXA } }),
+            new TableCell({
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('TOTAL', { size: 28, bold: true, font: HEADING_FONT, color: '1a1a1a' })] })],
+              borders: totalRowBorder,
+              width: { size: TOT_LABEL, type: WidthType.DXA },
+            }),
+            new TableCell({
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [monoTxt(formatCurrency(totals.total), { size: 28, bold: true, color: 'd97706' })] })],
+              borders: totalRowBorder,
+              width: { size: TOT_VALUE, type: WidthType.DXA },
+            }),
           ],
-          spacing: { before: 120, after: 400 },
-          border: { top: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
         })
       );
+
+      // Spacer above the totals block
+      children.push(new Paragraph({ spacing: { before: 200 }, children: [] }));
+
+      children.push(
+        new Table({
+          rows: totalsRows,
+          width: { size: COL_SPAN_5, type: WidthType.DXA },
+          columnWidths: [TOT_SPACER, TOT_LABEL, TOT_VALUE],
+          layout: TableLayoutType.FIXED,
+        })
+      );
+
+      // Generous breathing room between TOTAL and the next section (Notes).
+      children.push(new Paragraph({ spacing: { after: 600 }, children: [] }));
 
       // Notes & Conditions — respect profile toggle
       if (profile.showNotesOnQuote !== false) {

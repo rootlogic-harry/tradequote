@@ -253,7 +253,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       </div>
 
       {/* Section 4: Cost Breakdown */}
-      <div className="mb-8">
+      <div className="mb-12">
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Cost Breakdown
         </h2>
@@ -293,20 +293,26 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           </tbody>
         </table>
 
-        <div className="space-y-1 text-lg text-right" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          <div className="flex justify-end gap-8">
-            <span className="text-gray-500">Subtotal (ex VAT)</span>
-            <span>{formatCurrency(totals.subtotal)}</span>
-          </div>
-          {profile.vatRegistered && (
-            <div className="flex justify-end gap-8">
-              <span className="text-gray-500">VAT (20%)</span>
-              <span>{formatCurrency(totals.vatAmount)}</span>
+        {/* Totals — right-aligned, fixed-width, with a heavier rule above
+             TOTAL and brand-accent on the value to read like a proper invoice. */}
+        <div className="mt-6 flex justify-end">
+          <div className="w-2/3 sm:w-1/2 md:w-2/5">
+            <div className="space-y-2 text-lg" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Subtotal (ex VAT)</span>
+                <span className="text-gray-800">{formatCurrency(totals.subtotal)}</span>
+              </div>
+              {profile.vatRegistered && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">VAT (20%)</span>
+                  <span className="text-gray-800">{formatCurrency(totals.vatAmount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t-2 border-gray-800 pt-3 mt-2 text-2xl font-bold">
+                <span className="text-gray-900" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>TOTAL</span>
+                <span style={{ color: '#d97706' }}>{formatCurrency(totals.total)}</span>
+              </div>
             </div>
-          )}
-          <div className="flex justify-end gap-8 border-t border-gray-300 pt-2 text-2xl font-bold">
-            <span>TOTAL</span>
-            <span>{formatCurrency(totals.total)}</span>
           </div>
         </div>
       </div>
