@@ -167,8 +167,12 @@ export default function VideoUpload({
         <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
           Tap to record or drop a video
         </div>
-        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '16px' }}>
+        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '8px' }}>
           or choose from your files (max 3 minutes, 100MB)
+        </div>
+        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '12px', marginBottom: '16px', fontStyle: 'italic', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+          Tip: hold the camera steady on your reference card (or a tape measure)
+          for 2–3 seconds so a clean frame can be captured.
         </div>
         <button
           type="button"
