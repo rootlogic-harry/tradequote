@@ -5,7 +5,7 @@ const MAX_EXTRA_PHOTOS = 3;
 /**
  * Video upload component with drag-and-drop, thumbnail preview,
  * duration display, and optional extra photos.
- * Mobile-optimised: capture="environment" for rear camera,
+ * Mobile-optimised: OS file picker (Camera / Photo Library / Browse),
  * 44px minimum touch targets, client-side duration check.
  *
  * @param {object} props
@@ -188,7 +188,6 @@ export default function VideoUpload({
           ref={fileInputRef}
           type="file"
           accept="video/*"
-          capture="environment"
           onChange={handleInputChange}
           style={{ display: 'none' }}
         />

@@ -19,11 +19,11 @@ beforeAll(async () => {
 });
 
 describe('VideoUpload mobile optimisations', () => {
-  describe('native camera capture', () => {
-    it('includes capture="environment" on the video file input', () => {
-      // The hidden file input for video should trigger the rear camera on mobile
+  describe('file picker over direct camera', () => {
+    it('omits the capture attribute so mobile users get a file picker (Camera / Photo Library / Browse)', () => {
+      // Most users record on-site then upload later, so the input must not force the camera.
       expect(VideoUploadSource).toMatch(/accept=["']video\/\*["']/);
-      expect(VideoUploadSource).toMatch(/capture=["']environment["']/);
+      expect(VideoUploadSource).not.toMatch(/capture=["']environment["']/);
     });
   });
 

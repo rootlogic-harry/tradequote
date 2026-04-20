@@ -50,7 +50,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 Single-page React app. All state in one `useReducer` in `App.jsx`. Layout: 240px side rail (desktop ≥900px) + 64px bottom nav (mobile <900px). Five-step workflow:
 
 1. **Profile Setup** — company details, day rate, VAT
-2. **Job Details** — client info, capture mode choice (video walkthrough or photos), 5 photo slots or video upload with optional extra photos, brief notes (optional voice dictation via `VoiceRecorder`). Video upload: mobile-optimised (`capture="environment"`, 44px targets, 3-min client-side check), full playback preview with native controls, XHR upload with real progress % and automatic retry.
+2. **Job Details** — client info, capture mode choice (video walkthrough or photos), 5 photo slots or video upload with optional extra photos, brief notes (optional voice dictation via `VoiceRecorder`). Video upload: mobile-optimised (OS file picker so users can choose Camera or Photo Library — most record on-site then upload later — 44px targets, 3-min client-side check), full playback preview with native controls, XHR upload with real progress % and automatic retry.
 3. **AI Analysis** — loading screen with SSE-driven staged progress for video mode (falls back to time-based estimation) or rotating messages for photo mode (auto-advances)
 4. **Review & Edit** — three-column desktop, accordion mobile. Measurements must all be confirmed
 5. **Quote Output** — document preview, PDF/DOCX export, email

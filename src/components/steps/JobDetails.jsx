@@ -669,7 +669,6 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       className="hidden"
                       onChange={(e) => handlePhotoUpload(slot.key, e)}
                     />
@@ -725,7 +724,6 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={handleExtraPhoto}
             />
