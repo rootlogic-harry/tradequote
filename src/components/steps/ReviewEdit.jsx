@@ -479,7 +479,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       </div>
 
       {/* Live Preview */}
-      <LivePreview state={state} />
+      <LivePreview state={state} dispatch={dispatch} />
 
       {/* Generate Quote CTA — sticky bar */}
       <div

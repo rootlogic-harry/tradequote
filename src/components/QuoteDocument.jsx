@@ -1,9 +1,53 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 
-export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp }) {
+// Inline-editable text — switches between a static element and an auto-growing
+// textarea (or input) based on `editable`. When not editable the markup is
+// byte-identical to the previous render so PDF/DOCX exports are unaffected.
+function EditableText({ value, onChange, editable, multiline = true, className = '', placeholder, as = 'p' }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    if (!editable) return;
+    const el = ref.current;
+    if (!el || el.tagName !== 'TEXTAREA') return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }, [value, editable]);
+
+  if (!editable) {
+    const Tag = as;
+    return <Tag className={className}>{value}</Tag>;
+  }
+  const editClass = `${className} bg-amber-50/40 hover:bg-amber-50 focus:bg-white border border-transparent hover:border-amber-200 focus:border-amber-400 outline-none rounded px-1 -mx-1 transition-colors w-full`;
+  if (multiline) {
+    return (
+      <textarea
+        ref={ref}
+        value={value || ''}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={`${editClass} resize-none`}
+        style={{ overflow: 'hidden', minHeight: '1.5em' }}
+      />
+    );
+  }
+  return (
+    <input
+      ref={ref}
+      value={value || ''}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={editClass}
+    />
+  );
+}
+
+export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp, editable = false, dispatch }) {
+  // editable requires dispatch — guard so we never render edit affordances
+  // without a way to commit changes (e.g. SavedQuoteViewer passes no dispatch).
+  const canEdit = editable && typeof dispatch === 'function';
   const { profile, jobDetails, reviewData, photos = {}, transcript, captureMode } = state;
 
   if (!reviewData) return null;
@@ -121,7 +165,17 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Description of Damage
         </h2>
-        {renderDescription(damageDescription)}
+        {canEdit ? (
+          <EditableText
+            editable
+            value={damageDescription}
+            onChange={(e) => dispatch({ type: 'UPDATE_DAMAGE_DESCRIPTION', value: e.target.value })}
+            className="text-lg text-gray-700 whitespace-pre-wrap leading-relaxed"
+            placeholder="Description of damage…"
+          />
+        ) : (
+          renderDescription(damageDescription)
+        )}
       </div>
 
       {/* Video Walkthrough Transcript (only for video-mode quotes with transcript) */}
@@ -159,8 +213,40 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         <ol className="space-y-3">
           {scheduleOfWorks.map((step, i) => (
             <li key={step.id || i}>
-              <p className="font-bold text-lg text-gray-800">{i + 1}. {step.title}</p>
-              <p className="text-lg text-gray-600 ml-5">{step.description}</p>
+              {canEdit ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-bold text-lg text-gray-800 shrink-0">{i + 1}.</span>
+                    <EditableText
+                      editable
+                      multiline={false}
+                      value={step.title}
+                      onChange={(e) => dispatch({
+                        type: 'UPDATE_SCHEDULE',
+                        schedule: scheduleOfWorks.map((s, idx) => idx === i ? { ...s, title: e.target.value } : s),
+                      })}
+                      className="font-bold text-lg text-gray-800"
+                      as="span"
+                      placeholder="Step title"
+                    />
+                  </div>
+                  <EditableText
+                    editable
+                    value={step.description}
+                    onChange={(e) => dispatch({
+                      type: 'UPDATE_SCHEDULE',
+                      schedule: scheduleOfWorks.map((s, idx) => idx === i ? { ...s, description: e.target.value } : s),
+                    })}
+                    className="text-lg text-gray-600 ml-5 leading-relaxed"
+                    placeholder="Step description"
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-lg text-gray-800">{i + 1}. {step.title}</p>
+                  <p className="text-lg text-gray-600 ml-5">{step.description}</p>
+                </>
+              )}
             </li>
           ))}
         </ol>
@@ -232,9 +318,26 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             Notes &amp; Conditions
           </h2>
           <ol className="list-decimal list-outside pl-6 space-y-1 text-lg text-gray-600">
-            {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => (
-              <li key={i} className="pl-1">{note}</li>
-            ))}
+            {(reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES).map((note, i) => {
+              if (!canEdit) {
+                return <li key={i} className="pl-1">{note}</li>;
+              }
+              const allNotes = reviewData.notes && reviewData.notes.length > 0 ? reviewData.notes : DEFAULT_NOTES;
+              return (
+                <li key={i} className="pl-1">
+                  <EditableText
+                    editable
+                    value={note}
+                    onChange={(e) => dispatch({
+                      type: 'UPDATE_NOTES',
+                      notes: allNotes.map((n, idx) => idx === i ? e.target.value : n),
+                    })}
+                    className="text-lg text-gray-600 leading-relaxed"
+                    as="span"
+                  />
+                </li>
+              );
+            })}
           </ol>
         </div>
       )}
