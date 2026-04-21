@@ -151,12 +151,15 @@ describe('QuoteOutput crash safety', () => {
   const src = readComponent('components/steps/QuoteOutput.jsx');
 
   test('clientName.replace calls are null-safe', () => {
-    // All .clientName.replace calls must have fallback
+    // Every clientName.replace call must have a fallback so a quote with no
+    // client name (draft state, offline restore, etc.) doesn't crash the
+    // filename-generation path. Accepts any string fallback or optional
+    // chaining.
     const lines = src.split('\n');
     const replaceLines = lines.filter(l => /clientName.*\.replace/.test(l));
     expect(replaceLines.length).toBeGreaterThan(0);
     replaceLines.forEach(line => {
-      const safe = /\(.*clientName\s*\|\|\s*['"]['"]\)\.replace|clientName\?\.replace/.test(line);
+      const safe = /\(.*clientName\s*\|\|\s*['"][^'"]*['"]\)\.replace|clientName\?\.replace/.test(line);
       expect(safe).toBe(true);
     });
   });

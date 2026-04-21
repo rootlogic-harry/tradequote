@@ -111,8 +111,9 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         }
       }
 
-      const clientClean = (rams.client || 'RAMS').replace(/[^a-zA-Z0-9]/g, '-');
-      pdf.save(`RAMS-${rams.jobNumber}-${clientClean}.pdf`);
+      // TRQ-122: user-friendly filename — matches the quote export pattern
+      const safeClient = (rams.client || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
+      pdf.save(`RAMS - ${safeClient} (Job ${rams.jobNumber}).pdf`);
       showToast?.('PDF downloaded', 'success');
     } catch (err) {
       console.error('RAMS PDF generation failed:', err);
@@ -378,8 +379,9 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
       });
 
       const blob = await Packer.toBlob(doc);
-      const clientClean = (rams.client || 'RAMS').replace(/[^a-zA-Z0-9]/g, '-');
-      const filename = `RAMS-${rams.jobNumber}-${clientClean}.docx`;
+      // TRQ-122: user-friendly filename — matches the quote export pattern
+      const safeClient = (rams.client || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
+      const filename = `RAMS - ${safeClient} (Job ${rams.jobNumber}).docx`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

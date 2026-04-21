@@ -37,6 +37,23 @@ describe('Server-side SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/do not combine|Do NOT combine/i);
   });
 
+  // TRQ-122: "rubble" reads as disparaging in client-facing quote output
+  // ("Replacement sandstone rubble"). Removed from example + specification
+  // lines that Claude imitates; replaced with "walling stone".
+  test('no "rubble" in material example lines (TRQ-122)', () => {
+    expect(SYSTEM_PROMPT).not.toMatch(/matched rubble/i);
+    expect(SYSTEM_PROMPT).not.toMatch(/sandstone rubble/i);
+    expect(SYSTEM_PROMPT).not.toMatch(/gritstone rubble/i);
+    expect(SYSTEM_PROMPT).not.toMatch(/rubble course/i);
+  });
+
+  test('explicitly tells Claude to prefer "walling stone" over "rubble" (TRQ-122)', () => {
+    // A CLIENT-FACING LANGUAGE section names the substitution so Claude
+    // doesn't regress from its training-data default of "rubble".
+    expect(SYSTEM_PROMPT).toMatch(/CLIENT-FACING LANGUAGE/i);
+    expect(SYSTEM_PROMPT).toMatch(/walling stone/i);
+  });
+
   // Measurement accuracy v2: methodology rigor. The prompt drives Claude
   // through an explicit 5-step scale/measure/check loop, recognises Tier A/B/C
   // scale anchors, and respects the new USER-PROVIDED SCALE REFERENCES channel

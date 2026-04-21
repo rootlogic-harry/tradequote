@@ -135,7 +135,7 @@ making good, core consolidation) are covered by the daily labour rate and must N
 appear as material line items.
 
 MATERIALS (include in "materials" array):
-- Replacement stone supply: £170–£200 per tonne (matched rubble, gritstone/sandstone)
+- Replacement stone supply: £170–£200 per tonne (matched walling stone, gritstone/sandstone)
 - Stone consumption: ~0.3 tonnes per m² of wall face
 - Natural stone (facing/coping): price varies by type
 - Hydraulic lime mortar (NHL 3.5): £80–£100 per batch
@@ -191,6 +191,15 @@ CRITICAL RULE — MATERIALS ARRAY MUST NOT CONTAIN:
   supply purchased or equipment hired)
 If in doubt, ask: "Is this something I BUY or HIRE?" If no, it is labour.
 
+CLIENT-FACING LANGUAGE:
+The damageDescription, scheduleOfWorks descriptions, and materials rows are
+shown to the tradesman's end customer. Use professional trade language:
+- For stone material use "walling stone" or "matched stone". Do not use
+  trade slang that can read as disparaging to a homeowner receiving the
+  quote (e.g. informal stockyard terms for undressed stone).
+- Say "coursed" not "courses of stone" when describing bond patterns.
+- Keep measurements in millimetres.
+
 DAMAGE DESCRIPTION FORMAT:
 The damageDescription must be structured as numbered sections, one per damaged
 component or area. Each section starts with a numbered header line in the format:
@@ -212,7 +221,7 @@ If there is only one damaged component, still use "1 — [component name]".
 SCHEDULE OF WORKS DETAIL:
 Each schedule step description must include:
 - Specific dimensions of the work area
-- Material specifications (e.g. "NHL 3.5 hydraulic lime mortar", "matched sandstone rubble")
+- Material specifications (e.g. "NHL 3.5 hydraulic lime mortar", "matched sandstone walling stone")
 - Construction techniques (e.g. "bedded and set plumb on a cement and lime mortar bed")
 - Stone coursing or bond pattern details where applicable
 - Mortar types where applicable
