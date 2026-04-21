@@ -1,5 +1,33 @@
 [phases.setup]
-aptPkgs = ["ffmpeg"]
+# Chromium (via @sparticuz/chromium) needs these shared libs + fonts to
+# launch headless on Ubuntu. Without them Puppeteer fails with cryptic
+# "Failed to launch the browser process" errors.
+aptPkgs = [
+  "ffmpeg",
+  # Chromium runtime deps
+  "libasound2",
+  "libatk-bridge2.0-0",
+  "libatk1.0-0",
+  "libcairo2",
+  "libcups2",
+  "libdbus-1-3",
+  "libdrm2",
+  "libgbm1",
+  "libgtk-3-0",
+  "libnspr4",
+  "libnss3",
+  "libpango-1.0-0",
+  "libxcomposite1",
+  "libxdamage1",
+  "libxfixes3",
+  "libxkbcommon0",
+  "libxrandr2",
+  "libpangocairo-1.0-0",
+  "libxshmfence1",
+  # Fonts Chromium can fall back to (Google Fonts will still load over HTTPS)
+  "fonts-liberation",
+  "fonts-noto-color-emoji",
+]
 
 [phases.build]
 cmds = ["npm install", "npm run build"]

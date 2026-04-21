@@ -17,6 +17,7 @@
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage --testPathIgnorePatterns='(api|securityAudit)\\.test\\.js'"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^147.0.2",
     "connect-pg-simple": "^10.0.0",
     "docx": "^9.6.1",
     "express": "^5.2.1",
@@ -28,6 +29,7 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.20.0",
+    "puppeteer-core": "^24.42.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

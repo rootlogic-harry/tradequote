@@ -21,6 +21,7 @@ import {
   applyMeasurementPlausibilityBounds,
 } from './src/utils/aiParser.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
+import { renderQuotePdf } from './pdfRenderer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1206,6 +1207,47 @@ app.delete('/api/users/:id/jobs/:jobId', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// Rate-limiter for the PDF endpoint — each render spawns a Chromium page
+// and loads fonts from Google Fonts. Keep the concurrency bounded.
+const pdfRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  keyGenerator: (req) => req.params.id || req.ip,
+  message: { error: 'Too many PDF requests. Please wait a minute and try again.' },
+});
+
+// POST /api/users/:id/jobs/:jobId/pdf
+// Accepts pre-rendered quote HTML (react-dom/server.renderToStaticMarkup
+// on the client) and returns a native PDF using Chromium + public/print.css.
+// This is the Phase-2 successor to the html2canvas "Download PDF" path; it
+// produces crisp, selectable-text PDFs with correct page breaks every time.
+app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
+  const { quoteHtml, title } = req.body || {};
+  if (typeof quoteHtml !== 'string' || quoteHtml.length === 0) {
+    return res.status(400).json({ error: 'quoteHtml is required' });
+  }
+  if (quoteHtml.length > 5_000_000) {
+    // Guard against someone sending a 50MB blob of base64-inlined photos —
+    // the photos appendix has large data URLs but should never get close.
+    return res.status(413).json({ error: 'quoteHtml exceeds 5MB' });
+  }
+
+  try {
+    const pdf = await renderQuotePdf({ quoteHtml, title });
+    const safeFilename = (title || 'Quote').replace(/[^a-zA-Z0-9._-]/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    res.send(pdf);
+  } catch (err) {
+    console.error(`[PDF] render failed job=${req.params.jobId} err=${err.message}`);
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });

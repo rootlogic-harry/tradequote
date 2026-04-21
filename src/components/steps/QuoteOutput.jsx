@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import QuoteDocument from '../QuoteDocument.jsx';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
@@ -61,16 +62,59 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
 
-  // Browser-native print path. Uses the @media print stylesheet + the
-  // hidden .print-root clone of QuoteDocument (rendered with showPhotos
-  // and selectedPhotos so the appendix pages paginate natively). Works
-  // around all the rasterisation-and-blind-slicing failure modes of the
-  // html2canvas path: selectable text, Chrome's page-break-inside: avoid
-  // honoured on every section.
+  // Browser-native print path (Phase 1 fallback). Uses the @media print
+  // stylesheet + the hidden .print-root clone of QuoteDocument rendered
+  // with showPhotos and selectedPhotos. Works around all the rasterisation
+  // failure modes of the html2canvas path: selectable text, Chrome's
+  // page-break-inside: avoid honoured on every section.
   const handlePrint = () => {
-    // Give the DOM a tick in case anything just updated, then invoke
-    // the browser's print dialog. User picks "Save as PDF" destination.
     setTimeout(() => window.print(), 50);
+  };
+
+  // Server-side PDF (Phase 2 — preferred). Renders the same QuoteDocument
+  // markup via renderToStaticMarkup, POSTs it to /api/.../pdf where
+  // Puppeteer loads our print.css and returns a native selectable-text PDF.
+  // One-click download, no print dialog ceremony.
+  const [generatingServerPdf, setGeneratingServerPdf] = useState(false);
+  const handleDownloadPdfServer = async () => {
+    if (!state.currentUserId) {
+      showToast?.('Save the quote first, then download PDF.', 'error');
+      return;
+    }
+    setGeneratingServerPdf(true);
+    try {
+      const quoteHtml = renderToStaticMarkup(
+        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+      );
+      const clientClean = (jobDetails.clientName || '').replace(/[^a-zA-Z0-9]/g, '-');
+      const title = `Quote-${jobDetails.quoteReference}-${clientClean}`;
+      const jobId = savedJobId || state.savedJobId || 'draft';
+      const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteHtml, title }),
+      });
+      if (!res.ok) {
+        let msg = `PDF failed (${res.status})`;
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast?.('PDF downloaded', 'success');
+    } catch (err) {
+      console.error('Server PDF failed:', err);
+      showToast?.(`${err.message}. Try "Save as PDF" via browser print.`, 'error');
+    } finally {
+      setGeneratingServerPdf(false);
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -926,19 +970,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       {/* Primary actions: export/download */}
       <div className="flex flex-col fq:flex-row flex-wrap gap-3 mb-4">
         <button
-          onClick={handlePrint}
-          className="btn-primary"
-          title="Uses your browser's print engine — crisp text, clean page breaks"
+          onClick={handleDownloadPdfServer}
+          disabled={generatingServerPdf}
+          className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          title="Crisp PDF with selectable text, rendered server-side by Chromium"
         >
-          Save as PDF
+          {generatingServerPdf ? 'Generating PDF...' : 'Download PDF'}
         </button>
         <button
-          onClick={handleDownloadPDF}
-          disabled={generatingPDF}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
-          title="Legacy direct-download — may have layout issues with long quotes"
+          onClick={handlePrint}
+          className="btn-ghost"
+          title="Uses your browser's print dialog — fallback if Download PDF fails"
         >
-          {generatingPDF ? 'Generating...' : 'Direct download (legacy)'}
+          Save via print
         </button>
         <button
           onClick={handleDownloadDocx}

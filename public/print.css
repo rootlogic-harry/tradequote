@@ -1,0 +1,112 @@
+/* ──────────────────────────────────────────────────────────
+   Print styles for the quote PDF.
+
+   Used by TWO render paths that share the same rules:
+     1. window.print() in the app (Phase 1 — TRQ-119)
+     2. Puppeteer server-side rendering for /api/.../pdf
+        (Phase 2 — TRQ-120). The server reads this file and
+        inlines its contents into the HTML it hands Puppeteer.
+
+   Keep rules here generic enough to work in both contexts.
+   ────────────────────────────────────────────────────────── */
+
+@page {
+  size: A4;
+  margin: 18mm 18mm 22mm 18mm;
+}
+
+/* Render-only-on-print helper: the print-only clone of QuoteDocument is
+   mounted in the app shell but hidden on screen. */
+.print-only { display: none !important; }
+@media print { .print-only { display: block !important; } }
+
+@media print {
+  /* Print everything crisp and in colour */
+  html, body, * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Print only the .print-root element — hide all other app chrome.
+     visibility:hidden on body * preserves layout math; the print-root
+     is absolutely positioned at the document origin so it becomes the
+     only visible content the print engine paginates. */
+  body * { visibility: hidden !important; }
+  .print-root, .print-root * { visibility: visible !important; }
+  .print-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  /* Always-hidden elements in print */
+  .print-hide,
+  [data-html2canvas-ignore="true"] {
+    visibility: hidden !important;
+    display: none !important;
+  }
+
+  /* Quote document itself — no shadows, no max-height, no overflow */
+  #quote-document {
+    box-shadow: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+    color: #111 !important;
+    font-size: 11pt;
+  }
+
+  /* Sections must not split across pages — orphans/widows as backup */
+  [data-print-section] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Cost breakdown table: keep header with at least one body row */
+  [data-print-section="cost-breakdown"] thead {
+    display: table-header-group;
+  }
+  [data-print-section="cost-breakdown"] tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Totals block must stay together on one page */
+  [data-print-section="totals"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Photo appendix starts on a fresh page; each pair stays together */
+  [data-print-section="photos"] {
+    break-before: page;
+    page-break-before: always;
+  }
+  [data-print-pair] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Preserve the few coloured elements we actually want in print */
+  .bg-gray-50 { background: #f9fafb !important; }
+  .bg-gray-100 { background: #f3f4f6 !important; }
+  .border-gray-200 { border-color: #e5e7eb !important; }
+  .border-gray-300 { border-color: #d1d5db !important; }
+  .border-gray-800 { border-color: #1f2937 !important; }
+  .text-gray-500 { color: #6b7280 !important; }
+  .text-gray-600 { color: #4b5563 !important; }
+  .text-gray-700 { color: #374151 !important; }
+  .text-gray-800 { color: #1f2937 !important; }
+  .text-gray-900 { color: #111827 !important; }
+
+  /* Remove any container widths that would pinch the print area */
+  .max-w-5xl, .max-w-3xl, .max-w-2xl, .max-w-xl {
+    max-width: none !important;
+  }
+}
