@@ -91,14 +91,30 @@
     page-break-inside: avoid;
   }
 
-  /* Photo appendix starts on a fresh page; each pair stays together */
-  [data-print-section="photos"] {
+  /* Photo appendix. The first data-print-pair contains the "Site
+     Photographs" header AND the first 2 photos — by applying break-before:
+     page to that pair (rather than the outer section) the header always
+     rides onto the new page WITH its photos, never orphaned. Subsequent
+     pairs just break naturally. */
+  [data-print-section="photos"] > [data-print-pair]:first-child {
     break-before: page;
     page-break-before: always;
   }
   [data-print-pair] {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* Cap each printed photo's size so two photos + the section header fit
+     together on one A4 page (257mm usable height - ~30mm header -
+     ~25mm captions + gaps = 200mm for two photos = 100mm each). Gives us
+     headroom for portrait photos too. */
+  [data-print-section="photos"] .print-photo img {
+    max-width: 100%;
+    max-height: 95mm;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
   }
 
   /* Preserve the few coloured elements we actually want in print */

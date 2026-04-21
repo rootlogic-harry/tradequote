@@ -354,26 +354,37 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         <p>{[profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean).join(' · ')}</p>
       </div>
 
-      {/* Photos — full size (only when showPhotos is true).
-          For print: paired so two photos fit per A4 page and each pair stays
-          together on a page via data-print-pair + the CSS rule in index.html. */}
+      {/* Photos appendix. Layout law for printing:
+          - The section header must NEVER be alone on a page. It rides with
+            the first pair of photos as one unbreakable group.
+          - Each pair of photos is an unbreakable group of its own so it
+            doesn't split across pages.
+          - Photos are height-capped in print.css so header + 2 photos fit
+            together on one A4 page (~95mm each). */}
       {showPhotos && docPhotos.length > 0 && (
-        <div className="mt-8 border-t border-gray-200 pt-4" data-print-section="photos">
-          <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            Site Photographs
-          </h2>
-          <div className="space-y-6">
-            {Array.from({ length: Math.ceil(docPhotos.length / 2) }).map((_, pairIdx) => (
-              <div key={pairIdx} data-print-pair className="space-y-6">
-                {docPhotos.slice(pairIdx * 2, pairIdx * 2 + 2).map((p, i) => (
-                  <div key={i}>
-                    <img src={p.data} alt={p.label} className="w-full rounded" />
-                    <p className="text-base text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+        <div className="mt-8 pt-4" data-print-section="photos">
+          {Array.from({ length: Math.ceil(docPhotos.length / 2) }).map((_, pairIdx) => (
+            <div
+              key={pairIdx}
+              data-print-pair
+              className={pairIdx === 0 ? 'space-y-6' : 'space-y-6 mt-6'}
+            >
+              {pairIdx === 0 && (
+                <h2
+                  className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-3 border-t border-gray-200 pt-4"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
+                  Site Photographs
+                </h2>
+              )}
+              {docPhotos.slice(pairIdx * 2, pairIdx * 2 + 2).map((p, i) => (
+                <div key={i} className="print-photo">
+                  <img src={p.data} alt={p.label} className="w-full rounded" />
+                  <p className="text-base text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>

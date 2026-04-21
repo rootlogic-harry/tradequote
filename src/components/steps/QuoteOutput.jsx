@@ -382,6 +382,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         }),
       );
 
+      // Pages.app collapses paragraph-after spacing when adjacent to a
+      // shaded paragraph, so the quote-ref block appeared flush against
+      // the next heading. An explicit empty paragraph guarantees the gap.
+      children.push(new Paragraph({ children: [], spacing: { after: 400 } }));
+
       // Description of Damage
       children.push(
         new Paragraph({
