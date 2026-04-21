@@ -430,21 +430,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
 
-      // Video Walkthrough Transcript (only for video-mode quotes)
-      if (state.captureMode === 'video' && state.transcript) {
-        children.push(
-          new Paragraph({
-            children: [txt('SITE WALKTHROUGH NOTES', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
-            spacing: { before: 300, after: 120 },
-            border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' } },
-          }),
-          new Paragraph({
-            children: [txt(state.transcript, { size: 22 })],
-            spacing: { after: 300 },
-          }),
-          new Paragraph({ spacing: { after: 200 }, children: [] }),
-        );
-      }
+      // TRQ-122 follow-up: raw transcript is NOT rendered on the DOCX export
+      // — it's AI context only. The transcript stays visible to the tradesman
+      // in ReviewEdit.jsx "Video Transcript (read-only)" accordion but never
+      // reaches the customer's PDF/DOCX/email.
 
       // Measurements
       children.push(
@@ -883,11 +872,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     const subject = encodeURIComponent(
       `Quote ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
     );
-    const transcriptSection = state.captureMode === 'video' && state.transcript
-      ? `\n\nSite Walkthrough Notes:\n${state.transcript}\n`
-      : '';
+    // TRQ-122 follow-up: the raw transcript is AI context only, never
+    // pasted into customer-facing output (PDF, DOCX, email body).
     const body = encodeURIComponent(
-      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.${transcriptSection}\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
+      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };

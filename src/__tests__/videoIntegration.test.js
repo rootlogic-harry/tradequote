@@ -260,15 +260,20 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(quoteDocSource).toMatch(/transcript.*captureMode|captureMode.*transcript/);
     });
 
-    it('renders Site Walkthrough Notes section for video mode', () => {
-      expect(quoteDocSource).toContain('Site Walkthrough Notes');
+    // TRQ-122 follow-up: the raw Whisper transcript must NEVER appear on the
+    // customer-facing quote document. It's AI context only — Claude rewrites
+    // it into the damage description, schedule, etc. Showing the verbatim
+    // transcript leaks trade slang (e.g. "random rubble") to the homeowner.
+    it('does NOT render Site Walkthrough Notes — transcript is AI input only', () => {
+      expect(quoteDocSource).not.toMatch(/Site Walkthrough Notes/);
     });
 
-    it('only shows transcript section when captureMode is video and transcript exists', () => {
+    it.skip('only shows transcript section when captureMode is video and transcript exists', () => {
       expect(quoteDocSource).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*transcript/);
     });
 
-    it('renders transcript text in whitespace-pre-wrap paragraph', () => {
+    it.skip('renders transcript text in whitespace-pre-wrap paragraph', () => {
+      // Intentionally skipped — transcript no longer rendered on customer quote.
       expect(quoteDocSource).toMatch(/whitespace-pre-wrap.*\{transcript\}/s);
     });
   });
@@ -280,16 +285,16 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       quoteOutputSource = readFileSync(join(srcDir, 'components/steps/QuoteOutput.jsx'), 'utf8');
     });
 
-    it('adds SITE WALKTHROUGH NOTES heading to DOCX', () => {
-      expect(quoteOutputSource).toContain('SITE WALKTHROUGH NOTES');
+    // TRQ-122 follow-up: DOCX export no longer includes the raw transcript.
+    // The transcript is AI context only; Claude's generated damageDescription
+    // is the customer-facing surface. Leaves these assertions inverted so
+    // anyone re-introducing the section gets a loud failure.
+    it('does NOT add SITE WALKTHROUGH NOTES heading to DOCX', () => {
+      expect(quoteOutputSource).not.toContain('SITE WALKTHROUGH NOTES');
     });
 
-    it('conditionally includes transcript in DOCX for video mode', () => {
-      expect(quoteOutputSource).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*state\.transcript/);
-    });
-
-    it('renders transcript text in DOCX paragraph', () => {
-      expect(quoteOutputSource).toMatch(/txt\(state\.transcript/);
+    it('does NOT render the raw transcript text in the DOCX output', () => {
+      expect(quoteOutputSource).not.toMatch(/txt\(state\.transcript/);
     });
   });
 
@@ -467,16 +472,18 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       quoteOutputSource = readFileSync(join(srcDir, 'components/steps/QuoteOutput.jsx'), 'utf8');
     });
 
-    it('email handler references captureMode and transcript', () => {
-      expect(quoteOutputSource).toMatch(/handleEmail[\s\S]*captureMode.*video.*transcript/s);
+    // TRQ-122 follow-up: email body must not include the raw transcript.
+    // The transcript is AI context only — Claude's damageDescription is
+    // what the customer sees, not the tradesman's voice memo.
+    it('does NOT include Site Walkthrough Notes in email body', () => {
+      expect(quoteOutputSource).not.toContain('Site Walkthrough Notes');
     });
 
-    it('includes Site Walkthrough Notes in email body for video mode', () => {
-      expect(quoteOutputSource).toContain('Site Walkthrough Notes');
-    });
-
-    it('conditionally adds transcript only for video mode', () => {
-      expect(quoteOutputSource).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*state\.transcript/);
+    it('does NOT reference state.transcript inside the email body builder', () => {
+      // Find handleEmail's body and assert no transcript references
+      const emailBlock = quoteOutputSource.match(/handleEmail\s*=\s*\(\)\s*=>\s*\{[\s\S]*?window\.open/);
+      expect(emailBlock).not.toBeNull();
+      expect(emailBlock[0]).not.toMatch(/state\.transcript/);
     });
   });
 

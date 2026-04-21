@@ -178,15 +178,11 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         )}
       </div>
 
-      {/* Video Walkthrough Transcript (only for video-mode quotes with transcript) */}
-      {captureMode === 'video' && transcript && (
-        <div className="mb-8" data-print-section="transcript">
-          <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            Site Walkthrough Notes
-          </h2>
-          <p className="text-lg text-gray-700 whitespace-pre-wrap">{transcript}</p>
-        </div>
-      )}
+      {/* TRQ-122 follow-up: the video walkthrough transcript is AI context
+          only — never rendered on the customer-facing quote. Claude has
+          already used it to shape the damageDescription + schedule above.
+          The raw transcript stays visible to the tradesman in the Review
+          step (ReviewEdit.jsx "Video Transcript (read-only)" accordion). */}
 
       {/* Section 2: Measurements */}
       <div className="mb-8" data-print-section="measurements">

@@ -139,9 +139,11 @@ describe('QuoteDocument crash safety', () => {
     expect(/photos\s*=\s*\{\}/.test(src)).toBe(true);
   });
 
-  test('transcript section guarded by captureMode === video AND transcript', () => {
-    // Must check both conditions to prevent crash on non-video quotes
-    expect(src).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*transcript/);
+  test('no raw transcript rendering — it is AI input only, never customer output', () => {
+    // TRQ-122 follow-up: the walkthrough transcript is intentionally NOT on
+    // the customer-facing QuoteDocument. Having no reference at all is the
+    // correct crash-safety posture — nothing to guard because nothing renders.
+    expect(src).not.toMatch(/Site Walkthrough Notes/);
   });
 });
 
@@ -159,9 +161,11 @@ describe('QuoteOutput crash safety', () => {
     expect(src).not.toMatch(/\(jobDetails\.clientName\s*\|\|[^)]*\)\.replace/);
   });
 
-  test('DOCX transcript section guarded by captureMode === video AND transcript', () => {
-    // Must check both conditions to prevent crash on non-video quotes
-    expect(src).toMatch(/captureMode\s*===\s*['"]video['"]\s*&&\s*state\.transcript/);
+  test('DOCX export does not render the raw transcript', () => {
+    // TRQ-122 follow-up: transcript is AI context only. Same rationale as
+    // the QuoteDocument inline version.
+    expect(src).not.toContain('SITE WALKTHROUGH NOTES');
+    expect(src).not.toMatch(/txt\(state\.transcript/);
   });
 });
 
