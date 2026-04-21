@@ -75,7 +75,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   // Server-side PDF (Phase 2 — preferred). Renders the same QuoteDocument
   // markup via renderToStaticMarkup, POSTs it to /api/.../pdf where
   // Puppeteer loads our print.css and returns a native selectable-text PDF.
-  // One-click download, no print dialog ceremony.
+  //
+  // If the server endpoint fails for ANY reason (Chromium didn't start,
+  // network blip, rate limit, etc.) we fall back to window.print() — the
+  // user always gets a PDF option, no dead-end. The fallback produces the
+  // same document because both render paths share public/print.css.
   const [generatingServerPdf, setGeneratingServerPdf] = useState(false);
   const handleDownloadPdfServer = async () => {
     if (!state.currentUserId) {
@@ -83,28 +87,51 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       return;
     }
     setGeneratingServerPdf(true);
+
+    const falLbackToPrint = (reason) => {
+      console.warn('[PDF] server render failed, falling back to window.print():', reason);
+      showToast?.('Opening print dialog…', 'info');
+      setTimeout(() => window.print(), 100);
+    };
+
     try {
       const quoteHtml = renderToStaticMarkup(
         <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
       );
-      // TRQ-122: filename is "{Client} - {Property} - {Postcode}" —
-      // customer-readable, backend ref lives in the DB.
       const title = buildQuoteFilename({
         clientName: jobDetails.clientName,
         siteAddress: jobDetails.siteAddress,
       });
       const jobId = savedJobId || state.savedJobId || 'draft';
-      const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quoteHtml, title }),
-      });
+
+      // Bound the request so a hung Chromium can't leave the user staring
+      // at a spinner forever. AbortController at 45s then fall back.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45_000);
+
+      let res;
+      try {
+        res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quoteHtml, title }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
       if (!res.ok) {
         let msg = `PDF failed (${res.status})`;
         try { const j = await res.json(); msg = j.error || msg; } catch {}
         throw new Error(msg);
       }
       const blob = await res.blob();
+      if (blob.size < 500) {
+        // A tiny "PDF" is almost certainly an error page the server wrote
+        // before Chromium responded. Fall back rather than download garbage.
+        throw new Error('Server returned an empty/invalid PDF');
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -115,8 +142,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       URL.revokeObjectURL(url);
       showToast?.('PDF downloaded', 'success');
     } catch (err) {
-      console.error('Server PDF failed:', err);
-      showToast?.(`${err.message}. Try "Save as PDF" via browser print.`, 'error');
+      falLbackToPrint(err.message || err);
     } finally {
       setGeneratingServerPdf(false);
     }

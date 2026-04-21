@@ -36,18 +36,29 @@ async function getBrowser() {
     }
   }
 
-  browserPromise = puppeteer.launch({
-    args: chromium.args,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
-  });
-  const browser = await browserPromise;
+  const launchStart = Date.now();
+  try {
+    const execPath = await chromium.executablePath();
+    console.log(`[PDF] launching Chromium at ${execPath}`);
+    browserPromise = puppeteer.launch({
+      args: chromium.args,
+      executablePath: execPath,
+      headless: chromium.headless,
+    });
+    const browser = await browserPromise;
+    console.log(`[PDF] Chromium launched in ${Date.now() - launchStart}ms`);
 
-  browser.on('disconnected', () => {
+    browser.on('disconnected', () => {
+      console.warn('[PDF] Chromium disconnected; will relaunch on next request');
+      browserPromise = null;
+    });
+
+    return browser;
+  } catch (err) {
+    console.error(`[PDF] Chromium launch failed after ${Date.now() - launchStart}ms:`, err);
     browserPromise = null;
-  });
-
-  return browser;
+    throw err;
+  }
 }
 
 /**
@@ -78,6 +89,7 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote' }) {
 </body>
 </html>`;
 
+  const renderStart = Date.now();
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
@@ -92,6 +104,7 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote' }) {
       displayHeaderFooter: false,
       margin: { top: '18mm', right: '18mm', bottom: '22mm', left: '18mm' },
     });
+    console.log(`[PDF] rendered ${pdf.length} bytes in ${Date.now() - renderStart}ms`);
     return pdf;
   } finally {
     try { await page.close(); } catch { /* ignore */ }
