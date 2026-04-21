@@ -22,7 +22,7 @@ import OfflineBanner from './components/OfflineBanner.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
-import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs } from './utils/userDB.js';
+import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
 
@@ -98,6 +98,27 @@ export default function App() {
     loadUserData(state.currentUserId);
   }, [state.initComplete, state.currentUserId]);
 
+  // --- bfcache resilience ---
+  // Safari (and Firefox) restore entire pages from the back-forward cache.
+  // When that happens, JS state is frozen but the world around it may have
+  // moved on: session cookie evicted by ITP, Railway service restarted,
+  // OAuth state stale. Any API call from the restored page would 401
+  // while the UI confidently shows "logged in" — exactly Paul's "pressed
+  // the forward arrow and it kicked me back to login" regression.
+  //
+  // Cheap fix: on pageshow with event.persisted === true, force a full
+  // reload. The browser re-requests the page, the server re-validates
+  // the session, and whatever happens next is coherent.
+  useEffect(() => {
+    const onShow = (event) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
+
   // --- Fetch incomplete jobs whenever user or view changes ---
   const fetchIncompleteJobs = useCallback(async (userId) => {
     if (!userId) return;
@@ -109,6 +130,14 @@ export default function App() {
       const incomplete = jobs.filter(j => !j.hasRams && !j.ramsNotRequired);
       setIncompleteJobs(incomplete);
     } catch (err) {
+      // Session expired (ITP eviction, 7-day cookie cap, server restart):
+      // surface it as a login redirect rather than silently flattening to
+      // an empty list. Paul's "nothing in My Quotes" scare was exactly
+      // this masking a 401.
+      if (err instanceof SessionExpiredError) {
+        window.location.href = '/login?error=session_expired';
+        return;
+      }
       console.warn('[Dashboard] Failed to load jobs:', err.message);
       setIncompleteJobs([]);
       setSavedJobs([]);

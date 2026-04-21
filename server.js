@@ -458,6 +458,19 @@ app.get('/auth/google',
   })
 );
 
+// `handleOauthFailure` is a 4-arg error middleware that Express treats as
+// an error handler. If Passport blows up mid-callback (bad state param,
+// session lost between /auth/google and this callback, network error
+// talking to Google) we must NOT let the default 500 handler render —
+// that leaves the user on an ugly error page with no route back. Instead
+// we log the cause server-side and bounce to /login?error=oauth_failed,
+// which shows a clear message plus the Sign-in button again.
+function handleOauthFailure(err, req, res, _next) {
+  console.warn(`[OAuth] callback error: ${err?.message || err}`);
+  try { req.session?.destroy?.(() => {}); } catch {}
+  res.redirect('/login?error=oauth_failed');
+}
+
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login?error=auth_failed' }),
   (req, res) => {
@@ -465,7 +478,8 @@ app.get('/auth/google/callback',
       return res.redirect('/?onboarding=true');
     }
     res.redirect('/');
-  }
+  },
+  handleOauthFailure,
 );
 
 app.get('/auth/logout', (req, res, next) => {
@@ -619,9 +633,23 @@ app.get('/login', (req, res) => {
   if (req.isAuthenticated?.() || req.session?.legacyUserId) {
     return res.redirect('/');
   }
-  const errorMsg = req.query.error === 'auth_failed'
-    ? "<div class='error'>Sign-in failed. Please try again.</div>"
-    : '';
+  // Error copy per-cause. Paul's case was session_expired → we want a
+  // clear "your session ran out, tap Sign-in again" message rather than
+  // a scary 'sign-in failed' which implies bad password / Google issue.
+  let errorMsg = '';
+  switch (req.query.error) {
+    case 'session_expired':
+      errorMsg = "<div class='error'>Your session ran out. Please sign in again to get back to your quotes.</div>";
+      break;
+    case 'oauth_failed':
+      errorMsg = "<div class='error'>We couldn't complete the Google sign-in. Please try again.</div>";
+      break;
+    case 'auth_failed':
+      errorMsg = "<div class='error'>Sign-in failed. Please try again.</div>";
+      break;
+    default:
+      errorMsg = '';
+  }
   const html = LOGIN_PAGE_HTML.replace('${ERROR_HTML}', errorMsg);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);

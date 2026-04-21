@@ -154,9 +154,28 @@ export async function updateJob(userId, jobId, state) {
   }
 }
 
+/**
+ * Typed error for session-lost scenarios. Thrown by listJobs / other
+ * authenticated helpers when the server says 401. Callers that reach the
+ * UI can check `err instanceof SessionExpiredError` and redirect to
+ * `/login?error=session_expired` instead of silently showing an empty
+ * screen — the bug that lost Paul's first quote.
+ */
+export class SessionExpiredError extends Error {
+  constructor(message = 'Session expired') {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
+
 export async function listJobs(userId) {
   const res = await fetch(`/api/users/${userId}/jobs`);
-  if (!res.ok) return [];
+  if (res.status === 401) throw new SessionExpiredError();
+  if (!res.ok) {
+    let msg = `listJobs failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
   return res.json();
 }
 
