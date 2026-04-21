@@ -45,7 +45,8 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 - **Video Progress**: `GET /api/users/:id/jobs/:jobId/video/progress` — SSE endpoint for real-time progress. Emits stages: processing (10%), analysing (50%), reviewing (80%), complete (100%). Client connects before upload, falls back to time-based estimation if SSE unavailable.
 - **Admin**: Learning dashboard, agent runs, calibration notes (all behind `requireAdminPlan` middleware)
 - **Client Portal (TRQ-124 onwards)**: `POST /api/users/:id/jobs/:jobId/client-token` generates a UUID v4 token and freezes both the current `quote_snapshot` and the tradesman's profile into `jobs.client_snapshot` + `jobs.client_snapshot_profile`. `GET /api/users/:id/jobs/:jobId/client-status` returns portal state for the trader UI.
-- **Public Client Portal routes (TRQ-125)**: no-auth, rate-limited `clientPortalRateLimit` (20/hr/IP) mounted on all `/q/*`. Routes: `GET /q/:token` (validates token + expiry, sets noindex/no-store/DENY/CSP headers, renders portal — placeholder renderer until TRQ-126), `POST /q/:token/viewed` (bot-safe beacon using `COALESCE(client_viewed_at, NOW())` so the first view wins), `POST /q/:token/respond` (single-submission guard via `AND client_response IS NULL`, writes both new `client_*` columns and legacy `status`/`accepted_at`/`declined_at`). Every HTML response runs user-supplied fields through `escapeHtml`.
+- **Public Client Portal routes (TRQ-125)**: no-auth, rate-limited `clientPortalRateLimit` (20/hr/IP) mounted on all `/q/*`. Routes: `GET /q/:token` (validates token + expiry, sets noindex/no-store/DENY/CSP headers, renders portal), `POST /q/:token/viewed` (bot-safe beacon using `COALESCE(client_viewed_at, NOW())` so the first view wins), `POST /q/:token/respond` (single-submission guard via `AND client_response IS NULL`, writes both new `client_*` columns and legacy `status`/`accepted_at`/`declined_at`).
+- **Portal renderer (TRQ-126)** — `portalRenderer.js` at repo root. Reads ONLY from `client_snapshot` + `client_snapshot_profile` (frozen-at-send contract). Emits mobile-first HTML using the `.cp-*` namespace defined in `public/client-portal.css`. The root element is `<div class="cp" data-accent="{amber|rust|moss|slate}">` — unknown accents are rejected and fall back to amber. Every interpolated field is HTML-escaped. The inline view beacon fires only after 3s dwell OR scroll-past-cost-breakdown, and only once. Confirmation states replace the response block when `client_response IS NOT NULL` — no resubmission path.
 
 ### Frontend
 
@@ -579,6 +580,14 @@ React ref callbacks fire before the value is reliably measurable, and don't re-f
 `QuoteDocument` is used by three surfaces: the Live Preview (editable), the PDF capture (read-only), and `SavedQuoteViewer` (read-only). The editable path (`editable={true}` + `dispatch` prop) swaps `<p>` / `<span>` for `<textarea>` / `<input>`. When `editable` is false the markup must be identical to the previous render so PDF/DOCX/SavedQuote output doesn't drift.
 
 **Self-check:** When touching `QuoteDocument`, guard new rendering behind `canEdit` so read-only surfaces see the same HTML they always have.
+
+### 14. Client Portal rendering contract — never read live state (TRQ-126)
+
+The portal at `GET /q/:token` must read `client_snapshot` + `client_snapshot_profile` ONLY. Never `quote_snapshot`, never `profiles.data`. That's the frozen-at-send-time contract the whole feature depends on — if the tradesman edits the quote or swaps their logo after sending, the client still sees the version that was originally shared.
+
+If you add a new field to the portal page, freeze it at token generation time (TRQ-124's `POST /client-token` route writes both snapshots) and read it from the snapshot in `renderClientPortal`. Do NOT add a live database lookup in the renderer.
+
+**Self-check:** When editing `portalRenderer.js`, every `job.` / `profile.` access must trace back to a snapshot field. Grep confirms: any use of `pool.query` inside the renderer or an import of live profile/job helpers is a bug.
 
 ### 13. Measurement methodology v2 — confidence floor is enforced in code (TRQ-109)
 

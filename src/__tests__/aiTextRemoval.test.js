@@ -79,6 +79,32 @@ describe('AI text removal from user-facing components', () => {
     });
   });
 
+  // TRQ-126: The Client Portal is the most public surface in the whole
+  // product — the one page random people receive via email/SMS. Scan the
+  // renderer source for any user-visible AI vocabulary. (The runtime
+  // output scan in portalRenderer.test.js is load-bearing; this is
+  // belt-and-braces at the source level.)
+  test('portalRenderer.js contains no user-visible "AI" text', () => {
+    const fullPath = join(srcDir, '../portalRenderer.js');
+    const content = readFileSync(fullPath, 'utf-8');
+    const lines = content.split('\n');
+    const violations = [];
+    lines.forEach((line, idx) => {
+      if (isAllowedLine(line)) return;
+      for (const pattern of AI_PATTERNS) {
+        pattern.lastIndex = 0;
+        const match = pattern.exec(line);
+        if (match) {
+          violations.push({ line: idx + 1, text: line.trim(), match: match[0] });
+        }
+      }
+    });
+    if (violations.length > 0) {
+      const details = violations.map((v) => `  Line ${v.line}: "${v.match}" in: ${v.text}`).join('\n');
+      fail(`Found ${violations.length} user-visible "AI" reference(s) in portalRenderer.js:\n${details}`);
+    }
+  });
+
   test('JobDetails.jsx does not contain user-facing "AI" text (excluding system prompt and comments)', () => {
     const fullPath = join(srcDir, 'components/steps/JobDetails.jsx');
     const content = readFileSync(fullPath, 'utf-8');

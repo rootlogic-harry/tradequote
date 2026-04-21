@@ -28,6 +28,11 @@ import {
   isClientTokenExpired,
   CLIENT_TOKEN_TTL_DAYS,
 } from './src/utils/clientToken.js';
+import {
+  renderClientPortal,
+  renderTokenNotFound as renderPortalNotFound,
+  renderTokenExpired as renderPortalExpired,
+} from './portalRenderer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -2617,57 +2622,15 @@ const clientPortalRateLimit = rateLimit({
 
 app.use('/q/', clientPortalRateLimit);
 
-// Minimal HTML-escape — same one used by pdfRenderer.js. Duplicated here
-// rather than imported to keep server.js standalone for the error-page
-// helpers.
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// Placeholder portal renderer — TRQ-126 replaces this with the full
-// mobile-first HTML + client-portal.css page. For now it returns a
-// minimal, self-contained HTML response so the route contract is live.
-function renderClientPortalPlaceholder(job, token) {
-  const profile = job.client_snapshot_profile || {};
-  const safeCompany = escapeHtml(profile.companyName || profile.fullName || 'Your quote');
-  const safeRef = escapeHtml(job.quote_reference || '');
-  return `<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><title>${safeCompany}</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="robots" content="noindex,nofollow"/>
-</head><body>
-<h1>${safeCompany}</h1>
-<p>Quote reference: ${safeRef}</p>
-<p>Token: ${escapeHtml(token)}</p>
-<p><em>Full portal page arrives in TRQ-126.</em></p>
-</body></html>`;
-}
-
+// TRQ-126: the portal + error pages are rendered by portalRenderer.js
+// (imported above). Adapters keep the route handlers below stable — if
+// the renderer module ever relocates, only this file needs updating.
 function tokenNotFoundHtml() {
-  return `<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><title>Quote not found</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="robots" content="noindex,nofollow"/>
-</head><body>
-<h1>Quote not found</h1>
-<p>This link may be incorrect or the quote may have been removed. Please contact your tradesman directly.</p>
-</body></html>`;
+  return renderPortalNotFound();
 }
 
 function tokenExpiredHtml(job) {
-  const site = escapeHtml(job?.site_address || '');
-  return `<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><title>Quote expired</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="robots" content="noindex,nofollow"/>
-</head><body>
-<h1>This quote has expired.</h1>
-<p>The quote${site ? ` for ${site}` : ''} is no longer available online. Please get in touch with your tradesman to discuss your options.</p>
-</body></html>`;
+  return renderPortalExpired(job);
 }
 
 // Shared security headers for every /q/:token HTML response. CSP locks
@@ -2718,7 +2681,7 @@ app.get('/q/:token', async (req, res) => {
     // Email prefetchers and link-scanners will hit this GET without
     // executing JS; the beacon at /q/:token/viewed fires only after real
     // dwell / scroll interaction, so that's what captures a real view.
-    return res.status(200).type('html').send(renderClientPortalPlaceholder(job, token));
+    return res.status(200).type('html').send(renderClientPortal(job, token));
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
   }
