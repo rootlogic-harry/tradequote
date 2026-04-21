@@ -1264,7 +1264,18 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
               status, sent_at AS "sentAt", expires_at AS "expiresAt",
               accepted_at AS "acceptedAt", declined_at AS "declinedAt",
               decline_reason AS "declineReason",
-              completion_feedback AS "completionFeedback"
+              completion_feedback AS "completionFeedback",
+              -- TRQ-133: Client Portal detail fields for the StatusModal
+              -- audit section. IP + user-agent are stripped for non-admin
+              -- callers below — they're admin-only audit data.
+              client_token AS "clientToken",
+              client_token_expires_at AS "clientTokenExpiresAt",
+              client_viewed_at AS "clientViewedAt",
+              client_ip AS "clientIp",
+              client_user_agent AS "clientUserAgent",
+              client_response AS "clientResponse",
+              client_response_at AS "clientResponseAt",
+              client_decline_reason AS "clientDeclineReason"
        FROM jobs WHERE id = $1 AND user_id = $2`,
       [req.params.jobId, req.params.id]
     );
@@ -1272,6 +1283,14 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
     const job = rows[0];
     job.totalAmount = Number(job.totalAmount);
     job.snapshot = job.quoteSnapshot;
+    // Admin-plan gate: strip the soft-fingerprint fields (IP + UA) from
+    // the response for non-admin traders. They can still see *that* a
+    // client viewed their link and *when* — just not the network
+    // metadata.
+    if (req.user?.plan !== 'admin') {
+      delete job.clientIp;
+      delete job.clientUserAgent;
+    }
     res.json(job);
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);

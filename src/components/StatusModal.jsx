@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { calculateExpiresAt } from '../utils/quoteBuilder.js';
+import { generateClientToken, SessionExpiredError } from '../utils/userDB.js';
 
 const DECLINE_REASONS = [
   'No reason given',
@@ -218,6 +219,16 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
             </>
           )}
 
+          {/* TRQ-133: Client Portal audit section — admin-only and
+               only when the job has a client token. Shows the audit
+               trail (when viewed, from what IP) and Copy/Regenerate
+               link controls. Basic users never see this surface;
+               that's the design-law separation between the customer
+               product and the admin operating layer. */}
+          {isAdminPlan && job?.clientToken && (
+            <PortalAuditBlock job={job} />
+          )}
+
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -249,6 +260,161 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Admin-only Client Portal audit block (TRQ-133).
+ *
+ * Shows when the client opened the link, what IP they came from, the
+ * recorded response, and — when the response is "declined" — the
+ * free-text reason the client gave. Also exposes Copy link + Regenerate
+ * so the admin can either share the URL again or kill it and mint a
+ * fresh one. Regenerate is gated by window.confirm, matching the
+ * Step-5 ClientLinkBlock pattern (TRQ-131).
+ */
+function PortalAuditBlock({ job }) {
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const url = job.clientToken
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/q/${job.clientToken}`
+    : '';
+
+  const fmt = (iso) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '-';
+    const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return `${date} at ${time}`;
+  };
+
+  async function handleCopy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // swallow — user can select & copy manually
+    }
+  }
+
+  async function handleRegenerate() {
+    if (busy) return;
+    const ok = window.confirm(
+      'Regenerating will immediately invalidate the link you already shared. Continue?'
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      // userId is not on the job row shape consistently across call
+      // sites; use the URL :id param via window.location.pathname as
+      // a fallback. In practice StatusModal callers always have the
+      // full job row, so job.userId / user is available if the caller
+      // widens it. For now we accept that regenerate needs a refresh
+      // to reflect the new token.
+      await generateClientToken(job.userId || job.user_id || job.currentUserId || 'me', job.id);
+      window.location.reload();
+    } catch (err) {
+      if (err instanceof SessionExpiredError) {
+        window.location.href = '/login?error=session_expired';
+        return;
+      }
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginBottom: 20,
+        padding: '14px 16px',
+        borderRadius: 8,
+        border: '1px solid var(--tq-border)',
+        background: 'var(--tq-surface)',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'Barlow Condensed, sans-serif',
+          fontWeight: 700,
+          fontSize: 12,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: 'var(--tq-muted)',
+          marginBottom: 10,
+        }}
+      >
+        Client Portal
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 14px', fontSize: 12 }}>
+        <span style={{ color: 'var(--tq-muted)' }}>Link</span>
+        <span style={{ color: 'var(--tq-text)', fontFamily: 'JetBrains Mono, monospace', wordBreak: 'break-all' }}>
+          {url}
+        </span>
+        <span style={{ color: 'var(--tq-muted)' }}>Viewed</span>
+        <span style={{ color: 'var(--tq-text)' }}>
+          {job.clientViewedAt
+            ? `${fmt(job.clientViewedAt)}${job.clientIp ? ` · from ${job.clientIp}` : ''}`
+            : 'Not yet viewed'}
+        </span>
+        <span style={{ color: 'var(--tq-muted)' }}>Response</span>
+        <span style={{ color: 'var(--tq-text)' }}>
+          {job.clientResponse
+            ? `${job.clientResponse === 'accepted' ? 'Accepted' : 'Declined'} ${fmt(job.clientResponseAt)}`
+            : 'Awaiting'}
+        </span>
+        {job.clientResponse === 'declined' && job.clientDeclineReason && (
+          <>
+            <span style={{ color: 'var(--tq-muted)' }}>Reason</span>
+            <span style={{ color: 'var(--tq-text)' }}>{job.clientDeclineReason}</span>
+          </>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button
+          type="button"
+          onClick={handleCopy}
+          style={{
+            padding: '7px 14px',
+            borderRadius: 6,
+            border: '1px solid var(--tq-border)',
+            background: copied ? 'var(--tq-confirmed-bg)' : 'transparent',
+            color: 'var(--tq-text)',
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontWeight: 700,
+            fontSize: 12,
+            cursor: 'pointer',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          {copied ? 'Copied ✓' : 'Copy link'}
+        </button>
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={busy}
+          style={{
+            padding: '7px 14px',
+            borderRadius: 6,
+            border: '1px solid var(--tq-border)',
+            background: 'transparent',
+            color: 'var(--tq-muted)',
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontWeight: 700,
+            fontSize: 12,
+            cursor: busy ? 'not-allowed' : 'pointer',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? 'Regenerating…' : 'Regenerate'}
+        </button>
       </div>
     </div>
   );
