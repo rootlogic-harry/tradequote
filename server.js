@@ -225,6 +225,9 @@ async function initDB() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
       CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+      -- Dashboard / Saved-Quotes list sorts by saved_at DESC; without this
+      -- index Postgres does a seq-scan + sort on the whole jobs table.
+      CREATE INDEX IF NOT EXISTS idx_jobs_user_saved_at ON jobs(user_id, saved_at DESC);
       CREATE INDEX IF NOT EXISTS idx_calibration_notes_status ON calibration_notes(status);
       CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider, auth_provider_id);
     `);

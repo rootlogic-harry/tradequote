@@ -14,6 +14,13 @@ describe('Database indexes', () => {
     expect(serverSource).toContain('CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)');
   });
 
+  test('has composite index on jobs(user_id, saved_at DESC) for the saved-quotes list', () => {
+    // Without this, the Dashboard list query (ORDER BY saved_at DESC per user)
+    // does a seq-scan + sort on the whole jobs table — slow once we have a
+    // few hundred quotes per user.
+    expect(serverSource).toContain('CREATE INDEX IF NOT EXISTS idx_jobs_user_saved_at ON jobs(user_id, saved_at DESC)');
+  });
+
   test('has index on calibration_notes(status)', () => {
     expect(serverSource).toContain('CREATE INDEX IF NOT EXISTS idx_calibration_notes_status ON calibration_notes(status)');
   });

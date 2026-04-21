@@ -217,7 +217,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 1112 tests across 52 suites (unit + video processing). API integration (85) and security (59) suites run separately.
+**Current count:** 1154 tests across 56 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout). API integration (85) and security (59) suites run separately.
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -537,6 +537,53 @@ Browser-cached CSS will make deployed changes invisible. After modifying any CSS
 The 5 photo slots (`overview`, `closeup`, `sideProfile`, `referenceCard`, `access`) are stored in the database. Renaming them requires a data migration.
 
 **Self-check:** Never rename slot strings. If you need a new slot, add it — don't rename an existing one.
+
+### 7. External dictation tools bypass React `onChange` (TRQ-100)
+
+Tools like Wispr Flow, password managers, and some iOS keyboard extensions set `input.value` directly via platform APIs without dispatching a native `input` event. React's synthetic `onChange` never fires, so the controlled-component state stays empty even though text is visually present. The disabled Continue button then refuses to advance — user sees typed text but the form thinks the field is blank.
+
+**Self-check:** On any text input that gates navigation (siteAddress, briefNotes, measurement values, profile fields), mirror `onChange` with an `onBlur` handler that re-reads `e.target.value` and calls the same update function. Asserted in `dictationRobustness.test.js`.
+
+### 8. `[photo-stripped]` marker must be rehydrated on view (TRQ-106 / TRQ-107)
+
+`buildSaveSnapshot` replaces `profile.logo` and photo data URLs with the literal string `"[photo-stripped]"` to keep JSONB snapshots small. Viewers must:
+1. Detect the marker and fetch the live logo via `getProfile()` before rendering `<img src>`.
+2. Remount downstream components when photos arrive async, because `useState(() => new Set(allPhotos.map(...)))` initialisers only run once and will capture an empty selection if photos haven't loaded yet.
+
+**Self-check:** When reading `profile.logo` or `photos[slot]` from a saved snapshot, always treat `[photo-stripped]` as "missing, please fetch" rather than as a URL.
+
+### 9. DOCX tables need three things to render cleanly in Pages + Word (TRQ-110)
+
+`docx@9.x` requires **all three** for fixed column widths to stick:
+1. `columnWidths: [...]` on the `Table` constructor.
+2. `layout: TableLayoutType.FIXED`.
+3. Total table width ≤ page usable width (A4 - margins = 9026 twips at 1-inch margins). Going over causes Pages to collapse columns to fit.
+
+**Self-check:** When adding or resizing a DOCX table, compute the sum of column widths and verify it's at most 8800 twips on 1-inch-margin A4.
+
+### 10. `html2canvas` captures everything inside the ref (TRQ-103)
+
+If an on-screen element (like the inline footer) is also overlaid via `pdf.text()`, you get it twice on the page. Mark anything that's already handled by the overlay with `data-html2canvas-ignore="true"` so the capture skips it.
+
+### 11. Auto-growing textareas need `useLayoutEffect`, not `ref` callbacks (TRQ-111 / TRQ-114)
+
+React ref callbacks fire before the value is reliably measurable, and don't re-fire on prop changes. For textareas that should fit their content (schedule descriptions, damage description), use the shared `src/components/common/AutoGrowTextarea.jsx` — it uses `useLayoutEffect(..., [value, minHeight])` so the height is correct on the first frame the user sees.
+
+### 12. `QuoteDocument` must stay byte-identical when not editable (TRQ-112)
+
+`QuoteDocument` is used by three surfaces: the Live Preview (editable), the PDF capture (read-only), and `SavedQuoteViewer` (read-only). The editable path (`editable={true}` + `dispatch` prop) swaps `<p>` / `<span>` for `<textarea>` / `<input>`. When `editable` is false the markup must be identical to the previous render so PDF/DOCX/SavedQuote output doesn't drift.
+
+**Self-check:** When touching `QuoteDocument`, guard new rendering behind `canEdit` so read-only surfaces see the same HTML they always have.
+
+### 13. Measurement methodology v2 — confidence floor is enforced in code (TRQ-109)
+
+Claude sets per-measurement `confidence` itself, but tends to be optimistic. `applyMeasurementPlausibilityBounds(parsed, { scaleReferences })` in `aiParser.js` forces `confidence = 'low'` when:
+- No reference card AND no user-supplied `scaleReferences`.
+- `valueMm` is missing, `< 10mm`, or `> 100000mm`.
+
+Both the photo (`analyseJob.js`) and video (`server.js` video route) paths call it after `normalizeAIResponse`. The function only touches `confidence` — `aiValue` remains immutable.
+
+**Self-check:** If a new analysis path is added, it must call `applyMeasurementPlausibilityBounds` too.
 
 ---
 
