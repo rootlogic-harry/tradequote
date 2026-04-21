@@ -632,9 +632,12 @@ describe('Server job metadata extraction', () => {
   });
 
   test('GET /api/users/:id/jobs converts totalAmount to Number', () => {
+    // Widen the slice — the SELECT grew in TRQ-132 when we added
+    // Client Portal badge fields; 1000 chars is no longer enough to
+    // reach the Number() coercion.
     const getBlock = serverSrc.slice(
       serverSrc.indexOf("app.get('/api/users/:id/jobs'"),
-      serverSrc.indexOf("app.get('/api/users/:id/jobs'") + 1000
+      serverSrc.indexOf("app.get('/api/users/:id/jobs'") + 2000
     );
     expect(getBlock).toContain('Number(r.totalAmount)');
   });

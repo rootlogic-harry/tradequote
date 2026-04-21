@@ -1150,7 +1150,14 @@ app.get('/api/users/:id/jobs', async (req, res) => {
               rams_snapshot AS "ramsSnapshot",
               status, sent_at AS "sentAt", expires_at AS "expiresAt",
               accepted_at AS "acceptedAt", declined_at AS "declinedAt",
-              decline_reason AS "declineReason"
+              decline_reason AS "declineReason",
+              -- TRQ-132: Client Portal badge inputs. Minimal set — only
+              -- what the dashboard badge logic needs. IP / user-agent /
+              -- decline reason stay on the admin detail route.
+              client_token AS "clientToken",
+              client_token_expires_at AS "clientTokenExpiresAt",
+              client_viewed_at AS "clientViewedAt",
+              client_response AS "clientResponse"
        FROM jobs WHERE user_id = $1 ORDER BY saved_at DESC`,
       [req.params.id]
     );

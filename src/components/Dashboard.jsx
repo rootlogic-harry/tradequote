@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
+import PortalBadge from './PortalBadge.jsx';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -214,6 +215,7 @@ export default function Dashboard({
                       <VideoBadge captureMode={job.snapshot?.captureMode} />
                       {status === 'SENT' && <ExpiryBadge expiresAt={job.expiresAt} />}
                       {status === 'ACCEPTED' && isAdminPlan && <RamsBadge hasRams={hasRams} />}
+                      <PortalBadge job={job} />
                     </div>
                     <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
                       {job.clientName || 'Unnamed'}
