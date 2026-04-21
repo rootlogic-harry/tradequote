@@ -2589,6 +2589,205 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// TRQ-125: Client Portal — public routes (no auth)
+//
+// These routes are the client's entire interface with FastQuote. There is
+// no account, no password — the UUID in the URL IS the credential. Every
+// line below is load-bearing on that security model:
+//
+//   • Rate-limited (20/hr/IP) so an attacker can't enumerate tokens.
+//   • Security headers on every HTML response (noindex, no-store, DENY,
+//     CSP) — keeps the quote out of search engines, intermediary caches,
+//     and phishing iframes.
+//   • Parameterised queries only.
+//   • Expiry checked on every sub-route.
+//   • Bot-safe view tracking — the GET never writes client_viewed_at; the
+//     beacon does, and only after real-human interaction (dwell / scroll).
+//   • Single-submission guard on /respond via `AND client_response IS NULL`.
+// ─────────────────────────────────────────────────────────────────────────
+
+const clientPortalRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please try again later.' },
+});
+
+app.use('/q/', clientPortalRateLimit);
+
+// Minimal HTML-escape — same one used by pdfRenderer.js. Duplicated here
+// rather than imported to keep server.js standalone for the error-page
+// helpers.
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Placeholder portal renderer — TRQ-126 replaces this with the full
+// mobile-first HTML + client-portal.css page. For now it returns a
+// minimal, self-contained HTML response so the route contract is live.
+function renderClientPortalPlaceholder(job, token) {
+  const profile = job.client_snapshot_profile || {};
+  const safeCompany = escapeHtml(profile.companyName || profile.fullName || 'Your quote');
+  const safeRef = escapeHtml(job.quote_reference || '');
+  return `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><title>${safeCompany}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/>
+</head><body>
+<h1>${safeCompany}</h1>
+<p>Quote reference: ${safeRef}</p>
+<p>Token: ${escapeHtml(token)}</p>
+<p><em>Full portal page arrives in TRQ-126.</em></p>
+</body></html>`;
+}
+
+function tokenNotFoundHtml() {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><title>Quote not found</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/>
+</head><body>
+<h1>Quote not found</h1>
+<p>This link may be incorrect or the quote may have been removed. Please contact your tradesman directly.</p>
+</body></html>`;
+}
+
+function tokenExpiredHtml(job) {
+  const site = escapeHtml(job?.site_address || '');
+  return `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><title>Quote expired</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/>
+</head><body>
+<h1>This quote has expired.</h1>
+<p>The quote${site ? ` for ${site}` : ''} is no longer available online. Please get in touch with your tradesman to discuss your options.</p>
+</body></html>`;
+}
+
+// Shared security headers for every /q/:token HTML response. CSP locks
+// script execution to same-origin; no inline user content executes.
+function setClientPortalSecurityHeaders(res) {
+  res.set({
+    'X-Robots-Tag': 'noindex, nofollow',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy':
+      "default-src 'self'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "img-src 'self' data:; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "frame-ancestors 'none'",
+  });
+}
+
+app.get('/q/:token', async (req, res) => {
+  const { token } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, user_id,
+              client_token_expires_at,
+              client_snapshot,
+              client_snapshot_profile,
+              client_response,
+              client_response_at,
+              client_decline_reason,
+              quote_reference,
+              site_address
+         FROM jobs
+        WHERE client_token = $1`,
+      [token]
+    );
+
+    setClientPortalSecurityHeaders(res);
+
+    if (rows.length === 0) {
+      return res.status(404).type('html').send(tokenNotFoundHtml());
+    }
+    const job = rows[0];
+    if (isClientTokenExpired(job.client_token_expires_at)) {
+      return res.status(410).type('html').send(tokenExpiredHtml(job));
+    }
+    // NOTE: we intentionally do NOT update client_viewed_at here.
+    // Email prefetchers and link-scanners will hit this GET without
+    // executing JS; the beacon at /q/:token/viewed fires only after real
+    // dwell / scroll interaction, so that's what captures a real view.
+    return res.status(200).type('html').send(renderClientPortalPlaceholder(job, token));
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.post('/q/:token/viewed', async (req, res) => {
+  const { token } = req.params;
+  try {
+    const ua = (req.get('user-agent') || '').slice(0, 500);
+    await pool.query(
+      `UPDATE jobs
+         SET client_viewed_at   = COALESCE(client_viewed_at, NOW()),
+             client_ip          = COALESCE(client_ip, $1),
+             client_user_agent  = COALESCE(client_user_agent, $2)
+       WHERE client_token = $3
+         AND client_token_expires_at > NOW()`,
+      [req.ip, ua || null, token]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.post('/q/:token/respond', async (req, res) => {
+  const { token } = req.params;
+  const { response, declineReason } = req.body || {};
+
+  if (!['accepted', 'declined'].includes(response)) {
+    return res.status(400).json({ error: 'Invalid response' });
+  }
+
+  // Defensive: cap decline reason before it hits SQL. Keeps the audit
+  // row small and blocks novel-length paste attacks.
+  const reason = typeof declineReason === 'string' ? declineReason.slice(0, 300) : null;
+  const ua = (req.get('user-agent') || '').slice(0, 500);
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE jobs
+         SET client_response       = $1,
+             client_response_at    = NOW(),
+             client_decline_reason = $2,
+             client_ip             = COALESCE(client_ip, $3),
+             client_user_agent     = COALESCE(client_user_agent, $4),
+             status                = CASE WHEN $1 = 'accepted' THEN 'accepted' ELSE 'declined' END,
+             accepted_at           = CASE WHEN $1 = 'accepted' THEN NOW() ELSE accepted_at END,
+             declined_at           = CASE WHEN $1 = 'declined' THEN NOW() ELSE declined_at END,
+             decline_reason        = CASE WHEN $1 = 'declined' THEN $2 ELSE decline_reason END
+       WHERE client_token = $5
+         AND client_token_expires_at > NOW()
+         AND client_response IS NULL
+       RETURNING id`,
+      [response, reason, req.ip, ua || null, token]
+    );
+
+    if (rows.length === 0) {
+      // Either the token is unknown/expired OR the client_response is
+      // already set. 409 Conflict in both cases — the request was valid
+      // but conflicts with the resource's current state.
+      return res.status(409).json({ error: 'Response already recorded or link expired' });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
 // --- Error handler for body-parser / payload too large ---
 
 app.use((err, req, res, _next) => {
