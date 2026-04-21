@@ -105,6 +105,35 @@ export async function incrementQuoteSequence(userId) {
 
 // --- Jobs ---
 
+// ─── Client Portal (TRQ-131) ─────────────────────────────────────────────
+// Thin wrappers over the server routes shipped in TRQ-124 + TRQ-125. Both
+// throw SessionExpiredError on 401 so the trader UI can redirect to login
+// the same way the dashboard does.
+export async function getClientStatus(userId, jobId) {
+  const res = await fetch(`/api/users/${userId}/jobs/${jobId}/client-status`);
+  if (res.status === 401) throw new SessionExpiredError();
+  if (!res.ok) {
+    let msg = `getClientStatus failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function generateClientToken(userId, jobId) {
+  const res = await fetch(`/api/users/${userId}/jobs/${jobId}/client-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (res.status === 401) throw new SessionExpiredError();
+  if (!res.ok) {
+    let msg = `generateClientToken failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function saveJob(userId, state) {
   const snapshot = buildSaveSnapshot(state);
   const controller = new AbortController();

@@ -1,0 +1,235 @@
+/* ============================================================
+   TRADER-SIDE: Step 5 "Create client link" + dashboard badges
+   Uses Field visual language (Barlow Condensed, warm grays).
+   ============================================================ */
+
+.link-block {
+  border: 1px solid #3a3228;
+  background: #1a1410;
+  padding: 0;
+  margin: 20px 0;
+  font-family: "Inter", sans-serif;
+}
+.link-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #221a14;
+  border-bottom: 1px solid #3a3228;
+}
+.link-block-title {
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #f5e9d0;
+}
+.link-block-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #a8967a;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-family: "Barlow Condensed", sans-serif;
+}
+.link-block-status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #6b5d4c;
+}
+.link-block-status--viewed .link-block-status-dot { background: #d97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2); }
+.link-block-status--viewed { color: #f5b961; }
+.link-block-status--accepted .link-block-status-dot { background: #65a32d; box-shadow: 0 0 0 3px rgba(101, 163, 45, 0.2); }
+.link-block-status--accepted { color: #9dc767; }
+.link-block-status--declined .link-block-status-dot { background: #b84a3a; }
+.link-block-status--declined { color: #d97565; }
+.link-block-status--expired .link-block-status-dot { background: #5a4030; }
+.link-block-status--expired { color: #8a6a50; }
+
+.link-block-body { padding: 18px; }
+.link-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.link-url {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  background: #0f0a07;
+  border: 1px solid #3a3228;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12.5px;
+  color: #d9c9a8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  letter-spacing: 0.01em;
+}
+.link-url-copy {
+  padding: 0 18px;
+  background: #d97706;
+  color: #fff;
+  border: none;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+.link-url-copy:hover { background: #b85d00; }
+.link-url-copy--copied {
+  background: #65a32d;
+  color: #fff;
+}
+
+.link-meta {
+  display: flex;
+  gap: 22px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #3a3228;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a7d66;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 600;
+}
+.link-meta strong {
+  display: block;
+  color: #d9c9a8;
+  font-weight: 600;
+  margin-top: 2px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-family: "Inter", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.link-meta-accepted strong { color: #9dc767; }
+.link-meta-declined strong { color: #d97565; }
+
+.link-regenerate {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #3a3228;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.link-regenerate-text { font-size: 12px; color: #8a7d66; }
+.link-regenerate-btn {
+  background: transparent;
+  color: #d9c9a8;
+  border: 1px solid #3a3228;
+  padding: 7px 14px;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.link-regenerate-btn:hover { border-color: #d97706; color: #f5e9d0; }
+
+.link-first-btn {
+  background: #d97706;
+  color: #fff;
+  border: none;
+  padding: 14px 24px;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.15s;
+}
+.link-first-btn:hover { background: #b85d00; }
+.link-first-help {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: #8a7d66;
+  line-height: 1.5;
+  max-width: 400px;
+}
+
+/* ─── Dashboard portal badges (Field) ─── */
+.portal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid;
+  border-radius: 1px;
+  white-space: nowrap;
+}
+.portal-badge-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.portal-badge--await {
+  color: #8a7d66;
+  border-color: #3a3228;
+  background: rgba(58, 50, 40, 0.3);
+}
+.portal-badge--await .portal-badge-dot { background: #6b5d4c; }
+
+.portal-badge--viewed {
+  color: #f5b961;
+  border-color: #6b4210;
+  background: rgba(217, 119, 6, 0.12);
+}
+.portal-badge--viewed .portal-badge-dot {
+  background: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.25);
+  animation: portal-pulse 2s ease-out infinite;
+}
+@keyframes portal-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.5); }
+  70% { box-shadow: 0 0 0 4px rgba(217, 119, 6, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+}
+
+.portal-badge--accepted {
+  color: #9dc767;
+  border-color: #3d5c1a;
+  background: rgba(101, 163, 45, 0.12);
+}
+.portal-badge--accepted .portal-badge-dot { background: #65a32d; }
+
+.portal-badge--declined {
+  color: #d97565;
+  border-color: #6b2a20;
+  background: rgba(184, 74, 58, 0.12);
+}
+.portal-badge--declined .portal-badge-dot { background: #b84a3a; }
+
+.portal-badge--expired {
+  color: #8a6a50;
+  border-color: #3a2a1e;
+  background: transparent;
+  opacity: 0.75;
+}
+.portal-badge--expired .portal-badge-dot { background: #5a4030; }

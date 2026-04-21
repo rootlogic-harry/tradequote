@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QuoteDocument from '../QuoteDocument.jsx';
+import ClientLinkBlock from '../ClientLinkBlock.jsx';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
@@ -1067,6 +1068,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           </button>
         )}
       </div>
+
+      {/* Client Portal — "Create client link" block (TRQ-131).
+           Only visible on live quotes (not read-only saved viewers) and
+           only after the quote has been saved (the portal token lives on
+           the jobs row, so we need an id to attach it to). */}
+      {!isReadOnly && savedJobId && (
+        <ClientLinkBlock
+          currentUserId={state.currentUserId}
+          jobId={savedJobId}
+          showToast={showToast}
+        />
+      )}
 
       <p className="text-tq-muted text-xs mb-6">
         Tip: When emailing, attach your downloaded PDF or Word document before sending.
