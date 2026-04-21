@@ -32,9 +32,22 @@ describe('Print CSS in public/print.css', () => {
     expect(printCss).toMatch(/print-color-adjust:\s*exact/);
   });
 
-  it('defines .print-root as the sole visible tree during print', () => {
-    expect(printCss).toMatch(/body\s*\*\s*\{[\s\S]*visibility:\s*hidden/);
-    expect(printCss).toMatch(/\.print-root[\s\S]*visibility:\s*visible/);
+  it('scopes the visibility-hide rule to html.app-chrome so Puppeteer is unaffected', () => {
+    // When Puppeteer renders the server-side HTML (no app chrome, no
+    // app-chrome class) these rules should NOT apply — otherwise the
+    // position:absolute takes the only content out of flow and Chromium
+    // produces blank pages.
+    expect(printCss).toMatch(/html\.app-chrome\s+body\s*\*\s*\{[\s\S]*visibility:\s*hidden/);
+    expect(printCss).toMatch(/html\.app-chrome\s+\.print-root[\s\S]*visibility:\s*visible/);
+    expect(printCss).toMatch(/html\.app-chrome\s+\.print-root\s*\{[\s\S]*position:\s*absolute/);
+  });
+
+  it('the server-side path (html:not(.app-chrome)) keeps .print-root in normal flow', () => {
+    expect(printCss).toMatch(/html:not\(\.app-chrome\)\s+\.print-root/);
+  });
+
+  it('index.html tags <html> with app-chrome so the scope kicks in', () => {
+    expect(indexHtml).toMatch(/<html[^>]+class="[^"]*app-chrome[^"]*"/);
   });
 
   it('defines .print-only to hide the print clone on screen', () => {

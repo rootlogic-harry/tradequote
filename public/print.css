@@ -27,19 +27,27 @@
     print-color-adjust: exact !important;
   }
 
-  /* Print only the .print-root element — hide all other app chrome.
-     visibility:hidden on body * preserves layout math; the print-root
-     is absolutely positioned at the document origin so it becomes the
-     only visible content the print engine paginates. */
-  body * { visibility: hidden !important; }
-  .print-root, .print-root * { visibility: visible !important; }
-  .print-root {
+  /* Hide the app chrome when printing — only the .print-root subtree
+     prints. This rule is SCOPED to html.app-chrome so the server-side
+     Puppeteer path (which has no chrome to hide) isn't affected.
+     Without the scope, .print-root's position:absolute takes the only
+     content out of document flow → Chromium produces blank pages. */
+  html.app-chrome body * { visibility: hidden !important; }
+  html.app-chrome .print-root,
+  html.app-chrome .print-root * { visibility: visible !important; }
+  html.app-chrome .print-root {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
     background: white !important;
     box-shadow: none !important;
+  }
+
+  /* Server-side path: no chrome to hide, so .print-root stays in normal
+     flow and the PDF engine paginates the content the usual way. */
+  html:not(.app-chrome) .print-root {
+    background: white !important;
   }
 
   /* Always-hidden elements in print */

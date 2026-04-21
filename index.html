@@ -1,5 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- `app-chrome` class scopes the visibility-hiding print rules in
+     public/print.css so they only apply inside the app shell. The
+     Puppeteer server-side HTML (no chrome) omits this class so the
+     quote content stays in normal flow and paginates correctly. -->
+<html lang="en" class="app-chrome">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
