@@ -161,7 +161,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       </div>
 
       {/* Section 1: Damage */}
-      <div className="mb-8">
+      <div className="mb-8" data-print-section="damage">
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Description of Damage
         </h2>
@@ -180,7 +180,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Video Walkthrough Transcript (only for video-mode quotes with transcript) */}
       {captureMode === 'video' && transcript && (
-        <div className="mb-8">
+        <div className="mb-8" data-print-section="transcript">
           <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Site Walkthrough Notes
           </h2>
@@ -189,7 +189,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       )}
 
       {/* Section 2: Measurements */}
-      <div className="mb-8">
+      <div className="mb-8" data-print-section="measurements">
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Measurements
         </h2>
@@ -206,7 +206,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       </div>
 
       {/* Section 3: Schedule */}
-      <div className="mb-8">
+      <div className="mb-8" data-print-section="schedule">
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Schedule of Works
         </h2>
@@ -253,7 +253,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       </div>
 
       {/* Section 4: Cost Breakdown */}
-      <div className="mb-12">
+      <div className="mb-12" data-print-section="cost-breakdown">
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Cost Breakdown
         </h2>
@@ -295,7 +295,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
         {/* Totals — right-aligned, fixed-width, with a heavier rule above
              TOTAL and brand-accent on the value to read like a proper invoice. */}
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-end" data-print-section="totals">
           <div className="w-2/3 sm:w-1/2 md:w-2/5">
             <div className="space-y-2 text-lg" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
               <div className="flex justify-between">
@@ -319,7 +319,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Notes & Conditions — hidden when user disables in profile */}
       {profile.showNotesOnQuote !== false && (
-        <div className="mb-8">
+        <div className="mb-8" data-print-section="notes">
           <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Notes &amp; Conditions
           </h2>
@@ -358,17 +358,23 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         <p>{[profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean).join(' · ')}</p>
       </div>
 
-      {/* Photos — full size (only when showPhotos is true) */}
+      {/* Photos — full size (only when showPhotos is true).
+          For print: paired so two photos fit per A4 page and each pair stays
+          together on a page via data-print-pair + the CSS rule in index.html. */}
       {showPhotos && docPhotos.length > 0 && (
-        <div className="mt-8 border-t border-gray-200 pt-4">
+        <div className="mt-8 border-t border-gray-200 pt-4" data-print-section="photos">
           <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Site Photographs
           </h2>
           <div className="space-y-6">
-            {docPhotos.map((p, i) => (
-              <div key={i}>
-                <img src={p.data} alt={p.label} className="w-full rounded" />
-                <p className="text-base text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
+            {Array.from({ length: Math.ceil(docPhotos.length / 2) }).map((_, pairIdx) => (
+              <div key={pairIdx} data-print-pair className="space-y-6">
+                {docPhotos.slice(pairIdx * 2, pairIdx * 2 + 2).map((p, i) => (
+                  <div key={i}>
+                    <img src={p.data} alt={p.label} className="w-full rounded" />
+                    <p className="text-base text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
+                  </div>
+                ))}
               </div>
             ))}
           </div>

@@ -61,6 +61,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
 
+  // Browser-native print path. Uses the @media print stylesheet + the
+  // hidden .print-root clone of QuoteDocument (rendered with showPhotos
+  // and selectedPhotos so the appendix pages paginate natively). Works
+  // around all the rasterisation-and-blind-slicing failure modes of the
+  // html2canvas path: selectable text, Chrome's page-break-inside: avoid
+  // honoured on every section.
+  const handlePrint = () => {
+    // Give the DOM a tick in case anything just updated, then invoke
+    // the browser's print dialog. User picks "Save as PDF" destination.
+    setTimeout(() => window.print(), 50);
+  };
+
   const handleDownloadPDF = async () => {
     const element = quoteRef.current;
     if (!element) return;
@@ -914,11 +926,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       {/* Primary actions: export/download */}
       <div className="flex flex-col fq:flex-row flex-wrap gap-3 mb-4">
         <button
+          onClick={handlePrint}
+          className="btn-primary"
+          title="Uses your browser's print engine — crisp text, clean page breaks"
+        >
+          Save as PDF
+        </button>
+        <button
           onClick={handleDownloadPDF}
           disabled={generatingPDF}
-          className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+          title="Legacy direct-download — may have layout issues with long quotes"
         >
-          {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
+          {generatingPDF ? 'Generating...' : 'Direct download (legacy)'}
         </button>
         <button
           onClick={handleDownloadDocx}
@@ -1059,10 +1079,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         </div>
       )}
 
-      {/* Quote Document — showPhotos=false to prevent white band artefact in PDF;
-           photos are rendered separately in the PDF/Word appendix */}
+      {/* Quote Document — showPhotos=false to prevent white band artefact in
+           the legacy html2canvas PDF; photos are rendered separately in that
+           path's PDF/Word appendix. */}
       <div className="bg-white shadow-lg overflow-hidden" ref={quoteRef} style={{ borderRadius: 2 }}>
         <QuoteDocument state={state} showPhotos={false} />
+      </div>
+
+      {/* Print-only clone — full quote + photo appendix rendered inline so
+           the browser's print engine (native page-break-inside: avoid CSS)
+           paginates cleanly. Hidden on screen via `.print-only`. */}
+      <div className="print-root print-only" aria-hidden="true">
+        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
       </div>
     </div>
   );

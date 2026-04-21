@@ -63,6 +63,34 @@ describe('QuoteDocument layout — printed quote output', () => {
     });
   });
 
+  // TRQ-119 Phase 1: print-based PDF pipeline. Every major section in
+  // QuoteDocument must carry a data-print-section attribute so the @media
+  // print stylesheet in index.html can apply break-inside: avoid. Without
+  // these attributes, Chrome's print engine paginates blindly and cuts
+  // rows in half exactly like the old html2canvas approach did.
+  describe('Print pagination (TRQ-119 Phase 1)', () => {
+    const expectedSections = [
+      'damage',
+      'measurements',
+      'schedule',
+      'cost-breakdown',
+      'totals',
+      'notes',
+      'photos',
+    ];
+
+    for (const section of expectedSections) {
+      it(`QuoteDocument marks the ${section} section with data-print-section`, () => {
+        const pattern = new RegExp(`data-print-section="${section}"`);
+        expect(source).toMatch(pattern);
+      });
+    }
+
+    it('photo appendix wraps pairs in data-print-pair containers', () => {
+      expect(source).toMatch(/data-print-pair/);
+    });
+  });
+
   // TRQ-103: The PDF was showing the footer twice — once because html2canvas
   // captured the inline <div> footer at the end of the document, and again
   // because handleDownloadPDF overlays a pdf.text() footer at the bottom of
