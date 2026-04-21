@@ -684,8 +684,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         })
       );
 
-      // VAT (conditional)
-      if (profile.vatRegistered) {
+      // VAT (conditional — strict boolean only; see normaliseVatRegistered)
+      if (profile.vatRegistered === true) {
         totalsRows.push(
           new TableRow({
             children: [

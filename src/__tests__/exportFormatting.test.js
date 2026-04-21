@@ -23,28 +23,39 @@ const autoGrow = readFileSync(join(repoRoot, 'src/components/common/AutoGrowText
 // Auto-growing text areas (damage description + schedule descriptions)
 // ─────────────────────────────────────────────────────────────────────────
 describe('AutoGrowTextarea robustness', () => {
-  it('uses native field-sizing where supported', () => {
+  it('uses native field-sizing where supported (zero-JS sizing path)', () => {
     // CSS field-sizing: content is the zero-JS path for Chrome 123+, Safari 18+.
     expect(autoGrow).toMatch(/fieldSizing:\s*['"]content['"]/);
   });
 
-  it('has a synchronous useLayoutEffect measurement on value changes', () => {
+  it('detects native field-sizing support at module load so the JS fallback can bail', () => {
+    // The JS resize loop (useLayoutEffect + rAF) must only run on browsers
+    // that DO NOT support native field-sizing. Running both paths at once
+    // makes the native sizing and the JS sizing fight each other — each
+    // mutation triggers a reflow, each reflow retriggers the JS, producing
+    // a visible height oscillation that shakes the whole page (the
+    // "vibrating measurement boxes" regression Paul reported).
+    expect(autoGrow).toMatch(/CSS\.supports\s*\?\.\s*\(\s*['"]field-sizing['"]\s*,\s*['"]content['"]/);
+  });
+
+  it('does NOT use ResizeObserver — it is the feedback loop that caused the height oscillation', () => {
+    // Root cause of the vibration: the ResizeObserver fired on every
+    // height change WE made, which we'd interpret as "parent resized,
+    // remeasure" and re-write height, which the observer would see
+    // again → infinite micro-oscillation. We rely on the (layered)
+    // useLayoutEffect + rAF for the JS fallback, and nothing else.
+    expect(autoGrow).not.toMatch(/new ResizeObserver/);
+  });
+
+  it('has a synchronous useLayoutEffect measurement on value changes (JS fallback only)', () => {
     expect(autoGrow).toMatch(/useLayoutEffect/);
   });
 
-  it('retries the measurement via requestAnimationFrame', () => {
+  it('retries the measurement via requestAnimationFrame (JS fallback only)', () => {
     // Catches browsers that delay layout after height="auto"; without this
     // the synchronous scrollHeight read is stale and the box stays at
     // minHeight even when the value is long.
     expect(autoGrow).toMatch(/requestAnimationFrame\(resize\)/);
-  });
-
-  it('uses a ResizeObserver to catch parent visibility changes', () => {
-    // The textarea is mounted inside both the desktop grid and the mobile
-    // accordion. When the hidden one becomes visible (responsive breakpoint
-    // change, accordion expand) scrollHeight finally reports the real
-    // content height and we must re-measure.
-    expect(autoGrow).toMatch(/new ResizeObserver/);
   });
 
   it('skips measurement when clientWidth is 0 so it never overwrites a good height with a stale 0', () => {

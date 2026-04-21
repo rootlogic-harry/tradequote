@@ -14,8 +14,31 @@ export function calculateSubtotal(materialsSubtotal, labourTotal, additionalCost
   return materialsSubtotal + labourTotal + additionalCostsTotal;
 }
 
+/**
+ * Normalise the VAT-registered flag to a strict boolean.
+ *
+ * This is the SINGLE PLACE in the codebase that decides "is this profile
+ * VAT-registered?". Every calculation path (calculateVAT / calculateAllTotals)
+ * and every render path (QuoteDocument, ReviewEdit, QuoteOutput PDF +
+ * DOCX + email footer) reads through this function.
+ *
+ * The bug it prevents: profile.vatRegistered being used with a truthy
+ * check (`if (!vatRegistered)` or `{profile.vatRegistered && <row />}`)
+ * treats non-boolean truthy values — string "false", number 1, any
+ * object — as if the tradesman were registered. That was the root of
+ * Paul's "VAT applied to a not-VAT-registered profile" regression.
+ *
+ * Fail-closed: only the literal boolean `true` turns VAT on. Anything
+ * else (undefined, null, strings, numbers, objects) → not registered.
+ * A tradesman can always re-tick the box to opt in; we never silently
+ * promote a suspicious value to true.
+ */
+export function normaliseVatRegistered(v) {
+  return v === true;
+}
+
 export function calculateVAT(subtotal, vatRegistered) {
-  if (!vatRegistered) return 0;
+  if (!normaliseVatRegistered(vatRegistered)) return 0;
   return Math.round(subtotal * 0.2 * 100) / 100;
 }
 

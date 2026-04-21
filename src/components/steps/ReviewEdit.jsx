@@ -305,7 +305,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             <span style={{ color: 'var(--tq-muted)' }}>Subtotal (ex VAT)</span>
             <span className="font-mono font-medium">{formatCurrency(totals.subtotal)}</span>
           </div>
-          {profile.vatRegistered && (
+          {profile.vatRegistered === true && (
             <div className="flex justify-between">
               <span style={{ color: 'var(--tq-muted)' }}>VAT (20%)</span>
               <span className="font-mono">{formatCurrency(totals.vatAmount)}</span>

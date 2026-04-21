@@ -197,6 +197,10 @@ shown to the tradesman's end customer. Use professional trade language:
 - For stone material use "walling stone" or "matched stone". Do not use
   trade slang that can read as disparaging to a homeowner receiving the
   quote (e.g. informal stockyard terms for undressed stone).
+- When referring to stone reused from the existing wall, always use
+  "reclaimed" — never "salvaged" (which reads as distressed/scrap) and
+  never "rubble". Example: "reclaimed walling stone", "set aside for
+  reclamation", "reclaimed stones from the collapse".
 - Say "coursed" not "courses of stone" when describing bond patterns.
 - Keep measurements in millimetres.
 

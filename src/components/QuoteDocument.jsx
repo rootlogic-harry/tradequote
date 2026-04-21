@@ -298,7 +298,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
                 <span className="text-gray-500">Subtotal (ex VAT)</span>
                 <span className="text-gray-800">{formatCurrency(totals.subtotal)}</span>
               </div>
-              {profile.vatRegistered && (
+              {profile.vatRegistered === true && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">VAT (20%)</span>
                   <span className="text-gray-800">{formatCurrency(totals.vatAmount)}</span>
