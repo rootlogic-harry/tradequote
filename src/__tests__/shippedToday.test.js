@@ -332,15 +332,16 @@ describe('TRQ-119/120/121: PDF reliability', () => {
 // TRQ-122 — User-friendly filenames + remove "rubble"
 // ─────────────────────────────────────────────────────────────────────────
 describe('TRQ-122: friendly filenames + no rubble', () => {
-  it('Quote filenames use "Quote - {client} ({ref})" format', () => {
-    expect(files.quoteOutput).toMatch(/`Quote - \$\{/);
-    expect(files.quoteOutput).not.toMatch(/`Quote-\$\{[^}]*quoteReference[^}]*\}-\$\{clientClean\}\.pdf`/);
+  it('Quote + RAMS exports route through buildQuoteFilename', () => {
+    // All three export paths (Puppeteer, legacy PDF, DOCX) use the shared
+    // helper so the format stays consistent everywhere.
+    const quoteHits = files.quoteOutput.match(/buildQuoteFilename\(/g) || [];
+    expect(quoteHits.length).toBeGreaterThanOrEqual(3);
+    expect(files.ramsOutput).toMatch(/buildQuoteFilename\(/);
   });
-  it('RAMS filenames use "RAMS - {client} (Job {jobNumber})" format', () => {
-    expect(files.ramsOutput).toMatch(/`RAMS - \$\{/);
-  });
-  it('client-name sanitiser strips only filesystem-illegal characters', () => {
-    expect(files.quoteOutput).toMatch(/replace\(\/\[<>:"\/\\\\\|\?\*\]/);
+  it('no template literal builds a .pdf/.docx filename that includes quoteReference', () => {
+    expect(files.quoteOutput).not.toMatch(/`[^`]*quoteReference[^`]*\.pdf`/);
+    expect(files.quoteOutput).not.toMatch(/`[^`]*quoteReference[^`]*\.docx`/);
   });
   it('system prompt no longer uses "rubble" in example material lines', () => {
     expect(SYSTEM_PROMPT).not.toMatch(/matched rubble/i);

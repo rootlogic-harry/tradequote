@@ -150,18 +150,13 @@ describe('QuoteDocument crash safety', () => {
 describe('QuoteOutput crash safety', () => {
   const src = readComponent('components/steps/QuoteOutput.jsx');
 
-  test('clientName.replace calls are null-safe', () => {
-    // Every clientName.replace call must have a fallback so a quote with no
-    // client name (draft state, offline restore, etc.) doesn't crash the
-    // filename-generation path. Accepts any string fallback or optional
-    // chaining.
-    const lines = src.split('\n');
-    const replaceLines = lines.filter(l => /clientName.*\.replace/.test(l));
-    expect(replaceLines.length).toBeGreaterThan(0);
-    replaceLines.forEach(line => {
-      const safe = /\(.*clientName\s*\|\|\s*['"][^'"]*['"]\)\.replace|clientName\?\.replace/.test(line);
-      expect(safe).toBe(true);
-    });
+  test('filename construction is null-safe (uses buildQuoteFilename helper)', () => {
+    // Filename logic moved into src/utils/quoteFilename.js which is itself
+    // null-safe against undefined clientName / siteAddress (covered in
+    // quoteFilename.test.js). Here we just assert QuoteOutput delegates
+    // rather than doing ad-hoc `.replace` on a potentially-undefined string.
+    expect(src).toMatch(/buildQuoteFilename\(/);
+    expect(src).not.toMatch(/\(jobDetails\.clientName\s*\|\|[^)]*\)\.replace/);
   });
 
   test('DOCX transcript section guarded by captureMode === video AND transcript', () => {

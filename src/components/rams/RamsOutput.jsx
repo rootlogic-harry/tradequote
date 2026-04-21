@@ -5,6 +5,7 @@ import { WORK_TYPE_LABELS } from '../../data/ramsConstants.js';
 import { COMMON_PPE } from '../../data/ramsDefaults.js';
 import { updateJobRams } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
+import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 
 function formatDateSimple(iso) {
   if (!iso) return '';
@@ -111,9 +112,12 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         }
       }
 
-      // TRQ-122: user-friendly filename — matches the quote export pattern
-      const safeClient = (rams.client || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
-      pdf.save(`RAMS - ${safeClient} (Job ${rams.jobNumber}).pdf`);
+      // TRQ-122: user-friendly filename "{Client} - {Property} - {Postcode}"
+      const filename = buildQuoteFilename({
+        clientName: rams.client,
+        siteAddress: rams.siteAddress,
+      });
+      pdf.save(`${filename}.pdf`);
       showToast?.('PDF downloaded', 'success');
     } catch (err) {
       console.error('RAMS PDF generation failed:', err);
@@ -379,9 +383,11 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
       });
 
       const blob = await Packer.toBlob(doc);
-      // TRQ-122: user-friendly filename — matches the quote export pattern
-      const safeClient = (rams.client || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
-      const filename = `RAMS - ${safeClient} (Job ${rams.jobNumber}).docx`;
+      // TRQ-122: user-friendly filename "{Client} - {Property} - {Postcode}"
+      const filename = `${buildQuoteFilename({
+        clientName: rams.client,
+        siteAddress: rams.siteAddress,
+      })}.docx`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

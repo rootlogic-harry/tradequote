@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QuoteDocument from '../QuoteDocument.jsx';
+import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveJob as saveQuote, updateJob } from '../../utils/userDB.js';
@@ -86,12 +87,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const quoteHtml = renderToStaticMarkup(
         <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
       );
-      // TRQ-122: filename reads "Quote - Jordan Fleet (QT-2026-0004).pdf" so
-      // clients see a natural filename when the attachment arrives. Only
-      // strip characters illegal on Windows/macOS filesystems; keep spaces,
-      // apostrophes and hyphens.
-      const safeClient = (jobDetails.clientName || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
-      const title = `Quote - ${safeClient} (${jobDetails.quoteReference})`;
+      // TRQ-122: filename is "{Client} - {Property} - {Postcode}" —
+      // customer-readable, backend ref lives in the DB.
+      const title = buildQuoteFilename({
+        clientName: jobDetails.clientName,
+        siteAddress: jobDetails.siteAddress,
+      });
       const jobId = savedJobId || state.savedJobId || 'draft';
       const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
         method: 'POST',
@@ -231,8 +232,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       }
 
       // TRQ-122: matching filename format used by the Puppeteer path
-      const safeClient = (jobDetails.clientName || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
-      pdf.save(`Quote - ${safeClient} (${jobDetails.quoteReference}).pdf`);
+      const filename = buildQuoteFilename({
+        clientName: jobDetails.clientName,
+        siteAddress: jobDetails.siteAddress,
+      });
+      pdf.save(`${filename}.pdf`);
       showToast?.('PDF downloaded', 'success');
     } catch (err) {
       console.error('PDF generation failed:', err);
@@ -853,8 +857,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       const blob = await Packer.toBlob(doc);
       // TRQ-122: matching filename format used by the PDF paths
-      const safeClient = (jobDetails.clientName || 'Client').replace(/[<>:"/\\|?*]/g, '').trim();
-      const filename = `Quote - ${safeClient} (${jobDetails.quoteReference}).docx`;
+      const filename = `${buildQuoteFilename({
+        clientName: jobDetails.clientName,
+        siteAddress: jobDetails.siteAddress,
+      })}.docx`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
