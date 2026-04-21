@@ -858,6 +858,7 @@ export default function App() {
         <StatusModal
           modal={state.statusModal}
           job={state.recentJobs.find(j => j.id === state.statusModal.jobId)}
+          currentUserId={state.currentUserId}
           onConfirm={handleStatusConfirm}
           onCancel={() => dispatch({ type: 'CLOSE_STATUS_MODAL' })}
           isAdminPlan={isAdmin}

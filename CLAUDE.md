@@ -197,6 +197,35 @@ Agent orchestration lives in `agents/agentUtils.js`: creates run records, calls 
 
 ---
 
+## Client Portal (TRQ-124 → TRQ-133)
+
+A secure, account-less way for clients to view their quote and respond accept/decline from a unique link.
+
+**URL shape.** `https://fastquote.uk/q/{uuid-v4}`. The UUID is the entire credential (128 bits of entropy → brute-force infeasible). No account, no password, no email link verification.
+
+**Server surface (public, no auth):**
+- `GET /q/:token` — renders the mobile-first portal page via `portalRenderer.js`. Sets strict security headers (`X-Robots-Tag: noindex, nofollow`, `Cache-Control: no-store`, `X-Frame-Options: DENY`, CSP `default-src 'self'`, `frame-ancestors 'none'`). 404 on unknown, 410 on expired. Does NOT set `client_viewed_at` — email prefetchers and link scanners hit this without executing JS.
+- `POST /q/:token/viewed` — bot-safe beacon fired after 3s dwell or scroll past the cost breakdown (whichever first). `client_viewed_at = COALESCE(…, NOW())` so first-view wins. Rejects expired tokens. Records IP + truncated UA.
+- `POST /q/:token/respond` — validates `response ∈ {accepted, declined}`, truncates decline reason to 300 chars, enforces single-submission via `AND client_response IS NULL`. 409 on conflict. Writes both new `client_*` columns AND legacy `status`/`accepted_at`/`declined_at` so the dashboard reflects the decision.
+- `clientPortalRateLimit`: 20/hr/IP shared across `/q/*`.
+
+**Trader surface (requireOwner):**
+- `POST /api/users/:id/jobs/:jobId/client-token` — generates UUID via `crypto.randomUUID`, freezes `quote_snapshot` → `client_snapshot` and `profiles.data` → `client_snapshot_profile` (TRQ-124). Regenerating overwrites the token and resets response fields to NULL.
+- `GET /api/users/:id/jobs/:jobId/client-status` — returns trader-UI state (hasToken, url, expired, viewed, response, responseAt, declineReason).
+
+**Frozen-snapshot contract.** `portalRenderer.js` reads ONLY from `client_snapshot` + `client_snapshot_profile`. Never from live `quote_snapshot` / `profiles.data`. That's what guarantees the client sees the version that was sent, even if the tradesman edits their quote or swaps their logo afterwards.
+
+**Accent branding (TRQ-130).** Tradesman picks one of `amber | rust | moss | slate` in ProfileSetup. Stored as `profile.accent` (existing JSONB, no schema change). Whitelisted at both the server-side save (rejects unknown with 400) and the render-time `safeAccent()` (falls back to amber for unknown values) so no attribute injection is possible.
+
+**Trader UI (TRQ-131/132/133).**
+- Step 5 `ClientLinkBlock`: generates + copies + monitors the link. Five states — pre-generate, awaiting-view, viewed, accepted, declined.
+- Dashboard `PortalBadge`: adds `AWAITING VIEW` / `VIEWED` / `LINK EXPIRED` alongside the existing `StatusBadge`. Once the client responds, `StatusBadge`'s `ACCEPTED` / `DECLINED` stamp takes over to avoid double-stamping.
+- `StatusModal` admin section: viewed timestamp + IP + response audit + Copy/Regenerate. Admin-only — basic users never see the IP/UA fields (detail route strips them for non-admins).
+
+**CSS.** `public/client-portal.css` serves the customer-facing `/q/:token` page (140 `.cp-*` classes, mobile-first, includes `@media print`). `public/trader-portal.css` is an extracted subset of `.link-block-*` + `.portal-badge-*` rules loaded into the main app via `index.html` — keeps the trader bundle lean.
+
+---
+
 ## RAMS
 
 Risk Assessment & Method Statement editor. 9-section accordion:

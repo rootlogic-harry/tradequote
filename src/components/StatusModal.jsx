@@ -11,7 +11,7 @@ const DECLINE_REASONS = [
   'Other',
 ];
 
-export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPlan = false }) {
+export default function StatusModal({ modal, job, currentUserId, onConfirm, onCancel, isAdminPlan = false }) {
   if (!modal) return null;
   const { jobId, targetStatus } = modal;
   const [declineReason, setDeclineReason] = useState(DECLINE_REASONS[0]);
@@ -226,7 +226,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
                that's the design-law separation between the customer
                product and the admin operating layer. */}
           {isAdminPlan && job?.clientToken && (
-            <PortalAuditBlock job={job} />
+            <PortalAuditBlock job={job} currentUserId={currentUserId} />
           )}
 
           {/* Action buttons */}
@@ -275,7 +275,7 @@ export default function StatusModal({ modal, job, onConfirm, onCancel, isAdminPl
  * fresh one. Regenerate is gated by window.confirm, matching the
  * Step-5 ClientLinkBlock pattern (TRQ-131).
  */
-function PortalAuditBlock({ job }) {
+function PortalAuditBlock({ job, currentUserId }) {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const url = job.clientToken
@@ -308,15 +308,13 @@ function PortalAuditBlock({ job }) {
       'Regenerating will immediately invalidate the link you already shared. Continue?'
     );
     if (!ok) return;
+    if (!currentUserId) {
+      setBusy(false);
+      return;
+    }
     setBusy(true);
     try {
-      // userId is not on the job row shape consistently across call
-      // sites; use the URL :id param via window.location.pathname as
-      // a fallback. In practice StatusModal callers always have the
-      // full job row, so job.userId / user is available if the caller
-      // widens it. For now we accept that regenerate needs a refresh
-      // to reflect the new token.
-      await generateClientToken(job.userId || job.user_id || job.currentUserId || 'me', job.id);
+      await generateClientToken(currentUserId, job.id);
       window.location.reload();
     } catch (err) {
       if (err instanceof SessionExpiredError) {
