@@ -241,11 +241,6 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
             pdf.addImage(photo.data, 'JPEG', xPos, yPos, drawWidth, drawHeight);
 
-            // Caption
-            pdf.setFontSize(8);
-            pdf.setTextColor(100, 100, 100);
-            pdf.text(photo.label + ' — ' + jobDetails.siteAddress, photoMargin, yPos + drawHeight + 5);
-
             yPos += drawHeight + 15;
           }
 
@@ -828,11 +823,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                       },
                     }),
                   ],
-                  spacing: { before: 100, after: 40 },
-                }),
-                new Paragraph({
-                  children: [txt(`${photo.label} \u2014 ${jobDetails.siteAddress}`, { size: 18, color: '888888', italics: true })],
-                  spacing: { after: 200 },
+                  spacing: { before: 100, after: 200 },
                 }),
               );
             } catch (photoErr) {

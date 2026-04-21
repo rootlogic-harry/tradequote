@@ -380,7 +380,6 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
               {docPhotos.slice(pairIdx * 2, pairIdx * 2 + 2).map((p, i) => (
                 <div key={i} className="print-photo">
                   <img src={p.data} alt={p.label} className="w-full rounded" />
-                  <p className="text-base text-gray-400 mt-1">{p.label} — {jobDetails.siteAddress}</p>
                 </div>
               ))}
             </div>

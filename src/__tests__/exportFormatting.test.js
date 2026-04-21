@@ -81,6 +81,24 @@ describe('Site Photographs print layout', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// Print background — app body bleed ("beige box") on short pages
+// ─────────────────────────────────────────────────────────────────────────
+describe('Print background', () => {
+  it('forces white background on html/body inside app-chrome so --tq-bg cream does not bleed through below the last element on the page', () => {
+    // visibility: hidden preserves layout but not painting — without a
+    // white body override, the app's --tq-bg: #f5f1eb cream appears
+    // underneath the .print-root content in printed PDFs, producing a
+    // "large beige box" after the last photo / notes / totals on any
+    // page that does not fill the sheet.
+    expect(printCss).toMatch(/html\.app-chrome,\s*html\.app-chrome body\s*\{[\s\S]*?background:\s*white/);
+  });
+
+  it('no photo caption is rendered under each photo (clients find the repeated address noisy)', () => {
+    expect(quoteDoc).not.toMatch(/p\.label.*jobDetails\.siteAddress/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
 // DOCX section spacing — Pages collapses shading-adjacent gaps
 // ─────────────────────────────────────────────────────────────────────────
 describe('DOCX section spacing', () => {

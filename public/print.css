@@ -27,6 +27,16 @@
     print-color-adjust: exact !important;
   }
 
+  /* Force page chrome to white. The app's body uses a cream --tq-bg
+     (#f5f1eb) which bleeds through on any page where .print-root
+     content doesn't fill the sheet — producing a "beige box" below
+     the last element. Scoped to .app-chrome so the Puppeteer path
+     is unaffected. */
+  html.app-chrome,
+  html.app-chrome body {
+    background: white !important;
+  }
+
   /* Hide the app chrome when printing — only the .print-root subtree
      prints. This rule is SCOPED to html.app-chrome so the server-side
      Puppeteer path (which has no chrome to hide) isn't affected.
