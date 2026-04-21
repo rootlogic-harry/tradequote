@@ -107,13 +107,22 @@ function ribbonForDays(days, expiresAt) {
   };
 }
 
+// Strict boolean-only check — matches normaliseVatRegistered in
+// src/utils/calculations.js. Any non-boolean truthy value (string
+// "false", number 1, object) would otherwise silently turn VAT on,
+// which is exactly how Paul's regression played out in the React
+// render paths (TRQ-127). Fail-closed is the right default for money.
+function isVatRegistered(v) {
+  return v === true;
+}
+
 function totals(materials, labour, additionalCosts, vatRegistered) {
   let subtotal = 0;
   for (const m of materials || []) subtotal += Number(m.totalCost || 0);
   const labourTotal = Number(labour?.estimatedDays || 0) * Number(labour?.numberOfWorkers || 0) * Number(labour?.dayRate || 0);
   subtotal += labourTotal;
   for (const c of additionalCosts || []) subtotal += Number(c.amount || 0);
-  const vatAmount = vatRegistered ? subtotal * 0.2 : 0;
+  const vatAmount = isVatRegistered(vatRegistered) ? subtotal * 0.2 : 0;
   return { subtotal, labourTotal, vatAmount, total: subtotal + vatAmount };
 }
 
@@ -402,10 +411,10 @@ export function renderClientPortal(job, token) {
           <div class="cp-cost-value">${formatCurrency(c.amount)}</div>
         </div>`).join('')}
         <div class="cp-cost-row cp-cost-subtotal">
-          <div class="cp-cost-label">Subtotal${snapshotProfile.vatRegistered ? ' (ex VAT)' : ''}</div>
+          <div class="cp-cost-label">Subtotal${isVatRegistered(snapshotProfile.vatRegistered) ? ' (ex VAT)' : ''}</div>
           <div class="cp-cost-value">${formatCurrency(t.subtotal)}</div>
         </div>
-        ${snapshotProfile.vatRegistered ? `
+        ${isVatRegistered(snapshotProfile.vatRegistered) ? `
         <div class="cp-cost-row cp-cost-subtotal">
           <div class="cp-cost-label">VAT (20%)</div>
           <div class="cp-cost-value">${formatCurrency(t.vatAmount)}</div>
