@@ -22,6 +22,12 @@ import {
 } from './src/utils/aiParser.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf } from './pdfRenderer.js';
+import {
+  generateClientToken,
+  computeClientTokenExpiry,
+  isClientTokenExpired,
+  CLIENT_TOKEN_TTL_DAYS,
+} from './src/utils/clientToken.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -132,6 +138,28 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS declined_at TIMESTAMPTZ;
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS decline_reason TEXT;
+    `);
+
+    // TRQ-124: Client Portal columns — all additive. Once written,
+    // client_snapshot + client_snapshot_profile are frozen (Do-Not-Touch).
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_token            TEXT UNIQUE;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_token_expires_at TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_snapshot         JSONB;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_snapshot_profile JSONB;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_viewed_at        TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_response         TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_response_at      TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_decline_reason   TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_ip               TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS client_user_agent       TEXT;
+    `);
+    // Partial index: only rows with an active token are indexed. Keeps
+    // inserts cheap (draft jobs don't touch the index) and the GET /q/:token
+    // lookup is still an index seek.
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_jobs_client_token ON jobs(client_token)
+        WHERE client_token IS NOT NULL;
     `);
 
     // TRQ-10: OAuth columns on users table + sessions table
@@ -1248,6 +1276,115 @@ app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
     res.send(pdf);
   } catch (err) {
     console.error(`[PDF] render failed job=${req.params.jobId} err=${err.message}`);
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// TRQ-124: Client Portal — token generation + status
+//
+// These routes sit under the owner-scoped prefix
+// (`app.use('/api/users/:id', requireAuth, requireOwner)` above) so they
+// cannot be called without a logged-in session whose userId matches the
+// :id in the URL. That single guard is the ownership enforcement — do
+// not add or remove it here without updating that middleware.
+//
+// The token itself is the client's only credential (no account, no
+// password) so it MUST be generated via crypto.randomUUID (128-bit
+// entropy). Anything else — Math.random, timestamp-derived, sequential —
+// would make the quote URL guessable.
+// ─────────────────────────────────────────────────────────────────────────
+
+app.post('/api/users/:id/jobs/:jobId/client-token', async (req, res) => {
+  const { id: userId, jobId } = req.params;
+
+  try {
+    // Fetch the live quote snapshot + the tradesman's current profile;
+    // the UPDATE below freezes both into the job row so future edits to
+    // either do not change what the client sees at /q/:token.
+    const { rows: jobRows } = await pool.query(
+      'SELECT quote_snapshot FROM jobs WHERE id = $1 AND user_id = $2',
+      [jobId, userId]
+    );
+    if (jobRows.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    const { rows: profileRows } = await pool.query(
+      'SELECT data FROM profiles WHERE user_id = $1',
+      [userId]
+    );
+
+    const token = generateClientToken();
+    const expires = computeClientTokenExpiry();
+
+    await pool.query(
+      `UPDATE jobs
+         SET client_token             = $1,
+             client_token_expires_at  = $2,
+             client_snapshot          = $3,
+             client_snapshot_profile  = $4,
+             client_viewed_at         = NULL,
+             client_response          = NULL,
+             client_response_at       = NULL,
+             client_decline_reason    = NULL,
+             client_ip                = NULL,
+             client_user_agent        = NULL
+       WHERE id = $5 AND user_id = $6`,
+      [
+        token,
+        expires,
+        jobRows[0].quote_snapshot,
+        profileRows[0]?.data || {},
+        jobId,
+        userId,
+      ]
+    );
+
+    const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://fastquote.uk').replace(/\/$/, '');
+    res.json({
+      token,
+      url: `${baseUrl}/q/${token}`,
+      expires: expires.toISOString(),
+      ttlDays: CLIENT_TOKEN_TTL_DAYS,
+    });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.get('/api/users/:id/jobs/:jobId/client-status', async (req, res) => {
+  const { id: userId, jobId } = req.params;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT client_token, client_token_expires_at,
+              client_viewed_at, client_response,
+              client_response_at, client_decline_reason
+         FROM jobs
+        WHERE id = $1 AND user_id = $2`,
+      [jobId, userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    const r = rows[0];
+    if (!r.client_token) {
+      return res.json({ hasToken: false });
+    }
+
+    const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://fastquote.uk').replace(/\/$/, '');
+    res.json({
+      hasToken: true,
+      url: `${baseUrl}/q/${r.client_token}`,
+      expires: r.client_token_expires_at,
+      expired: isClientTokenExpired(r.client_token_expires_at),
+      viewed: !!r.client_viewed_at,
+      viewedAt: r.client_viewed_at,
+      response: r.client_response,
+      responseAt: r.client_response_at,
+      declineReason: r.client_decline_reason,
+    });
+  } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });

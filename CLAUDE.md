@@ -44,6 +44,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 - **Video**: `POST /api/users/:id/jobs/:jobId/video` — multer disk storage (100MB), ffmpeg frame extraction + audio extraction, Whisper transcription, Claude analysis. Rate limited (5/hour). Cleans up temp files. Server-side AI normalisation via aiParser pipeline. Client uploads via XHR with real progress tracking and automatic retry (3 attempts, exponential backoff).
 - **Video Progress**: `GET /api/users/:id/jobs/:jobId/video/progress` — SSE endpoint for real-time progress. Emits stages: processing (10%), analysing (50%), reviewing (80%), complete (100%). Client connects before upload, falls back to time-based estimation if SSE unavailable.
 - **Admin**: Learning dashboard, agent runs, calibration notes (all behind `requireAdminPlan` middleware)
+- **Client Portal (TRQ-124 onwards)**: `POST /api/users/:id/jobs/:jobId/client-token` generates a UUID v4 token and freezes both the current `quote_snapshot` and the tradesman's profile into `jobs.client_snapshot` + `jobs.client_snapshot_profile`. `GET /api/users/:id/jobs/:jobId/client-status` returns portal state for the trader UI. Public `/q/:token` routes arrive in TRQ-125.
 
 ### Frontend
 
@@ -81,6 +82,7 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `agent_retry_queue` | Exponential-backoff retry for failed agent runs |
 | `dictation_runs` | Voice-to-text telemetry (user, success, latency, audio size, transcript chars) |
 | `session` | Express session store (connect-pg-simple) |
+| `jobs.client_*` (TRQ-124) | Client Portal columns — token, expiry, frozen `client_snapshot` + `client_snapshot_profile`, viewed/response audit trail. Accessed by `/q/:token` routes; the snapshot columns are immutable after write (Do-Not-Touch). |
 
 ### JSONB Snapshot Contract
 
@@ -361,6 +363,8 @@ These files/systems have hard invariants. Modifying them risks corrupting produc
 | `SAVE_ALLOWLIST` in `stripBlobs.js` | Controls what persists to JSONB | Adding junk bloats snapshots; removing keys loses data |
 | `requireAdminPlan` middleware | Gates all admin routes | Basic users see admin internals (violates design law) |
 | `isAdminPlan.js` contract | Sole admin-branching primitive | Raw checks proliferate, defaults flip, basic users see admin UI |
+| `jobs.client_snapshot` + `jobs.client_snapshot_profile` (TRQ-124) | Frozen at token-generation time. Read-only after write. | Client portal begins to show post-send edits to the tradesman's quote or profile — violates the "frozen at send time" design principle and breaks the audit story. |
+| `src/utils/clientToken.js` — `generateClientToken()` | Must stay `crypto.randomUUID()`. 128-bit entropy is what makes `/q/:token` guess-resistant. | Replacing with `Math.random`, timestamps, or sequential IDs makes the portal URL brute-forceable — any passerby could enumerate active quotes. |
 
 **If you need to change a protected item:** explain what you want to change, why, and what the blast radius is. Then wait for approval.
 
