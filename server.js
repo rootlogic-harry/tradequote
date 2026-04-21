@@ -1004,6 +1004,13 @@ app.delete('/api/users/:id', async (req, res) => {
 
 // --- Profile Routes ---
 
+// Client Portal accent colour (TRQ-130) — the tradesman's chosen tint
+// for the customer-facing /q/:token page. Whitelist mirrors the one in
+// portalRenderer.js → safeAccent(). Server-side rejection stops bad
+// values ever reaching the DB, even if a scripted client tries to
+// smuggle CSS/attribute content through the profile save.
+const ACCENT_WHITELIST = ['amber', 'rust', 'moss', 'slate'];
+
 app.get('/api/users/:id/profile', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -1019,10 +1026,14 @@ app.get('/api/users/:id/profile', async (req, res) => {
 
 app.put('/api/users/:id/profile', async (req, res) => {
   try {
+    const body = req.body || {};
+    if ('accent' in body && !ACCENT_WHITELIST.includes(body.accent)) {
+      return res.status(400).json({ error: 'invalid accent' });
+    }
     await pool.query(
       `INSERT INTO profiles (user_id, data) VALUES ($1, $2)
        ON CONFLICT (user_id) DO UPDATE SET data = $2`,
-      [req.params.id, JSON.stringify(req.body)]
+      [req.params.id, JSON.stringify(body)]
     );
     res.json({ ok: true });
   } catch (err) {

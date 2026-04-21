@@ -47,6 +47,11 @@ export const initialState = {
     dayRate: DEFAULT_DAY_RATE,
     accreditations: '',
     showNotesOnQuote: true,
+    // Client Portal accent — tints the customer-portal's primary CTA,
+    // eyebrows, and total-box trim. Four values: amber | rust | moss |
+    // slate. Default amber. Legacy profiles without an accent key read
+    // as amber because this default lives at the initial-state level.
+    accent: 'amber',
   },
   jobDetails: {
     clientName: '',

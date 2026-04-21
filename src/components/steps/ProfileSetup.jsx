@@ -247,6 +247,56 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
         </label>
       </div>
 
+      {/* Portal accent — tints the client-facing quote link's CTA and
+           total-box. Four values: amber (default) / rust / moss / slate. */}
+      <div className="eyebrow mb-3">Quote Accent Colour</div>
+      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+        Tints the colour of the client quote link you share. Choose what matches your brand.
+      </p>
+      <div className="mb-8 flex gap-3" role="radiogroup" aria-label="Quote accent colour">
+        {[
+          { key: 'amber', label: 'Amber', hex: '#c4610a' },
+          { key: 'rust',  label: 'Rust',  hex: '#a33d1c' },
+          { key: 'moss',  label: 'Moss',  hex: '#4c6b2e' },
+          { key: 'slate', label: 'Slate', hex: '#2f4557' },
+        ].map((swatch) => {
+          const selected = (profile.accent || 'amber') === swatch.key;
+          return (
+            <button
+              key={swatch.key}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={swatch.label}
+              onClick={() => update('accent', swatch.key)}
+              data-accent-swatch={swatch.key}
+              className="flex flex-col items-center gap-2 p-2 rounded transition-all"
+              style={{
+                minWidth: 64,
+                minHeight: 72,
+                border: `2px solid ${selected ? swatch.hex : 'var(--tq-border)'}`,
+                background: selected ? `${swatch.hex}12` : 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 4,
+                  background: swatch.hex,
+                  boxShadow: selected ? `0 0 0 2px ${swatch.hex}40` : 'none',
+                }}
+              />
+              <span className="text-xs font-heading uppercase tracking-wide" style={{ color: 'var(--tq-muted)' }}>
+                {swatch.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {!isModal && (
         <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--tq-muted)' }}>
           By continuing, you agree that your quoting data (including edits,
