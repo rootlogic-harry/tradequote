@@ -7,6 +7,7 @@ import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
 import { uploadWithRetry } from '../../utils/uploadWithProgress.js';
+import { documentTerm } from '../../utils/documentType.js';
 
 const VIDEO_ERROR_MAP = [
   [/ANTHROPIC_API_KEY/i, 'Our analysis service is temporarily unavailable. Please try again later.'],
@@ -81,6 +82,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
   const [uploadingSlot, setUploadingSlot] = useState(null); // which slot is processing
 
   const { jobDetails, photos, extraPhotos, profile, captureMode } = state;
+  const term = documentTerm(profile);
   const [videoFile, setVideoFile] = useState(null);
   const [videoExtraPhotos, setVideoExtraPhotos] = useState([]);
 
@@ -561,7 +563,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
                   cursor: 'pointer',
                 }}
               >
-                REVIEW QUOTE
+                REVIEW {term.upper}
               </button>
             )}
             <button
@@ -577,7 +579,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
               }}
             >
               {canAnalyseVideo
-                ? 'GENERATE QUOTE'
+                ? `GENERATE ${term.upper}`
                 : !videoFile
                   ? 'ADD VIDEO TO CONTINUE'
                   : 'ADD SITE ADDRESS TO CONTINUE'
@@ -890,9 +892,9 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           }}
         >
           {state.reviewData
-            ? 'RE-GENERATE QUOTE'
+            ? `RE-GENERATE ${term.upper}`
             : canAnalyse
-              ? 'GENERATE QUOTE'
+              ? `GENERATE ${term.upper}`
               : neededPhotos > 0
                 ? `ADD ${neededPhotos} PHOTO${neededPhotos !== 1 ? 'S' : ''} TO CONTINUE`
                 : 'ADD SITE ADDRESS TO CONTINUE'

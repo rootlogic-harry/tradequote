@@ -670,6 +670,7 @@ export default function App() {
       return (
         <Dashboard
           userName={state.currentUser?.name}
+          profile={state.profile}
           onStartNewQuote={handleStartNewQuote}
           onStartQuickQuote={handleStartQuickQuote}
           onViewJobs={() => setCurrentView('saved')}
@@ -731,6 +732,7 @@ export default function App() {
           onCreateRams={handleCreateRamsFromSaved}
           onViewRams={handleViewRams}
           currentUserId={state.currentUserId}
+          profile={state.profile}
           recentJobs={state.recentJobs}
           dispatch={dispatch}
           isAdminPlan={isAdmin}

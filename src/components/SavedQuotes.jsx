@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { listJobs, deleteJob, deletePhotos } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
+import { documentTerm } from '../utils/documentType.js';
 
 const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
 
-export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, recentJobs = [], dispatch, isAdminPlan = false, showToast }) {
+export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, profile, recentJobs = [], dispatch, isAdminPlan = false, showToast }) {
+  const term = documentTerm(profile);
   const [localQuotes, setLocalQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -111,7 +113,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
           <div className="text-4xl mb-4 opacity-30">&#128193;</div>
           <h2 className="text-xl font-heading font-bold mb-2" style={{ color: 'var(--tq-text)' }}>No saved jobs yet</h2>
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Generate a quote and click "Save Quote" to store it here for later.
+            Generate a {term.lower} and click "Save {term.title}" to store it here for later.
           </p>
         </div>
       </div>

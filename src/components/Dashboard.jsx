@@ -2,6 +2,7 @@ import React from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
+import { documentTerm } from '../utils/documentType.js';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -25,6 +26,7 @@ function isThisMonth(dateStr) {
 
 export default function Dashboard({
   userName,
+  profile,
   onStartNewQuote,
   onStartQuickQuote,
   onViewJobs,
@@ -41,6 +43,7 @@ export default function Dashboard({
   onViewRams,
   isAdminPlan = false,
 }) {
+  const term = documentTerm(profile);
   // Use recentJobs (from reducer) if available, fallback to savedJobs
   const jobs = recentJobs.length > 0 ? recentJobs : savedJobs;
 
@@ -79,10 +82,10 @@ export default function Dashboard({
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={onStartQuickQuote} className="btn-ghost" title="Skip the review step">
-            QUICK QUOTE
+            QUICK {term.upper}
           </button>
           <button onClick={onStartNewQuote} className="btn-primary">
-            + NEW QUOTE
+            + NEW {term.upper}
           </button>
         </div>
       </div>

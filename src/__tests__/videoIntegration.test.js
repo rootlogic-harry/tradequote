@@ -303,11 +303,14 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(jobDetailsSource).toContain('Your video analysis is preserved');
     });
 
-    it('shows REVIEW QUOTE button to skip re-upload', () => {
-      expect(jobDetailsSource).toContain('REVIEW QUOTE');
+    it('shows a REVIEW button to skip re-upload (term is document-type-aware)', () => {
+      // TRQ-134: the label is now term-aware — REVIEW QUOTE for Mark's
+      // profile, REVIEW ESTIMATE for Paul's. Assert the template form
+      // rather than a specific literal so both profiles stay covered.
+      expect(jobDetailsSource).toMatch(/REVIEW \{term\.upper\}/);
     });
 
-    it('REVIEW QUOTE dispatches SET_STEP to skip to review', () => {
+    it('REVIEW button dispatches SET_STEP to skip to review', () => {
       // Should dispatch SET_STEP with the correct step (4 for standard, 5 for quick)
       expect(jobDetailsSource).toMatch(/SET_STEP.*quoteMode.*quick.*5.*4|SET_STEP.*step.*quoteMode/s);
     });
