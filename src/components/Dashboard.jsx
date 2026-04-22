@@ -3,6 +3,11 @@ import { formatCurrency } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
 import { documentTerm } from '../utils/documentType.js';
+import {
+  needsFollowUp,
+  relativeViewedLabel,
+  normaliseUkPhoneForWhatsApp,
+} from '../utils/portalFollowUp.js';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -21,6 +26,107 @@ function isThisMonth(dateStr) {
   const d = new Date(dateStr);
   const now = new Date();
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+function buildPortalUrl(clientToken) {
+  if (!clientToken) return '';
+  const origin = typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : '';
+  return `${origin}/q/${clientToken}`;
+}
+
+function FollowUpRow({ job }) {
+  const clientPhone = job.snapshot?.jobDetails?.clientPhone || '';
+  const waPhone = normaliseUkPhoneForWhatsApp(clientPhone);
+  const portalUrl = buildPortalUrl(job.clientToken);
+  const viewedLabel = relativeViewedLabel(job) || 'Viewed';
+
+  const handleCopy = async (e) => {
+    e.stopPropagation();
+    if (!portalUrl) return;
+    try {
+      await navigator.clipboard?.writeText?.(portalUrl);
+    } catch {
+      // Clipboard permission denied / not available — silently fail.
+      // Paul can still tap Call/WhatsApp.
+    }
+  };
+
+  return (
+    <div className="job-row flex-col fq:flex-row">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className="jr-ref">{job.quoteReference}</span>
+          <span className="portal-badge portal-badge--viewed">
+            <span className="portal-badge-dot" aria-hidden />
+            {viewedLabel}
+          </span>
+        </div>
+        <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
+          {job.clientName || 'Unnamed'}
+        </div>
+        {job.siteAddress && (
+          <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
+            {job.siteAddress}
+          </div>
+        )}
+      </div>
+
+      {/* Action buttons — Call, WhatsApp, Copy link.
+          Call + WhatsApp are hidden if no phone is on file so we
+          don't wire dead buttons. Copy link always works. */}
+      <div className="flex flex-wrap gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+        {clientPhone && (
+          <a
+            href={`tel:${clientPhone.replace(/\s+/g, '')}`}
+            className="btn-ghost text-xs"
+            style={{ height: 36, padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            aria-label={`Call ${job.clientName || 'client'}`}
+          >
+            {'\u260E'} Call
+          </a>
+        )}
+        {waPhone && (
+          <a
+            href={`https://wa.me/${waPhone}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-ghost text-xs"
+            style={{ height: 36, padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            aria-label={`WhatsApp ${job.clientName || 'client'}`}
+          >
+            WhatsApp
+          </a>
+        )}
+        {portalUrl && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="btn-ghost text-xs"
+            style={{ height: 36, padding: '0 16px' }}
+          >
+            Copy link
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FollowUpSection({ jobs }) {
+  const followUps = (jobs || []).filter((j) => needsFollowUp(j));
+  if (followUps.length === 0) return null;
+  return (
+    <div className="mb-8">
+      <div className="eyebrow mb-3">Needs follow-up</div>
+      <div className="space-y-2">
+        {followUps.map((job) => (
+          <FollowUpRow key={job.id} job={job} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 
@@ -172,6 +278,13 @@ export default function Dashboard({
           </div>
         </div>
       )}
+
+      {/* Needs follow-up — viewed by the client ≥2 days ago, no response.
+          Paul's "chase list": see who's gone cold and tap through to
+          Call / WhatsApp / Copy link. No nudge emails, no pushes — it
+          just surfaces the decision for the next time he logs in.
+          Same view for both basic and admin (per Paul's brief). */}
+      <FollowUpSection jobs={jobs} />
 
       {/* Recent jobs */}
       <div className="mb-8">

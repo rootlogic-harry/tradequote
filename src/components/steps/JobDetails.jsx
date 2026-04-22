@@ -327,6 +327,23 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
           />
         </div>
 
+        <div>
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Client Phone <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>(optional)</span>
+          </label>
+          <input
+            type="tel"
+            autoComplete="tel"
+            enterKeyHint="next"
+            inputMode="tel"
+            placeholder="e.g. 07554 040992"
+            className={inputClass('clientPhone')}
+            value={jobDetails.clientPhone || ''}
+            onChange={(e) => updateJob('clientPhone', e.target.value)}
+            onBlur={(e) => updateJob('clientPhone', e.target.value)}
+          />
+        </div>
+
         <div className="fq:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Site Address *

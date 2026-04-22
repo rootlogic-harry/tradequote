@@ -60,6 +60,10 @@ export const initialState = {
   jobDetails: {
     clientName: '',
     siteAddress: '',
+    // Optional — used by the dashboard's "Needs follow-up" quick
+    // actions so Paul can tap Call or WhatsApp without digging up the
+    // number. Never required; form leaves it blank if unknown.
+    clientPhone: '',
     quoteReference: `QT-${new Date().getFullYear()}-0001`,
     quoteDate: new Date().toISOString().split('T')[0],
     briefNotes: '',

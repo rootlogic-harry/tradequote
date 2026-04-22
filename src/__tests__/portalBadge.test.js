@@ -118,6 +118,13 @@ describe('PortalBadge — rendered markup', () => {
   test('includes the dot span so the pulse animation has a target', () => {
     expect(src).toMatch(/portal-badge-dot/);
   });
+
+  test('viewed variant uses the relative-timestamp label (portal insights)', () => {
+    // "Viewed 2 days ago" is the whole point — a bare "Viewed" badge
+    // doesn't tell Paul which clients have gone cold.
+    expect(src).toMatch(/relativeViewedLabel/);
+    expect(src).toMatch(/kind === 'viewed'/);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────
