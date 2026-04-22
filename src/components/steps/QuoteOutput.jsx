@@ -5,6 +5,7 @@ import ClientLinkBlock from '../ClientLinkBlock.jsx';
 import { documentTerm } from '../../utils/documentType.js';
 import { downloadBlob } from '../../utils/downloadBlob.js';
 import { buildEmlMessage } from '../../utils/buildEmlMessage.js';
+import { shouldUseShareSheetPath } from '../../utils/platform.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
@@ -912,11 +913,17 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
-  // TRQ-141 — "Send via Outlook". Builds a .eml file with the PDF
-  // pre-attached; the OS hands it to the default mail handler. On
-  // Paul's Windows box that's Outlook; on iPad it falls through to the
-  // share sheet (Mail.app / Outlook iOS if installed). If no handler
-  // is available the user sees a friendly error, never a dead click.
+  // TRQ-141 — "Send via Outlook". Two paths depending on platform:
+  //
+  //   Desktop (Windows/macOS/Linux): download a .eml file. Outlook
+  //   Desktop / Mail.app / Thunderbird all register message/rfc822
+  //   and open it as an editable draft (X-Unsent: 1 wins for Outlook).
+  //
+  //   iPad/iPhone/Android: Safari does NOT hand .eml files to Mail
+  //   or Outlook iOS — the share sheet just offers Print (Paul's first
+  //   test hit this dead end). Instead share the PDF directly with
+  //   subject/body via the Web Share API; the target mail app opens
+  //   a compose view with the PDF attached and the title as subject.
   const [sendingOutlook, setSendingOutlook] = useState(false);
   const canSendOutlook = Boolean(profile?.email);
   const handleSendViaOutlook = async () => {
@@ -960,8 +967,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         clearTimeout(timeoutId);
       }
 
-      // 2) Assemble the .eml. Subject + body mirror handleEmail so
-      //    trader muscle memory carries across.
+      // 2) Subject + body mirror handleEmail so trader muscle memory
+      //    carries across both platforms.
       const subject = `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`;
       const body =
         `Dear ${jobDetails.clientName},\n\n` +
@@ -970,6 +977,27 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         `Please do not hesitate to contact us should you have any questions.\n\n` +
         `Kind regards,\n${profile.fullName || ''}\n${profile.companyName || ''}\n${profile.phone || ''}`;
 
+      // 3a) iPad / iPhone / Android path — Web Share API with the PDF.
+      //     Mail / Outlook iOS / Gmail iOS open a compose view with
+      //     the PDF attached and the subject pre-filled. This is the
+      //     ONLY reliable path on iOS because .eml files don't open
+      //     as editable drafts there.
+      if (shouldUseShareSheetPath()) {
+        try {
+          const pdfFile = new File([pdfBlob], `${title}.pdf`, { type: 'application/pdf' });
+          if (navigator.canShare?.({ files: [pdfFile] })) {
+            await navigator.share({ files: [pdfFile], title: subject, text: body });
+            showToast?.('Opening in your mail app\u2026', 'success');
+            return;
+          }
+        } catch (err) {
+          if (err?.name === 'AbortError') return;
+          // Fall through to .eml — may still work if desktop UA was misdetected.
+        }
+      }
+
+      // 3b) Desktop path — .eml with the PDF inline. Outlook Desktop /
+      //     Mail.app / Thunderbird hand it straight to a draft compose.
       const { text: eml } = await buildEmlMessage({
         from: { name: profile.fullName || profile.companyName || '', email: profile.email },
         to: jobDetails.clientEmail ? [jobDetails.clientEmail] : [],
@@ -980,18 +1008,9 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           { filename: `${title}.pdf`, contentType: 'application/pdf', data: pdfBlob },
         ],
       });
-
-      // 3) Download the .eml. Outlook Desktop / Mail.app / Thunderbird
-      //    all register the message/rfc822 MIME type and will open the
-      //    file as an editable draft thanks to X-Unsent: 1.
       const emlBlob = new Blob([eml], { type: 'message/rfc822' });
       const result = await downloadBlob(emlBlob, `${title}.eml`, { mimeType: 'message/rfc822' });
       if (result?.cancelled) return;
-      // On iPad, if no mail app is registered for .eml the share sheet
-      // still opens — the user just won't see "Outlook" as a target.
-      // Pointing them at "Save to Files" keeps them unblocked without
-      // needing a download-handler-detection API the browser doesn't
-      // expose.
       showToast?.(
         result?.shared
           ? 'Opening in your mail app\u2026'
