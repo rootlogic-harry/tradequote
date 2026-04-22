@@ -104,6 +104,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const title = buildQuoteFilename({
         clientName: jobDetails.clientName,
         siteAddress: jobDetails.siteAddress,
+        fallbackLabel: term.title,
       });
       const jobId = savedJobId || state.savedJobId || 'draft';
 
@@ -259,6 +260,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const filename = buildQuoteFilename({
         clientName: jobDetails.clientName,
         siteAddress: jobDetails.siteAddress,
+        fallbackLabel: term.title,
       });
       pdf.save(`${filename}.pdf`);
       showToast?.('PDF downloaded', 'success');
@@ -874,6 +876,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const filename = `${buildQuoteFilename({
         clientName: jobDetails.clientName,
         siteAddress: jobDetails.siteAddress,
+        fallbackLabel: term.title,
       })}.docx`;
 
       const url = URL.createObjectURL(blob);

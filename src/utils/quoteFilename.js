@@ -11,17 +11,21 @@
  * @param {object} opts
  * @param {string} [opts.clientName] - free-text client name
  * @param {string} [opts.siteAddress] - full comma-delimited site address
+ * @param {string} [opts.fallbackLabel='Quote'] - used when every
+ *   identifying field is empty (rare). Pass 'Estimate' for Paul-style
+ *   profiles so the filename reads "Estimate.pdf" rather than "Quote.pdf"
+ *   in the degenerate case.
  * @returns {string} filename **without** an extension
  */
 export function buildQuoteFilename(opts = {}) {
-  const { clientName = '', siteAddress = '' } = opts || {};
+  const { clientName = '', siteAddress = '', fallbackLabel = 'Quote' } = opts || {};
 
   const client = sanitise(clientName);
   const property = sanitise(extractProperty(siteAddress));
   const postcode = extractPostcode(siteAddress);
 
   const parts = [client, property, postcode].filter(Boolean);
-  if (parts.length === 0) return 'Quote';
+  if (parts.length === 0) return fallbackLabel;
   return parts.join(' - ');
 }
 
