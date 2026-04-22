@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import QuoteDocument from '../QuoteDocument.jsx';
 import ClientLinkBlock from '../ClientLinkBlock.jsx';
 import { documentTerm } from '../../utils/documentType.js';
+import { downloadBlob } from '../../utils/downloadBlob.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
@@ -136,15 +137,13 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         // before Chromium responded. Fall back rather than download garbage.
         throw new Error('Server returned an empty/invalid PDF');
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${title}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast?.('PDF downloaded', 'success');
+      // TRQ-140: iOS-safe download — uses navigator.share when
+      // available so iPad Safari gets the native share sheet instead
+      // of silently ignoring the <a download> attribute.
+      const result = await downloadBlob(blob, `${title}.pdf`, { mimeType: 'application/pdf' });
+      if (!result?.cancelled) {
+        showToast?.(result?.shared ? 'PDF ready to share' : 'PDF downloaded', 'success');
+      }
     } catch (err) {
       falLbackToPrint(err.message || err);
     } finally {
@@ -262,8 +261,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         siteAddress: jobDetails.siteAddress,
         fallbackLabel: term.title,
       });
-      pdf.save(`${filename}.pdf`);
-      showToast?.('PDF downloaded', 'success');
+      // TRQ-140: pdf.save() internally does anchor-click which fails
+      // silently on iPad Safari — route through downloadBlob so iOS
+      // users get the native share sheet.
+      const pdfBlob = pdf.output('blob');
+      const result = await downloadBlob(pdfBlob, `${filename}.pdf`, { mimeType: 'application/pdf' });
+      if (!result?.cancelled) {
+        showToast?.(result?.shared ? 'PDF ready to share' : 'PDF downloaded', 'success');
+      }
     } catch (err) {
       console.error('PDF generation failed:', err);
       showToast?.('PDF generation failed. Please try again.', 'error');
@@ -879,15 +884,13 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         fallbackLabel: term.title,
       })}.docx`;
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast?.('Word document downloaded', 'success');
+      // TRQ-140: iOS-safe download (share sheet on iPad).
+      const result = await downloadBlob(blob, filename, {
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      if (!result?.cancelled) {
+        showToast?.(result?.shared ? 'Word document ready to share' : 'Word document downloaded', 'success');
+      }
     } catch (err) {
       console.error('Word export failed:', err);
       showToast?.('Word export failed. Please try again.', 'error');
