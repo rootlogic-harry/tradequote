@@ -13,6 +13,12 @@
  * mangle a non-B-encoded non-ASCII subject.
  */
 import { buildEmlMessage } from '../utils/buildEmlMessage.js';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(__dirname, '../../');
 
 // Tiny "PDF" — real byte content, small enough to inspect in base64 form.
 // 0x25 0x50 0x44 0x46 = %PDF, the actual PDF magic number; good test data.
@@ -332,5 +338,201 @@ describe('buildEmlMessage — edge cases + safety', () => {
     const b64Decomp = fromDecomposed.match(/From:\s*=\?UTF-8\?B\?([^?]+)\?=/)?.[1];
     const b64Comp = fromComposed.match(/From:\s*=\?UTF-8\?B\?([^?]+)\?=/)?.[1];
     expect(b64Decomp).toBe(b64Comp);
+  });
+});
+
+// ─── QE audit: previously-unmodeled attack surfaces + edge cases ──────
+//
+// These tests were added in the post-ship QE pass. Each represents a
+// real-world scenario that was not explicitly locked down by the
+// initial TDD suite but that a production mail client (or an attacker)
+// could hit.
+
+describe('buildEmlMessage — QE audit: injection defences', () => {
+  // The security invariant is: user-controlled strings MUST NOT be
+  // able to start a new header line. The test asserts that no line in
+  // the output begins with "Bcc:" — the literal bytes may still appear
+  // inside a From/To value (inert), but they may not form a header.
+  const headerInjected = (s, headerName) => {
+    const regex = new RegExp(`\\r\\n${headerName}:`, 'i');
+    return regex.test(s);
+  };
+
+  test('strips CR/LF from from.email so no Bcc: header can be injected', () => {
+    // Profile form validates email syntax upstream, but buildEmlMessage
+    // shouldn't assume that. If the value ever lands here with CR/LF,
+    // treat it as a header-injection attempt — not a template.
+    const s = asString(build({
+      from: { name: 'Paul', email: 'paul@doyle.co\r\nBcc: evil@evil.co' },
+    }));
+    expect(headerInjected(s, 'Bcc')).toBe(false);
+  });
+
+  test('strips CR/LF from from.name so no Bcc: header can be injected', () => {
+    const s = asString(build({
+      from: { name: 'Paul\r\nBcc: evil@evil.co', email: 'paul@doyle.co' },
+    }));
+    expect(headerInjected(s, 'Bcc')).toBe(false);
+  });
+
+  test('strips CR/LF from each entry in the To: list', () => {
+    // jobDetails.clientEmail is the most likely injection vector in
+    // production — the form validator is lenient and the value is
+    // pasted into the To: header.
+    const s = asString(build({
+      to: ['client@example.com\r\nBcc: evil@evil.co', 'other@ok.com'],
+    }));
+    expect(headerInjected(s, 'Bcc')).toBe(false);
+  });
+});
+
+describe('buildEmlMessage — QE audit: display-name RFC 5322 compliance', () => {
+  test('quotes a display name containing a comma (would split into 2 addrs)', () => {
+    // "Smith, John <email>" is parsed by RFC 5322 as TWO addresses:
+    // "Smith" and "John <email>". Must be quoted.
+    const s = asString(build({
+      from: { name: 'Smith, John', email: 'j@smith.co' },
+    }));
+    expect(s).toMatch(/From:\s*"Smith, John" <j@smith\.co>/);
+  });
+
+  test('quotes a display name containing parentheses (would become comment)', () => {
+    // Paul's real-world case: "Doyle Walling (Yorkshire) Ltd".
+    // Unquoted parens are RFC 5322 comments, so the display name is lost.
+    const s = asString(build({
+      from: { name: 'Doyle Walling (Yorkshire) Ltd', email: 'p@doyle.co' },
+    }));
+    expect(s).toMatch(/From:\s*"Doyle Walling \(Yorkshire\) Ltd" <p@doyle\.co>/);
+  });
+
+  test('escapes double-quote inside a display name', () => {
+    const s = asString(build({
+      from: { name: 'The "Big" Stone Co', email: 'big@stone.co' },
+    }));
+    // Internal " must become \" inside the quoted display name.
+    expect(s).toMatch(/From:\s*"The \\"Big\\" Stone Co" <big@stone\.co>/);
+  });
+
+  test('escapes backslash inside a display name', () => {
+    const s = asString(build({
+      from: { name: 'Back\\Slash', email: 'x@y.co' },
+    }));
+    expect(s).toMatch(/From:\s*"Back\\\\Slash" <x@y\.co>/);
+  });
+
+  test('does NOT quote a plain ASCII name with no specials (avoid needless noise)', () => {
+    const s = asString(build({
+      from: { name: 'Paul Clough', email: 'p@doyle.co' },
+    }));
+    // Should still be unquoted — quoting is only needed for specials.
+    expect(s).toMatch(/From:\s*Paul Clough <p@doyle\.co>\r\n/);
+    expect(s).not.toMatch(/From:\s*"Paul Clough"/);
+  });
+});
+
+describe('buildEmlMessage — QE audit: invalid inputs handled safely', () => {
+  test('invalid Date falls back to a valid RFC 5322 date instead of NaN', () => {
+    // new Date('oops') → Invalid Date → getUTCDay() returns NaN →
+    // RFC_DAYS[NaN] is undefined. Without a guard, the Date header
+    // becomes "undefined, NaN undefined NaN NaN:NaN:NaN +0000" —
+    // enough to make some mail clients reject the whole draft.
+    const s = asString(build({ date: new Date('not-a-real-date') }));
+    expect(s).not.toMatch(/undefined|NaN/);
+    expect(s).toMatch(
+      /Date:\s*(Sun|Mon|Tue|Wed|Thu|Fri|Sat), \d{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} \+0000/
+    );
+  });
+});
+
+describe('buildEmlMessage — QE audit: quoted-printable trailing whitespace', () => {
+  test('encodes a trailing space before a line break (RFC 2045 §6.7 rule 3)', () => {
+    // "Hello \nWorld" — the space before the newline MUST be encoded
+    // as =20, or mail gateways that trim trailing whitespace will
+    // mangle the body. Outlook is lenient, but downstream relay agents
+    // (e.g. Postfix) often strip trailing whitespace silently.
+    const s = asString(build({ body: 'Hello \nWorld' }));
+    // Grab the quoted-printable body block (between the text-part
+    // headers and the next boundary).
+    const qpBlock = s
+      .split('Content-Transfer-Encoding: quoted-printable\r\n\r\n')[1]
+      .split('\r\n--')[0];
+    // The first line must end with "=20" (encoded space), not a bare space.
+    expect(qpBlock).toMatch(/Hello=20\r\n/);
+    expect(qpBlock).not.toMatch(/Hello \r\n/);
+  });
+
+  test('encodes a trailing tab before a line break', () => {
+    const s = asString(build({ body: 'Hello\t\nWorld' }));
+    const qpBlock = s
+      .split('Content-Transfer-Encoding: quoted-printable\r\n\r\n')[1]
+      .split('\r\n--')[0];
+    // Tab (0x09) is already QP-encoded as =09 — this test just guards
+    // against a regression that treats tabs as printable.
+    expect(qpBlock).toMatch(/Hello=09\r\n/);
+  });
+});
+
+describe('buildEmlMessage — QE audit: filename edge cases', () => {
+  test('strips CR/LF from attachment filename (another injection surface)', () => {
+    const s = asString(build({
+      attachments: [{
+        filename: 'quote.pdf"\r\nX-Injected: evil',
+        contentType: 'application/pdf',
+        data: PDF_BYTES,
+      }],
+    }));
+    expect(s).not.toMatch(/X-Injected:\s*evil/);
+  });
+});
+
+// ─── QuoteOutput wiring — source-level assertions (TRQ-141) ───────────
+//
+// Mirrors the pattern in downloadBlob.test.js: rather than mount the
+// full React tree, we grep the compiled source for the contract.
+// Cheap, catches regressions if someone rips the handler out.
+
+describe('Send via Outlook — QuoteOutput wiring', () => {
+  const src = readFileSync(
+    join(repoRoot, 'src/components/steps/QuoteOutput.jsx'),
+    'utf8'
+  );
+
+  test('imports buildEmlMessage', () => {
+    expect(src).toMatch(
+      /import\s*\{[\s\S]*buildEmlMessage[\s\S]*\}\s*from\s*['"`][^'"]*buildEmlMessage/
+    );
+  });
+
+  test('handleSendViaOutlook handler is defined', () => {
+    expect(src).toMatch(/handleSendViaOutlook\s*=\s*async/);
+  });
+
+  test('handler calls buildEmlMessage with a message/rfc822 output', () => {
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    expect(idx).toBeGreaterThan(-1);
+    const slice = src.slice(idx, idx + 5000);
+    expect(slice).toMatch(/buildEmlMessage\s*\(/);
+    expect(slice).toMatch(/message\/rfc822/);
+  });
+
+  test('handler calls downloadBlob to hand the .eml to the OS', () => {
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    const slice = src.slice(idx, idx + 5000);
+    expect(slice).toMatch(/downloadBlob\s*\(/);
+    expect(slice).toMatch(/\.eml/);
+  });
+
+  test('"Send via Outlook" button exists and is gated on profile email', () => {
+    expect(src).toMatch(/Send via Outlook/);
+    // disabled={sendingOutlook || !canSendOutlook}
+    expect(src).toMatch(/disabled=\{[^}]*!canSendOutlook[^}]*\}/);
+  });
+
+  test('handler pre-flights for profile.email', () => {
+    // Must not silently fail when profile.email is absent — the user
+    // needs a clear instruction ("Add your email in profile").
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    const slice = src.slice(idx, idx + 5000);
+    expect(slice).toMatch(/canSendOutlook/);
   });
 });

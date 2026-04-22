@@ -99,11 +99,17 @@ function buildTopLevelHeaders(input, boundary) {
   const rawSubject = String(input.subject || '');
   const strippedSubject = stripHeaderCtl(rawSubject);
   const subjectWasTampered = strippedSubject !== rawSubject;
+  // Every header-bound user string is run through stripHeaderCtl as
+  // defence in depth — even if the upstream form validator is lenient
+  // (or someone adds a new caller), header injection cannot slip
+  // through. Non-string inputs are coerced first.
+  const safeTo = (input.to || []).map((addr) => stripHeaderCtl(addr));
+  const safeDate = sanitiseDate(input.date);
   const lines = [
     `From: ${formatAddress(input.from)}`,
-    `To: ${(input.to || []).join(', ')}`,
+    `To: ${safeTo.join(', ')}`,
     `Subject: ${encodeHeaderValue(strippedSubject, { force: subjectWasTampered })}`,
-    `Date: ${formatRfc5322Date(input.date || new Date())}`,
+    `Date: ${formatRfc5322Date(safeDate)}`,
     `Message-ID: <${randomId()}@fastquote.uk>`,
     'MIME-Version: 1.0',
     // X-Unsent: 1 is Microsoft's convention for "open as editable
@@ -120,6 +126,13 @@ function buildTopLevelHeaders(input, boundary) {
   return CRLF + lines.join(CRLF) + CRLF;
 }
 
+function sanitiseDate(d) {
+  // Invalid Date (e.g. `new Date('oops')`) has `getTime() === NaN`.
+  // Fall back to now so the header is always valid RFC 5322.
+  if (d instanceof Date && !Number.isNaN(d.getTime())) return d;
+  return new Date();
+}
+
 function buildAttachmentPart(a) {
   const safeFilename = sanitiseFilename(a.filename || 'attachment');
   const nameParam = filenameParam(safeFilename);
@@ -134,10 +147,25 @@ function buildAttachmentPart(a) {
 
 // ─── Header encoding ───────────────────────────────────────────────────
 function formatAddress({ name, email }) {
-  if (!name) return email;
-  const normalised = name.normalize ? name.normalize('NFC') : name;
-  if (isAscii(normalised)) return `${normalised} <${email}>`;
-  return `${encodeBWord(normalised)} <${email}>`;
+  // Always strip control chars — defence in depth for email-field
+  // injection (the profile form may validate loosely).
+  const safeEmail = stripHeaderCtl(String(email || ''));
+  if (!name) return safeEmail;
+  const safeName = stripHeaderCtl(String(name));
+  const normalised = typeof safeName.normalize === 'function' ? safeName.normalize('NFC') : safeName;
+  if (!isAscii(normalised)) {
+    // B-word is atomic — no quoting required, specials are masked by base64.
+    return `${encodeBWord(normalised)} <${safeEmail}>`;
+  }
+  // RFC 5322 §3.2.3 "specials" — if any of these appear in an ASCII
+  // display name, it MUST be a quoted-string or the parser mis-reads
+  // the whole address. Common real-world triggers: "Smith, John" and
+  // "Acme (UK) Ltd".
+  const needsQuoting = /["(),:;<>@[\]\\]/.test(normalised);
+  if (!needsQuoting) return `${normalised} <${safeEmail}>`;
+  // Quote-string: wrap in "", escape " and \ with a leading backslash.
+  const escaped = normalised.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `"${escaped}" <${safeEmail}>`;
 }
 
 function encodeHeaderValue(v, opts = {}) {
@@ -210,9 +238,11 @@ function encodeQuotedPrintable(s) {
   let line = '';
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
-    const prevCRLF = bytes[i - 1] === 0x0d && bytes[i] === 0x0a;
     if (b === 0x0d && bytes[i + 1] === 0x0a) {
-      chunks.push(line, CRLF);
+      // End of hard line — RFC 2045 §6.7 rule 3: a trailing SP or HT
+      // MUST NOT appear at the end of an encoded line. We encode the
+      // last character of `line` if it's whitespace, before the CRLF.
+      chunks.push(qpEncodeTrailingWhitespace(line), CRLF);
       line = '';
       i++; // skip LF
       continue;
@@ -224,13 +254,27 @@ function encodeQuotedPrintable(s) {
     else out = String.fromCharCode(b);
     // Soft-wrap before exceeding 75 chars (room for soft-break =).
     if (line.length + out.length > 75) {
-      chunks.push(line, '=', CRLF);
+      // Same trailing-WS rule applies at soft breaks too.
+      chunks.push(qpEncodeTrailingWhitespace(line), '=', CRLF);
       line = '';
     }
     line += out;
   }
-  if (line) chunks.push(line);
+  if (line) {
+    // Final line also must not end with unencoded whitespace — some
+    // relays re-wrap and would then strip it silently.
+    chunks.push(qpEncodeTrailingWhitespace(line));
+  }
   return chunks.join('');
+}
+
+function qpEncodeTrailingWhitespace(line) {
+  // If the last character is a literal SP or HT, re-encode it as =20 / =09.
+  // (A line already ending in "=XX" is fine — that's a non-whitespace byte.)
+  const last = line.charCodeAt(line.length - 1);
+  if (last === 0x20) return line.slice(0, -1) + '=20';
+  if (last === 0x09) return line.slice(0, -1) + '=09';
+  return line;
 }
 
 // ─── Base64 helpers (portable: browser + Node) ─────────────────────────
