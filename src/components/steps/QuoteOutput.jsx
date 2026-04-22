@@ -69,12 +69,30 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
 
+  // Small inline spinner for loading button states. Uses `border-current`
+  // so it inherits the button's text colour — works on both .btn-primary
+  // (white text) and .btn-ghost (accent text) without any extra plumbing.
+  const InlineSpinner = () => (
+    <span
+      aria-hidden="true"
+      className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
+    />
+  );
+
   // Browser-native print path (Phase 1 fallback). Uses the @media print
   // stylesheet + the hidden .print-root clone of QuoteDocument rendered
   // with showPhotos and selectedPhotos. Works around all the rasterisation
   // failure modes of the html2canvas path: selectable text, Chrome's
   // page-break-inside: avoid honoured on every section.
+  const [printing, setPrinting] = useState(false);
   const handlePrint = () => {
+    setPrinting(true);
+    // afterprint fires whether the user prints or cancels. `once:true`
+    // auto-removes the listener. Safety timeout guards against browsers
+    // that don't fire afterprint (older mobile Safari).
+    const clear = () => setPrinting(false);
+    window.addEventListener('afterprint', clear, { once: true });
+    setTimeout(clear, 15_000);
     setTimeout(() => window.print(), 50);
   };
 
@@ -1137,23 +1155,27 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         <button
           onClick={handleDownloadPdfServer}
           disabled={generatingServerPdf}
-          className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
           title="Crisp PDF with selectable text, rendered server-side by Chromium"
         >
+          {generatingServerPdf && <InlineSpinner />}
           {generatingServerPdf ? 'Generating PDF...' : 'Download PDF'}
         </button>
         <button
           onClick={handlePrint}
-          className="btn-ghost"
+          disabled={printing}
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
           title="Uses your browser's print dialog — fallback if Download PDF fails"
         >
-          Save via print
+          {printing && <InlineSpinner />}
+          {printing ? 'Preparing preview\u2026' : 'Save via print'}
         </button>
         <button
           onClick={handleDownloadDocx}
           disabled={generatingDocx}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
         >
+          {generatingDocx && <InlineSpinner />}
           {generatingDocx ? 'Generating Word...' : 'Download Word'}
         </button>
         <button onClick={handleEmail} className="btn-ghost">
@@ -1162,13 +1184,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         <button
           onClick={handleSendViaOutlook}
           disabled={sendingOutlook || !canSendOutlook}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
           title={
             canSendOutlook
               ? 'Opens Outlook (or your default mail app) with the quote and PDF already attached'
               : 'Add your email address in your profile first'
           }
         >
+          {sendingOutlook && <InlineSpinner />}
           {sendingOutlook ? 'Preparing email\u2026' : 'Send via Outlook'}
         </button>
         {!isReadOnly && (
