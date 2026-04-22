@@ -1074,11 +1074,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         )}
       </div>
 
-      {/* Client Portal — "Create client link" block (TRQ-131).
-           Only visible on live quotes (not read-only saved viewers) and
-           only after the quote has been saved (the portal token lives on
-           the jobs row, so we need an id to attach it to). */}
-      {!isReadOnly && savedJobId && (
+      {/* Client Portal — "Create client link" block (TRQ-131, widened
+           in TRQ-139 to render on read-only saved viewers too). The
+           portal actions (Copy, Regenerate) are owner-scoped on the
+           server and safe to expose either way — the read-only mode
+           applies to the quote content (measurements, costs), not
+           the portal link management. Only gated on savedJobId so we
+           have a row to attach the token to. */}
+      {savedJobId && (
         <ClientLinkBlock
           currentUserId={state.currentUserId}
           jobId={savedJobId}

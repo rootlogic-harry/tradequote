@@ -64,6 +64,11 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
     // duplicate jobs row — the bug Paul reported with five identical
     // QT-2026-0002 rows in his dashboard.
     savedJobId: quote.id,
+    // TRQ-139: ClientLinkBlock uses state.currentUserId to hit the
+    // owner-scoped /client-token + /client-status routes. Without it
+    // on virtualState, a read-only saved-quote viewer can't reach
+    // the portal management surface.
+    currentUserId,
   };
 
   return (

@@ -171,10 +171,12 @@ describe('QuoteOutput.jsx — renders ClientLinkBlock on Step 5', () => {
     expect(src).toMatch(/<ClientLinkBlock[\s\S]*?jobId/);
   });
 
-  test('does not render ClientLinkBlock in read-only mode', () => {
-    // Saved-quote viewer passes isReadOnly — a client can't generate a
-    // new token on somebody else's saved quote. The portal actions are
-    // only meaningful on the user's own live quote.
-    expect(src).toMatch(/!isReadOnly[\s\S]{0,200}<ClientLinkBlock|ClientLinkBlock[\s\S]{0,200}isReadOnly[\s\S]{0,100}null/);
+  test('renders ClientLinkBlock whenever a savedJobId exists (TRQ-139 opened it to read-only too)', () => {
+    // Originally gated on !isReadOnly so it was hidden on the
+    // saved-quote viewer. Paul asked to be able to grab the link
+    // from an already-saved quote without having to Edit & Re-generate
+    // first — the portal actions are owner-scoped on the server and
+    // safe either way, so the gate dropped to just `savedJobId`.
+    expect(src).toMatch(/\{\s*savedJobId\s*&&[\s\S]{0,80}<ClientLinkBlock/);
   });
 });
