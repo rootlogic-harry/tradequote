@@ -1,6 +1,7 @@
 import React, { useReducer, useState, useEffect, useRef, useCallback } from 'react';
 import { reducer, getInitialState, loadState } from './reducer.js';
 import { STEPS } from './constants.js';
+import { documentTerm } from './utils/documentType.js';
 import StepIndicator from './components/StepIndicator.jsx';
 import ProfileSetup from './components/steps/ProfileSetup.jsx';
 import JobDetails from './components/steps/JobDetails.jsx';
@@ -469,14 +470,15 @@ export default function App() {
       dispatch({ type: 'JOBS_UPDATED', jobs });
       setSavedJobs(jobs);
       dispatch({ type: 'CLOSE_STATUS_MODAL' });
+      const term = documentTerm(state.profile);
       if (targetStatus === 'sent') {
         const expiry = new Date(meta.expiresAt);
         const formatted = expiry.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
-        showToast(`Quote marked as sent \u00b7 expires ${formatted}`, 'success');
+        showToast(`${term.title} marked as sent \u00b7 expires ${formatted}`, 'success');
       } else if (targetStatus === 'accepted') {
-        showToast("Quote accepted \u2014 don\u2019t forget to create a RAMS", 'success');
+        showToast(`${term.title} accepted \u2014 don\u2019t forget to create a RAMS`, 'success');
       } else if (targetStatus === 'declined') {
-        showToast('Quote recorded as declined', 'info');
+        showToast(`${term.title} recorded as declined`, 'info');
       } else if (targetStatus === 'completed') {
         showToast('Job marked as completed', 'success');
       }
@@ -495,16 +497,17 @@ export default function App() {
   };
 
   const handleViewQuote = async (quoteSummary) => {
+    const term = documentTerm(state.profile);
     try {
       const full = await getJob(state.currentUserId, quoteSummary.id);
       if (!full) {
-        showToast('Could not load this quote. It may have been deleted.', 'error');
+        showToast(`Could not load this ${term.lower}. It may have been deleted.`, 'error');
         return;
       }
       setViewingQuote(full);
     } catch (err) {
       console.error('Failed to load quote:', err);
-      showToast('Failed to load quote. Check your connection and try again.', 'error');
+      showToast(`Failed to load ${term.lower}. Check your connection and try again.`, 'error');
     }
   };
 
@@ -521,7 +524,7 @@ export default function App() {
         }
       } catch {}
     }
-    showToast('Quote loaded for editing', 'success');
+    showToast(`${documentTerm(state.profile).title} loaded for editing`, 'success');
   };
 
   // RAMS: Create from current quote
