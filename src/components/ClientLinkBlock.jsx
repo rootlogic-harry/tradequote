@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getClientStatus, generateClientToken, SessionExpiredError } from '../utils/userDB.js';
+import { documentTerm } from '../utils/documentType.js';
 
 /**
  * Trader-side Client Portal block on Step 5 (TRQ-131).
@@ -20,7 +21,8 @@ import { getClientStatus, generateClientToken, SessionExpiredError } from '../ut
  * block redirects to /login?error=session_expired, matching the
  * dashboard's behaviour (TRQ-128).
  */
-export default function ClientLinkBlock({ currentUserId, jobId, showToast }) {
+export default function ClientLinkBlock({ currentUserId, jobId, profile, showToast }) {
+  const term = documentTerm(profile);
   const [status, setStatus] = useState(null);   // null = loading; {} = loaded
   const [loadError, setLoadError] = useState(null);
   const [generating, setGenerating] = useState(false);
@@ -117,7 +119,7 @@ export default function ClientLinkBlock({ currentUserId, jobId, showToast }) {
         </button>
         <p className="link-first-help">
           Generates a private, expiring link you can send to your client
-          via email, SMS or WhatsApp. They can review the quote and tap
+          via email, SMS or WhatsApp. They can review the {term.lower} and tap
           Accept or Decline — you&#39;ll see the response on your dashboard.
         </p>
       </div>

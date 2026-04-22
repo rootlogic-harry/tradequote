@@ -1079,6 +1079,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         <ClientLinkBlock
           currentUserId={state.currentUserId}
           jobId={savedJobId}
+          profile={profile}
           showToast={showToast}
         />
       )}

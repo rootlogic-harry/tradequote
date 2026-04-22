@@ -293,7 +293,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
            total-box. Four values: amber (default) / rust / moss / slate. */}
       <div className="eyebrow mb-3">Quote Accent Colour</div>
       <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
-        Tints the colour of the client quote link you share. Choose what matches your brand.
+        Tints the colour of the client link you share. Choose what matches your brand.
       </p>
       <div className="mb-8 flex gap-3" role="radiogroup" aria-label="Quote accent colour">
         {[
