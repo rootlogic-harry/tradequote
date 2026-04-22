@@ -10,6 +10,7 @@ import { calculateAllTotals } from '../../utils/calculations.js';
 import { formatCurrency } from '../../utils/quoteBuilder.js';
 import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 import { saveDraft } from '../../utils/userDB.js';
+import { documentTerm } from '../../utils/documentType.js';
 
 function AccordionSection({ title, isOpen, onToggle, children }) {
   return (
@@ -77,6 +78,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
   };
 
   const generateEnabled = canGenerateQuote(measurements, materials, labour);
+  const term = documentTerm(profile);
 
   const totals = calculateAllTotals(materials, labour, additionalCosts, profile.vatRegistered);
 
@@ -302,7 +304,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             </div>
           ))}
           <div className="pt-2 flex justify-between" style={{ borderTop: '1px solid var(--tq-border-soft)' }}>
-            <span style={{ color: 'var(--tq-muted)' }}>Subtotal (ex VAT)</span>
+            <span style={{ color: 'var(--tq-muted)' }}>Subtotal{profile.vatRegistered === true ? ' (ex VAT)' : ''}</span>
             <span className="font-mono font-medium">{formatCurrency(totals.subtotal)}</span>
           </div>
           {profile.vatRegistered === true && (
@@ -385,7 +387,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             </h2>
           </div>
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Check each measurement below, then hit Generate Quote when ready.
+            Check each measurement below, then hit Generate {term.title} when ready.
           </p>
         </div>
         {unconfirmedCount > 0 && (
@@ -445,7 +447,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
           }}
         >
           {generateEnabled
-            ? 'GENERATE QUOTE \u2192'
+            ? `GENERATE ${term.upper} \u2192`
             : unconfirmedCount > 0
               ? `CONFIRM ${unconfirmedCount} MEASUREMENT${unconfirmedCount !== 1 ? 'S' : ''} TO CONTINUE`
               : 'COMPLETE ALL SECTIONS TO CONTINUE'
@@ -514,7 +516,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
           }}
         >
           {generateEnabled
-            ? 'GENERATE QUOTE \u2192'
+            ? `GENERATE ${term.upper} \u2192`
             : unconfirmedCount > 0
               ? `CONFIRM ${unconfirmedCount} MEASUREMENT${unconfirmedCount !== 1 ? 'S' : ''} FIRST`
               : !materials || materials.length === 0

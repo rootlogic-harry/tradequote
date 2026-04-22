@@ -247,6 +247,48 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
         </label>
       </div>
 
+      {/* Document type — some tradesmen send "Quotes" (fixed prices),
+           others send "Estimates" (approximate figures confirmed on
+           site). Choose once; every quote-like surface the client sees
+           uses the chosen term. */}
+      <div className="eyebrow mb-3">Document Type</div>
+      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+        What do you call the document your clients receive?
+      </p>
+      <div className="mb-8 flex gap-2" role="radiogroup" aria-label="Document type">
+        {[
+          { key: 'quote',    label: 'Quote' },
+          { key: 'estimate', label: 'Estimate' },
+        ].map((opt) => {
+          const selected = (profile.documentType || 'quote') === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => update('documentType', opt.key)}
+              data-document-type-option={opt.key}
+              className="flex-1 px-4 py-3 rounded transition-all"
+              style={{
+                border: `2px solid ${selected ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
+                background: selected ? 'var(--tq-accent-bg, rgba(217,119,6,0.08))' : 'transparent',
+                color: selected ? 'var(--tq-accent)' : 'var(--tq-muted)',
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontWeight: 700,
+                fontSize: 14,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                minHeight: 48,
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Portal accent — tints the client-facing quote link's CTA and
            total-box. Four values: amber (default) / rust / moss / slate. */}
       <div className="eyebrow mb-3">Quote Accent Colour</div>

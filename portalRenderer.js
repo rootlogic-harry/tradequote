@@ -32,6 +32,20 @@
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACCENT_WHITELIST = new Set(['amber', 'rust', 'moss', 'slate']);
+const DOCUMENT_TERMS = {
+  quote:    { title: 'Quote',    upper: 'QUOTE',    lower: 'quote' },
+  estimate: { title: 'Estimate', upper: 'ESTIMATE', lower: 'estimate' },
+};
+
+// Portal-local copy of the documentTerm helper. Kept inline (rather than
+// importing from src/utils/documentType.js) so portalRenderer stays
+// self-contained and deployable server-side without any React/Vite
+// import path. Fail-closed: anything other than the whitelisted values
+// falls back to quote.
+function documentTerm(profile) {
+  const raw = profile && typeof profile.documentType === 'string' ? profile.documentType : 'quote';
+  return DOCUMENT_TERMS[raw] || DOCUMENT_TERMS.quote;
+}
 
 export function escapeHtml(s) {
   return String(s ?? '')
@@ -184,14 +198,15 @@ function noteList(notes) {
 
 function respondBlock(tokenSafe, profile) {
   const firstName = (profile?.fullName || profile?.companyName || '').split(/\s+/)[0] || 'your tradesman';
+  const term = documentTerm(profile);
   return `
 <div class="cp-respond">
-  <p class="cp-respond-lead">Please review the quote above and let <strong>${escapeHtml(firstName)}</strong> know if you'd like to proceed.</p>
+  <p class="cp-respond-lead">Please review the ${term.lower} above and let <strong>${escapeHtml(firstName)}</strong> know if you'd like to proceed.</p>
   <div class="cp-respond-stack">
-    <button type="button" class="cp-btn cp-btn-primary" data-action="accept">✓ Accept this quote</button>
-    <button type="button" class="cp-btn cp-btn-secondary" data-action="decline-open">Decline this quote</button>
+    <button type="button" class="cp-btn cp-btn-primary" data-action="accept">✓ Accept this ${term.lower}</button>
+    <button type="button" class="cp-btn cp-btn-secondary" data-action="decline-open">Decline this ${term.lower}</button>
     <div class="cp-decline-sheet" style="display:none">
-      <div class="cp-decline-label">Decline this quote</div>
+      <div class="cp-decline-label">Decline this ${term.lower}</div>
       <div class="cp-decline-hint">Optional — let ${escapeHtml(firstName)} know why (max 300 chars)</div>
       <textarea class="cp-decline-textarea" maxlength="300" data-ref="decline-reason"></textarea>
       <div class="cp-decline-count" data-ref="decline-count">0 / 300</div>
@@ -209,6 +224,7 @@ function respondBlock(tokenSafe, profile) {
 function confirmationBlock(job) {
   const response = job.client_response;
   const when = formatDateTime(job.client_response_at);
+  const term = documentTerm(job.client_snapshot_profile);
   if (response === 'accepted') {
     return `
 <div class="cp-confirm">
@@ -216,7 +232,7 @@ function confirmationBlock(job) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
   </div>
   <h2 class="cp-confirm-title">Thanks — your response has been recorded.</h2>
-  <p class="cp-confirm-body">You accepted this quote on <strong>${escapeHtml(when)}</strong>. Your tradesman will be in touch to discuss next steps.</p>
+  <p class="cp-confirm-body">You accepted this ${term.lower} on <strong>${escapeHtml(when)}</strong>. Your tradesman will be in touch to discuss next steps.</p>
 </div>`;
   }
   if (response === 'declined') {
@@ -356,7 +372,8 @@ export function renderClientPortal(job, token) {
   const ribbon = ribbonForDays(days, job?.client_token_expires_at);
   const hasResponse = job?.client_response === 'accepted' || job?.client_response === 'declined';
 
-  const title = escapeHtml(`Quote · ${snapshotProfile.companyName || snapshotProfile.fullName || 'Your quote'}`);
+  const term = documentTerm(profile);
+  const title = escapeHtml(`${term.title} · ${snapshotProfile.companyName || snapshotProfile.fullName || `Your ${term.lower}`}`);
 
   return `${baseHead(title)}
 <body>
@@ -377,7 +394,7 @@ export function renderClientPortal(job, token) {
     </div>
 
     <div class="cp-quote-head">
-      <div class="cp-eyebrow">Quote</div>
+      <div class="cp-eyebrow">${term.title}</div>
       <h1 class="cp-ref">${escapeHtml(jobDetails.quoteReference || '')}</h1>
       <div class="cp-prepared">Prepared ${escapeHtml(formatDate(jobDetails.quoteDate))}</div>
       <dl class="cp-meta">

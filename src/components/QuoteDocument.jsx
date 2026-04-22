@@ -2,6 +2,7 @@ import React, { useRef, useLayoutEffect } from 'react';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
+import { documentTerm } from '../utils/documentType.js';
 
 // Inline-editable text — switches between a static element and an auto-growing
 // textarea (or input) based on `editable`. When not editable the markup is
@@ -49,6 +50,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   // without a way to commit changes (e.g. SavedQuoteViewer passes no dispatch).
   const canEdit = editable && typeof dispatch === 'function';
   const { profile, jobDetails, reviewData, photos = {}, transcript, captureMode } = state;
+  const term = documentTerm(profile);
 
   if (!reviewData) return null;
 
@@ -157,7 +159,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
 
       {/* Reference line */}
       <div className="bg-gray-50 px-4 py-2 rounded mb-6 text-base font-medium">
-        Quote ref: {jobDetails.quoteReference} — {jobDetails.clientName}, {jobDetails.siteAddress}
+        {term.title} ref: {jobDetails.quoteReference} — {jobDetails.clientName}, {jobDetails.siteAddress}
       </div>
 
       {/* Section 1: Damage */}
@@ -295,7 +297,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           <div className="w-2/3 sm:w-1/2 md:w-2/5">
             <div className="space-y-2 text-lg" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
               <div className="flex justify-between">
-                <span className="text-gray-500">Subtotal (ex VAT)</span>
+                <span className="text-gray-500">Subtotal{profile.vatRegistered === true ? ' (ex VAT)' : ''}</span>
                 <span className="text-gray-800">{formatCurrency(totals.subtotal)}</span>
               </div>
               {profile.vatRegistered === true && (

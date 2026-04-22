@@ -52,6 +52,10 @@ export const initialState = {
     // slate. Default amber. Legacy profiles without an accent key read
     // as amber because this default lives at the initial-state level.
     accent: 'amber',
+    // Document-type label — 'quote' (default, Mark's preference) or
+    // 'estimate' (Paul's preference). Every customer-facing render
+    // surface reads through src/utils/documentType.js → documentTerm().
+    documentType: 'quote',
   },
   jobDetails: {
     clientName: '',

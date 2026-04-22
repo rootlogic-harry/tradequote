@@ -119,6 +119,32 @@ describe('calculateAllTotals — VAT is only applied for a boolean-true profile'
   });
 });
 
+describe('"(ex VAT)" suffix only renders when VAT is actually applied (TRQ-135)', () => {
+  // Paul reported his quote saying "Subtotal (ex VAT)" despite being
+  // not-VAT-registered. The suffix is misleading — it implies VAT will
+  // be added later. Gate all three render paths strictly on the same
+  // `=== true` check the VAT row itself uses.
+  const files = [
+    'src/components/QuoteDocument.jsx',
+    'src/components/steps/ReviewEdit.jsx',
+    'src/components/steps/QuoteOutput.jsx',
+    'portalRenderer.js',
+  ];
+  test.each(files)('%s: "(ex VAT)" is always paired with a vatRegistered === true guard', (file) => {
+    const src = readFileSync(join(repoRoot, file), 'utf8');
+    const exVatLines = src.split('\n').filter((line) => /\(ex VAT\)/.test(line));
+    for (const line of exVatLines) {
+      // Each occurrence must be inside a conditional that gates on the
+      // strict-true VAT flag — either profile.vatRegistered === true or
+      // isVatRegistered(...).
+      const guarded =
+        /vatRegistered\s*===\s*true/.test(line) ||
+        /isVatRegistered\s*\(/.test(line);
+      expect(guarded).toBe(true);
+    }
+  });
+});
+
 describe('render-time gating — UI components read through the same normaliser', () => {
   // Source-level assertion: any site that toggles VAT UI must go through
   // normaliseVatRegistered or a `=== true` strict check, never a truthy

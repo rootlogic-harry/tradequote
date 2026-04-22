@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QuoteDocument from '../QuoteDocument.jsx';
 import ClientLinkBlock from '../ClientLinkBlock.jsx';
+import { documentTerm } from '../../utils/documentType.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
@@ -12,6 +13,7 @@ import { DEFAULT_NOTES } from '../../utils/defaultNotes.js';
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false }) {
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos = {}, extraPhotos = [] } = state;
+  const term = documentTerm(profile);
 
   // Collect all available photos for appendix (slots + extras)
   const allPhotos = [];
@@ -84,7 +86,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const [generatingServerPdf, setGeneratingServerPdf] = useState(false);
   const handleDownloadPdfServer = async () => {
     if (!state.currentUserId) {
-      showToast?.('Save the quote first, then download PDF.', 'error');
+      showToast?.(`Save the ${term.lower} first, then download PDF.`, 'error');
       return;
     }
     setGeneratingServerPdf(true);
@@ -396,7 +398,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         new Paragraph({
           shading: { fill: 'F5F5F5' },
           children: [
-            txt(`Quote ref: ${jobDetails.quoteReference} \u2014 ${jobDetails.clientName}, ${jobDetails.siteAddress}`, {
+            txt(`${term.title} ref: ${jobDetails.quoteReference} \u2014 ${jobDetails.clientName}, ${jobDetails.siteAddress}`, {
               size: 22, bold: true,
             }),
           ],
@@ -672,7 +674,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           children: [
             new TableCell({ children: [new Paragraph('')], borders: noBorder, width: { size: TOT_SPACER, type: WidthType.DXA } }),
             new TableCell({
-              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt('Subtotal (ex VAT)', { size: 22, color: '666666' })] })],
+              children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [txt(`Subtotal${profile.vatRegistered === true ? ' (ex VAT)' : ''}`, { size: 22, color: '666666' })] })],
               borders: noBorder,
               width: { size: TOT_LABEL, type: WidthType.DXA },
             }),
@@ -893,12 +895,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
   const handleEmail = () => {
     const subject = encodeURIComponent(
-      `Quote ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
+      `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
     );
     // TRQ-122 follow-up: the raw transcript is AI context only, never
     // pasted into customer-facing output (PDF, DOCX, email body).
     const body = encodeURIComponent(
-      `Dear ${jobDetails.clientName},\n\nPlease find attached our quote (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
+      `Dear ${jobDetails.clientName},\n\nPlease find attached our ${term.lower} (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
@@ -942,7 +944,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       setSaved(true);
       setSavedJobId(id);
       dispatch({ type: 'QUOTE_SAVED', jobId: id });
-      showToast?.('Quote saved', 'success');
+      showToast?.(`${term.title} saved`, 'success');
       onSaved?.();
     } catch (err) {
       console.error('Failed to save quote:', err);
@@ -983,7 +985,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           </button>
         )}
         <h2 className="page-title" style={{ fontSize: 28 }}>
-          Your Quote
+          Your {term.title}
         </h2>
       </div>
       <p className="text-tq-muted text-sm mb-6">
@@ -1029,7 +1031,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                   : ''
             }`}
           >
-            {saving ? 'Saving...' : saved ? 'Saved \u2713' : 'Save Quote'}
+            {saving ? 'Saving...' : saved ? 'Saved \u2713' : `Save ${term.title}`}
           </button>
         )}
         {saveError && !saving && (
@@ -1057,14 +1059,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             disabled={!savedJobId}
             className="btn-ghost text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
-            title={savedJobId ? 'Create RAMS for this job' : 'Save the quote first to create a RAMS'}
+            title={savedJobId ? 'Create RAMS for this job' : `Save the ${term.lower} first to create a RAMS`}
           >
             Create RAMS
           </button>
         )}
         {!isReadOnly && !onBack && (
           <button onClick={handleNewQuote} className="btn-ghost text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Start New Quote
+            Start New {term.title}
           </button>
         )}
       </div>

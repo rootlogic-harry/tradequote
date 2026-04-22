@@ -1011,6 +1011,12 @@ app.delete('/api/users/:id', async (req, res) => {
 // smuggle CSS/attribute content through the profile save.
 const ACCENT_WHITELIST = ['amber', 'rust', 'moss', 'slate'];
 
+// Document-type label (TRQ-134). Mirrors DOCUMENT_TYPES in
+// src/utils/documentType.js. Whitelist at the save boundary so bad
+// values never reach the DB; the render-time helper has its own
+// fallback to 'quote' as belt-and-braces.
+const DOCUMENT_TYPE_WHITELIST = ['quote', 'estimate'];
+
 app.get('/api/users/:id/profile', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -1029,6 +1035,9 @@ app.put('/api/users/:id/profile', async (req, res) => {
     const body = req.body || {};
     if ('accent' in body && !ACCENT_WHITELIST.includes(body.accent)) {
       return res.status(400).json({ error: 'invalid accent' });
+    }
+    if ('documentType' in body && !DOCUMENT_TYPE_WHITELIST.includes(body.documentType)) {
+      return res.status(400).json({ error: 'invalid documentType' });
     }
     await pool.query(
       `INSERT INTO profiles (user_id, data) VALUES ($1, $2)
