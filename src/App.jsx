@@ -22,6 +22,7 @@ import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
+import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
@@ -765,17 +766,30 @@ export default function App() {
       case 3:
         return <AIAnalysis state={state} dispatch={dispatch} cancelAnalysis={cancelAnalysis} />;
       case 4:
-        return <ReviewEdit state={state} dispatch={dispatch} showToast={showToast} />;
-      case 5:
+        // Scoped boundary around the review grid — one malformed
+        // measurement from a schema-drifted saved quote shouldn't take
+        // the whole app down. Paul keeps editing the others.
         return (
-          <QuoteOutput
-            state={state}
-            dispatch={dispatch}
-            showToast={showToast}
-            onCreateRams={handleCreateRams}
-            onSaved={() => fetchIncompleteJobs(state.currentUserId)}
-            isAdminPlan={isAdmin}
-          />
+          <ErrorBoundary scope="review">
+            <ReviewEdit state={state} dispatch={dispatch} showToast={showToast} />
+          </ErrorBoundary>
+        );
+      case 5:
+        // Step 5 is the most-visited surface (preview + downloads +
+        // portal link). A crash here was the worst-case: loss of
+        // unsaved edits, no way back to the dashboard without a full
+        // refresh. Scoped boundary gives Paul a "Try again" instead.
+        return (
+          <ErrorBoundary scope="quote-output">
+            <QuoteOutput
+              state={state}
+              dispatch={dispatch}
+              showToast={showToast}
+              onCreateRams={handleCreateRams}
+              onSaved={() => fetchIncompleteJobs(state.currentUserId)}
+              isAdminPlan={isAdmin}
+            />
+          </ErrorBoundary>
         );
       default:
         return null;

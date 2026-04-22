@@ -7,6 +7,7 @@ import { downloadBlob } from '../../utils/downloadBlob.js';
 import { buildEmlMessage } from '../../utils/buildEmlMessage.js';
 import { shouldUseShareSheetPath } from '../../utils/platform.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
+import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveJob as saveQuote, updateJob } from '../../utils/userDB.js';
@@ -1367,9 +1368,17 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       {/* Quote Document — showPhotos=false to prevent white band artefact in
            the legacy html2canvas PDF; photos are rendered separately in that
-           path's PDF/Word appendix. */}
+           path's PDF/Word appendix.
+
+           Wrapped in a scoped ErrorBoundary: a crash inside QuoteDocument
+           (e.g. a malformed value coming back from a saved snapshot) used
+           to take the whole Step 5 down. Now it shows an inline
+           "couldn't load — try again" card and the download/share buttons
+           above remain usable. */}
       <div className="bg-white shadow-lg overflow-hidden" ref={quoteRef} style={{ borderRadius: 2 }}>
-        <QuoteDocument state={state} showPhotos={false} />
+        <ErrorBoundary scope="quote-document">
+          <QuoteDocument state={state} showPhotos={false} />
+        </ErrorBoundary>
       </div>
 
       {/* Print-only clone — full quote + photo appendix rendered inline so
