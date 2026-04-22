@@ -981,10 +981,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         `Please do not hesitate to contact us should you have any questions.\n\n` +
         `Kind regards,\n${profile.fullName || ''}\n${profile.companyName || ''}\n${profile.phone || ''}`;
 
-      // 1) Get the PDF — from cache (second tap after activation-expiry)
-      //    or freshly from the server. Caching the blob means the user's
-      //    next tap has it ready in-memory, sharing in the fresh
-      //    activation window without another 5-second wait.
+      // 1) Get the PDF — from cache (second tap after NotAllowedError)
+      //    or freshly from the server. We only cache AFTER an iPad
+      //    activation-expiry rejection, so on any other code path the
+      //    "Tap again to send" label never incorrectly appears.
       let pdfBlob = cachedPdfBlob;
       if (!pdfBlob) {
         const quoteHtml = renderToStaticMarkup(
@@ -1003,7 +1003,6 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           if (!res.ok) throw new Error(`PDF failed (${res.status})`);
           pdfBlob = await res.blob();
           if (pdfBlob.size < 500) throw new Error('Server returned an empty/invalid PDF');
-          setCachedPdfBlob(pdfBlob);
         } finally {
           clearTimeout(timeoutId);
         }
@@ -1012,7 +1011,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       // 2a) iPad / iPhone / Android — Web Share API with the PDF. On the
       //     first tap this may reject with NotAllowedError because iOS
       //     voids the user activation after our 5s PDF fetch. We cache
-      //     the blob and ask the user to tap once more — that tap's
+      //     the blob THEN and ask the user to tap once more — that tap's
       //     fresh activation lets share() succeed.
       if (shouldUseShareSheetPath()) {
         const emailFilename = sanitiseFilenameForShare(subject);
@@ -1022,20 +1021,22 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           });
           if (navigator.canShare?.({ files: [pdfFile] })) {
             await navigator.share({ files: [pdfFile], title: emailFilename });
-            // Success — clear cache so the next "Send via Outlook" on a
-            // freshly-edited quote re-fetches.
+            // Success — clear any cache from a prior failed attempt.
             setCachedPdfBlob(null);
             showToast?.('Open in Mail (or Outlook) to send with the PDF attached', 'success');
             return;
           }
         } catch (err) {
           if (err?.name === 'AbortError') {
-            // User cancelled the share sheet — leave cache for retry.
+            // User cancelled. Clear cache so the label returns to
+            // "Send via Outlook" — no stale "Tap again to send".
+            setCachedPdfBlob(null);
             return;
           }
           if (err?.name === 'NotAllowedError') {
-            // iOS consumed our activation during the fetch. Blob is cached;
-            // next tap will share it within fresh activation.
+            // iOS voided activation during the fetch. Cache the blob
+            // here so the NEXT tap (fresh activation) shares immediately.
+            setCachedPdfBlob(pdfBlob);
             showToast?.(
               'Your PDF is ready \u2014 tap Send via Outlook once more to open share options',
               'info'
@@ -1044,7 +1045,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           }
           throw err;
         }
-        // Fell through (canShare false) — tell user what to do.
+        // canShare returned false (Safari refused the payload). Blob is
+        // not cached — recommending Download PDF is the cleaner escape.
         showToast?.('This browser can\u2019t open a mail draft. Use Download PDF instead.', 'error');
         return;
       }
@@ -1073,6 +1075,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       );
     } catch (err) {
       console.error('Send via Outlook failed:', err);
+      // Clear cache on any unexpected error — keeping it around would
+      // leave the button stuck on "Tap again to send" on desktop where
+      // there's no share sheet to retry into.
+      setCachedPdfBlob(null);
       showToast?.(err.message || 'Could not prepare the Outlook draft.', 'error');
     } finally {
       setSendingOutlook(false);

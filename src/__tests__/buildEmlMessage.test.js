@@ -536,22 +536,82 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
     expect(slice).toMatch(/canSendOutlook/);
   });
 
-  test('iPad path calls navigator.share with ONLY files (no text field)', () => {
-    // Regression guard for Paul's iPad "PREPARING EMAIL… then nothing"
-    // bug: passing { files, title, text } to navigator.share was
-    // rejected silently on iPad Safari. The reliable contract is the
-    // same one downloadBlob uses — pass files + filename only.
+  // Isolate the iPad branch from the handler — from the
+  // `shouldUseShareSheetPath` check down to the closing brace of
+  // its `if` block. Downstream desktop code must not pollute the
+  // assertion.
+  const ipadBranchOf = (handlerSrc) => {
+    const start = handlerSrc.indexOf('if (shouldUseShareSheetPath');
+    if (start === -1) return '';
+    // Match braces from the first `{` after the if — stop when depth returns to 0.
+    const firstBrace = handlerSrc.indexOf('{', start);
+    let depth = 1;
+    let i = firstBrace + 1;
+    while (i < handlerSrc.length && depth > 0) {
+      if (handlerSrc[i] === '{') depth++;
+      else if (handlerSrc[i] === '}') depth--;
+      i++;
+    }
+    return handlerSrc.slice(start, i);
+  };
+
+  test('iPad branch calls navigator.share directly (no text field in the payload)', () => {
+    // Regression guard for two production bugs:
+    //   1. "PREPARING EMAIL… then nothing" — passing { files, title, text }
+    //      to navigator.share was silently rejected on iPad Safari.
+    //   2. "thinks for 5s then goes back to normal" — delegating to
+    //      downloadBlob meant we couldn't distinguish NotAllowedError
+    //      (activation expired) from anchor-click fallback; we need
+    //      the direct call so the catch block can react to it.
     const idx = src.indexOf('handleSendViaOutlook = async');
-    const slice = src.slice(idx, idx + 5000);
-    // The iPad branch must delegate to downloadBlob (which uses the
-    // proven { files: [file], title: filename } payload) and MUST NOT
-    // call navigator.share directly with a text/body field.
-    const ipadBranch = slice.slice(
-      slice.indexOf('shouldUseShareSheetPath'),
-      slice.indexOf('3b)') !== -1 ? slice.indexOf('3b)') : slice.length,
+    const handlerSrc = src.slice(idx, idx + 8000);
+    const ipad = ipadBranchOf(handlerSrc);
+    expect(ipad).toMatch(/navigator\.share\s*\(/);
+    // Must NOT pass `text:` alongside files — iPad Safari rejects that combo.
+    expect(ipad).not.toMatch(/navigator\.share\s*\([^)]*text\s*:/);
+    // Must NOT delegate to downloadBlob here — downloadBlob swallows
+    // NotAllowedError into an anchor-click fallback that iPad ignores.
+    expect(ipad).not.toMatch(/downloadBlob\s*\(/);
+  });
+
+  test('iPad branch handles NotAllowedError by caching the PDF for retry', () => {
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    const handlerSrc = src.slice(idx, idx + 8000);
+    const ipad = ipadBranchOf(handlerSrc);
+    // The NotAllowedError path is load-bearing — it's the whole
+    // reason the second tap works. Must both set the cache and
+    // surface a user instruction.
+    expect(ipad).toMatch(/NotAllowedError/);
+    expect(ipad).toMatch(/setCachedPdfBlob\s*\(\s*pdfBlob/);
+  });
+
+  test('iPad branch clears cache on AbortError (user cancelled)', () => {
+    // Without this, the "Tap again to send" label sticks forever
+    // after a user cancels the share sheet.
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    const handlerSrc = src.slice(idx, idx + 8000);
+    const ipad = ipadBranchOf(handlerSrc);
+    const abortBlock = ipad.slice(
+      ipad.indexOf('AbortError'),
+      ipad.indexOf('NotAllowedError'),
     );
-    expect(ipadBranch).toMatch(/downloadBlob\s*\(/);
-    // No stray navigator.share({... text: ...}) in the iPad branch.
-    expect(ipadBranch).not.toMatch(/navigator\.share\s*\([^)]*text\s*:/);
+    expect(abortBlock).toMatch(/setCachedPdfBlob\s*\(\s*null\s*\)/);
+  });
+
+  test('unexpected errors clear the cache (no "Tap again to send" on desktop)', () => {
+    // Scenario: desktop .eml path throws after fetch. Outer catch
+    // must clear cache so the button label doesn't get stuck.
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    const handlerSrc = src.slice(idx, idx + 10000);
+    const catchStart = handlerSrc.indexOf('catch (err)');
+    const outerCatch = handlerSrc.slice(catchStart, catchStart + 600);
+    expect(outerCatch).toMatch(/setCachedPdfBlob\s*\(\s*null\s*\)/);
+  });
+
+  test('button label switches to "Tap again to send" when cache is populated', () => {
+    // Source-level assertion of the ternary that drives the retry UX.
+    expect(src).toMatch(
+      /cachedPdfBlob[\s\S]{0,200}Tap again to send[\s\S]{0,200}Send via Outlook/
+    );
   });
 });
