@@ -4,6 +4,7 @@ import QuoteDocument from '../QuoteDocument.jsx';
 import ClientLinkBlock from '../ClientLinkBlock.jsx';
 import { documentTerm } from '../../utils/documentType.js';
 import { downloadBlob } from '../../utils/downloadBlob.js';
+import { buildEmlMessage } from '../../utils/buildEmlMessage.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import { formatCurrency, formatDate } from '../../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../../utils/calculations.js';
@@ -911,6 +912,100 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
+  // TRQ-141 — "Send via Outlook". Builds a .eml file with the PDF
+  // pre-attached; the OS hands it to the default mail handler. On
+  // Paul's Windows box that's Outlook; on iPad it falls through to the
+  // share sheet (Mail.app / Outlook iOS if installed). If no handler
+  // is available the user sees a friendly error, never a dead click.
+  const [sendingOutlook, setSendingOutlook] = useState(false);
+  const canSendOutlook = Boolean(profile?.email);
+  const handleSendViaOutlook = async () => {
+    if (!canSendOutlook) {
+      showToast?.('Add your email address in your profile first.', 'error');
+      return;
+    }
+    if (!state.currentUserId) {
+      showToast?.(`Save the ${term.lower} first, then send via Outlook.`, 'error');
+      return;
+    }
+    setSendingOutlook(true);
+    try {
+      // 1) Generate the server PDF — same path as Download PDF so the
+      //    attached document is byte-identical to what Paul would
+      //    download manually.
+      const quoteHtml = renderToStaticMarkup(
+        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+      );
+      const title = buildQuoteFilename({
+        clientName: jobDetails.clientName,
+        siteAddress: jobDetails.siteAddress,
+        fallbackLabel: term.title,
+      });
+      const jobId = savedJobId || state.savedJobId || 'draft';
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45_000);
+      let pdfBlob;
+      try {
+        const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quoteHtml, title }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`PDF failed (${res.status})`);
+        pdfBlob = await res.blob();
+        if (pdfBlob.size < 500) throw new Error('Server returned an empty/invalid PDF');
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      // 2) Assemble the .eml. Subject + body mirror handleEmail so
+      //    trader muscle memory carries across.
+      const subject = `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`;
+      const body =
+        `Dear ${jobDetails.clientName},\n\n` +
+        `Please find attached our ${term.lower} (ref: ${jobDetails.quoteReference}) ` +
+        `for dry stone walling works at ${jobDetails.siteAddress}.\n\n` +
+        `Please do not hesitate to contact us should you have any questions.\n\n` +
+        `Kind regards,\n${profile.fullName || ''}\n${profile.companyName || ''}\n${profile.phone || ''}`;
+
+      const { text: eml } = await buildEmlMessage({
+        from: { name: profile.fullName || profile.companyName || '', email: profile.email },
+        to: jobDetails.clientEmail ? [jobDetails.clientEmail] : [],
+        subject,
+        body,
+        date: new Date(),
+        attachments: [
+          { filename: `${title}.pdf`, contentType: 'application/pdf', data: pdfBlob },
+        ],
+      });
+
+      // 3) Download the .eml. Outlook Desktop / Mail.app / Thunderbird
+      //    all register the message/rfc822 MIME type and will open the
+      //    file as an editable draft thanks to X-Unsent: 1.
+      const emlBlob = new Blob([eml], { type: 'message/rfc822' });
+      const result = await downloadBlob(emlBlob, `${title}.eml`, { mimeType: 'message/rfc822' });
+      if (result?.cancelled) return;
+      // On iPad, if no mail app is registered for .eml the share sheet
+      // still opens — the user just won't see "Outlook" as a target.
+      // Pointing them at "Save to Files" keeps them unblocked without
+      // needing a download-handler-detection API the browser doesn't
+      // expose.
+      showToast?.(
+        result?.shared
+          ? 'Opening in your mail app\u2026'
+          : 'Draft saved \u2014 open it with Outlook (or Mail/Thunderbird)',
+        'success'
+      );
+    } catch (err) {
+      console.error('Send via Outlook failed:', err);
+      showToast?.(err.message || 'Could not prepare the Outlook draft.', 'error');
+    } finally {
+      setSendingOutlook(false);
+    }
+  };
+
   const handleNewQuote = () => {
     dispatch({ type: 'NEW_QUOTE' });
   };
@@ -1024,6 +1119,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         </button>
         <button onClick={handleEmail} className="btn-ghost">
           Send via Email
+        </button>
+        <button
+          onClick={handleSendViaOutlook}
+          disabled={sendingOutlook || !canSendOutlook}
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+          title={
+            canSendOutlook
+              ? 'Opens Outlook (or your default mail app) with the quote and PDF already attached'
+              : 'Add your email address in your profile first'
+          }
+        >
+          {sendingOutlook ? 'Preparing email\u2026' : 'Send via Outlook'}
         </button>
         {!isReadOnly && (
           <button

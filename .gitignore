@@ -20,5 +20,8 @@ coverage/
 # MCP config (local)
 .mcp.json
 
+# Claude Code local settings (per-machine tool allowlist, gitignored)
+.claude/settings.local.json
+
 # Logs
 npm-debug.log*

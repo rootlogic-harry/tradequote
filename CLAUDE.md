@@ -610,6 +610,24 @@ React ref callbacks fire before the value is reliably measurable, and don't re-f
 
 **Self-check:** When touching `QuoteDocument`, guard new rendering behind `canEdit` so read-only surfaces see the same HTML they always have.
 
+### 15. "Send via Outlook" is a .eml download, not a live integration (TRQ-141)
+
+`Send via Outlook` generates an RFC 5322 `.eml` file with the PDF pre-attached and lets the OS hand it to the default mail handler (Outlook Desktop on Paul's box, Mail.app / Outlook iOS via the share sheet on iPad). No OAuth, no Azure AD, no server-side mail.
+
+Every rule in `src/utils/buildEmlMessage.js` is load-bearing — Outlook Desktop will reject the file if any of them are wrong:
+
+- CRLF on every line (bare LF collapses the whole header block).
+- `X-Unsent: 1` header — without it Outlook Desktop opens the `.eml` as **read-only received mail**, not as an editable draft. This is THE bug-to-prevent.
+- B-encoded UTF-8 for non-ASCII headers (`=?UTF-8?B?…?=`). Raw UTF-8 renders as mojibake in Outlook 2016 and earlier.
+- Base64 attachment body wrapped at ≤76 chars per RFC 2045.
+- Quoted-printable plain-text body, also soft-wrapped at ≤76 chars.
+- RFC 2231 continuation for non-ASCII filenames.
+- Multipart boundary ≤70 chars per RFC 2046 (we use a single UUID, 36 chars).
+- Subject/header CR/LF stripped before emission (header-injection defence).
+- NFC normalisation for all free-text fields (prevents "é" vs "e+◌́" client-rendering divergence).
+
+**Self-check:** If you edit `buildEmlMessage.js`, every one of these rules has a test in `buildEmlMessage.test.js`. Run `npm test -- --testPathPattern=buildEmlMessage` — all 38 tests must stay green. If you change the output format, verify the resulting `.eml` opens as an **editable draft** (not read-only) in Outlook Desktop before shipping.
+
 ### 14. Client Portal rendering contract — never read live state (TRQ-126)
 
 The portal at `GET /q/:token` must read `client_snapshot` + `client_snapshot_profile` ONLY. Never `quote_snapshot`, never `profiles.data`. That's the frozen-at-send-time contract the whole feature depends on — if the tradesman edits the quote or swaps their logo after sending, the client still sees the version that was originally shared.
