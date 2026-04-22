@@ -948,12 +948,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   //   Desktop / Mail.app / Thunderbird all register message/rfc822
   //   and open it as an editable draft (X-Unsent: 1 wins for Outlook).
   //
-  //   iPad/iPhone/Android: Safari does NOT hand .eml files to Mail
-  //   or Outlook iOS — the share sheet just offers Print (Paul's first
-  //   test hit this dead end). Instead share the PDF directly with
-  //   subject/body via the Web Share API; the target mail app opens
-  //   a compose view with the PDF attached and the title as subject.
+  //   iPad/iPhone/Android: share the PDF via Web Share API so the
+  //   target mail app (Outlook iOS / Mail) composes a draft with the
+  //   PDF attached. Two-tap fallback: if the first tap's fetch takes
+  //   too long, iOS voids the user activation and share() rejects
+  //   with NotAllowedError. We cache the blob and ask the user to
+  //   tap again — that tap brings a fresh activation, share succeeds.
   const [sendingOutlook, setSendingOutlook] = useState(false);
+  const [cachedPdfBlob, setCachedPdfBlob] = useState(null);
   const canSendOutlook = Boolean(profile?.email);
   const handleSendViaOutlook = async () => {
     if (!canSendOutlook) {
@@ -966,38 +968,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     }
     setSendingOutlook(true);
     try {
-      // 1) Generate the server PDF — same path as Download PDF so the
-      //    attached document is byte-identical to what Paul would
-      //    download manually.
-      const quoteHtml = renderToStaticMarkup(
-        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
-      );
       const title = buildQuoteFilename({
         clientName: jobDetails.clientName,
         siteAddress: jobDetails.siteAddress,
         fallbackLabel: term.title,
       });
-      const jobId = savedJobId || state.savedJobId || 'draft';
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45_000);
-      let pdfBlob;
-      try {
-        const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quoteHtml, title }),
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`PDF failed (${res.status})`);
-        pdfBlob = await res.blob();
-        if (pdfBlob.size < 500) throw new Error('Server returned an empty/invalid PDF');
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      // 2) Subject + body mirror handleEmail so trader muscle memory
-      //    carries across both platforms.
       const subject = `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`;
       const body =
         `Dear ${jobDetails.clientName},\n\n` +
@@ -1006,35 +981,75 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         `Please do not hesitate to contact us should you have any questions.\n\n` +
         `Kind regards,\n${profile.fullName || ''}\n${profile.companyName || ''}\n${profile.phone || ''}`;
 
-      // 3a) iPad / iPhone / Android — reuse the proven Download-PDF
-      //     share path (same one Paul's iPad already handles). The
-      //     filename doubles as the subject hint: when he picks "Mail"
-      //     in the share sheet, iOS opens a compose view with the PDF
-      //     attached and the filename pre-filled as the subject line.
-      //
-      //     Why we no longer pass title + text to `navigator.share`:
-      //     iPad Safari's `canShare` returns true for `{ files }` but
-      //     `share()` rejects the full `{ files, title, text }` payload
-      //     silently, and the catch block ate the error — Paul saw
-      //     "PREPARING EMAIL..." spin for 8 seconds then nothing.
-      //     Sticking to the `{ files }` contract that downloadBlob
-      //     already uses is the reliable path.
+      // 1) Get the PDF — from cache (second tap after activation-expiry)
+      //    or freshly from the server. Caching the blob means the user's
+      //    next tap has it ready in-memory, sharing in the fresh
+      //    activation window without another 5-second wait.
+      let pdfBlob = cachedPdfBlob;
+      if (!pdfBlob) {
+        const quoteHtml = renderToStaticMarkup(
+          <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+        );
+        const jobId = savedJobId || state.savedJobId || 'draft';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45_000);
+        try {
+          const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quoteHtml, title }),
+            signal: controller.signal,
+          });
+          if (!res.ok) throw new Error(`PDF failed (${res.status})`);
+          pdfBlob = await res.blob();
+          if (pdfBlob.size < 500) throw new Error('Server returned an empty/invalid PDF');
+          setCachedPdfBlob(pdfBlob);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
+      // 2a) iPad / iPhone / Android — Web Share API with the PDF. On the
+      //     first tap this may reject with NotAllowedError because iOS
+      //     voids the user activation after our 5s PDF fetch. We cache
+      //     the blob and ask the user to tap once more — that tap's
+      //     fresh activation lets share() succeed.
       if (shouldUseShareSheetPath()) {
         const emailFilename = sanitiseFilenameForShare(subject);
-        const result = await downloadBlob(pdfBlob, `${emailFilename}.pdf`, {
-          mimeType: 'application/pdf',
-        });
-        if (result?.cancelled) return;
-        showToast?.(
-          result?.shared
-            ? 'Open in Mail (or Outlook) to send with the PDF attached'
-            : 'PDF saved — attach it to a new email',
-          'success'
-        );
+        try {
+          const pdfFile = new File([pdfBlob], `${emailFilename}.pdf`, {
+            type: 'application/pdf',
+          });
+          if (navigator.canShare?.({ files: [pdfFile] })) {
+            await navigator.share({ files: [pdfFile], title: emailFilename });
+            // Success — clear cache so the next "Send via Outlook" on a
+            // freshly-edited quote re-fetches.
+            setCachedPdfBlob(null);
+            showToast?.('Open in Mail (or Outlook) to send with the PDF attached', 'success');
+            return;
+          }
+        } catch (err) {
+          if (err?.name === 'AbortError') {
+            // User cancelled the share sheet — leave cache for retry.
+            return;
+          }
+          if (err?.name === 'NotAllowedError') {
+            // iOS consumed our activation during the fetch. Blob is cached;
+            // next tap will share it within fresh activation.
+            showToast?.(
+              'Your PDF is ready \u2014 tap Send via Outlook once more to open share options',
+              'info'
+            );
+            return;
+          }
+          throw err;
+        }
+        // Fell through (canShare false) — tell user what to do.
+        showToast?.('This browser can\u2019t open a mail draft. Use Download PDF instead.', 'error');
         return;
       }
 
-      // 3b) Desktop path — .eml with the PDF inline. Outlook Desktop /
+      // 2b) Desktop path — .eml with the PDF inline. Outlook Desktop /
       //     Mail.app / Thunderbird hand it straight to a draft compose.
       const { text: eml } = await buildEmlMessage({
         from: { name: profile.fullName || profile.companyName || '', email: profile.email },
@@ -1048,6 +1063,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       });
       const emlBlob = new Blob([eml], { type: 'message/rfc822' });
       const result = await downloadBlob(emlBlob, `${title}.eml`, { mimeType: 'message/rfc822' });
+      setCachedPdfBlob(null);
       if (result?.cancelled) return;
       showToast?.(
         result?.shared
@@ -1192,7 +1208,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           }
         >
           {sendingOutlook && <InlineSpinner />}
-          {sendingOutlook ? 'Preparing email\u2026' : 'Send via Outlook'}
+          {sendingOutlook
+            ? 'Preparing email\u2026'
+            : cachedPdfBlob
+              ? 'Tap again to send'
+              : 'Send via Outlook'}
         </button>
         {!isReadOnly && (
           <button
