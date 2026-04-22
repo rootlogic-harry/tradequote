@@ -193,10 +193,10 @@ export default function Dashboard({
           >
             <div className="text-3xl mb-3 opacity-20">&#128221;</div>
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
-              No jobs yet. Create your first quote to get started.
+              No jobs yet. Create your first {term.lower} to get started.
             </p>
             <button onClick={onStartNewQuote} className="btn-primary">
-              + New Quote
+              + New {term.title}
             </button>
           </div>
         ) : (

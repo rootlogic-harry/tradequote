@@ -797,6 +797,7 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         currentUser={state.currentUser}
+        profile={state.profile}
         onSettingsClick={() => setShowProfileModal(true)}
         onLogout={handleLogout}
         isAdminPlan={isAdmin}

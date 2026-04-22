@@ -1,4 +1,5 @@
 import React from 'react';
+import { documentTerm } from '../utils/documentType.js';
 
 export default function Sidebar({
   currentView,
@@ -11,15 +12,17 @@ export default function Sidebar({
   theme,
   toggleTheme,
   currentUser,
+  profile,
   onSettingsClick,
   onLogout,
   isAdminPlan = false,
   className = '',
 }) {
+  const term = documentTerm(profile);
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon, action: onGoToDashboard },
-    { key: 'new', label: 'New Quote', icon: PlusIcon, action: onStartNewQuote },
-    { key: 'saved', label: 'My Quotes', icon: FolderIcon, action: onGoToSaved },
+    { key: 'new', label: `New ${term.title}`, icon: PlusIcon, action: onStartNewQuote },
+    { key: 'saved', label: `My ${term.title}s`, icon: FolderIcon, action: onGoToSaved },
     ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', icon: ChartIcon, action: onGoToLearning }] : []),
     ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', icon: CpuIcon, action: onGoToAgents }] : []),
   ];

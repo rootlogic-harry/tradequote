@@ -108,7 +108,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
   if (quotes.length === 0) {
     return (
       <div className="max-w-5xl mx-auto">
-        <h2 className="page-title mb-6" style={{ fontSize: 28 }}>My Quotes</h2>
+        <h2 className="page-title mb-6" style={{ fontSize: 28 }}>My {term.title}s</h2>
         <div className="text-center py-20">
           <div className="text-4xl mb-4 opacity-30">&#128193;</div>
           <h2 className="text-xl font-heading font-bold mb-2" style={{ color: 'var(--tq-text)' }}>No saved jobs yet</h2>
