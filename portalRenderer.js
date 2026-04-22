@@ -140,6 +140,37 @@ function totals(materials, labour, additionalCosts, vatRegistered) {
   return { subtotal, labourTotal, vatAmount, total: subtotal + vatAmount };
 }
 
+/**
+ * Portal head — TRQ-136.
+ *
+ * The old head showed the back-office reference (QT-2026-0002) as the
+ * hero with a QUOTE eyebrow above. Paul flagged this as noise for the
+ * client. The new head uses the client name + site address as the
+ * hero — that's what the client actually wants to see at a glance.
+ *
+ * Falls back defensively:
+ *   • no clientName → use siteAddress as the hero
+ *   • neither present → generic "Your {term}" so the layout doesn't
+ *     collapse into empty space
+ *
+ * The reference still lives on the saved PDF/DOCX body (via
+ * QuoteDocument) for record-keeping — it's just not the portal's
+ * focal point.
+ */
+function headBlock(jobDetails, term) {
+  const clientName = (jobDetails?.clientName || '').trim();
+  const siteAddress = (jobDetails?.siteAddress || '').trim();
+  const hero = clientName || siteAddress || `Your ${term.lower}`;
+  const subtitle = clientName && siteAddress ? siteAddress : '';
+  const prepared = formatDate(jobDetails?.quoteDate);
+  return `
+    <div class="cp-quote-head">
+      <h1 class="cp-ref">${escapeHtml(hero)}</h1>
+      ${subtitle ? `<div class="cp-prepared" style="font-size:15px;color:var(--ink-2);margin-bottom:6px">${escapeHtml(subtitle)}</div>` : ''}
+      ${prepared ? `<div class="cp-prepared">Prepared ${escapeHtml(prepared)}</div>` : ''}
+    </div>`;
+}
+
 function headerLogo(profile) {
   // A real logo arrives in client_snapshot_profile.logo (data URL or
   // server-hosted URL). If stripped (placeholder `[photo-stripped]`) or
@@ -393,15 +424,7 @@ export function renderClientPortal(job, token) {
       </div>
     </div>
 
-    <div class="cp-quote-head">
-      <div class="cp-eyebrow">${term.title}</div>
-      <h1 class="cp-ref">${escapeHtml(jobDetails.quoteReference || '')}</h1>
-      <div class="cp-prepared">Prepared ${escapeHtml(formatDate(jobDetails.quoteDate))}</div>
-      <dl class="cp-meta">
-        <dt>For</dt><dd><strong>${escapeHtml(jobDetails.clientName || '')}</strong></dd>
-        <dt>Site</dt><dd>${escapeHtml(jobDetails.siteAddress || '')}</dd>
-      </dl>
-    </div>
+    ${headBlock(jobDetails, term)}
 
     <section class="cp-section">
       <h2 class="cp-section-title">Description of damage</h2>

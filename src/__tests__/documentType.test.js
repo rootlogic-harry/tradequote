@@ -156,9 +156,17 @@ describe('renderClientPortal — estimate profile renders estimate-flavoured cop
   };
   const TOKEN = 'a3f7c091-2e84-4b1a-9f23-8d05e7b61c3a';
 
-  test('eyebrow reads ESTIMATE (uppercase) for an estimate profile', () => {
+  test('Accept/Decline CTAs pick up the estimate term (TRQ-136 removed the eyebrow)', () => {
+    // The portal head's QUOTE / ESTIMATE eyebrow was removed in TRQ-136
+    // because the client name + site address are now the hero. The
+    // term still flows through the response block CTAs, the document
+    // title, and the confirmation copy — which is where an estimate
+    // profile's choice actually shows up to the client.
     const html = renderClientPortal(baseJob, TOKEN);
-    expect(html).toMatch(/class="cp-eyebrow"[^>]*>\s*Estimate\s*</i);
+    // Document title carries the term.
+    expect(html).toMatch(/<title>[^<]*Estimate/i);
+    // No leftover uppercase QUOTE/ESTIMATE eyebrow in the head.
+    expect(html).not.toMatch(/class="cp-eyebrow"/);
   });
 
   test('Accept CTA reads "Accept this estimate" for an estimate profile', () => {

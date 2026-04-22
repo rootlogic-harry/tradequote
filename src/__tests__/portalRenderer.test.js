@@ -99,13 +99,22 @@ describe('renderClientPortal — structure', () => {
     expect(html).toMatch(/class="cp-tradesman"[^>]*>[^<]*Doyle Walling/);
   });
 
-  test('renders the quote reference', () => {
-    expect(html).toMatch(/class="cp-ref"[^>]*>[^<]*QT-2026-0047/);
+  test('renders the client name as the hero (TRQ-136 — reference is no longer in the head)', () => {
+    // The head used to show the back-office quote reference; Paul's
+    // feedback was that it wasn't useful to the client. The hero now
+    // carries the client name, with the site address beneath as
+    // subtitle and the prepared date as a small meta line.
+    expect(html).toMatch(/class="cp-ref"[^>]*>[^<]*James Simcock/);
+    const head = html.match(/<div class="cp-quote-head"[^>]*>[\s\S]*?<\/div>/);
+    expect(head).not.toBeNull();
+    expect(head[0]).not.toMatch(/QT-2026-0047/);
   });
 
-  test('renders the client name and site address in the meta grid', () => {
-    expect(html).toMatch(/cp-meta[\s\S]*James Simcock/);
-    expect(html).toMatch(/cp-meta[\s\S]*Brink Farm Pott/);
+  test('renders the client name and site address in the head (TRQ-136 — no more .cp-meta grid)', () => {
+    const head = html.match(/<div class="cp-quote-head"[^>]*>[\s\S]*?<\/div>/);
+    expect(head).not.toBeNull();
+    expect(head[0]).toMatch(/James Simcock/);
+    expect(head[0]).toMatch(/Brink Farm Pott/);
   });
 
   test('renders the damage description inside .cp-prose', () => {
