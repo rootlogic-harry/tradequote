@@ -535,4 +535,23 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
     const slice = src.slice(idx, idx + 5000);
     expect(slice).toMatch(/canSendOutlook/);
   });
+
+  test('iPad path calls navigator.share with ONLY files (no text field)', () => {
+    // Regression guard for Paul's iPad "PREPARING EMAIL… then nothing"
+    // bug: passing { files, title, text } to navigator.share was
+    // rejected silently on iPad Safari. The reliable contract is the
+    // same one downloadBlob uses — pass files + filename only.
+    const idx = src.indexOf('handleSendViaOutlook = async');
+    const slice = src.slice(idx, idx + 5000);
+    // The iPad branch must delegate to downloadBlob (which uses the
+    // proven { files: [file], title: filename } payload) and MUST NOT
+    // call navigator.share directly with a text/body field.
+    const ipadBranch = slice.slice(
+      slice.indexOf('shouldUseShareSheetPath'),
+      slice.indexOf('3b)') !== -1 ? slice.indexOf('3b)') : slice.length,
+    );
+    expect(ipadBranch).toMatch(/downloadBlob\s*\(/);
+    // No stray navigator.share({... text: ...}) in the iPad branch.
+    expect(ipadBranch).not.toMatch(/navigator\.share\s*\([^)]*text\s*:/);
+  });
 });

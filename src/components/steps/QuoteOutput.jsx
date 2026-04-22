@@ -913,6 +913,17 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
+  // Build a filename-safe version of the subject line for the share
+  // sheet. iOS Mail uses the filename as the default subject when the
+  // user picks Mail from a Web Share — so this is what Paul's client
+  // will see in their inbox.
+  const sanitiseFilenameForShare = (s) =>
+    String(s)
+      .replace(/[/\\?*:|"<>\x00-\x1f]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120) || 'Quote';
+
   // TRQ-141 — "Send via Outlook". Two paths depending on platform:
   //
   //   Desktop (Windows/macOS/Linux): download a .eml file. Outlook
@@ -977,23 +988,32 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         `Please do not hesitate to contact us should you have any questions.\n\n` +
         `Kind regards,\n${profile.fullName || ''}\n${profile.companyName || ''}\n${profile.phone || ''}`;
 
-      // 3a) iPad / iPhone / Android path — Web Share API with the PDF.
-      //     Mail / Outlook iOS / Gmail iOS open a compose view with
-      //     the PDF attached and the subject pre-filled. This is the
-      //     ONLY reliable path on iOS because .eml files don't open
-      //     as editable drafts there.
+      // 3a) iPad / iPhone / Android — reuse the proven Download-PDF
+      //     share path (same one Paul's iPad already handles). The
+      //     filename doubles as the subject hint: when he picks "Mail"
+      //     in the share sheet, iOS opens a compose view with the PDF
+      //     attached and the filename pre-filled as the subject line.
+      //
+      //     Why we no longer pass title + text to `navigator.share`:
+      //     iPad Safari's `canShare` returns true for `{ files }` but
+      //     `share()` rejects the full `{ files, title, text }` payload
+      //     silently, and the catch block ate the error — Paul saw
+      //     "PREPARING EMAIL..." spin for 8 seconds then nothing.
+      //     Sticking to the `{ files }` contract that downloadBlob
+      //     already uses is the reliable path.
       if (shouldUseShareSheetPath()) {
-        try {
-          const pdfFile = new File([pdfBlob], `${title}.pdf`, { type: 'application/pdf' });
-          if (navigator.canShare?.({ files: [pdfFile] })) {
-            await navigator.share({ files: [pdfFile], title: subject, text: body });
-            showToast?.('Opening in your mail app\u2026', 'success');
-            return;
-          }
-        } catch (err) {
-          if (err?.name === 'AbortError') return;
-          // Fall through to .eml — may still work if desktop UA was misdetected.
-        }
+        const emailFilename = sanitiseFilenameForShare(subject);
+        const result = await downloadBlob(pdfBlob, `${emailFilename}.pdf`, {
+          mimeType: 'application/pdf',
+        });
+        if (result?.cancelled) return;
+        showToast?.(
+          result?.shared
+            ? 'Open in Mail (or Outlook) to send with the PDF attached'
+            : 'PDF saved — attach it to a new email',
+          'success'
+        );
+        return;
       }
 
       // 3b) Desktop path — .eml with the PDF inline. Outlook Desktop /
