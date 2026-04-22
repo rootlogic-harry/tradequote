@@ -515,3 +515,30 @@ export function renderTokenExpired(job = {}) {
 </body>
 </html>`;
 }
+
+/**
+ * Rendered when the portal route hits a transient infrastructure error
+ * (Railway DNS blip, Postgres restart, etc.). Friendly, honest, and
+ * auto-refreshes once — users rarely notice these blips if we recover
+ * within ~15s. No raw JSON, no scary 500 screen.
+ */
+export function renderServiceUnavailable() {
+  return `${baseHead('Just a moment…')}
+<body>
+<div class="cp" data-accent="amber">
+  <div class="cp-page">
+    <div class="cp-confirm">
+      <div class="cp-error-stamp">Temporarily unavailable</div>
+      <h1 class="cp-confirm-title">We\u2019re reconnecting.</h1>
+      <p class="cp-confirm-body">Your quote is still there \u2014 our database is briefly unreachable. This page will refresh itself automatically in a few seconds.</p>
+    </div>
+  </div>
+</div>
+<script>
+  // Auto-refresh once after 15s. One retry only — never loop, so a
+  // sustained outage doesn't hammer the server or the client battery.
+  setTimeout(function () { window.location.reload(); }, 15000);
+</script>
+</body>
+</html>`;
+}

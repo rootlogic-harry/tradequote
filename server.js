@@ -10,6 +10,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 import { safeError } from './safeError.js';
+import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
@@ -32,6 +33,7 @@ import {
   renderClientPortal,
   renderTokenNotFound as renderPortalNotFound,
   renderTokenExpired as renderPortalExpired,
+  renderServiceUnavailable as renderPortalServiceUnavailable,
 } from './portalRenderer.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -468,7 +470,13 @@ app.get('/auth/google',
 function handleOauthFailure(err, req, res, _next) {
   console.warn(`[OAuth] callback error: ${err?.message || err}`);
   try { req.session?.destroy?.(() => {}); } catch {}
-  res.redirect('/login?error=oauth_failed');
+  // Railway DNS blips and Postgres restarts show up here as "session
+  // store unreachable" — the user's Google credentials are fine, it's
+  // our infrastructure that's hiccupping. Point them at a friendlier
+  // message so they don't assume their Google account is broken (Mark
+  // hit this during today's outage and thought he'd lost access).
+  const reason = isTransientInfrastructureError(err) ? 'reconnecting' : 'oauth_failed';
+  res.redirect(`/login?error=${reason}`);
 }
 
 app.get('/auth/google/callback',
@@ -646,6 +654,11 @@ app.get('/login', (req, res) => {
       break;
     case 'auth_failed':
       errorMsg = "<div class='error'>Sign-in failed. Please try again.</div>";
+      break;
+    case 'reconnecting':
+      // Transient infrastructure error — our DB was briefly unreachable.
+      // Your Google account is fine; retrying in a moment will work.
+      errorMsg = "<div class='error'>We\u2019re reconnecting to our database. Please wait a moment and sign in again \u2014 your Google account is fine.</div>";
       break;
     default:
       errorMsg = '';
@@ -2766,6 +2779,18 @@ app.get('/q/:token', async (req, res) => {
     // dwell / scroll interaction, so that's what captures a real view.
     return res.status(200).type('html').send(renderClientPortal(job, token));
   } catch (err) {
+    // Portal is a customer-facing HTML surface — a raw JSON blob on
+    // transient outages looks broken to the client and undermines the
+    // tradesman's professionalism. Render the styled 503 page instead,
+    // which auto-refreshes once.
+    console.error(`[GET /q/:token]`, err?.message || err);
+    setClientPortalSecurityHeaders(res);
+    if (isTransientInfrastructureError(err)) {
+      res.set('Retry-After', '10');
+      return res.status(503).type('html').send(renderPortalServiceUnavailable());
+    }
+    // Fall through to safeError for genuine server bugs (JSON is fine
+    // there — only developers / our logs see it in practice).
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });
