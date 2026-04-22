@@ -804,13 +804,18 @@ describe('Concurrent save protection', () => {
     expect(saveJobBody).not.toContain('fetchWithRetry');
   });
 
-  test('server POST /api/users/:id/jobs has 30s dedup window', () => {
+  test('server POST /api/users/:id/jobs has a dedup window (widened to 10 minutes in TRQ-137)', () => {
+    // Originally 30 seconds — Paul reported duplicate rows when his
+    // edit-regenerate-save cycle exceeded that. Widened to 10 minutes
+    // to cover realistic slower cadences. The proper fix is
+    // client-side (SavedQuoteViewer carries savedJobId → client does
+    // PUT not POST on re-save), but this is belt-and-braces.
     const serverSrc = readFileSync(join(__dirname, '../../server.js'), 'utf8');
     const postBlock = serverSrc.slice(
       serverSrc.indexOf("app.post('/api/users/:id/jobs'"),
-      serverSrc.indexOf("app.post('/api/users/:id/jobs'") + 1500
+      serverSrc.indexOf("app.post('/api/users/:id/jobs'") + 1800
     );
-    expect(postBlock).toContain('30 seconds');
+    expect(postBlock).toContain('10 minutes');
   });
 });
 

@@ -667,6 +667,7 @@ export default function App() {
             onBack={() => setViewingQuote(null)}
             onEditQuote={handleEditQuote}
             currentUserId={state.currentUserId}
+            liveProfile={state.profile}
           />
         );
       }
@@ -726,6 +727,7 @@ export default function App() {
             onBack={() => setViewingQuote(null)}
             onEditQuote={handleEditQuote}
             currentUserId={state.currentUserId}
+            liveProfile={state.profile}
           />
         );
       }

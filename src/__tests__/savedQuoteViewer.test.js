@@ -47,11 +47,14 @@ describe('SavedQuoteViewer crash resilience', () => {
     expect(src).toMatch(/\[photo-stripped\]/);
   });
 
-  it('passes null (not [photo-stripped]) to QuoteOutput when the live logo is not yet loaded', () => {
-    // The virtualState.profile.logo must fall back to null when we haven't
-    // fetched the real logo yet, so the <img> guard `{profile.logo && ...}`
-    // doesn't render a broken image.
-    expect(src).toMatch(/logo:\s*restoredLogo\s*\|\|\s*null/);
+  it('falls back to null (not [photo-stripped]) when no logo is available', () => {
+    // The virtualState.profile.logo must end in `|| null` so the
+    // <img> guard `{profile.logo && ...}` doesn't render a broken
+    // image when the live logo isn't loaded yet. TRQ-138 threaded the
+    // live profile through here so the chain is now
+    // baseProfile.logo || restoredLogo || null — the terminal null
+    // is the safety net.
+    expect(src).toMatch(/logo:[^,\n]*\|\|\s*null/);
   });
 
   // QuoteOutput's `selectedPhotoIndices` state initializes once via `new Set(allPhotos.map(...))`.

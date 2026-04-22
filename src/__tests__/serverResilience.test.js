@@ -388,8 +388,8 @@ describe('Data integrity', () => {
     expect(putJob).toContain('pickAllowedKeys');
   });
 
-  test('job dedup uses 30-second window', () => {
-    expect(serverSource).toContain("INTERVAL '30 seconds'");
+  test('job dedup uses a 10-minute window (widened from 30s in TRQ-137)', () => {
+    expect(serverSource).toContain("INTERVAL '10 minutes'");
   });
 
   test('quote_diffs uses transactional DELETE + INSERT for idempotent replacement', () => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import QuoteOutput from './steps/QuoteOutput.jsx';
 import { loadPhotos, getProfile } from '../utils/userDB.js';
 
-export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId }) {
+export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId, liveProfile }) {
   const snapshot = quote?.snapshot || {};
   const [restoredPhotos, setRestoredPhotos] = useState(null);
   const [restoredLogo, setRestoredLogo] = useState(null);
@@ -36,11 +36,18 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
   const snapshotProfile = snapshot.profile || {};
   const profileLogoIsStripped =
     !snapshotProfile.logo || snapshotProfile.logo === '[photo-stripped]';
+  // TRQ-138: The tradesman's preview uses the LIVE profile (branding,
+  // accent, documentType, logo, contact details) so updates apply
+  // retroactively to every saved quote's preview. The client portal
+  // (/q/:token) still reads client_snapshot_profile — that frozen
+  // record is untouched. We fall back to the snapshot profile if the
+  // live one isn't passed in (legacy caller or ad-hoc test).
+  const baseProfile = liveProfile || snapshotProfile;
   const virtualState = {
     step: 5,
     profile: profileLogoIsStripped
-      ? { ...snapshotProfile, logo: restoredLogo || null }
-      : snapshotProfile,
+      ? { ...baseProfile, logo: baseProfile.logo || restoredLogo || null }
+      : baseProfile,
     jobDetails: snapshot.jobDetails || {},
     photos: restoredPhotos?.photos || {},
     extraPhotos: restoredPhotos?.extraPhotos?.length ? restoredPhotos.extraPhotos : (snapshot.extraPhotos || []),
@@ -51,6 +58,12 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
     captureMode: snapshot.captureMode || null,
     transcript: snapshot.transcript || null,
     aiRawResponse: snapshot.aiRawResponse,
+    // TRQ-137: carry the DB row id into the editor so Edit & Re-generate
+    // → Save runs the PUT (update) branch instead of POSTing a brand
+    // new row. Without this, every re-save of a saved quote creates a
+    // duplicate jobs row — the bug Paul reported with five identical
+    // QT-2026-0002 rows in his dashboard.
+    savedJobId: quote.id,
   };
 
   return (

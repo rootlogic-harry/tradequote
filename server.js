@@ -1189,12 +1189,21 @@ app.post('/api/users/:id/jobs', async (req, res) => {
 
     const quoteRef = jobDetails?.quoteReference || '';
 
-    // Dedup: if same user + quote_reference was created in last 30 seconds, return existing
+    // TRQ-137: Dedup window widened from 30s → 10 minutes.
+    // Why: Paul's edit-regenerate-save cycle is slower than 30s (he
+    // reviews the preview, adjusts, re-saves), so the old window let a
+    // stream of duplicate POSTs through. The proper fix is client-side
+    // (SavedQuoteViewer.virtualState now carries savedJobId so the
+    // next save uses PUT), but widening the server window is
+    // belt-and-braces. If the same (user, quote_reference) turns up on
+    // POST within 10 minutes, return the existing id — the client then
+    // holds that id and switches to PUT for any subsequent saves,
+    // closing the loop.
     if (quoteRef) {
       const { rows: existing } = await pool.query(
         `SELECT id FROM jobs
          WHERE user_id = $1 AND quote_reference = $2
-           AND saved_at > NOW() - INTERVAL '30 seconds'
+           AND saved_at > NOW() - INTERVAL '10 minutes'
          ORDER BY saved_at DESC LIMIT 1`,
         [req.params.id, quoteRef]
       );

@@ -130,7 +130,9 @@ describe('TRQ-106 + TRQ-107: saved quote logo + photos', () => {
   it('SavedQuoteViewer rehydrates logo when [photo-stripped] marker is present', () => {
     expect(files.savedQuoteViewer).toMatch(/getProfile/);
     expect(files.savedQuoteViewer).toMatch(/\[photo-stripped\]/);
-    expect(files.savedQuoteViewer).toMatch(/logo:\s*restoredLogo\s*\|\|\s*null/);
+    // TRQ-138 expanded the fallback chain to
+    // baseProfile.logo || restoredLogo || null (live profile first).
+    expect(files.savedQuoteViewer).toMatch(/logo:[^,\n]*\|\|\s*null/);
   });
   it('SavedQuoteViewer remounts QuoteOutput when photos arrive so selection initialiser sees them', () => {
     expect(files.savedQuoteViewer).toMatch(/key=\{restoredPhotos/);
