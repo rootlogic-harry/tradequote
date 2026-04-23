@@ -255,6 +255,72 @@ describe('csvEscape', () => {
   test('numeric input is stringified', () => {
     expect(csvEscape(42)).toBe('42');
   });
+
+  // CSV formula-injection guard (OWASP). Excel/LibreOffice treat any
+  // cell starting with = + - @ CR or TAB as a formula, so a hostile
+  // client name / description could exfiltrate data when the trader
+  // opens the CSV for a sanity-check before uploading to QBO.
+  describe('formula-injection guard', () => {
+    test('prefixes leading = with a tab', () => {
+      expect(csvEscape('=SUM(A1:A5)')).toBe('\t=SUM(A1:A5)');
+    });
+    test('= with embedded quotes: guard + RFC 4180 quoting both apply', () => {
+      // Leading = → tab prefix; internal " → doubled inside a quoted field.
+      expect(csvEscape('=HYPERLINK("x")')).toBe('"\t=HYPERLINK(""x"")"');
+    });
+    test('prefixes leading + with a tab', () => {
+      expect(csvEscape('+1234')).toBe('\t+1234');
+    });
+    test('prefixes leading - with a tab', () => {
+      expect(csvEscape('-ACME Ltd')).toBe('\t-ACME Ltd');
+    });
+    test('prefixes leading @ with a tab', () => {
+      expect(csvEscape('@SUM(A1:A5)')).toBe('\t@SUM(A1:A5)');
+    });
+    test('prefixes leading TAB with another tab', () => {
+      expect(csvEscape('\t=cmd')).toBe('\t\t=cmd');
+    });
+    test('prefixes leading CR and quotes (CR triggers RFC 4180 quoting)', () => {
+      // \rACME starts with \r → prepend \t → then contains \r → quote.
+      expect(csvEscape('\rACME')).toBe('"\t\rACME"');
+    });
+    test('plain text unaffected', () => {
+      expect(csvEscape('ACME Ltd')).toBe('ACME Ltd');
+    });
+    test('formula-looking char mid-string is unaffected', () => {
+      expect(csvEscape('price=5')).toBe('price=5');
+    });
+    test('formula guard survives comma-quoting', () => {
+      // "=ACME, Inc" starts with = → prefix tab → contains comma → quote.
+      expect(csvEscape('=ACME, Inc')).toBe('"\t=ACME, Inc"');
+    });
+  });
+});
+
+// End-to-end: a malicious customer name must not end up as a raw
+// formula-trigger cell in the CSV.
+describe('buildQuickbooksCSV — formula injection in customer name', () => {
+  test('customer name starting with = is neutralised with leading tab', () => {
+    const evilJob = {
+      ...kebroydJob,
+      client_name: '=cmd|"/c calc"!A0',
+      quote_snapshot: {
+        ...kebroydJob.quote_snapshot,
+        jobDetails: {
+          ...kebroydJob.quote_snapshot.jobDetails,
+          clientName: '=cmd|"/c calc"!A0',
+        },
+      },
+    };
+    const csv = buildQuickbooksCSV(evilJob, kebroydProfile);
+    // Every row with a customer cell must not begin that cell with =.
+    // In the first data row, Customer is column index 1.
+    const lines = csv.split('\r\n').filter(Boolean);
+    const firstDataRow = parseCSVRow(lines[1]);
+    expect(firstDataRow[1].startsWith('=')).toBe(false);
+    // Leading tab indicates the guard fired.
+    expect(firstDataRow[1].startsWith('\t')).toBe(true);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────
@@ -551,10 +617,15 @@ describe('server route wiring', () => {
     expect(block).toMatch(/Content-Disposition[\s\S]*?attachment/);
   });
 
-  test('response prefixes UTF-8 BOM for Excel compatibility', () => {
+  test('response does NOT prefix a UTF-8 BOM (QBO parser would reject)', () => {
+    // Older versions of this code prepended \uFEFF for Excel
+    // compatibility. QBO's CSV parser is reported to treat the BOM as
+    // part of the first column header ("\uFEFFInvoiceNo"), breaking
+    // auto-mapping on import. QBO is the target, not Excel.
     const idx = serverSrc.indexOf('/export/quickbooks-csv');
     const block = serverSrc.slice(idx, idx + 2000);
-    expect(block).toMatch(/\\uFEFF/);
+    expect(block).not.toMatch(/['"`]\\uFEFF['"`]\s*\+\s*csv/);
+    expect(block).toMatch(/res\.send\(csv\)/);
   });
 
   test('"no line items" / empty snapshot returns 400, not 500', () => {
@@ -589,9 +660,32 @@ describe('QuoteOutput wiring — Export for QuickBooks', () => {
     const modalBlock = quoteOutputSrc.match(
       /function QbInstructionsModal[\s\S]*?^}/m
     )?.[0] || '';
-    expect(modalBlock).toMatch(/Exclusive of tax/);
+    // QBO's actual dropdown label is "Tax Amount", not "VAT option".
+    expect(modalBlock).toMatch(/Tax Amount/);
+    expect(modalBlock).toMatch(/Exclusive of Tax/);
     // Red/error styling on the warning so it's visually distinct.
     expect(modalBlock).toMatch(/rgba\(239, 68, 68/);
+  });
+
+  test('modal full-guide shows DD/MM/YYYY (matches our DD/MM output, not D/M)', () => {
+    // formatDate pads both day and month. QBO's dropdown lists
+    // DD/MM/YYYY as an option; picking D/M/YYYY would mismatch.
+    const modalBlock = quoteOutputSrc.match(
+      /function QbInstructionsModal[\s\S]*?^}/m
+    )?.[0] || '';
+    expect(modalBlock).toMatch(/DD\/MM\/YYYY/);
+    expect(modalBlock).not.toMatch(/>D\/M\/YYYY</);
+  });
+
+  test('modal warns CIS users that Item CIS Tax Code is not yet output', () => {
+    // QBO accounts with the Construction Industry Scheme module on
+    // require an Item CIS Tax Code column. We don't emit one — the
+    // import stalls at the mapping step. Warn up front.
+    const modalBlock = quoteOutputSrc.match(
+      /function QbInstructionsModal[\s\S]*?^}/m
+    )?.[0] || '';
+    expect(modalBlock).toMatch(/CIS/);
+    expect(modalBlock).toMatch(/Item CIS Tax Code/);
   });
 
   test('modal shows which VAT setting was used for the export', () => {

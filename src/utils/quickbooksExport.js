@@ -97,7 +97,14 @@ export function addDays(input, days) {
 
 export function csvEscape(value) {
   if (value === null || value === undefined) return '';
-  const str = String(value);
+  let str = String(value);
+  // CSV formula-injection guard (OWASP). Excel/LibreOffice evaluate
+  // any cell starting with = + - @ CR or TAB as a formula. Prefix with
+  // a leading tab so the viewer treats the cell as literal text. QBO's
+  // CSV parser trims leading whitespace, so the import is unaffected.
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = '\t' + str;
+  }
   // RFC 4180 — any field containing comma / quote / CR / LF must be
   // quoted; internal quotes are doubled.
   if (/[",\n\r]/.test(str)) {

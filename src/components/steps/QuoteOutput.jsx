@@ -1516,9 +1516,26 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
           fontSize: 13, color: '#fca5a5',
         }}>
           <strong>Important:</strong> on the mapping screen set{' '}
-          <strong>VAT option → Exclusive of tax</strong>. Picking Inclusive
+          <strong>Tax Amount → Exclusive of Tax</strong>. Picking Inclusive
           makes QuickBooks back-calculate tax from the subtotal and the
           figures will be wrong.
+        </div>
+
+        {/* CIS conditional guidance. If the trader's QBO account has the
+            Construction Industry Scheme module on, QBO marks "Item CIS
+            Tax Code" as required on the mapping screen. We don't emit
+            that column yet — so the import stalls with no recovery
+            hint. Warn up front. */}
+        <div style={{
+          background: 'var(--tq-card-hover, rgba(255,255,255,0.04))',
+          border: '1px solid var(--tq-border, #3a3630)',
+          borderRadius: 8, padding: '10px 12px', marginBottom: 16,
+          fontSize: 13, color: 'var(--tq-text, #f0ede8)',
+        }}>
+          <strong>Using CIS?</strong> If the mapping screen shows{' '}
+          <em>Item CIS Tax Code</em> marked required, we don't output
+          a CIS code yet. Either turn CIS off for this import, or pick
+          a code manually from the dropdown.
         </div>
         <div style={{
           fontSize: 12, color: 'var(--tq-muted, #7a6f5e)', marginBottom: 16,
@@ -1545,8 +1562,8 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
             <li>Upload the CSV file you just downloaded</li>
             <li>On the mapping screen:
               <ul style={{ paddingLeft: 18, marginTop: 4 }}>
-                <li>Date format: <strong>D/M/YYYY</strong></li>
-                <li>VAT option: <strong>Exclusive of tax</strong></li>
+                <li>Date format: <strong>DD/MM/YYYY</strong></li>
+                <li>Tax Amount: <strong>Exclusive of Tax</strong></li>
               </ul>
             </li>
             <li>Review the import preview</li>

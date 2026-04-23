@@ -1528,9 +1528,10 @@ app.get('/api/users/:id/jobs/:jobId/export/quickbooks-csv', async (req, res) => 
       'Content-Disposition',
       `attachment; filename="fastquote-${safeRef}-quickbooks.csv"`
     );
-    // UTF-8 BOM so Excel on Windows doesn't mangle accented characters.
-    // QBO's import pipeline tolerates the BOM.
-    res.send('\uFEFF' + csv);
+    // No BOM: QBO's CSV parser has been known to reject the BOM as part
+    // of the first column header ("\uFEFFInvoiceNo"), breaking auto-
+    // mapping. Excel re-opening isn't the target use case here — QBO is.
+    res.send(csv);
   } catch (err) {
     // "no line items" and "snapshot is empty" are 400-class user errors,
     // not server bugs. Return the specific message so the UI can explain.
