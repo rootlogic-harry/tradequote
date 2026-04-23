@@ -15,8 +15,15 @@ const MAX_EXTRA_PHOTOS = 3;
  * @param {(files: File[]) => void} props.onExtraPhotosChange
  * @param {number} [props.maxExtraPhotos=3]
  * @param {number} [props.maxDuration=180]   — max video length in seconds
- * @param {(msg: string) => void} [props.onDurationError] — called when video exceeds maxDuration
+ * @param {(msg: string) => void} [props.onError] — surfaces ANY rejection
+ *   reason to the parent (wired to showToast). Covers non-video MIME,
+ *   oversize file, and duration-exceeded.
+ * @param {(msg: string) => void} [props.onDurationError] — DEPRECATED,
+ *   retained for back-compat with callers that only wired duration.
+ *   Prefer onError.
  */
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB — matches server multer cap
+
 export default function VideoUpload({
   video = null,
   onVideoChange,
@@ -24,6 +31,7 @@ export default function VideoUpload({
   onExtraPhotosChange,
   maxExtraPhotos = MAX_EXTRA_PHOTOS,
   maxDuration = 180,
+  onError,
   onDurationError,
 }) {
   const [dragOver, setDragOver] = useState(false);
@@ -32,16 +40,29 @@ export default function VideoUpload({
   const [videoUrl, setVideoUrl] = useState(null);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const photoInputRef = useRef(null);
 
   // Stable refs for callbacks used inside video effect — avoids stale closures
   // without re-triggering the effect when parent re-renders
   const onVideoChangeRef = useRef(onVideoChange);
+  const onErrorRef = useRef(onError);
   const onDurationErrorRef = useRef(onDurationError);
   const maxDurationRef = useRef(maxDuration);
   useEffect(() => { onVideoChangeRef.current = onVideoChange; }, [onVideoChange]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
   useEffect(() => { onDurationErrorRef.current = onDurationError; }, [onDurationError]);
   useEffect(() => { maxDurationRef.current = maxDuration; }, [maxDuration]);
+
+  // Report an error to whichever handler the parent wired. Falls back to
+  // the legacy onDurationError for back-compat with JobDetails which
+  // (pre-fix) only listened on that prop. Paul's bug was this callback
+  // never being wired, so silent `return`s in handleFile left him
+  // staring at an unchanged empty drop-zone after a failed select.
+  const reportError = useCallback((msg) => {
+    if (typeof onErrorRef.current === 'function') onErrorRef.current(msg);
+    else if (typeof onDurationErrorRef.current === 'function') onDurationErrorRef.current(msg);
+  }, []);
 
   // Generate thumbnail and read duration when video changes
   useEffect(() => {
@@ -62,7 +83,9 @@ export default function VideoUpload({
       setDuration(videoEl.duration);
       // Client-side duration check — reject before uploading
       if (videoEl.duration > maxDurationRef.current) {
-        onDurationErrorRef.current?.(`Video must be under ${Math.floor(maxDurationRef.current / 60)} minutes`);
+        const msg = `Video must be under ${Math.floor(maxDurationRef.current / 60)} minutes (this one is ${Math.ceil(videoEl.duration / 60)} min)`;
+        if (typeof onErrorRef.current === 'function') onErrorRef.current(msg);
+        else if (typeof onDurationErrorRef.current === 'function') onDurationErrorRef.current(msg);
         onVideoChangeRef.current(null);
         return;
       }
@@ -84,10 +107,28 @@ export default function VideoUpload({
   }, [video]);
 
   const handleFile = useCallback((file) => {
-    if (!file || !file.type.startsWith('video/')) return;
-    if (file.size > 100 * 1024 * 1024) return; // 100MB client-side cap
+    // Every rejection path now SURFACES the reason. Silent returns were
+    // the root cause of Paul's iPad "picked a video, nothing happened"
+    // — he had no way to know the file was being refused.
+    if (!file) {
+      reportError('No file was selected. Tap again to pick a video.');
+      return;
+    }
+    if (!file.type || !file.type.startsWith('video/')) {
+      reportError(
+        `That file isn\u2019t a video (detected: ${file.type || 'unknown'}). Please choose a video from your library.`
+      );
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      const sizeMb = (file.size / 1024 / 1024).toFixed(0);
+      reportError(
+        `Video is ${sizeMb}MB — maximum is 100MB. Try recording at a lower quality, or trim it to a shorter clip.`
+      );
+      return;
+    }
     onVideoChange(file);
-  }, [onVideoChange]);
+  }, [onVideoChange, reportError]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -152,42 +193,80 @@ export default function VideoUpload({
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
         style={{
           border: `2px dashed ${dragOver ? 'var(--accent, #2563eb)' : 'var(--border, #ccc)'}`,
           borderRadius: '12px',
-          padding: '48px 24px',
+          padding: '36px 24px',
           textAlign: 'center',
-          cursor: 'pointer',
           background: dragOver ? 'var(--accent-bg, #eff6ff)' : 'transparent',
           transition: 'border-color 0.15s, background 0.15s',
         }}
       >
-        <div style={{ fontSize: '36px', marginBottom: '12px' }}>🎬</div>
+        <div style={{ fontSize: '36px', marginBottom: '8px' }}>🎬</div>
         <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
-          Tap to record or drop a video
+          Add a video of the job
         </div>
-        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '8px' }}>
-          or choose from your files (max 3 minutes, 100MB)
+        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '16px' }}>
+          Up to 3 minutes, under 100MB.
         </div>
-        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '12px', marginBottom: '16px', fontStyle: 'italic', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+
+        {/* Two primary buttons, side by side. On iPad the distinction
+            matters: "Record" skips the Photos picker (capture=environment
+            opens the camera directly), while "Choose from library"
+            opens the standard picker. Keeping them separate stops Paul
+            getting stuck in the Photos picker when he meant to shoot
+            fresh footage. */}
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '14px' }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }}
+            style={{
+              padding: '12px 22px',
+              minHeight: '44px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'var(--accent, #2563eb)',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 600,
+            }}
+          >
+            📹 Record now
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+            style={{
+              padding: '12px 22px',
+              minHeight: '44px',
+              borderRadius: '8px',
+              border: '1px solid var(--border, #ccc)',
+              background: 'var(--card-bg, #fff)',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+            }}
+          >
+            Choose from library
+          </button>
+        </div>
+
+        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '12px', fontStyle: 'italic', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
           Tip: hold the camera steady on your reference card (or a tape measure)
           for 2–3 seconds so a clean frame can be captured.
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-          style={{
-            padding: '10px 24px',
-            borderRadius: '8px',
-            border: '1px solid var(--border, #ccc)',
-            background: 'var(--card-bg, #fff)',
-            cursor: 'pointer',
-            fontSize: '14px',
-          }}
-        >
-          Choose file
-        </button>
+
+        {/* Two inputs: camera-capture (opens camera on iOS/Android) and
+            library-picker (opens Photos). Both feed the same handler. */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="video/*"
+          capture="environment"
+          onChange={handleInputChange}
+          style={{ display: 'none' }}
+        />
         <input
           ref={fileInputRef}
           type="file"

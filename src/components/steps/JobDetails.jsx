@@ -490,6 +490,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
             onVideoChange={setVideoFile}
             extraPhotos={videoExtraPhotos}
             onExtraPhotosChange={setVideoExtraPhotos}
+            onError={(msg) => showToast?.(msg, 'error')}
           />
 
           {/* Brief notes in video mode */}

@@ -19,11 +19,23 @@ beforeAll(async () => {
 });
 
 describe('VideoUpload mobile optimisations', () => {
-  describe('file picker over direct camera', () => {
-    it('omits the capture attribute so mobile users get a file picker (Camera / Photo Library / Browse)', () => {
-      // Most users record on-site then upload later, so the input must not force the camera.
+  describe('record + pick — two-input design', () => {
+    // Original test asserted "no capture attribute" was best, but
+    // Paul's iPad video showed library-only left him stuck in the
+    // Photos picker for 50+ seconds. Hardened design exposes BOTH:
+    //   - capture=environment → shoots directly from the camera
+    //   - no capture → opens the library picker
+    // Separate buttons let the user pick the right path per situation.
+    it('exposes a camera-capture input AND a library-picker input', () => {
       expect(VideoUploadSource).toMatch(/accept=["']video\/\*["']/);
-      expect(VideoUploadSource).not.toMatch(/capture=["']environment["']/);
+      // Camera-capture input present (direct record).
+      expect(VideoUploadSource).toMatch(/capture=["']environment["']/);
+      // Library-picker input present (no capture attr on fileInputRef).
+      const libInput = VideoUploadSource.match(
+        /<input\s+[\s\S]{0,200}?ref=\{fileInputRef\}[\s\S]{0,300}?\/>/
+      );
+      expect(libInput).not.toBeNull();
+      expect(libInput[0]).not.toMatch(/capture=/);
     });
   });
 

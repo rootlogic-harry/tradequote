@@ -49,8 +49,17 @@ const files = {
 // TRQ-99 — Photo/video inputs now show the OS file picker (not camera only)
 // ─────────────────────────────────────────────────────────────────────────
 describe('TRQ-99: OS file picker on photo/video inputs', () => {
-  it('VideoUpload does not force capture="environment"', () => {
-    expect(files.videoUpload).not.toMatch(/capture=["']environment["']/);
+  it('VideoUpload offers the library picker without forcing capture', () => {
+    // The default "Choose from library" input must NOT force the
+    // camera. A separate "Record now" input (capture=environment)
+    // was added later after Paul's iPad video showed that library-
+    // only users got stuck in the Photos picker — both paths now
+    // coexist.
+    const libInput = files.videoUpload.match(
+      /<input\s+[\s\S]{0,200}?ref=\{fileInputRef\}[\s\S]{0,300}?\/>/
+    );
+    expect(libInput).not.toBeNull();
+    expect(libInput[0]).not.toMatch(/capture=/);
   });
   it('JobDetails photo inputs do not force capture="environment"', () => {
     expect(files.jobDetails).not.toMatch(/capture=["']environment["']/);
