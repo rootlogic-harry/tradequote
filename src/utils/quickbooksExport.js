@@ -106,6 +106,26 @@ export function csvEscape(value) {
   return str;
 }
 
+// Collapse a line to qty=1 when the upstream qty × rate doesn't equal
+// the saved total (within one penny). QBO recomputes amount as
+// qty × rate on import, so keeping mismatched triples would drift the
+// invoice total. Keeping it exact beats showing the "real" unit rate.
+export function reconcileLineMath(qty, rate, amount) {
+  const q = Number(qty);
+  const r = Number(rate);
+  const a = Number(amount);
+  if (!Number.isFinite(q) || !Number.isFinite(r) || !Number.isFinite(a)) {
+    return { qty: 1, rate: a, amount: a };
+  }
+  const computed = q * r;
+  if (Math.abs(computed - a) < 0.005) {
+    // Within half a penny — safe to keep the original triple so the
+    // invoice preserves the unit detail (e.g. 4.5 t × £185 = £832.50).
+    return { qty: q, rate: r, amount: a };
+  }
+  return { qty: 1, rate: a, amount: a };
+}
+
 // ─── Main exporter ────────────────────────────────────────────────────
 
 const CSV_HEADERS = [
@@ -179,12 +199,17 @@ export function buildQuickbooksCSV(job, profile) {
 
   // Materials
   for (const m of materials) {
-    const qty = Number(m.quantity ?? 1);
-    const rate = Number(m.unitCost ?? 0);
-    const amount = Number(m.totalCost ?? qty * rate);
+    const rawQty = Number(m.quantity ?? 1);
+    const rawRate = Number(m.unitCost ?? 0);
+    const amount = Number(m.totalCost ?? rawQty * rawRate);
     if (!Number.isFinite(amount) || amount <= 0) continue;  // QBO drops zero/negative
     const name = sanitiseItemName(m.description);
     const desc = sanitiseText(m.description || 'Material supply').slice(0, ITEM_DESCRIPTION_CAP);
+    // If qty × rate doesn't equal the saved total (happens when upstream
+    // rounding nudged totalCost — e.g. 2.5 × 185 = 462.50 but the saved
+    // total is 463.00), collapse to qty=1 so QBO's own computation of
+    // qty × rate produces exactly the saved total. No rounding.
+    const { qty, rate } = reconcileLineMath(rawQty, rawRate, amount);
     lines.push({ name, desc, qty, rate, amount });
   }
 

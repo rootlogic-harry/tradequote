@@ -15,6 +15,7 @@ import {
   addDays,
   csvEscape,
   parseUKDate,
+  reconcileLineMath,
 } from '../utils/quickbooksExport.js';
 
 import { parseCSVRow } from './helpers/parseCSVRow.js';
@@ -461,6 +462,55 @@ describe('buildQuickbooksCSV — numeric formatting', () => {
     const first = parseCSVRow(csv.split('\r\n')[1]);
     expect(first[2]).toBe('16/04/2026');
     expect(first[3]).toBe('16/05/2026');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// reconcileLineMath — preserves exact totals when qty × rate drifts
+// ──────────────────────────────────────────────────────────────────────
+describe('reconcileLineMath', () => {
+  test('passes through when qty × rate matches amount exactly', () => {
+    expect(reconcileLineMath(4.5, 185, 832.50)).toEqual({ qty: 4.5, rate: 185, amount: 832.50 });
+  });
+  test('passes through when qty × rate is within half-a-penny', () => {
+    // 3 × 33.33 = 99.99, amount 99.99 — exact match, keep detail
+    expect(reconcileLineMath(3, 33.33, 99.99)).toEqual({ qty: 3, rate: 33.33, amount: 99.99 });
+  });
+  test('collapses to qty=1 when qty × rate disagrees with amount (Harry bug)', () => {
+    // 2.5 × 185 = 462.50 but saved total is 463.00 (upstream rounded up).
+    // Must collapse to 1 × 463.00 so QBO's qty × rate === saved total.
+    expect(reconcileLineMath(2.5, 185, 463.00)).toEqual({ qty: 1, rate: 463.00, amount: 463.00 });
+  });
+  test('collapses when numbers are wildly mismatched', () => {
+    expect(reconcileLineMath(5, 100, 750)).toEqual({ qty: 1, rate: 750, amount: 750 });
+  });
+  test('falls back to qty=1 with garbage inputs', () => {
+    expect(reconcileLineMath('bad', 185, 463)).toEqual({ qty: 1, rate: 463, amount: 463 });
+  });
+});
+
+describe('buildQuickbooksCSV — rounding drift (no rounding guarantee)', () => {
+  test('material line with drifted totalCost collapses to qty=1, rate=totalCost', () => {
+    const driftJob = {
+      ...kebroydJob,
+      quote_snapshot: {
+        ...kebroydJob.quote_snapshot,
+        reviewData: {
+          ...kebroydJob.quote_snapshot.reviewData,
+          materials: [
+            { id: 'mat-0', description: 'Sandstone', quantity: 2.5, unit: 't', unitCost: 185, totalCost: 463.00 },
+          ],
+          labourEstimate: { estimatedDays: 0, numberOfWorkers: 0, dayRate: 0 },
+        },
+      },
+    };
+    const csv = buildQuickbooksCSV(driftJob, kebroydProfile);
+    const lines = csv.split('\r\n').filter(Boolean);
+    const row = parseCSVRow(lines[1]);
+    // Columns: InvoiceNo, Customer, InvoiceDate, DueDate, Item, Desc, Qty, Rate, Amount, Tax
+    expect(row[6]).toBe('1');       // quantity
+    expect(row[7]).toBe('463.00');  // rate (= total)
+    expect(row[8]).toBe('463.00');  // amount
   });
 });
 
