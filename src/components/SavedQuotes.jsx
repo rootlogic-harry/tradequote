@@ -227,7 +227,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
                   {quote.siteAddress || ''}
                   {quote.quoteDate ? ` \u00b7 ${formatDate(quote.quoteDate)}` : ''}
-                  <span className="fq:hidden"> \u00b7 {formatCurrency(quote.totalAmount)}</span>
+                  <span className="fq:hidden"> · {formatCurrency(quote.totalAmount)}</span>
                 </div>
               </div>
 

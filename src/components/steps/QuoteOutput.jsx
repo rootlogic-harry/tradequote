@@ -1488,24 +1488,43 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
           Three steps to import it in QuickBooks Online.
         </p>
         <ol style={{ paddingLeft: 20, marginBottom: 16, lineHeight: 1.6 }}>
-          <li><strong>Settings \u2699 \u2192 Import data \u2192 Invoices</strong></li>
+          <li><strong>Settings ⚙ → Import data → Invoices</strong></li>
           <li>Upload the CSV you just downloaded</li>
           <li>Review the preview, then <strong>Start import</strong></li>
         </ol>
+
+        {/* iPad Safari tip — Paul hit this: he tapped "Save to Notes"
+            from the share sheet and Notes stored the content as plain
+            text instead of a .csv file. Guide the user to Save to
+            Files (which preserves the extension) or AirDrop. */}
+        <div style={{
+          background: 'rgba(232, 168, 56, 0.12)',
+          border: '1px solid rgba(232, 168, 56, 0.4)',
+          borderRadius: 8, padding: '10px 12px', marginBottom: 16,
+          fontSize: 13, color: 'var(--tq-text, #f0ede8)',
+        }}>
+          <strong>On iPad/iPhone:</strong> from the share sheet pick{' '}
+          <strong>Save to Files</strong> (or AirDrop to your Mac). Avoid{' '}
+          <em>Save to Notes</em> — Notes stores the content as plain text,
+          not a .csv file.
+        </div>
+
         <div style={{
           background: 'rgba(239, 68, 68, 0.12)',
           border: '1px solid rgba(239, 68, 68, 0.4)',
           borderRadius: 8, padding: '10px 12px', marginBottom: 16,
           fontSize: 13, color: '#fca5a5',
         }}>
-          <strong>Important:</strong> on the mapping screen set <strong>VAT option \u2192 Exclusive of tax</strong>.
-          Picking Inclusive makes QuickBooks back-calculate tax from the subtotal and the figures will be wrong.
+          <strong>Important:</strong> on the mapping screen set{' '}
+          <strong>VAT option → Exclusive of tax</strong>. Picking Inclusive
+          makes QuickBooks back-calculate tax from the subtotal and the
+          figures will be wrong.
         </div>
         <div style={{
           fontSize: 12, color: 'var(--tq-muted, #7a6f5e)', marginBottom: 16,
         }}>
-          This export uses <strong>{vatRegistered ? '20% VAT' : 'No VAT'}</strong> based on your profile.
-          Change it in Profile if that\u2019s wrong, then re-export.
+          This export uses <strong>{vatRegistered ? '20% VAT' : 'No VAT'}</strong>{' '}
+          based on your profile. Change it in Profile if that's wrong, then re-export.
         </div>
         <button
           type="button"
@@ -1521,7 +1540,7 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
         {expanded && (
           <ol style={{ paddingLeft: 20, marginBottom: 16, lineHeight: 1.6, fontSize: 13, color: 'var(--tq-muted, #f0ede8)' }}>
             <li>Log in to QuickBooks Online</li>
-            <li>Click the \u2699 Settings icon \u2192 Import data</li>
+            <li>Click the ⚙ Settings icon → Import data</li>
             <li>Click <strong>Invoices</strong></li>
             <li>Upload the CSV file you just downloaded</li>
             <li>On the mapping screen:
@@ -1536,7 +1555,9 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
           </ol>
         )}
         <p style={{ fontSize: 12, color: 'var(--tq-muted, #7a6f5e)', marginBottom: 16 }}>
-          Note: QuickBooks creates a draft invoice \u2014 you can edit anything before sending. Imported batches can\u2019t be undone; individual invoices have to be deleted one at a time.
+          Note: QuickBooks creates a draft invoice — you can edit anything before
+          sending. Imported batches can't be undone; individual invoices have to be
+          deleted one at a time.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button

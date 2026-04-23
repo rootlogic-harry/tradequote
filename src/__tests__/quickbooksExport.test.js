@@ -550,4 +550,28 @@ describe('QuoteOutput wiring — Export for QuickBooks', () => {
     )?.[0] || '';
     expect(modalBlock).toMatch(/vatRegistered \? ['"]20% VAT['"] : ['"]No VAT['"]/);
   });
+
+  test('modal warns iPad users to Save to Files (not Notes)', () => {
+    // Paul hit the Notes trap: he picked Save to Notes from the iPad
+    // share sheet, and Notes stored the CSV content as plain text
+    // rather than a .csv file. This test locks in the fix.
+    const modalBlock = quoteOutputSrc.match(
+      /function QbInstructionsModal[\s\S]*?^}/m
+    )?.[0] || '';
+    expect(modalBlock).toMatch(/Save to Files/);
+    expect(modalBlock).toMatch(/Save to Notes/);
+  });
+
+  test('modal contains no unresolved \\u escape sequences in JSX text', () => {
+    // Regression guard for the Unicode-in-JSX-text bug. JSX treats
+    // \u2699 etc. as literal characters, not escapes — they only
+    // evaluate inside a JS expression {}. Modal had \u2699, \u2192,
+    // \u2014, \u2019 rendering as raw text. Replaced with real chars.
+    const modalBlock = quoteOutputSrc.match(
+      /function QbInstructionsModal[\s\S]*?^}/m
+    )?.[0] || '';
+    // Strip anything inside JSX {...} expressions, then hunt for \u.
+    const stripped = modalBlock.replace(/\{[^{}]*\}/g, '');
+    expect(stripped).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+  });
 });
