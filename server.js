@@ -23,6 +23,7 @@ import {
 } from './src/utils/aiParser.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf } from './pdfRenderer.js';
+import { fileTypeFromFile } from 'file-type';
 import {
   generateClientToken,
   computeClientTokenExpiry,
@@ -75,6 +76,12 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '0'); // modern browsers — CSP replaces this
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()');
+  // sec-audit L-2 — HSTS in production. 2-year max-age with preload
+  // tells browsers to never load tradequote-production.up.railway.app
+  // over plain HTTP again. Skipped in dev so localhost still works.
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  }
   next();
 });
 
@@ -278,6 +285,24 @@ async function initDB() {
       );
     `);
 
+    // sec-audit I-2 — admin audit trail. Every privileged action
+    // (set-plan, migrate-data, future admin tools) writes a row here.
+    // Append-only: never UPDATE or DELETE except for retention pruning.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_audit (
+        id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        actor_id     TEXT REFERENCES users(id),
+        action       TEXT NOT NULL,
+        target_id    TEXT,
+        details      JSONB,
+        ip           TEXT,
+        user_agent   TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_audit_actor ON admin_audit(actor_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_admin_audit_action ON admin_audit(action, created_at DESC);
+    `);
+
     // Missing indexes for common query patterns
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
@@ -401,7 +426,13 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // sec-audit L-1 — `auto` resolves to true when the connection is
+    // HTTPS (in prod, Railway terminates TLS and we trust the
+    // X-Forwarded-Proto header via app.set('trust proxy', 1)) and
+    // false on local HTTP dev. Removes the previous NODE_ENV check
+    // — same effect in prod, but no risk that a misset env var
+    // silently sends session cookies over plain HTTP.
+    secure: 'auto',
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   },
@@ -502,6 +533,16 @@ function handleOauthFailure(err, req, res, _next) {
 
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login?error=auth_failed' }),
+  // sec-audit L-4 — regenerate the session on successful login so any
+  // pre-login session id (planted via fixation) is invalidated. Passport
+  // re-attaches req.user to the new session for us.
+  (req, res, next) => {
+    const user = req.user;
+    req.session.regenerate((err) => {
+      if (err) return next(err);
+      req.login(user, (loginErr) => loginErr ? next(loginErr) : next());
+    });
+  },
   (req, res) => {
     if (!req.user.profile_complete) {
       return res.redirect('/?onboarding=true');
@@ -1015,6 +1056,27 @@ function requireAdminPlan(req, res, next) {
     return res.status(403).json({ error: 'This feature is not available on your plan.' });
   }
   next();
+}
+
+// sec-audit I-2 — fire-and-forget admin audit write. Never throws —
+// audit failure must not break the underlying admin action.
+async function logAdminAction(req, action, targetId = null, details = null) {
+  try {
+    await pool.query(
+      `INSERT INTO admin_audit (actor_id, action, target_id, details, ip, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        req.user?.id || null,
+        String(action).slice(0, 100),
+        targetId ? String(targetId).slice(0, 100) : null,
+        details ? JSON.parse(JSON.stringify(details)) : null,
+        req.ip,
+        (req.get('user-agent') || '').slice(0, 500),
+      ]
+    );
+  } catch (err) {
+    console.warn(`[Audit] write failed action=${action} err=${err.message}`);
+  }
 }
 
 // Protect all user-scoped routes
@@ -1850,6 +1912,7 @@ app.post('/api/admin/users/:id/set-plan', requireAuth, requireAdminPlan, async (
     }
     const { rowCount } = await pool.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, req.params.id]);
     if (rowCount === 0) return res.status(404).json({ error: 'User not found' });
+    await logAdminAction(req, 'set-plan', req.params.id, { newPlan: plan });
     res.json({ ok: true, id: req.params.id, plan });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
@@ -1895,6 +1958,11 @@ app.post('/api/admin/migrate-data', requireAuth, requireAdminPlan, async (req, r
     await client.query('UPDATE settings SET user_id = $1 WHERE user_id = $2 AND key NOT IN (SELECT key FROM settings WHERE user_id = $1)', [toUserId, fromUserId]);
 
     await client.query('COMMIT');
+    await logAdminAction(req, 'migrate-data', toUserId, {
+      from: fromUserId,
+      to: toUserId,
+      counts: { jobs: jobs.rowCount, diffs: diffs.rowCount, photos: photos.rowCount },
+    });
     res.json({
       ok: true,
       from: { id: fromUserId, name: fromUser.rows[0].name },
@@ -1956,10 +2024,36 @@ app.delete('/api/users/:id/drafts', async (req, res) => {
 
 // --- Photo Routes ---
 
+// sec-audit M-3 — hard cap per-user on photo storage. Without this, a
+// user could push 50 MB JSONs in a loop and fill our Postgres. 500 MB
+// is plenty for normal use (~25 high-res quote-photo sets).
+const PER_USER_PHOTO_BYTES_CEILING = 500 * 1024 * 1024;
+
 app.put('/api/users/:id/photos/:context/:slot', async (req, res) => {
   try {
     const { data, label, name } = req.body;
     if (!data) return res.status(400).json({ error: 'data is required' });
+
+    // Quota check: sum existing user_photos rows for this user (excl.
+    // the row we're about to overwrite) + the new payload size.
+    const { rows: usageRows } = await pool.query(
+      `SELECT COALESCE(SUM(octet_length(data)), 0)::bigint AS bytes
+         FROM user_photos
+        WHERE user_id = $1
+          AND NOT (context = $2 AND slot = $3)`,
+      [req.params.id, req.params.context, req.params.slot]
+    );
+    const existingBytes = Number(usageRows[0]?.bytes || 0);
+    const incomingBytes = Buffer.byteLength(String(data), 'utf8');
+    if (existingBytes + incomingBytes > PER_USER_PHOTO_BYTES_CEILING) {
+      console.warn(
+        `[Photo] quota exceeded user=${req.params.id} existing=${existingBytes} incoming=${incomingBytes}`
+      );
+      return res.status(413).json({
+        error: 'Photo storage quota exceeded for this account. Delete old photos to make room.',
+      });
+    }
+
     await pool.query(
       `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())
@@ -2153,6 +2247,18 @@ const aiRateLimit = rateLimit({
   validate: false,
 });
 
+// sec-audit M-4 — second rate limit keyed by client IP. Prevents the
+// "many cheap accounts" bypass: per-user is 20/hour but with multiple
+// OAuth accounts an attacker could multiply that. This catches the
+// common case where the abuse comes from one client. Production sits
+// behind Railway's proxy; trust proxy is set above so req.ip is the
+// real client IP, not Railway's edge.
+const aiRateLimitPerIp = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 100, // 5x the per-user — leaves room for shared NATs (offices, schools)
+  message: { error: 'Too many analyses from this network. Please wait before trying again.' },
+});
+
 // --- Dictation (voice-to-text) ---
 
 const dictationUpload = multer({
@@ -2302,10 +2408,42 @@ app.post('/api/users/:id/jobs/:jobId/video',
       return res.status(400).json({ error: 'File must be a video' });
     }
 
-    // Validate extra photo MIME types
+    // sec-audit M-2 — verify magic bytes, not just the client's claimed
+    // MIME. A user could upload e.g. an ELF binary with Content-Type:
+    // video/mp4 to feed ffmpeg unexpected input. Reject anything whose
+    // sniffed MIME doesn't actually match a video container.
+    try {
+      const sniffed = await fileTypeFromFile(videoFile.path);
+      if (!sniffed || !sniffed.mime.startsWith('video/')) {
+        try { fs.unlinkSync(videoFile.path); } catch {}
+        return res.status(400).json({
+          error: `File contents are not a recognised video format (detected: ${sniffed?.mime || 'unknown'})`,
+        });
+      }
+    } catch (err) {
+      console.warn(`[Video] magic-byte check failed: ${err.message}`);
+      try { fs.unlinkSync(videoFile.path); } catch {}
+      return res.status(400).json({ error: 'Could not verify video file format' });
+    }
+
+    // Validate extra photo MIME types (sniffed too).
     const invalidPhoto = extraPhotoFiles.find(f => !f.mimetype?.startsWith('image/'));
     if (invalidPhoto) {
       return res.status(400).json({ error: `Extra photo must be an image (got ${invalidPhoto.mimetype})` });
+    }
+    for (const f of extraPhotoFiles) {
+      try {
+        const sniffed = await fileTypeFromFile(f.path);
+        if (!sniffed || !sniffed.mime.startsWith('image/')) {
+          try { fs.unlinkSync(f.path); } catch {}
+          return res.status(400).json({
+            error: `Extra photo contents are not a recognised image (detected: ${sniffed?.mime || 'unknown'})`,
+          });
+        }
+      } catch {
+        try { fs.unlinkSync(f.path); } catch {}
+        return res.status(400).json({ error: 'Could not verify photo file format' });
+      }
     }
 
     console.log(`[Video] user=${userId} job=${jobId} mime=${videoFile.mimetype} size=${videoFile.size} extraPhotos=${extraPhotoFiles.length}`);
@@ -2523,7 +2661,7 @@ function validateAnthropicProxyBody(body) {
   return null;
 }
 
-app.post('/api/anthropic/messages', requireAuth, aiRateLimit, async (req, res) => {
+app.post('/api/anthropic/messages', aiRateLimitPerIp, requireAuth, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
@@ -2701,7 +2839,7 @@ import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { shouldAutoCalibrate } from './autoCalibration.js';
 import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 
-app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
+app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });

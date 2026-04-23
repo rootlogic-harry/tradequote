@@ -362,8 +362,11 @@ describe('Security hardening', () => {
     expect(serverSource).toContain('httpOnly: true');
   });
 
-  test('session cookie is secure in production', () => {
-    expect(serverSource).toContain("secure: process.env.NODE_ENV === 'production'");
+  test('session cookie is secure in production (sec-audit L-1)', () => {
+    // Hardened: now uses secure: 'auto' which resolves to true under
+    // HTTPS. Previously NODE_ENV-conditional, which silently disabled
+    // Secure if the env var was wrong.
+    expect(serverSource).toContain("secure: 'auto'");
   });
 
   test('session cookie has sameSite', () => {

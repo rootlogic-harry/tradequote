@@ -127,6 +127,128 @@ describe('sec-audit H-1 — Anthropic proxy enforces model + token caps', () => 
   });
 });
 
+describe('sec-audit L-1 — session cookie Secure resolves via "auto"', () => {
+  test('cookie config uses secure: "auto" (no NODE_ENV-dependent check)', () => {
+    expect(serverSrc).toMatch(/secure:\s*['"]auto['"]/);
+    // Regression guard against the previous conditional that could
+    // silently disable Secure if NODE_ENV is anything but 'production'.
+    expect(serverSrc).not.toMatch(/secure:\s*process\.env\.NODE_ENV/);
+  });
+});
+
+describe('sec-audit L-2 — HSTS in production', () => {
+  test('Strict-Transport-Security header set in production', () => {
+    expect(serverSrc).toMatch(
+      /NODE_ENV\s*===\s*['"]production['"][\s\S]{0,400}Strict-Transport-Security/
+    );
+    // includeSubDomains + preload for max protection against downgrade.
+    expect(serverSrc).toMatch(/includeSubDomains/);
+    expect(serverSrc).toMatch(/preload/);
+  });
+});
+
+describe('sec-audit L-4 — session regeneration on login (fixation defence)', () => {
+  test('OAuth callback regenerates session and re-logs the user in', () => {
+    // The greedy regex on the route is brittle (nested parens),
+    // so we slice from the route registration to the next top-level
+    // `app.` call.
+    const start = serverSrc.indexOf("app.get('/auth/google/callback'");
+    expect(start).toBeGreaterThan(-1);
+    const next = serverSrc.indexOf('\napp.', start + 1);
+    const block = serverSrc.slice(start, next === -1 ? start + 2000 : next);
+    expect(block).toMatch(/session\.regenerate/);
+    expect(block).toMatch(/req\.login\(user/);
+    // Order must be: regenerate first, then req.login. If the order
+    // flips, fixation defence is voided.
+    expect(block.indexOf('session.regenerate')).toBeLessThan(block.indexOf('req.login'));
+  });
+});
+
+describe('sec-audit M-2 — magic-byte verification on uploads', () => {
+  test('imports fileTypeFromFile (file-type magic-byte detector)', () => {
+    expect(serverSrc).toMatch(/import\s*\{\s*fileTypeFromFile\s*\}\s*from\s*['"`]file-type['"`]/);
+  });
+
+  test('video upload checks the sniffed MIME starts with video/', () => {
+    expect(serverSrc).toMatch(/fileTypeFromFile\s*\(\s*videoFile\.path\s*\)/);
+    expect(serverSrc).toMatch(/sniffed\.mime\.startsWith\(\s*['"]video\/['"]\s*\)/);
+  });
+
+  test('extra photos are sniffed too (covers MIME-spoofed images in the loop)', () => {
+    expect(serverSrc).toMatch(/sniffed\.mime\.startsWith\(\s*['"]image\/['"]\s*\)/);
+  });
+
+  test('rejected uploads are unlinked from /tmp (no DoS via tmp fill)', () => {
+    // Catches the regression where we reject the request but leave
+    // the file behind, allowing /tmp to fill up.
+    expect(serverSrc).toMatch(/fs\.unlinkSync\(videoFile\.path\)/);
+  });
+});
+
+describe('sec-audit M-3 — per-user photo storage cap', () => {
+  test('declares a per-user ceiling constant', () => {
+    expect(serverSrc).toMatch(/PER_USER_PHOTO_BYTES_CEILING\s*=\s*\d+/);
+  });
+
+  test('photo PUT runs a quota check before INSERT', () => {
+    const route = serverSrc.match(
+      /app\.put\(\s*['"`]\/api\/users\/:id\/photos\/:context\/:slot['"`][\s\S]*?\n\}\)\s*;/
+    );
+    expect(route).not.toBeNull();
+    // Sums existing bytes for this user excluding the row being overwritten.
+    expect(route[0]).toMatch(/SUM\(\s*octet_length\(data\)/i);
+    // Returns 413 when over.
+    expect(route[0]).toMatch(/res\.status\(413\)/);
+  });
+});
+
+describe('sec-audit M-4 — IP-based rate limit on AI routes (multi-account bypass)', () => {
+  test('declares aiRateLimitPerIp using the default IP keyGenerator', () => {
+    expect(serverSrc).toMatch(/aiRateLimitPerIp\s*=\s*rateLimit\(/);
+    // Crucially: NO custom keyGenerator on this one — it falls back
+    // to req.ip, which (with trust proxy) is the real client IP.
+    const block = serverSrc.match(/aiRateLimitPerIp\s*=\s*rateLimit\(\{[\s\S]*?\}\);/);
+    expect(block).not.toBeNull();
+    expect(block[0]).not.toMatch(/keyGenerator/);
+  });
+
+  test('both AI routes have aiRateLimitPerIp before the auth check', () => {
+    expect(serverSrc).toMatch(/\/api\/anthropic\/messages['"`],\s*aiRateLimitPerIp/);
+    expect(serverSrc).toMatch(/\/api\/users\/:id\/analyse['"`],\s*aiRateLimitPerIp/);
+  });
+});
+
+describe('sec-audit I-2 — admin audit log', () => {
+  test('admin_audit table created at boot', () => {
+    expect(serverSrc).toMatch(/CREATE TABLE IF NOT EXISTS\s+admin_audit/);
+    // Must store actor, action, target, ip, ua at minimum.
+    expect(serverSrc).toMatch(/actor_id\s+TEXT/);
+    expect(serverSrc).toMatch(/action\s+TEXT NOT NULL/);
+    expect(serverSrc).toMatch(/target_id\s+TEXT/);
+    expect(serverSrc).toMatch(/ip\s+TEXT/);
+    expect(serverSrc).toMatch(/user_agent\s+TEXT/);
+  });
+
+  test('logAdminAction helper is fire-and-forget (never throws)', () => {
+    const fn = serverSrc.match(/async function logAdminAction[\s\S]*?^\}/m)?.[0] || '';
+    expect(fn).toMatch(/try\s*\{/);
+    expect(fn).toMatch(/catch\s*\(/);
+    expect(fn).not.toMatch(/throw\s/);
+  });
+
+  test('set-plan route writes an audit row', () => {
+    const route = serverSrc.match(
+      /app\.post\(\s*['"`]\/api\/admin\/users\/:id\/set-plan['"`][\s\S]*?\n\}\)\s*;/
+    );
+    expect(route).not.toBeNull();
+    expect(route[0]).toMatch(/logAdminAction\([\s\S]*?['"]set-plan['"]/);
+  });
+
+  test('migrate-data route writes an audit row', () => {
+    expect(serverSrc).toMatch(/logAdminAction\([\s\S]{0,200}?['"]migrate-data['"]/);
+  });
+});
+
 describe('sec-audit L-3 — legacy session reads plan from DB (no synthesised admin)', () => {
   test('requireAuth no longer synthesises plan: "admin" for legacy sessions', () => {
     const fn = serverSrc.match(/function requireAuth[\s\S]*?^\}/m)?.[0] || '';
