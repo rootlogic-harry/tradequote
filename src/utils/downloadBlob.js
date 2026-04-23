@@ -1,32 +1,35 @@
 /**
- * iOS-safe blob download helper (TRQ-140).
+ * Platform-aware blob download.
  *
- * Paul reported "tap Download PDF, nothing happens" on iPad Safari.
- * Root cause: iOS Safari ignores the `download` attribute on blob
- * URLs, so the standard web pattern (`<a href="blob:…" download>`)
- * silently opens the blob in a new tab (or gets popup-blocked).
+ * Two real-world constraints we have to reconcile:
  *
- * Modern iOS + Android support `navigator.share({ files: [File] })`
- * which opens the native share sheet — Save to Files, AirDrop, Mail,
- * Messages. That's the pattern iPad users expect. We detect support
- * via `navigator.canShare({ files })` and fall back to the legacy
- * anchor-click path on desktop or older browsers.
+ *   - iPad Safari IGNORES the `download` attribute on blob: URLs
+ *     (TRQ-140: Paul's original "tap Download PDF, nothing happens").
+ *     Fix on iOS/Android is the Web Share API with a File, which opens
+ *     the native share sheet (Save to Files, AirDrop, Mail...).
+ *
+ *   - macOS Safari also supports `navigator.share`, but desktop users
+ *     don't want a share sheet — they expect "click download, file in
+ *     Downloads folder". The share sheet also confuses macOS's type
+ *     inference: a CSV comes through as "Text Document · 583 bytes"
+ *     without visible extension (Harry's QuickBooks export bug).
+ *
+ * So: use the share sheet ONLY on touch-primary platforms (iPad,
+ * iPhone, Android). Everywhere else, anchor-click to Downloads.
  *
  * User cancelling the share sheet is not an error — we swallow
- * AbortError and return `{ cancelled: true }` so the caller can
- * decide whether to show a toast.
+ * AbortError and return `{ cancelled: true }`.
  */
+import { shouldUseShareSheetPath } from './platform.js';
 
 export async function downloadBlob(blob, filename, { mimeType } = {}) {
   const type = mimeType || blob?.type || 'application/octet-stream';
 
-  // Prefer the Web Share API when the browser says it can share the
-  // file. Wrapped in try/catch so we can distinguish user cancellation
-  // (fine) from API failure (fall through to anchor click).
-  if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
+  // Share-sheet path — iOS/Android only.
+  if (shouldUseShareSheetPath()) {
     try {
       const file = new File([blob], filename, { type });
-      if (navigator.canShare({ files: [file] })) {
+      if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: filename });
           return { shared: true };
@@ -34,18 +37,18 @@ export async function downloadBlob(blob, filename, { mimeType } = {}) {
           if (err?.name === 'AbortError') {
             return { cancelled: true };
           }
-          // Fall through to anchor-click.
+          // Non-abort error — fall through to anchor-click so something
+          // still happens (e.g. on an unusual mobile browser config).
         }
       }
     } catch {
-      // File constructor unavailable or canShare threw — fall through.
+      // File constructor unavailable — fall through.
     }
   }
 
-  // Legacy path — blob URL + anchor click. Works on desktop. Ignored
-  // on iOS Safari but harmless (the browser either opens the blob in
-  // a new tab or does nothing; the caller can still fall back to
-  // window.print() if needed).
+  // Desktop / older browsers path — blob URL + anchor click. Saves
+  // directly to the browser's Downloads folder with the filename and
+  // extension intact.
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

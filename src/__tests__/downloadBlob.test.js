@@ -35,13 +35,23 @@ describe('downloadBlob — Web Share API path (iOS / modern Android)', () => {
     jest.resetModules();
   });
 
-  test('uses navigator.share when canShare({ files }) returns true', async () => {
+  // Share sheet now requires a touch-primary platform (iPad/iPhone/
+  // Android) — macOS Safari's share sheet was hijacking the desktop
+  // flow, turning "Export for QuickBooks" into a confused "Text
+  // Document" share sheet. Set up a full iPad-like navigator for the
+  // share-path tests.
+  const asIPadNavigator = (extras = {}) => ({
+    userAgent: 'Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+    maxTouchPoints: 5,
+    ...extras,
+  });
+
+  test('uses navigator.share on iPad (canShare true, touch platform)', async () => {
     const shareSpy = jest.fn(async () => undefined);
-    globalThis.navigator = {
+    globalThis.navigator = asIPadNavigator({
       canShare: (data) => Array.isArray(data?.files) && data.files.length === 1,
       share: shareSpy,
-    };
-    // Mock File constructor
+    });
     globalThis.File = class {
       constructor(parts, name, opts) {
         this.name = name;
@@ -57,11 +67,41 @@ describe('downloadBlob — Web Share API path (iOS / modern Android)', () => {
     expect(arg.files[0].name).toBe('test.pdf');
   });
 
+  test('desktop macOS Safari goes to anchor-click, NOT share sheet (Harry\'s QBO bug)', async () => {
+    // Regression guard: Harry's QBO export triggered macOS Safari's
+    // share sheet because canShare existed. Desktop users expect the
+    // file in Downloads, not a share sheet.
+    const shareSpy = jest.fn();
+    const clickSpy = jest.fn();
+    globalThis.navigator = {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
+      maxTouchPoints: 0,
+      canShare: () => true,
+      share: shareSpy,
+    };
+    globalThis.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL: jest.fn() };
+    globalThis.document = {
+      createElement: () => ({
+        set href(v) {}, set download(v) {},
+        click: clickSpy,
+        style: {},
+      }),
+      body: { appendChild: jest.fn(), removeChild: jest.fn() },
+    };
+    const { downloadBlob } = await import('../utils/downloadBlob.js');
+    await downloadBlob(new Blob(['x'], { type: 'text/csv' }), 'test.csv');
+    expect(shareSpy).not.toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
   test('falls back to anchor-click when canShare({ files }) is not supported', async () => {
     const clickSpy = jest.fn();
     const appendSpy = jest.fn();
     const removeSpy = jest.fn();
-    globalThis.navigator = { /* no canShare */ };
+    globalThis.navigator = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36',
+      maxTouchPoints: 0,
+    };
     globalThis.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL: jest.fn() };
     globalThis.document = {
       createElement: () => ({
@@ -78,23 +118,22 @@ describe('downloadBlob — Web Share API path (iOS / modern Android)', () => {
 
   test('user cancelling the share sheet (AbortError) is NOT treated as an error', async () => {
     const abort = Object.assign(new Error('User cancelled'), { name: 'AbortError' });
-    globalThis.navigator = {
+    globalThis.navigator = asIPadNavigator({
       canShare: () => true,
       share: jest.fn(async () => { throw abort; }),
-    };
+    });
     globalThis.File = class { constructor() {} };
     const { downloadBlob } = await import('../utils/downloadBlob.js');
-    // Should resolve with a "cancelled" marker, NOT throw.
     const result = await downloadBlob(new Blob(['x']), 'x.pdf');
     expect(result).toEqual({ cancelled: true });
   });
 
   test('non-AbortError share failure falls through to anchor-click', async () => {
     const clickSpy = jest.fn();
-    globalThis.navigator = {
+    globalThis.navigator = asIPadNavigator({
       canShare: () => true,
       share: jest.fn(async () => { throw new Error('permission denied'); }),
-    };
+    });
     globalThis.File = class { constructor() {} };
     globalThis.URL = { createObjectURL: () => 'blob:mock', revokeObjectURL: jest.fn() };
     globalThis.document = {
