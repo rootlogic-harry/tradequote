@@ -39,6 +39,27 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// ─── Boot-time secret check (sec-audit H-3) ───────────────────────────
+// Any of these missing in production = ship a known-broken app: cookie
+// signing falls back to a public default, OAuth fails open, DB calls
+// throw at first request. Fail-closed at boot so ops sees it instantly
+// rather than us ending up with a forge-able session secret in prod.
+const REQUIRED_PROD_ENV = [
+  'SESSION_SECRET',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'DATABASE_URL',
+];
+if (process.env.NODE_ENV === 'production') {
+  const missing = REQUIRED_PROD_ENV.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Refusing to start in production with missing secrets: ${missing.join(', ')}. ` +
+      `Set them on the deploy platform.`
+    );
+  }
+}
+
 const app = express();
 app.set('trust proxy', 1); // trust first proxy (Railway)
 
@@ -542,7 +563,18 @@ app.get('/auth/me', async (req, res) => {
 
 // Temporary legacy-session endpoint for Mark and Harry transition
 const LEGACY_USERS = ['mark', 'harry'];
+// SECURITY (sec-audit C-1): the legacy switcher lets you become any
+// LEGACY_USERS value without authentication — fine in dev, full account
+// takeover in prod. Gated to non-production builds. Any prod hit is
+// logged at WARN so we'd see an exploitation attempt against an old
+// build that lacked this gate.
 app.post('/api/session/legacy', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      `[SECURITY] /api/session/legacy hit in prod from ip=${req.ip} ua="${(req.get('user-agent') || '').slice(0, 200)}" body=${JSON.stringify(req.body || {}).slice(0, 200)}`
+    );
+    return res.status(404).json({ error: 'Not found' });
+  }
   const { userId } = req.body || {};
   if (!LEGACY_USERS.includes(userId)) {
     return res.status(403).json({ error: 'Not a legacy user' });
@@ -926,9 +958,18 @@ app.get('/', (req, res, next) => {
 
 // --- Auth Middleware ---
 
+// SECURITY (sec-audit H-2): the test bypass is double-gated. Both
+// NODE_ENV !== 'production' AND ENABLE_TEST_AUTH=1 must be set for it
+// to ever consider the x-test-user-id header. In production we refuse
+// to look at the header at all, so accidentally setting NODE_ENV=test
+// in prod (Nixpacks defaults, ops mistake) cannot enable impersonation.
+const TEST_AUTH_ENABLED =
+  process.env.NODE_ENV !== 'production' &&
+  process.env.ENABLE_TEST_AUTH === '1';
+
 function requireAuth(req, res, next) {
-  // Test bypass — only active when NODE_ENV=test AND a header is provided
-  if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-id']) {
+  // Test bypass — only when test auth is explicitly enabled at boot.
+  if (TEST_AUTH_ENABLED && req.headers['x-test-user-id']) {
     req.user = {
       id: req.headers['x-test-user-id'],
       plan: req.headers['x-test-plan'] || 'admin',
@@ -939,10 +980,23 @@ function requireAuth(req, res, next) {
   if (req.isAuthenticated && req.isAuthenticated()) {
     return next();
   }
-  // Legacy switcher session
+  // Legacy switcher session — sec-audit L-3: read the actual plan from
+  // the DB rather than synthesising 'admin'. Defence in depth in case
+  // C-1's gate is ever weakened.
   if (req.session?.legacyUserId) {
-    req.user = { id: req.session.legacyUserId, plan: 'admin' };
-    return next();
+    pool
+      .query('SELECT plan FROM users WHERE id = $1', [req.session.legacyUserId])
+      .then(({ rows }) => {
+        const plan = rows[0]?.plan || 'basic';
+        req.user = { id: req.session.legacyUserId, plan };
+        next();
+      })
+      .catch((err) => {
+        console.error('[Auth] legacy plan lookup failed:', err.message);
+        // Fail closed: if we can't verify the plan, treat as unauth.
+        res.status(401).json({ error: 'Not authenticated' });
+      });
+    return;
   }
   res.status(401).json({ error: 'Not authenticated' });
 }

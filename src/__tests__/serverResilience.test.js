@@ -268,14 +268,22 @@ describe('Auth middleware coverage', () => {
     }
   });
 
-  test('requireAuth has test bypass ONLY when NODE_ENV=test', () => {
+  test('requireAuth test bypass is double-gated (sec-audit H-2)', () => {
+    // Hardened: the bypass header is ignored unless BOTH
+    // NODE_ENV !== 'production' AND ENABLE_TEST_AUTH=1. This protects
+    // against an accidental NODE_ENV=test in production enabling
+    // arbitrary user impersonation via the x-test-user-id header.
     const authFn = serverSource.slice(
       serverSource.indexOf('function requireAuth'),
       serverSource.indexOf('function requireOwner')
     );
-
-    expect(authFn).toContain("process.env.NODE_ENV === 'test'");
-    expect(authFn).toContain("x-test-user-id");
+    expect(authFn).toContain('TEST_AUTH_ENABLED');
+    expect(authFn).toContain('x-test-user-id');
+    // The constant must require the production check + the explicit
+    // env var.
+    expect(serverSource).toMatch(
+      /TEST_AUTH_ENABLED\s*=[\s\S]*?NODE_ENV\s*!==\s*['"]production['"][\s\S]*?ENABLE_TEST_AUTH/
+    );
   });
 
   test('Anthropic proxy requires auth', () => {
