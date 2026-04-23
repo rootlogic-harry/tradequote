@@ -1086,6 +1086,47 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     }
   };
 
+  // QuickBooks Online UK — invoice CSV export. File-only; no OAuth.
+  // Requires the quote to be saved (need a jobId the server can query).
+  const [exportingQb, setExportingQb] = useState(false);
+  const [showQbInstructions, setShowQbInstructions] = useState(false);
+  const handleExportQuickbooks = async () => {
+    if (!state.currentUserId) {
+      showToast?.(`Save the ${term.lower} first, then export.`, 'error');
+      return;
+    }
+    const jobId = savedJobId || state.savedJobId;
+    if (!jobId) {
+      showToast?.(`Save the ${term.lower} first, then export.`, 'error');
+      return;
+    }
+    setExportingQb(true);
+    try {
+      const res = await fetch(
+        `/api/users/${state.currentUserId}/jobs/${jobId}/export/quickbooks-csv`,
+        { credentials: 'include' }
+      );
+      if (!res.ok) {
+        let msg = `Export failed (${res.status})`;
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const safeRef = String(jobDetails.quoteReference || 'quote')
+        .replace(/[^a-zA-Z0-9_-]/g, '_');
+      const result = await downloadBlob(blob, `fastquote-${safeRef}-quickbooks.csv`, {
+        mimeType: 'text/csv',
+      });
+      if (result?.cancelled) return;
+      setShowQbInstructions(true);
+    } catch (err) {
+      console.error('QuickBooks export failed:', err);
+      showToast?.(err.message || 'Could not build the QuickBooks file.', 'error');
+    } finally {
+      setExportingQb(false);
+    }
+  };
+
   const handleNewQuote = () => {
     dispatch({ type: 'NEW_QUOTE' });
   };
@@ -1220,6 +1261,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             : cachedPdfBlob
               ? 'Tap again to send'
               : 'Send via Outlook'}
+        </button>
+        <button
+          onClick={handleExportQuickbooks}
+          disabled={exportingQb || !(savedJobId || state.savedJobId)}
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+          title={
+            (savedJobId || state.savedJobId)
+              ? 'Download a CSV you can import into QuickBooks Online'
+              : `Save the ${term.lower} first to enable export`
+          }
+        >
+          {exportingQb && <InlineSpinner />}
+          {exportingQb ? 'Building CSV\u2026' : 'Export for QuickBooks'}
         </button>
         {!isReadOnly && (
           <button
@@ -1366,6 +1420,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         </div>
       )}
 
+      {/* QuickBooks CSV post-download instructions modal. Three short
+           steps headline + a "Show full guide" expander on demand —
+           avoids a wall-of-text on iPad where a 9-step modal scrolls
+           off-screen. VAT line is loud so users don't pick Inclusive by
+           accident (the one setting that silently produces wrong totals). */}
+      {showQbInstructions && (
+        <QbInstructionsModal
+          vatRegistered={profile?.vatRegistered === true}
+          onClose={() => setShowQbInstructions(false)}
+        />
+      )}
+
       {/* Quote Document — showPhotos=false to prevent white band artefact in
            the legacy html2canvas PDF; photos are rendered separately in that
            path's PDF/Word appendix.
@@ -1386,6 +1452,101 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
            paginates cleanly. Hidden on screen via `.print-only`. */}
       <div className="print-root print-only" aria-hidden="true">
         <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+      </div>
+    </div>
+  );
+}
+
+function QbInstructionsModal({ vatRegistered, onClose }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div
+      role="dialog"
+      aria-labelledby="qb-modal-title"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16, zIndex: 50,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--tq-card, #222018)',
+          border: '1px solid var(--tq-border, #3a3630)',
+          borderRadius: 12, padding: '24px 24px 20px',
+          maxWidth: 520, width: '100%', color: 'var(--tq-text, #f0ede8)',
+          maxHeight: '90vh', overflowY: 'auto',
+        }}
+      >
+        <h2 id="qb-modal-title" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
+          Your QuickBooks file is ready
+        </h2>
+        <p style={{ color: 'var(--tq-muted, #7a6f5e)', fontSize: 14, marginBottom: 16 }}>
+          Three steps to import it in QuickBooks Online.
+        </p>
+        <ol style={{ paddingLeft: 20, marginBottom: 16, lineHeight: 1.6 }}>
+          <li><strong>Settings \u2699 \u2192 Import data \u2192 Invoices</strong></li>
+          <li>Upload the CSV you just downloaded</li>
+          <li>Review the preview, then <strong>Start import</strong></li>
+        </ol>
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.12)',
+          border: '1px solid rgba(239, 68, 68, 0.4)',
+          borderRadius: 8, padding: '10px 12px', marginBottom: 16,
+          fontSize: 13, color: '#fca5a5',
+        }}>
+          <strong>Important:</strong> on the mapping screen set <strong>VAT option \u2192 Exclusive of tax</strong>.
+          Picking Inclusive makes QuickBooks back-calculate tax from the subtotal and the figures will be wrong.
+        </div>
+        <div style={{
+          fontSize: 12, color: 'var(--tq-muted, #7a6f5e)', marginBottom: 16,
+        }}>
+          This export uses <strong>{vatRegistered ? '20% VAT' : 'No VAT'}</strong> based on your profile.
+          Change it in Profile if that\u2019s wrong, then re-export.
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            background: 'none', border: 'none',
+            color: 'var(--tq-accent, #e8a838)', cursor: 'pointer',
+            fontSize: 13, padding: 0, marginBottom: 12,
+          }}
+        >
+          {expanded ? 'Hide full guide' : 'Show full guide'}
+        </button>
+        {expanded && (
+          <ol style={{ paddingLeft: 20, marginBottom: 16, lineHeight: 1.6, fontSize: 13, color: 'var(--tq-muted, #f0ede8)' }}>
+            <li>Log in to QuickBooks Online</li>
+            <li>Click the \u2699 Settings icon \u2192 Import data</li>
+            <li>Click <strong>Invoices</strong></li>
+            <li>Upload the CSV file you just downloaded</li>
+            <li>On the mapping screen:
+              <ul style={{ paddingLeft: 18, marginTop: 4 }}>
+                <li>Date format: <strong>D/M/YYYY</strong></li>
+                <li>VAT option: <strong>Exclusive of tax</strong></li>
+              </ul>
+            </li>
+            <li>Review the import preview</li>
+            <li>Click <strong>Start import</strong></li>
+            <li>Review and send the invoice in QuickBooks</li>
+          </ol>
+        )}
+        <p style={{ fontSize: 12, color: 'var(--tq-muted, #7a6f5e)', marginBottom: 16 }}>
+          Note: QuickBooks creates a draft invoice \u2014 you can edit anything before sending. Imported batches can\u2019t be undone; individual invoices have to be deleted one at a time.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-primary"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

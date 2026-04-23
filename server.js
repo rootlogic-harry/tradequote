@@ -23,6 +23,7 @@ import {
 } from './src/utils/aiParser.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf } from './pdfRenderer.js';
+import { buildQuickbooksCSV } from './src/utils/quickbooksExport.js';
 import { fileTypeFromFile } from 'file-type';
 import {
   generateClientToken,
@@ -1493,6 +1494,49 @@ app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
     res.send(pdf);
   } catch (err) {
     console.error(`[PDF] render failed job=${req.params.jobId} err=${err.message}`);
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// QuickBooks Online UK — invoice CSV export (file-only, no API / OAuth).
+// Protected by the global `app.use('/api/users/:id', requireAuth, requireOwner)`
+// middleware so ownership is enforced before this handler runs.
+app.get('/api/users/:id/jobs/:jobId/export/quickbooks-csv', async (req, res) => {
+  const { id: userId, jobId } = req.params;
+  try {
+    const { rows: jobRows } = await pool.query(
+      'SELECT * FROM jobs WHERE id = $1 AND user_id = $2',
+      [jobId, userId]
+    );
+    if (jobRows.length === 0) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+    const job = jobRows[0];
+
+    const { rows: profRows } = await pool.query(
+      'SELECT data FROM profiles WHERE user_id = $1',
+      [userId]
+    );
+    const profile = profRows[0]?.data || {};
+
+    const csv = buildQuickbooksCSV(job, profile);
+
+    const safeRef = String(job.quote_reference || 'quote')
+      .replace(/[^a-zA-Z0-9_-]/g, '_');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="fastquote-${safeRef}-quickbooks.csv"`
+    );
+    // UTF-8 BOM so Excel on Windows doesn't mangle accented characters.
+    // QBO's import pipeline tolerates the BOM.
+    res.send('\uFEFF' + csv);
+  } catch (err) {
+    // "no line items" and "snapshot is empty" are 400-class user errors,
+    // not server bugs. Return the specific message so the UI can explain.
+    if (/no line items|snapshot is empty/i.test(err?.message || '')) {
+      return res.status(400).json({ error: err.message });
+    }
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });
