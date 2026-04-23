@@ -76,6 +76,57 @@ describe('sec-audit H-3 — required production secrets are checked at boot', ()
   });
 });
 
+describe('sec-audit H-1 — Anthropic proxy enforces model + token caps', () => {
+  test('declares an explicit model allowlist (no wildcards)', () => {
+    expect(serverSrc).toMatch(/ANTHROPIC_MODEL_ALLOWLIST\s*=\s*new\s+Set\(\[/);
+    // The two models we actually use.
+    expect(serverSrc).toMatch(/['"]claude-sonnet-4-20250514['"]/);
+    expect(serverSrc).toMatch(/['"]claude-haiku-4-5-20251001['"]/);
+  });
+
+  test('caps max_tokens at a sane ceiling (cost DoS guard)', () => {
+    expect(serverSrc).toMatch(/ANTHROPIC_MAX_TOKENS_CEILING\s*=\s*\d+/);
+    // The literal ceiling value should be small (single-digit thousand range).
+    const ceiling = serverSrc.match(/ANTHROPIC_MAX_TOKENS_CEILING\s*=\s*(\d+)/)?.[1];
+    expect(Number(ceiling)).toBeGreaterThan(1000);
+    expect(Number(ceiling)).toBeLessThanOrEqual(16384);
+  });
+
+  test('caps request body size (no 50MB context attacks)', () => {
+    expect(serverSrc).toMatch(/ANTHROPIC_MAX_BODY_BYTES\s*=\s*\d+/);
+  });
+
+  test('caps message-array length', () => {
+    expect(serverSrc).toMatch(/ANTHROPIC_MAX_MESSAGES\s*=\s*\d+/);
+  });
+
+  test('proxy rejects with 400 + logs WARN when validation fails', () => {
+    const route = serverSrc.match(
+      /app\.post\(\s*['"`]\/api\/anthropic\/messages['"`][\s\S]*?validateAnthropicProxyBody[\s\S]*?\n\}\)\s*;/
+    );
+    expect(route).not.toBeNull();
+    expect(route[0]).toMatch(/return\s+res\.status\(400\)/);
+    expect(route[0]).toMatch(/console\.warn[\s\S]{0,200}AI-proxy/);
+  });
+
+  test('proxy rejects with 413 when body exceeds size cap', () => {
+    expect(serverSrc).toMatch(
+      /body\.length\s*>\s*ANTHROPIC_MAX_BODY_BYTES[\s\S]{0,200}res\.status\(413\)/
+    );
+  });
+
+  test('/api/users/:id/analyse uses the same allowlist', () => {
+    // Catches the regression where an attacker bypasses the proxy by
+    // hitting /analyse directly with their own model + max_tokens.
+    const analyseRoute = serverSrc.match(
+      /app\.post\(\s*['"`]\/api\/users\/:id\/analyse['"`][\s\S]*?\n\}\)\s*;/
+    );
+    expect(analyseRoute).not.toBeNull();
+    expect(analyseRoute[0]).toMatch(/ANTHROPIC_MODEL_ALLOWLIST/);
+    expect(analyseRoute[0]).toMatch(/ANTHROPIC_MAX_TOKENS_CEILING/);
+  });
+});
+
 describe('sec-audit L-3 — legacy session reads plan from DB (no synthesised admin)', () => {
   test('requireAuth no longer synthesises plan: "admin" for legacy sessions', () => {
     const fn = serverSrc.match(/function requireAuth[\s\S]*?^\}/m)?.[0] || '';

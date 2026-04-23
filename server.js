@@ -2490,13 +2490,56 @@ app.post('/api/users/:id/jobs/:jobId/video',
   }
 );
 
+// SECURITY (sec-audit H-1): cap what the proxy will forward.
+// Pre-fix this endpoint was a raw passthrough — client could request
+// any model + arbitrary max_tokens + arbitrary message volume,
+// trivially burning Anthropic credits ($50+/hour/account at Opus).
+// We now enforce a model allowlist, a token ceiling, a body-size
+// ceiling, and a defensive message-array length cap.
+const ANTHROPIC_MODEL_ALLOWLIST = new Set([
+  'claude-sonnet-4-20250514',     // primary analysis
+  'claude-haiku-4-5-20251001',    // agent calls
+  // Add new models explicitly. Never wildcard.
+]);
+const ANTHROPIC_MAX_TOKENS_CEILING = 8192;   // generous for analysis output
+const ANTHROPIC_MAX_BODY_BYTES = 250_000;    // photos arrive in /analyse, not here
+const ANTHROPIC_MAX_MESSAGES = 20;
+
+function validateAnthropicProxyBody(body) {
+  if (!body || typeof body !== 'object') return 'Request body must be a JSON object';
+  if (typeof body.model !== 'string' || !ANTHROPIC_MODEL_ALLOWLIST.has(body.model)) {
+    return `Model not permitted by proxy. Allowed: ${[...ANTHROPIC_MODEL_ALLOWLIST].join(', ')}`;
+  }
+  if (typeof body.max_tokens !== 'number' || body.max_tokens <= 0) {
+    return 'max_tokens must be a positive number';
+  }
+  if (body.max_tokens > ANTHROPIC_MAX_TOKENS_CEILING) {
+    return `max_tokens must be \u2264 ${ANTHROPIC_MAX_TOKENS_CEILING}`;
+  }
+  if (!Array.isArray(body.messages)) return 'messages must be an array';
+  if (body.messages.length === 0 || body.messages.length > ANTHROPIC_MAX_MESSAGES) {
+    return `messages length must be between 1 and ${ANTHROPIC_MAX_MESSAGES}`;
+  }
+  return null;
+}
+
 app.post('/api/anthropic/messages', requireAuth, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
   }
 
+  const validationError = validateAnthropicProxyBody(req.body);
+  if (validationError) {
+    console.warn(`[AI-proxy] reject user=${req.user?.id} reason="${validationError}"`);
+    return res.status(400).json({ error: validationError });
+  }
+
   const body = JSON.stringify(req.body);
+  if (body.length > ANTHROPIC_MAX_BODY_BYTES) {
+    console.warn(`[AI-proxy] reject user=${req.user?.id} reason="body too large (${body.length}b)"`);
+    return res.status(413).json({ error: `Request too large (${body.length} bytes; max ${ANTHROPIC_MAX_BODY_BYTES})` });
+  }
 
   for (let attempt = 0; attempt < ANTHROPIC_MAX_RETRIES; attempt++) {
     try {
@@ -2669,6 +2712,18 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
     return res.status(400).json({ error: 'messages is required' });
   }
 
+  // SECURITY (sec-audit H-1): clamp model + max_tokens to the same
+  // allowlist/ceiling the proxy enforces. Prevents an authenticated
+  // user from forcing Opus calls or 200k-token outputs.
+  const requestedModel = typeof model === 'string' ? model : 'claude-sonnet-4-20250514';
+  if (!ANTHROPIC_MODEL_ALLOWLIST.has(requestedModel)) {
+    console.warn(`[Analyse] reject user=${req.user?.id} model="${requestedModel}"`);
+    return res.status(400).json({ error: `Model not permitted` });
+  }
+  const requestedMaxTokens = typeof max_tokens === 'number' && max_tokens > 0
+    ? Math.min(max_tokens, ANTHROPIC_MAX_TOKENS_CEILING)
+    : 4000;
+
   try {
     // Use server-side prompt (ignore any client-sent systemPrompt)
     let augmentedPrompt = SYSTEM_PROMPT;
@@ -2689,12 +2744,12 @@ app.post('/api/users/:id/analyse', aiRateLimit, async (req, res) => {
     // Compute prompt version hash
     const promptVersion = computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
 
-    // Call 1: Primary analysis
+    // Call 1: Primary analysis (uses the validated/clamped values)
     const analysisResponse = await callAnthropicRaw({
       systemPrompt: augmentedPrompt,
       messages,
-      model: model || 'claude-sonnet-4-20250514',
-      maxTokens: max_tokens || 4000,
+      model: requestedModel,
+      maxTokens: requestedMaxTokens,
       apiKey,
     });
 
