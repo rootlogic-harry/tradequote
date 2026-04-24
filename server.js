@@ -1,6 +1,7 @@
 import express from 'express';
 import pg from 'pg';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import https from 'https';
@@ -474,7 +475,10 @@ async (accessToken, refreshToken, profile, done) => {
     let userId = baseId;
     const clash = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
     if (clash.rows.length > 0) {
-      userId = `${baseId}_${Math.random().toString(36).slice(2, 6)}`;
+      // 32 bits from crypto.randomBytes. Math.random().toString(36)
+      // only gives ~21 bits and two concurrent Google signups can
+      // collide, erroring the second INSERT on the unique id.
+      userId = `${baseId}_${crypto.randomBytes(4).toString('hex')}`;
     }
 
     const inserted = await pool.query(
@@ -2729,8 +2733,13 @@ app.post('/api/anthropic/messages', aiRateLimitPerIp, requireAuth, aiRateLimit, 
       const result = await makeAnthropicRequest(body, apiKey);
 
       if (RETRYABLE_STATUS_CODES.has(result.statusCode) && attempt < ANTHROPIC_MAX_RETRIES - 1) {
+        // Cap Retry-After at 5 minutes. Anthropic's real values stay
+        // well under this; an unexpectedly large header (upstream bug
+        // or MITM) would otherwise stall the proxy for hours.
+        const retryAfterRaw = parseInt(result.headers['retry-after'] || '0', 10);
+        const retryAfterSecs = Number.isFinite(retryAfterRaw) ? Math.min(Math.max(retryAfterRaw, 0), 300) : 0;
         const delay = result.statusCode === 429
-          ? Math.max(ANTHROPIC_RETRY_DELAYS[attempt], parseInt(result.headers['retry-after'] || '0', 10) * 1000)
+          ? Math.max(ANTHROPIC_RETRY_DELAYS[attempt], retryAfterSecs * 1000)
           : ANTHROPIC_RETRY_DELAYS[attempt];
         console.warn(`Anthropic returned ${result.statusCode}, retrying in ${delay}ms (attempt ${attempt + 1}/${ANTHROPIC_MAX_RETRIES})`);
         await new Promise((r) => setTimeout(r, delay));

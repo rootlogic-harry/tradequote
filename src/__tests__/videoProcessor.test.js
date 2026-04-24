@@ -251,4 +251,25 @@ describe('processVideo', () => {
     expect(capturedWorkDir).toBeTruthy();
     expect(fs.existsSync(capturedWorkDir)).toBe(false);
   });
+
+  // Defence-in-depth: jobId comes from a URL param and a hostile owner
+  // could submit `../../evil` to escape /tmp. requireOwner gates the
+  // route, but filesystem paths should not trust URL data.
+  it('sanitises jobId so path traversal cannot escape /tmp', async () => {
+    setupSuccessfulMocks();
+    await processVideo(baseArgs({ jobId: '../../etc/passwd' }));
+    expect(capturedWorkDir).toBeTruthy();
+    expect(capturedWorkDir.startsWith('/tmp/job_')).toBe(true);
+    expect(capturedWorkDir).not.toMatch(/\.\.\//);
+    // Underscore replaces every non-[A-Za-z0-9_-] char.
+    expect(capturedWorkDir).toMatch(/\/tmp\/job_[_A-Za-z0-9-]+_\d+$/);
+  });
+
+  it('sanitises jobId starting with a dash/dot so it cannot look like a flag or hidden dir', async () => {
+    setupSuccessfulMocks();
+    await processVideo(baseArgs({ jobId: '-rf' }));
+    expect(capturedWorkDir).toBeTruthy();
+    // Leading dot/dash is replaced with underscore.
+    expect(capturedWorkDir).toMatch(/\/tmp\/job__rf_\d+$/);
+  });
 });

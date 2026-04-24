@@ -414,6 +414,7 @@ function reducerCore(state, action) {
         jobDetails: {
           clientName: '',
           siteAddress: '',
+          clientPhone: '',
           quoteReference: `QT-${year}-${String(nextSeq).padStart(4, '0')}`,
           quoteDate: new Date().toISOString().split('T')[0],
           briefNotes: '',

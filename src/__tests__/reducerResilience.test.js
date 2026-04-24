@@ -184,6 +184,20 @@ describe('NEW_QUOTE resets transient fields', () => {
     const result = reducer(state, { type: 'NEW_QUOTE' });
     expect(result.rams).toBeNull();
   });
+
+  test('resets clientPhone to empty string (was missing from jobDetails reset)', () => {
+    // clientPhone is in the initial jobDetails shape but was dropped
+    // from the NEW_QUOTE reset — left state.jobDetails.clientPhone as
+    // undefined instead of ''. UI defaulted via `|| ''` but the state
+    // shape was inconsistent.
+    const state = {
+      ...initialState,
+      jobDetails: { ...initialState.jobDetails, clientPhone: '07123 456789' },
+      quoteSequence: 1,
+    };
+    const result = reducer(state, { type: 'NEW_QUOTE' });
+    expect(result.jobDetails.clientPhone).toBe('');
+  });
 });
 
 // ======================================================================

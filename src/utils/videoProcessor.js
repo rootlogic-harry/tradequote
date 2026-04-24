@@ -34,7 +34,13 @@ export async function processVideo({
   siteAddress,
   profile,
 }) {
-  const workDir = `/tmp/job_${jobId}_${Date.now()}`;
+  // Sanitise jobId before it hits the filesystem. jobId comes from a
+  // URL param (`/api/users/:id/jobs/:jobId/video`) and would otherwise
+  // be interpolated raw — `../../evil` would escape /tmp. Requests are
+  // authenticated via requireOwner, but defence-in-depth: allow only
+  // [A-Za-z0-9_-] and never let the result start with a dot or dash.
+  const safeJobId = String(jobId || '').replace(/[^A-Za-z0-9_-]/g, '_').replace(/^[-.]+/, '_');
+  const workDir = `/tmp/job_${safeJobId}_${Date.now()}`;
 
   try {
     // 1. Validate duration
