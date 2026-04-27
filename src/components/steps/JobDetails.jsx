@@ -652,7 +652,11 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         Photo Upload
       </h3>
 
-      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-6">
+      {/* 2-cols on every viewport: stacking 5 photo cards on a 375px
+          phone produced a ~1400px wall of photos (4 screen-heights of
+          scrolling). Two columns at 165px each is still a meaningful
+          preview and the labels/numbers stay readable. */}
+      <div className="grid grid-cols-2 gap-3 fq:gap-4 mb-6">
         {PHOTO_SLOTS.map((slot, slotIndex) => {
           const photo = photos[slot.key];
           const isMissing = photoWarnings.missingSlots?.includes(slot.key);

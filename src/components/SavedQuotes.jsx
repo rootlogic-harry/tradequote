@@ -239,10 +239,13 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 {formatCurrency(quote.totalAmount)}
               </div>
 
-              {/* Action buttons */}
-              <div className="flex gap-2 shrink-0 flex-wrap" onClick={e => e.stopPropagation()}>
+              {/* Action buttons. `.row-action-btn` is compact 36px on
+                  desktop, full-width 44px on mobile so each tap target
+                  is unambiguous. Wrapper goes flex-col on mobile so the
+                  buttons stack vertically. */}
+              <div className="flex flex-col fq:flex-row gap-2 shrink-0 fq:flex-wrap w-full fq:w-auto" onClick={e => e.stopPropagation()}>
                 {status === 'DRAFT' && (
-                  <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="btn-primary text-xs" style={{ height: 36, padding: '0 16px' }}>
+                  <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="row-action-btn" style={{ background: 'var(--tq-accent)', color: '#fff', borderColor: 'var(--tq-accent)' }}>
                     Mark Sent
                   </button>
                 )}
@@ -251,15 +254,15 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   <>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'accepted')}
-                      className="btn-ghost text-xs"
-                      style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                      className="row-action-btn"
+                      style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       {'\u2713'} Accepted
                     </button>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'declined')}
-                      className="btn-ghost text-xs"
-                      style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                      className="row-action-btn"
+                      style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                     >
                       {'\u2717'} Declined
                     </button>
@@ -269,22 +272,22 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                 {status === 'ACCEPTED' && (
                   <>
                     {isAdminPlan && hasRams && onViewRams ? (
-                      <button onClick={() => onViewRams(quote)} className="btn-ghost text-xs" style={{ height: 36, padding: '0 16px' }}>
+                      <button onClick={() => onViewRams(quote)} className="row-action-btn">
                         View RAMS
                       </button>
                     ) : isAdminPlan && onCreateRams ? (
                       <button
                         onClick={() => onCreateRams(quote)}
-                        className="btn-ghost text-xs"
-                        style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
+                        className="row-action-btn"
+                        style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
                       >
                         Create RAMS
                       </button>
                     ) : null}
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'completed')}
-                      className="btn-ghost text-xs"
-                      style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                      className="row-action-btn"
+                      style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       Complete
                     </button>
@@ -295,17 +298,17 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   <>
                     <button
                       onClick={() => handleDelete(quote.id)}
-                      className="btn-ghost text-xs"
-                      style={{ height: 36, padding: '0 16px', backgroundColor: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)', borderColor: 'var(--tq-error-bd)' }}
+                      className="row-action-btn"
+                      style={{ backgroundColor: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)', borderColor: 'var(--tq-error-bd)' }}
                     >
                       Confirm
                     </button>
-                    <button onClick={() => setConfirmDeleteId(null)} className="btn-ghost text-xs" style={{ height: 36, padding: '0 16px' }}>
+                    <button onClick={() => setConfirmDeleteId(null)} className="row-action-btn">
                       Cancel
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => setConfirmDeleteId(quote.id)} className="btn-ghost text-xs" style={{ height: 36, padding: '0 16px', color: 'var(--tq-muted)' }}>
+                  <button onClick={() => setConfirmDeleteId(quote.id)} className="row-action-btn" style={{ color: 'var(--tq-muted)' }}>
                     Delete
                   </button>
                 )}

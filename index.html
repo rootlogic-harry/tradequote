@@ -216,6 +216,42 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .btn-ghost:hover { border-color: var(--tq-accent); color: var(--tq-accent); }
+    /* Compact action button for table-row contexts (Saved Quotes,
+       Dashboard incomplete jobs). Density-friendly on desktop (36px,
+       inline). On mobile, becomes a full-width 44px row so multiple
+       state changes (Mark Sent, Accept, Decline, Complete, Delete)
+       stack as touchable rows instead of getting wrapped & squashed. */
+    .row-action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 16px;
+      border-radius: 2px;
+      border: 1.5px solid var(--tq-border);
+      background: transparent;
+      color: var(--tq-text);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+    }
+    .row-action-btn:hover:not(:disabled) {
+      border-color: var(--tq-accent);
+      color: var(--tq-accent);
+    }
+    .row-action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    @media (max-width: 899px) {
+      .row-action-btn {
+        height: 44px;
+        width: 100%;
+        font-size: 13px;
+      }
+    }
     .pill {
       display: inline-flex;
       align-items: center;

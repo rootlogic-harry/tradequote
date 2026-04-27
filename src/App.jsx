@@ -826,7 +826,7 @@ export default function App() {
           quoteMode={state.quoteMode}
           isAdminPlan={isAdmin}
         />
-        <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="max-w-5xl mx-auto px-3 fq:px-4 py-4 fq:py-6">
           <OfflineBanner />
           <SaveErrorBanner
             error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}

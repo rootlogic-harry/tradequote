@@ -127,7 +127,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   };
 
   return (
-    <div id="quote-document" className="bg-white text-gray-900 px-10 py-8 font-['Inter',sans-serif] text-lg leading-relaxed" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div id="quote-document" className="bg-white text-gray-900 px-4 fq:px-10 py-6 fq:py-8 font-['Inter',sans-serif] text-base fq:text-lg leading-relaxed" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Header */}
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">
