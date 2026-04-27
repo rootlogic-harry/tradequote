@@ -333,14 +333,18 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
         TradeQuote 2026
       </footer>
 
-      {/* Responsive styles */}
+      {/* Responsive styles. Aligned to the project-wide 900px breakpoint
+          (Tailwind `fq:`). Was 768/767 — diverging from the rest of the
+          app meant the landing-hero-grid and how-it-works section
+          flipped at different viewport widths than every other screen,
+          which looked broken on tablets. */}
       <style>{`
-        @media (min-width: 768px) {
+        @media (min-width: 900px) {
           .landing-hero-grid {
             grid-template-columns: 3fr 2fr !important;
           }
         }
-        @media (max-width: 767px) {
+        @media (max-width: 899px) {
           .landing-how-it-works {
             display: none;
           }

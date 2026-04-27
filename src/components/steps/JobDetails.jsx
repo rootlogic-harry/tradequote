@@ -285,7 +285,7 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="page-title mb-1" style={{ fontSize: 32 }}>
+      <h2 className="page-title mb-1">
         Job Details & Photos
       </h2>
       <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>

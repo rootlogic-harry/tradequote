@@ -161,8 +161,11 @@
     .page-title {
       font-family: 'Barlow Condensed', sans-serif;
       font-weight: 800;
-      font-size: 56px;
-      line-height: 1;
+      /* Fluid scaling: 28px on a 320px phone, 56px on desktop ≥933px.
+         Replaces the static 56px which forced trader screens to wrap
+         their <h2 className="page-title"> in a hard fontSize override. */
+      font-size: clamp(28px, 6vw, 56px);
+      line-height: 1.05;
       color: var(--tq-text);
     }
     .eyebrow {
@@ -216,7 +219,9 @@
     .pill {
       display: inline-flex;
       align-items: center;
-      height: 32px;
+      /* Touch-friendly on mobile (Apple HIG = 44px min); compact on
+         desktop where the cursor is precise. */
+      height: 36px;
       padding: 0 14px;
       border-radius: 2px;
       border: 1.5px solid var(--tq-border);
@@ -229,6 +234,9 @@
       letter-spacing: 0.05em;
       cursor: pointer;
       transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+    }
+    @media (max-width: 899px) {
+      .pill { height: 40px; padding: 0 16px; }
     }
     .pill:hover { border-color: var(--tq-accent); color: var(--tq-accent); }
     .pill.active {
@@ -264,6 +272,22 @@
       font-weight: 500;
       color: var(--tq-nav-text);
     }
+    /* Mobile: 4 stat cells in 375px gives 93px each — money values
+       overflow ("£12,500"). Re-flow as 2×2 grid below the fq breakpoint
+       and rebuild borders so the inner cross stays visible. */
+    @media (max-width: 899px) {
+      .stats-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .stats-strip .stat-cell {
+        padding: 12px 8px;
+        border-right: 1px solid rgba(255,255,255,0.08);
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+      }
+      .stats-strip .stat-cell:nth-child(2n) { border-right: none; }
+      .stats-strip .stat-cell:nth-last-child(-n+2) { border-bottom: none; }
+      .stats-strip .stat-value { font-size: 18px; }
+    }
     .job-row {
       display: flex;
       align-items: center;
@@ -274,6 +298,17 @@
       border-radius: 2px;
       cursor: pointer;
       transition: border-color 0.15s;
+    }
+    /* Mobile: a 375px row can't hold ref+badges+name+amount+actions in
+       a single line. Stack content vertically so each block is full-
+       width and readable. flex-col is applied via the React variant
+       (`flex-col fq:flex-row`); these styles snug the padding + gap. */
+    @media (max-width: 899px) {
+      .job-row {
+        gap: 12px;
+        padding: 14px;
+        align-items: stretch;
+      }
     }
     .job-row:hover { border-color: var(--tq-accent); }
     .jr-ref {

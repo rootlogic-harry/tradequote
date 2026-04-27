@@ -15,7 +15,9 @@ export default function CaptureChoice({ onSelectMode, defaultMode = null }) {
       flexDirection: 'column',
       gap: '16px',
       padding: '24px 0',
-      maxWidth: '480px',
+      // Fluid: never wider than 480px on tablet+, never wider than the
+      // viewport (minus 32px gutter) on a 320px phone.
+      width: 'min(480px, 100%)',
       margin: '0 auto',
     }}>
       <h3 style={{

@@ -1206,7 +1206,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             <span className="hidden fq:inline">Back</span>
           </button>
         )}
-        <h2 className="page-title" style={{ fontSize: 28 }}>
+        <h2 className="page-title">
           Your {term.title}
         </h2>
       </div>

@@ -382,7 +382,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
               </svg>
               <span className="hidden fq:inline">Job Details</span>
             </button>
-            <h2 className="page-title" style={{ fontSize: 28 }}>
+            <h2 className="page-title">
               Review & Edit
             </h2>
           </div>

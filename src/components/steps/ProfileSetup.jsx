@@ -39,7 +39,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
     <div className={isModal ? '' : 'max-w-2xl mx-auto'}>
       {!isModal && (
         <>
-          <h2 className="page-title mb-1" style={{ fontSize: 32 }}>
+          <h2 className="page-title mb-1">
             Profile Setup
           </h2>
           <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
