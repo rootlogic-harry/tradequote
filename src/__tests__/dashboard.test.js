@@ -38,3 +38,22 @@ describe('Dashboard Needs Attention shows site address', () => {
     expect(hasSiteAddressRender).toBe(true);
   });
 });
+
+// TRQ-163: Paul saw an "Untitled" draft banner on the dashboard after
+// his analysis errored — clientName had been reset to '' by a stray
+// NEW_QUOTE while step stayed at 2. The banner used to render whenever
+// step ∈ [2,4]; now it requires at least one of clientName/siteAddress
+// to be non-blank so the dashboard doesn't surface phantom drafts.
+describe('Dashboard currentDraft prop guards empty content', () => {
+  const appSrc = readFileSync(join(__dirname, '../App.jsx'), 'utf8');
+
+  it('currentDraft requires clientName or siteAddress to be non-blank', () => {
+    const idx = appSrc.indexOf('currentDraft={');
+    expect(idx).toBeGreaterThan(-1);
+    const block = appSrc.slice(idx, idx + 400);
+    // Both fields appear in the guard, AND .trim() is used so a single
+    // space doesn't qualify.
+    expect(block).toMatch(/jobDetails\?\.\s*clientName\?\.\s*trim\(\)/);
+    expect(block).toMatch(/jobDetails\?\.\s*siteAddress\?\.\s*trim\(\)/);
+  });
+});

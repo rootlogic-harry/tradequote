@@ -148,6 +148,23 @@ describe('safeError usage consistency', () => {
     const safeErrorCount = (routeSection.match(/safeError\(res,/g) || []).length;
     expect(safeErrorCount).toBeGreaterThanOrEqual(15);
   });
+
+  test('analyse route retries transient Anthropic errors (TRQ-163)', () => {
+    // Paul hit a single Anthropic 5xx mid-Step-3 and saw "service is
+    // temporarily unavailable". The analyse route now retries on the
+    // same RETRYABLE_STATUS_CODES set the proxy uses, so a single
+    // transient error doesn't surface to the user.
+    const analyseStart = serverSource.indexOf("'/api/users/:id/analyse'");
+    const analyseEnd = serverSource.indexOf("// --- Error handler for body-parser");
+    const analyseRoute = serverSource.slice(analyseStart, analyseEnd);
+
+    // Loop with the shared retry-attempt counter.
+    expect(analyseRoute).toMatch(/for \(let attempt = 0; attempt < ANTHROPIC_MAX_RETRIES; attempt\+\+\)/);
+    // Re-uses the shared retryable status set, not a hardcoded list.
+    expect(analyseRoute).toMatch(/RETRYABLE_STATUS_CODES\.has/);
+    // Backoff before retry.
+    expect(analyseRoute).toMatch(/ANTHROPIC_RETRY_DELAYS\[attempt\]/);
+  });
 });
 
 describe('SQL injection prevention', () => {

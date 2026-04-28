@@ -680,7 +680,13 @@ export default function App() {
           onStartQuickQuote={handleStartQuickQuote}
           onViewJobs={() => setCurrentView('saved')}
           incompleteJobs={incompleteJobs}
-          currentDraft={pendingDraft || (state.step >= 2 && state.step <= 4 ? state : null)}
+          currentDraft={
+            pendingDraft
+            || (state.step >= 2 && state.step <= 4
+                && (state.jobDetails?.clientName?.trim() || state.jobDetails?.siteAddress?.trim())
+                ? state
+                : null)
+          }
           onResumeDraft={pendingDraft ? handleResumeDraft : () => setCurrentView('editor')}
           onResumeJob={handleResumeJob}
           onMarkRamsNotRequired={handleMarkRamsNotRequired}

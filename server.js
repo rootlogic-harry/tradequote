@@ -2936,14 +2936,38 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
     // Compute prompt version hash
     const promptVersion = computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
 
-    // Call 1: Primary analysis (uses the validated/clamped values)
-    const analysisResponse = await callAnthropicRaw({
-      systemPrompt: augmentedPrompt,
-      messages,
-      model: requestedModel,
-      maxTokens: requestedMaxTokens,
-      apiKey,
-    });
+    // Call 1: Primary analysis with retry on transient Anthropic errors.
+    // The /api/anthropic/messages proxy already retries on 429/500/502/
+    // 503/529; this route was missing the same logic, so a single
+    // overloaded response from Anthropic surfaced to the user as
+    // "Something Went Wrong / The service is temporarily unavailable"
+    // (Paul, 2026-04-28). Same backoff schedule as the proxy.
+    let analysisResponse = null;
+    let lastErr = null;
+    for (let attempt = 0; attempt < ANTHROPIC_MAX_RETRIES; attempt++) {
+      try {
+        analysisResponse = await callAnthropicRaw({
+          systemPrompt: augmentedPrompt,
+          messages,
+          model: requestedModel,
+          maxTokens: requestedMaxTokens,
+          apiKey,
+        });
+        break;
+      } catch (err) {
+        lastErr = err;
+        // callAnthropicRaw throws "Anthropic API error (529): ..." on
+        // non-2xx. Extract the status to decide if it's retryable.
+        const statusMatch = /Anthropic API error \((\d+)\)/.exec(err.message || '');
+        const status = statusMatch ? Number(statusMatch[1]) : null;
+        const retryable = status !== null && RETRYABLE_STATUS_CODES.has(status);
+        if (!retryable || attempt === ANTHROPIC_MAX_RETRIES - 1) throw err;
+        const delay = ANTHROPIC_RETRY_DELAYS[attempt];
+        console.warn(`[Analyse] Anthropic ${status} for user=${req.params.id}, retrying in ${delay}ms (attempt ${attempt + 1}/${ANTHROPIC_MAX_RETRIES})`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    if (!analysisResponse) throw lastErr || new Error('Analysis failed without response');
 
     const rawText = analysisResponse.content?.[0]?.text || '';
 
