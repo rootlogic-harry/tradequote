@@ -101,6 +101,12 @@ export const initialState = {
   retryCount: 0,
   statusModal: { open: false, jobId: null, targetStatus: null },
   recentJobs: [],
+  // Surface autosave outcome to the UI. Replaces the silent
+  // `.catch(() => {})` pattern at the six saveDraft call sites — users
+  // now see "Saved 12s ago" / "Saving…" / "Save failed — retry" near
+  // the step header instead of typing into a tab whose persistence
+  // has silently broken (TRQ-166).
+  autosave: { status: 'idle', lastSavedAt: null, error: null },
 };
 
 function buildDiffContext(reviewData) {
@@ -641,6 +647,32 @@ function reducerCore(state, action) {
         ...state,
         quoteSaveError: action.error || 'Save failed. Your work is preserved in this tab.',
         quoteSaveErrorKey: (state.quoteSaveErrorKey || 0) + 1,
+      };
+
+    // ── Draft autosave status (TRQ-166) ─────────────────────────────────
+    // Replaces the silent `.catch(() => {})` pattern around saveDraft.
+    // Components consume `state.autosave` to render an indicator near
+    // the step header. lastSavedAt is a millis timestamp; UI converts
+    // to relative ("Saved 12s ago"). On failure we keep lastSavedAt
+    // unchanged so "Saved 2m ago — last save failed" reads naturally.
+    case 'AUTOSAVE_START':
+      return {
+        ...state,
+        autosave: { ...state.autosave, status: 'saving', error: null },
+      };
+    case 'AUTOSAVE_OK':
+      return {
+        ...state,
+        autosave: { status: 'saved', lastSavedAt: Date.now(), error: null },
+      };
+    case 'AUTOSAVE_FAIL':
+      return {
+        ...state,
+        autosave: {
+          ...state.autosave,
+          status: 'failed',
+          error: action.error || 'Save failed',
+        },
       };
 
     case 'SWITCH_USER':

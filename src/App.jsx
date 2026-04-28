@@ -25,6 +25,7 @@ import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
+import { autosaveDraft } from './utils/autosaveDraft.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
 
@@ -293,7 +294,7 @@ export default function App() {
     // Active editing — keep autosaving.
     if (state.step <= 4) {
       const timer = setTimeout(() => {
-        saveDraft(state.currentUserId, state).catch(() => {});
+        autosaveDraft(state.currentUserId, state, dispatch);
       }, 5000);
       return () => clearTimeout(timer);
     }
@@ -417,7 +418,7 @@ export default function App() {
   const handleStartNewQuote = () => {
     // Save current work as draft first if in-progress
     if (state.currentUserId && state.step >= 2 && state.step <= 4) {
-      saveDraft(state.currentUserId, state).catch(() => {});
+      autosaveDraft(state.currentUserId, state, dispatch);
     }
     // Clear draft photos for fresh start
     if (state.currentUserId) deletePhotos(state.currentUserId, 'draft').catch(() => {});
@@ -427,7 +428,7 @@ export default function App() {
 
   const handleStartQuickQuote = () => {
     if (state.currentUserId && state.step >= 2 && state.step <= 4) {
-      saveDraft(state.currentUserId, state).catch(() => {});
+      autosaveDraft(state.currentUserId, state, dispatch);
     }
     if (state.currentUserId) deletePhotos(state.currentUserId, 'draft').catch(() => {});
     dispatch({ type: 'NEW_QUOTE', mode: 'quick' });
@@ -849,6 +850,8 @@ export default function App() {
           currentView={currentView}
           quoteMode={state.quoteMode}
           isAdminPlan={isAdmin}
+          autosave={state.autosave}
+          onAutosaveRetry={() => autosaveDraft(state.currentUserId, state, dispatch)}
         />
         <div className="max-w-5xl mx-auto px-3 fq:px-4 py-4 fq:py-6">
           <OfflineBanner />

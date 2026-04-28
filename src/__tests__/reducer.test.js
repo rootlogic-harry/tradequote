@@ -1246,4 +1246,48 @@ describe('reducer', () => {
       expect(result.step).toBe(3);
     });
   });
+
+  // ── TRQ-166: Autosave status surfaces draft persistence outcome ──
+  describe('AUTOSAVE actions', () => {
+    test('initial state has idle autosave', () => {
+      expect(initialState.autosave).toEqual({
+        status: 'idle',
+        lastSavedAt: null,
+        error: null,
+      });
+    });
+
+    test('AUTOSAVE_START flips status to saving and clears error', () => {
+      const start = { ...initialState, autosave: { status: 'failed', lastSavedAt: 1, error: 'old' } };
+      const result = reducer(start, { type: 'AUTOSAVE_START' });
+      expect(result.autosave.status).toBe('saving');
+      expect(result.autosave.error).toBeNull();
+      // lastSavedAt is preserved across saving — UI can still render
+      // "Saved 12s ago" while a fresh save is in flight.
+      expect(result.autosave.lastSavedAt).toBe(1);
+    });
+
+    test('AUTOSAVE_OK records timestamp, clears error', () => {
+      const before = Date.now();
+      const result = reducer(initialState, { type: 'AUTOSAVE_OK' });
+      expect(result.autosave.status).toBe('saved');
+      expect(result.autosave.lastSavedAt).toBeGreaterThanOrEqual(before);
+      expect(result.autosave.error).toBeNull();
+    });
+
+    test('AUTOSAVE_FAIL records error and preserves lastSavedAt', () => {
+      const start = { ...initialState, autosave: { status: 'saved', lastSavedAt: 12345, error: null } };
+      const result = reducer(start, { type: 'AUTOSAVE_FAIL', error: 'Network down' });
+      expect(result.autosave.status).toBe('failed');
+      expect(result.autosave.error).toBe('Network down');
+      // Preserves the last successful timestamp so UI can render
+      // "Saved 2m ago — last save failed".
+      expect(result.autosave.lastSavedAt).toBe(12345);
+    });
+
+    test('AUTOSAVE_FAIL falls back to generic message when error omitted', () => {
+      const result = reducer(initialState, { type: 'AUTOSAVE_FAIL' });
+      expect(result.autosave.error).toBe('Save failed');
+    });
+  });
 });

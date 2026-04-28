@@ -1,5 +1,6 @@
 import React from 'react';
 import { STEPS } from '../constants.js';
+import AutosaveStatus from './AutosaveStatus.jsx';
 
 export default function StepIndicator({
   currentStep,
@@ -7,6 +8,12 @@ export default function StepIndicator({
   currentView,
   quoteMode,
   isAdminPlan = false,
+  // Autosave indicator (TRQ-166) — surfaces draft persistence outcome
+  // beside the step pills. Accepts the reducer's `state.autosave`
+  // shape: { status, lastSavedAt, error }. onRetry is optional and
+  // wires the "retry" link in the failed state.
+  autosave,
+  onAutosaveRetry,
   // Accept but ignore legacy props so existing call sites don't break
   onSettingsClick,
   theme,
@@ -103,6 +110,14 @@ export default function StepIndicator({
             style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, color: 'var(--tq-text)' }}
           >
             Step {currentStepData.number}: {currentStepData.label}
+          </span>
+          {/* Desktop: autosave indicator goes in the right-hand slot.
+              On mobile the "Step X: Label" text already occupies that
+              space, so the indicator is hidden there to avoid crowding
+              — the failure state still surfaces via the SaveErrorBanner
+              below the step bar. */}
+          <span className="hidden fq:inline-flex ml-auto">
+            <AutosaveStatus autosave={autosave} onRetry={onAutosaveRetry} />
           </span>
           </div>
         </div>
