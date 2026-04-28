@@ -67,7 +67,7 @@ describe('Upload resilience', () => {
     });
 
     it('validates video file size before upload', () => {
-      expect(jobDetailsSource).toMatch(/100\s*\*\s*1024\s*\*\s*1024|videoFile\.size/);
+      expect(jobDetailsSource).toMatch(/500\s*\*\s*1024\s*\*\s*1024|videoFile\.size/);
     });
   });
 

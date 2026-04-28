@@ -221,7 +221,7 @@ describe('Video integration into Step 2 (JobDetails)', () => {
     });
 
     it('maps File too large to actionable message', () => {
-      expect(jobDetailsSource).toMatch(/File too large.*under 100MB/s);
+      expect(jobDetailsSource).toMatch(/File too large.*under 500MB/s);
     });
 
     it('maps 5xx Upload failed to generic retry message', () => {

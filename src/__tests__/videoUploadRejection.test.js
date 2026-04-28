@@ -45,7 +45,7 @@ describe('VideoUpload — every file rejection reports an error', () => {
     expect(fn[0]).toMatch(/file\.size\s*>\s*MAX_VIDEO_BYTES[\s\S]*?reportError/);
     // Message must mention both the measured size AND the cap.
     expect(fn[0]).toMatch(/sizeMb/);
-    expect(fn[0]).toMatch(/100MB/);
+    expect(fn[0]).toMatch(/500MB/);
   });
 
   test('duration-exceeded reports through the same unified path', () => {

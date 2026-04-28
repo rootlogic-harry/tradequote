@@ -18,8 +18,8 @@ describe('POST /api/users/:id/jobs/:jobId/video', () => {
       // Route contract: if (!req.file) return res.status(400)
     });
 
-    it('rejects files exceeding 100MB', () => {
-      const maxSize = 100 * 1024 * 1024;
+    it('rejects files exceeding 500MB', () => {
+      const maxSize = 500 * 1024 * 1024;
       const oversized = maxSize + 1;
       expect(oversized).toBeGreaterThan(maxSize);
     });
@@ -126,15 +126,15 @@ describe('POST /api/users/:id/jobs/:jobId/video', () => {
 
   describe('multer config contract', () => {
     it('uses disk storage (not memory) for large video files', () => {
-      // Video files can be up to 100MB — too large for memory storage.
+      // Video files can be up to 500MB — way too large for memory.
       // Route uses multer.diskStorage() with /tmp destination.
       // req.file.path gives the file path on disk.
       const diskConfig = {
         destination: '/tmp',
-        fileSize: 100 * 1024 * 1024,
+        fileSize: 500 * 1024 * 1024,
       };
       expect(diskConfig.destination).toBe('/tmp');
-      expect(diskConfig.fileSize).toBe(104857600);
+      expect(diskConfig.fileSize).toBe(524288000);
     });
   });
 

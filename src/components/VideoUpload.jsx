@@ -22,7 +22,7 @@ const MAX_EXTRA_PHOTOS = 3;
  *   retained for back-compat with callers that only wired duration.
  *   Prefer onError.
  */
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB — matches server multer cap
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB — matches server multer cap
 
 export default function VideoUpload({
   video = null,
@@ -123,7 +123,7 @@ export default function VideoUpload({
     if (file.size > MAX_VIDEO_BYTES) {
       const sizeMb = (file.size / 1024 / 1024).toFixed(0);
       reportError(
-        `Video is ${sizeMb}MB — maximum is 100MB. Try recording at a lower quality, or trim it to a shorter clip.`
+        `Video is ${sizeMb}MB — maximum is 500MB. Try recording at a lower quality, or trim it to a shorter clip.`
       );
       return;
     }
@@ -207,7 +207,7 @@ export default function VideoUpload({
           Add a video of the job
         </div>
         <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '16px' }}>
-          Up to 3 minutes, under 100MB.
+          Up to 3 minutes, under 500MB.
         </div>
 
         {/* Two primary buttons, side by side. On iPad the distinction

@@ -11,7 +11,7 @@ import { documentTerm } from '../../utils/documentType.js';
 
 const VIDEO_ERROR_MAP = [
   [/ANTHROPIC_API_KEY/i, 'Our analysis service is temporarily unavailable. Please try again later.'],
-  [/File too large/i, 'Video file is too large. Please record a shorter video (under 100MB).'],
+  [/File too large/i, 'Video file is too large. Please record a shorter video (under 500MB).'],
   [/under 3 minutes|too long/i, 'Video is too long. Please record a shorter video (under 3 minutes).'],
   [/appears to be empty|no video data/i, 'The video file appears to be empty or corrupted. Please try recording again.'],
   [/unreadable response/i, 'We had trouble reading the analysis. Please try again.'],
@@ -196,9 +196,10 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
     if (!jobResult.valid) return;
     if (!videoFile) return;
 
-    // Client-side file size check (#20)
-    if (videoFile.size > 100 * 1024 * 1024) {
-      showToast?.('Video must be under 100MB', 'error');
+    // Client-side file size check (#20). 500MB matches the server
+    // multer cap — Paul reports 2-min iPhone clips ~300MB.
+    if (videoFile.size > 500 * 1024 * 1024) {
+      showToast?.('Video must be under 500MB', 'error');
       return;
     }
 
