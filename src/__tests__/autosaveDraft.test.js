@@ -66,6 +66,47 @@ describe('autosaveDraft', () => {
     await expect(autosaveDraft('mark', { foo: 1 }, null)).resolves.toBeUndefined();
     expect(mockSaveDraft).toHaveBeenCalled();
   });
+
+  // TRQ-167: visibility-state guard prevents the two-tab race where a
+  // backgrounded tab's stale-state autosave clobbers a foreground
+  // tab's writes (drafts table is UNIQUE(user_id) — last write wins).
+  describe('visibility-state guard', () => {
+    let originalDocument;
+    beforeEach(() => {
+      originalDocument = globalThis.document;
+    });
+    afterEach(() => {
+      globalThis.document = originalDocument;
+    });
+
+    test('skips entirely when document.visibilityState is "hidden"', async () => {
+      globalThis.document = { visibilityState: 'hidden' };
+      const dispatch = jest.fn();
+      await autosaveDraft('mark', { foo: 1 }, dispatch);
+      expect(mockSaveDraft).not.toHaveBeenCalled();
+      // No AUTOSAVE_START/OK/FAIL dispatch — the indicator should not
+      // flicker for skipped saves.
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    test('proceeds normally when document.visibilityState is "visible"', async () => {
+      globalThis.document = { visibilityState: 'visible' };
+      mockSaveDraft.mockResolvedValue(undefined);
+      const dispatch = jest.fn();
+      await autosaveDraft('mark', { foo: 1 }, dispatch);
+      expect(mockSaveDraft).toHaveBeenCalled();
+      expect(dispatch).toHaveBeenCalledWith({ type: 'AUTOSAVE_START' });
+      expect(dispatch).toHaveBeenCalledWith({ type: 'AUTOSAVE_OK' });
+    });
+
+    test('proceeds when document is undefined (server-side / Node env)', async () => {
+      globalThis.document = undefined;
+      mockSaveDraft.mockResolvedValue(undefined);
+      const dispatch = jest.fn();
+      await autosaveDraft('mark', { foo: 1 }, dispatch);
+      expect(mockSaveDraft).toHaveBeenCalled();
+    });
+  });
 });
 
 // Source-level wiring assertions — keep the silent-failure pattern

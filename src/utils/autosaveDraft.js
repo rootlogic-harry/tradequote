@@ -16,6 +16,17 @@ import { saveDraft } from './userDB.js';
 
 export async function autosaveDraft(userId, state, dispatch) {
   if (!userId) return;
+  // TRQ-167: skip if the tab is backgrounded. Drafts are keyed
+  // UNIQUE(user_id) at the DB layer, so two tabs both running their
+  // 5s timer would race on the same row — last write wins. A user
+  // with FastQuote open in two tabs (Mark's admin workflow) would
+  // see Tab A's typing clobbered by Tab B's stale-state autosave.
+  // Skipping when hidden lets the visible tab own the row. When the
+  // backgrounded tab is brought forward, the next state change re-
+  // arms the 5s timer in App.jsx and it catches up automatically.
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return;
+  }
   // Defensive fallback for the rare call site that doesn't have access
   // to dispatch (e.g. utility code paths). Behaves exactly like the
   // legacy silent catch — degrades cleanly rather than crashing.
