@@ -139,8 +139,15 @@ export async function saveJob(userId, state) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    // No retry for POST — retrying a create request risks duplicate jobs
-    const res = await fetch(`/api/users/${userId}/jobs`, {
+    // Retry on transient errors (5xx, network blip). The server-side
+    // dedup window (10 minutes, keyed by user_id + quote_reference,
+    // see server.js around line 1336) makes this safe — a duplicate
+    // POST returns the existing row's id rather than inserting twice.
+    // Comment used to read "No retry for POST" but that pre-dated the
+    // dedup window (TRQ-137). Without the retry, a single transient
+    // 5xx during the Step-5 save burned the only attempt and the user
+    // saw "Save failed".
+    const res = await fetchWithRetry(`/api/users/${userId}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(snapshot),

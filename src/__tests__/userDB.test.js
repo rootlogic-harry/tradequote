@@ -406,16 +406,19 @@ describe('saveJob with photo copy', () => {
 
 // --- fetchWithRetry (tested via saveJob/saveDiffs) ---
 
-describe('saveJob (no retry — POST is not retried to prevent duplicates)', () => {
-  test('saveJob fails immediately on 500 (no retry)', async () => {
-    fetchMock.mockReturnValue(mockResponse({ error: 'Temporary failure' }, false, 500));
-    await expect(saveJob('mark', makeFakeState('Fail')))
-      .rejects.toThrow('Temporary failure');
-    // Only one call — no retries for POST
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+describe('saveJob (retries on transient errors — TRQ-165)', () => {
+  test('saveJob retries on 500 and succeeds on second attempt', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ error: 'Temporary' }, false, 500))
+      .mockReturnValueOnce(mockResponse({ id: 'sq-123' }))
+      .mockReturnValueOnce(mockResponse({ ok: true })); // copyPhotos
+    const id = await saveJob('mark', makeFakeState('Retry'));
+    expect(id).toBe('sq-123');
+    // Initial 500 + successful retry (+ copyPhotos call after).
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+  }, 15000);
 
-  test('saveJob does not retry on 4xx errors', async () => {
+  test('saveJob does NOT retry on 4xx (those are caller errors, not transient)', async () => {
     fetchMock.mockReturnValue(mockResponse({ error: 'Bad request' }, false, 400));
     await expect(saveJob('mark', makeFakeState('NoRetry')))
       .rejects.toThrow('Bad request');

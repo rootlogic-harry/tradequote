@@ -144,10 +144,14 @@ describe('Bug 1: Snapshot → virtualState round-trip safety', () => {
 });
 
 // =====================================================================
-// Bug 2: saveJob no-retry + saveDiffs still retries + dedup
+// Bug 2: saveJob retries on transient (TRQ-165) + saveDiffs still
+// retries + dedup. Original fix here was no-retry to stop dupes; the
+// dedup window (TRQ-137) made retry safe again, and TRQ-165 turned
+// retry back on so a single 5xx during Step-5 save no longer burns
+// the only attempt.
 // =====================================================================
 
-describe('Bug 2: saveJob behavioral (no retry on POST)', () => {
+describe('Bug 2: saveJob retries on transient errors (TRQ-165)', () => {
   let fetchMock;
   let saveJob, saveDiffs, updateJob;
 
@@ -192,12 +196,15 @@ describe('Bug 2: saveJob behavioral (no retry on POST)', () => {
     };
   }
 
-  test('saveJob does NOT retry on 500 — single fetch call only', async () => {
-    fetchMock.mockReturnValue(mockResponse({ error: 'Server down' }, false, 500));
-    await expect(saveJob('mark', makeFakeState('NoRetry'))).rejects.toThrow();
-    // Only 1 call — no retry
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+  test('saveJob retries on 500 (server-side dedup window keeps it safe)', async () => {
+    fetchMock
+      .mockReturnValueOnce(mockResponse({ error: 'Server down' }, false, 500))
+      .mockReturnValueOnce(mockResponse({ id: 'sq-after-retry' }))
+      .mockReturnValueOnce(mockResponse({ ok: true })); // copyPhotos
+    const id = await saveJob('mark', makeFakeState('Retry'));
+    expect(id).toBe('sq-after-retry');
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+  }, 15000);
 
   test('saveJob calls plain fetch with POST method', async () => {
     fetchMock

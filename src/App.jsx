@@ -275,16 +275,34 @@ export default function App() {
   }, [theme, state.currentUserId]);
 
   // WS5: Auto-save draft (debounced 5s, steps 2-4 only)
+  //
+  // Critical ordering rule (TRQ-165): the draft is cleared ONLY after a
+  // successful Step 5 save (savedJobId set by QUOTE_SAVED). Previously
+  // the clear fired the instant step transitioned out of [2,4], in
+  // parallel with the saveJob effect — so a transient 5xx during save
+  // left the user with no draft, no job, and only sessionStorage as a
+  // recovery path. If that tab died (iPad memory pressure, OAuth re-
+  // login, manual refresh), the work was gone.
   useEffect(() => {
     if (!state.currentUserId) return;
-    if (state.step < 2 || state.step > 4) {
+    // Out of editing entirely (dashboard, etc.) — safe to drop draft.
+    if (state.step < 2) {
       clearDraft(state.currentUserId).catch(() => {});
       return;
     }
-    const timer = setTimeout(() => {
-      saveDraft(state.currentUserId, state).catch(() => {});
-    }, 5000);
-    return () => clearTimeout(timer);
+    // Active editing — keep autosaving.
+    if (state.step <= 4) {
+      const timer = setTimeout(() => {
+        saveDraft(state.currentUserId, state).catch(() => {});
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+    // Step 5 — only clear once the job has been saved. While
+    // savedJobId is null (save in flight, or save failed) the draft is
+    // the user's recovery path.
+    if (state.step === 5 && state.savedJobId) {
+      clearDraft(state.currentUserId).catch(() => {});
+    }
   }, [state]);
 
   // Auto-save job + diffs at Generate Quote (Step 4 → Step 5)

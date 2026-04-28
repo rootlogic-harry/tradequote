@@ -796,12 +796,18 @@ describe('Concurrent save protection', () => {
     }
   });
 
-  test('saveJob does NOT use fetchWithRetry (prevents duplicate job creation)', () => {
+  test('saveJob USES fetchWithRetry — server-side dedup window keeps retry safe (TRQ-165)', () => {
+    // Inversion of the original assertion. saveJob used to use plain
+    // fetch because a retry would create duplicate job rows. After
+    // TRQ-137 added the 10-minute (user_id, quote_reference) dedup
+    // window, a duplicate POST returns the existing id instead of
+    // INSERTing — so retry on transient 5xx is safe again, and TRQ-165
+    // turned it back on so a single 5xx mid-save doesn't lose the work.
     const src = readFileSync(join(__dirname, '../utils/userDB.js'), 'utf8');
     const saveJobStart = src.indexOf('export async function saveJob(');
     const saveJobEnd = src.indexOf('\nexport', saveJobStart + 1);
     const saveJobBody = src.slice(saveJobStart, saveJobEnd);
-    expect(saveJobBody).not.toContain('fetchWithRetry');
+    expect(saveJobBody).toContain('fetchWithRetry');
   });
 
   test('server POST /api/users/:id/jobs has a dedup window (widened to 10 minutes in TRQ-137)', () => {
