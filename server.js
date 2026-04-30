@@ -38,6 +38,11 @@ import {
   renderTokenExpired as renderPortalExpired,
   renderServiceUnavailable as renderPortalServiceUnavailable,
 } from './portalRenderer.js';
+import {
+  tokensToGbp,
+  whisperBytesToGbp,
+  getPriceMap,
+} from './src/utils/anthropicPricing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -2904,6 +2909,324 @@ app.post('/api/admin/calibration/run', requireAuth, requireAdminPlan, async (req
     res.json({ ok: true, runId, proposals });
   } catch (err) {
     console.error('[CalibrationRun] Error:', err.message);
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// TRQ-174: Admin Analytics endpoint
+//
+// Single round-trip aggregator for the Analytics dashboard. Returns
+// users / quotes / spend / reliability / portal-engagement sections in
+// one response so the frontend doesn't fan out into 6 separate
+// requests on every page load.
+//
+// Range: ?range=24h | 7d | 30d | all (default 30d). All tables that
+// support a created_at filter are scoped by this window; users are
+// always returned in full because "users that haven't logged in" is a
+// dashboard signal too.
+//
+// Cached in-memory for 60s — Mark refreshing the tab won't re-run the
+// 6 aggregate queries every time. Cache is per-range and clears on
+// process restart (acceptable; this is a 2-user app).
+// ─────────────────────────────────────────────────────────────────────
+const ANALYTICS_CACHE_MS = 60_000;
+const analyticsCache = new Map(); // range → { at, payload }
+
+function rangeToInterval(range) {
+  // Returns a Postgres-friendly interval expression OR null for "all".
+  switch (range) {
+    case '24h': return '24 hours';
+    case '7d':  return '7 days';
+    case '30d': return '30 days';
+    case 'all': return null;
+    default:    return '30 days';
+  }
+}
+
+app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) => {
+  const range = ['24h', '7d', '30d', 'all'].includes(req.query.range)
+    ? req.query.range : '30d';
+  const cached = analyticsCache.get(range);
+  if (cached && Date.now() - cached.at < ANALYTICS_CACHE_MS) {
+    return res.json(cached.payload);
+  }
+  const interval = rangeToInterval(range); // null = all-time
+  // Built up below. Each section runs in a single SQL round-trip.
+  // PostgreSQL DATE arithmetic: COALESCE($N::interval, 'NULL'::interval)
+  // doesn't work cleanly, so we conditionally append the interval
+  // predicate string-side. NEVER interpolate user input — only the
+  // hard-coded interval map values below are interpolated.
+  const intervalSql = interval ? `INTERVAL '${interval}'` : null;
+  const sinceFilter = (col) => intervalSql ? `${col} > NOW() - ${intervalSql}` : 'TRUE';
+
+  try {
+    // ── Users section ────────────────────────────────────────────────
+    const usersQuery = pool.query(`
+      SELECT id, name, plan, auth_provider, created_at AS "createdAt",
+             last_login_at AS "lastLoginAt"
+      FROM users ORDER BY last_login_at DESC NULLS LAST
+    `);
+    // Count signups in the window
+    const signupsQuery = pool.query(`
+      SELECT COUNT(*)::int AS "count" FROM users WHERE ${sinceFilter('created_at')}
+    `);
+
+    // ── Quote activity ───────────────────────────────────────────────
+    const quotesQuery = pool.query(`
+      SELECT
+        COUNT(*)::int AS "total",
+        COUNT(*) FILTER (WHERE status = 'draft')::int AS "drafts",
+        COUNT(*) FILTER (WHERE status = 'sent')::int AS "sent",
+        COUNT(*) FILTER (WHERE status = 'accepted')::int AS "accepted",
+        COUNT(*) FILTER (WHERE status = 'declined')::int AS "declined",
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS "completed",
+        COALESCE(SUM(total_amount) FILTER (WHERE status IN ('sent','accepted','completed')), 0)::float AS "totalValueGbp",
+        COALESCE(AVG(total_amount) FILTER (WHERE status IN ('sent','accepted','completed')), 0)::float AS "avgValueGbp",
+        COUNT(*) FILTER (WHERE quote_snapshot->>'captureMode' = 'video')::int AS "videoMode",
+        COUNT(*) FILTER (WHERE quote_snapshot->>'captureMode' = 'photos')::int AS "photoMode",
+        COUNT(*) FILTER (WHERE quote_snapshot->>'quoteMode' = 'quick')::int AS "quickMode"
+      FROM jobs WHERE ${sinceFilter('saved_at')}
+    `);
+
+    // ── Per-user quote + spend roll-up ───────────────────────────────
+    // Joins jobs with agent_runs (token spend includes both 'analyse'
+    // calls and background agent_types) and dictation_runs (Whisper).
+    // Returns one row per user so the dashboard table can sort/filter.
+    const perUserQuery = pool.query(`
+      WITH user_jobs AS (
+        SELECT user_id,
+               COUNT(*)::int AS jobs,
+               COALESCE(SUM(total_amount) FILTER (WHERE status IN ('sent','accepted','completed')), 0)::float AS quoted_value,
+               MAX(saved_at) AS last_quote_at
+        FROM jobs WHERE ${sinceFilter('saved_at')}
+        GROUP BY user_id
+      ),
+      user_tokens AS (
+        SELECT user_id,
+               COUNT(*)::int AS analyse_calls,
+               COALESCE(SUM(prompt_tokens), 0)::bigint AS prompt_tokens,
+               COALESCE(SUM(completion_tokens), 0)::bigint AS completion_tokens,
+               jsonb_object_agg(model, COALESCE(model_tokens, 0)) AS by_model
+        FROM (
+          SELECT user_id, agent_type, model, prompt_tokens, completion_tokens,
+                 SUM(COALESCE(prompt_tokens, 0) + COALESCE(completion_tokens, 0))
+                   OVER (PARTITION BY user_id, model) AS model_tokens
+          FROM agent_runs WHERE ${sinceFilter('created_at')}
+        ) t
+        GROUP BY user_id
+      ),
+      user_audio AS (
+        SELECT user_id, COALESCE(SUM(audio_bytes), 0)::bigint AS audio_bytes
+        FROM dictation_runs WHERE ${sinceFilter('created_at')}
+        GROUP BY user_id
+      )
+      SELECT
+        u.id AS "userId", u.name, u.plan, u.last_login_at AS "lastLoginAt",
+        COALESCE(j.jobs, 0) AS "jobs",
+        COALESCE(j.quoted_value, 0) AS "quotedValue",
+        j.last_quote_at AS "lastQuoteAt",
+        COALESCE(t.analyse_calls, 0) AS "analyseCalls",
+        COALESCE(t.prompt_tokens, 0)::bigint AS "promptTokens",
+        COALESCE(t.completion_tokens, 0)::bigint AS "completionTokens",
+        t.by_model AS "tokensByModel",
+        COALESCE(a.audio_bytes, 0)::bigint AS "whisperAudioBytes"
+      FROM users u
+      LEFT JOIN user_jobs j ON j.user_id = u.id
+      LEFT JOIN user_tokens t ON t.user_id = u.id
+      LEFT JOIN user_audio a ON a.user_id = u.id
+      ORDER BY COALESCE(t.prompt_tokens + t.completion_tokens, 0) DESC
+    `);
+
+    // ── Per-quote spend (top 20 most-expensive quotes in window) ─────
+    const perQuoteQuery = pool.query(`
+      SELECT
+        ar.job_id AS "jobId", ar.user_id AS "userId",
+        j.client_name AS "clientName", j.quote_reference AS "quoteReference",
+        SUM(COALESCE(ar.prompt_tokens, 0))::bigint AS "promptTokens",
+        SUM(COALESCE(ar.completion_tokens, 0))::bigint AS "completionTokens",
+        COUNT(*)::int AS "calls",
+        MAX(ar.created_at) AS "lastCallAt"
+      FROM agent_runs ar
+      LEFT JOIN jobs j ON j.id = ar.job_id
+      WHERE ar.job_id IS NOT NULL AND ${sinceFilter('ar.created_at')}
+      GROUP BY ar.job_id, ar.user_id, j.client_name, j.quote_reference
+      ORDER BY (SUM(COALESCE(ar.prompt_tokens, 0)) + SUM(COALESCE(ar.completion_tokens, 0))) DESC
+      LIMIT 20
+    `);
+
+    // ── Spend totals by model (for the "where the bill goes" chart) ──
+    const spendByModelQuery = pool.query(`
+      SELECT model,
+             COALESCE(SUM(prompt_tokens), 0)::bigint AS "promptTokens",
+             COALESCE(SUM(completion_tokens), 0)::bigint AS "completionTokens",
+             COUNT(*)::int AS calls
+      FROM agent_runs WHERE model IS NOT NULL AND ${sinceFilter('created_at')}
+      GROUP BY model
+      ORDER BY (SUM(prompt_tokens) + SUM(completion_tokens)) DESC NULLS LAST
+    `);
+
+    // ── Reliability — failures + retry queue depth ───────────────────
+    const failuresQuery = pool.query(`
+      SELECT id, user_id AS "userId", agent_type AS "agentType",
+             error, model, created_at AS "createdAt"
+      FROM agent_runs
+      WHERE status = 'failed' AND ${sinceFilter('created_at')}
+      ORDER BY created_at DESC LIMIT 50
+    `);
+    const retryQueueQuery = pool.query(`
+      SELECT COUNT(*)::int AS "depth",
+             COUNT(*) FILTER (WHERE attempts >= 2)::int AS "stuck"
+      FROM agent_retry_queue
+    `);
+
+    // ── Portal engagement ────────────────────────────────────────────
+    const portalQuery = pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE client_token IS NOT NULL)::int AS "tokensIssued",
+        COUNT(*) FILTER (WHERE client_viewed_at IS NOT NULL)::int AS "viewed",
+        COUNT(*) FILTER (WHERE client_response IS NOT NULL)::int AS "responded",
+        COUNT(*) FILTER (WHERE client_response = 'accepted')::int AS "accepted",
+        COUNT(*) FILTER (WHERE client_response = 'declined')::int AS "declined"
+      FROM jobs
+      WHERE client_token IS NOT NULL AND ${sinceFilter('saved_at')}
+    `);
+
+    // ── Daily spend trend (last 30 days regardless of range — chart) ──
+    const dailyTrendQuery = pool.query(`
+      SELECT DATE(created_at) AS "date",
+             COALESCE(SUM(prompt_tokens), 0)::bigint AS "promptTokens",
+             COALESCE(SUM(completion_tokens), 0)::bigint AS "completionTokens"
+      FROM agent_runs
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) ASC
+    `);
+
+    const [
+      usersRes, signupsRes, quotesRes, perUserRes, perQuoteRes,
+      spendByModelRes, failuresRes, retryQueueRes, portalRes, dailyTrendRes,
+    ] = await Promise.all([
+      usersQuery, signupsQuery, quotesQuery, perUserQuery, perQuoteQuery,
+      spendByModelQuery, failuresQuery, retryQueueQuery, portalQuery, dailyTrendQuery,
+    ]);
+
+    // Convert per-user token totals into £ for the dashboard. Per-user
+    // by_model is a JSON object — sum each model's £ separately so a
+    // user with mixed Sonnet+Haiku usage gets a correct total.
+    const usersWithCost = perUserRes.rows.map((u) => {
+      let modelCostGbp = 0;
+      const byModel = u.tokensByModel || {};
+      for (const [model, totalTokens] of Object.entries(byModel)) {
+        // The window-function aggregate above sums prompt+completion
+        // per (user, model) but we only have the combined number here.
+        // For the per-user table treat the split as 70/30 (typical for
+        // analyse calls) — the breakdown chart uses the exact split
+        // from spendByModel below for accuracy. Acceptable approximation
+        // for the user-table column which is "spend overview".
+        const numericTokens = Number(totalTokens) || 0;
+        modelCostGbp += tokensToGbp(model, numericTokens * 0.7, numericTokens * 0.3);
+      }
+      const audioBytes = Number(u.whisperAudioBytes) || 0;
+      const whisperGbp = whisperBytesToGbp(audioBytes);
+      return {
+        ...u,
+        promptTokens: Number(u.promptTokens) || 0,
+        completionTokens: Number(u.completionTokens) || 0,
+        whisperAudioBytes: audioBytes,
+        estimatedCostGbp: Number((modelCostGbp + whisperGbp).toFixed(4)),
+      };
+    });
+
+    const perQuoteWithCost = perQuoteRes.rows.map((q) => {
+      const promptTokens = Number(q.promptTokens) || 0;
+      const completionTokens = Number(q.completionTokens) || 0;
+      // Per-quote we don't know the model split — use Sonnet 4 as the
+      // default since analyse calls are Sonnet (background agents on
+      // Haiku contribute much less spend).
+      const estimatedCostGbp = tokensToGbp(
+        'claude-sonnet-4-20250514', promptTokens, completionTokens
+      );
+      return {
+        ...q,
+        promptTokens, completionTokens,
+        estimatedCostGbp: Number(estimatedCostGbp.toFixed(4)),
+      };
+    });
+
+    const spendByModelWithCost = spendByModelRes.rows.map((m) => {
+      const promptTokens = Number(m.promptTokens) || 0;
+      const completionTokens = Number(m.completionTokens) || 0;
+      return {
+        model: m.model, calls: m.calls,
+        promptTokens, completionTokens,
+        estimatedCostGbp: Number(
+          tokensToGbp(m.model, promptTokens, completionTokens).toFixed(4)
+        ),
+      };
+    });
+
+    const totalCostGbp = spendByModelWithCost.reduce(
+      (sum, m) => sum + m.estimatedCostGbp, 0
+    );
+
+    const portal = portalRes.rows[0] || {};
+    const portalRates = {
+      tokensIssued: portal.tokensIssued || 0,
+      viewed: portal.viewed || 0,
+      responded: portal.responded || 0,
+      accepted: portal.accepted || 0,
+      declined: portal.declined || 0,
+      viewRate: portal.tokensIssued > 0
+        ? Number((portal.viewed / portal.tokensIssued).toFixed(2)) : 0,
+      responseRate: portal.viewed > 0
+        ? Number((portal.responded / portal.viewed).toFixed(2)) : 0,
+    };
+
+    // 14-day "dormant" cut. Mark sees who hasn't been near the app.
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const dormant = usersRes.rows.filter(
+      (u) => !u.lastLoginAt || new Date(u.lastLoginAt) < fourteenDaysAgo
+    ).length;
+
+    const payload = {
+      range,
+      generatedAt: new Date().toISOString(),
+      pricing: getPriceMap(),
+      users: {
+        total: usersRes.rows.length,
+        byPlan: usersRes.rows.reduce((acc, u) => {
+          acc[u.plan] = (acc[u.plan] || 0) + 1;
+          return acc;
+        }, {}),
+        signupsInRange: signupsRes.rows[0]?.count || 0,
+        dormantCount: dormant,
+        list: usersRes.rows,
+      },
+      quotes: quotesRes.rows[0] || {},
+      perUser: usersWithCost,
+      perQuote: perQuoteWithCost,
+      spend: {
+        totalGbp: Number(totalCostGbp.toFixed(2)),
+        byModel: spendByModelWithCost,
+        dailyTrend: dailyTrendRes.rows.map((d) => ({
+          date: d.date,
+          promptTokens: Number(d.promptTokens) || 0,
+          completionTokens: Number(d.completionTokens) || 0,
+        })),
+      },
+      reliability: {
+        recentFailures: failuresRes.rows,
+        retryQueueDepth: retryQueueRes.rows[0]?.depth || 0,
+        retryQueueStuck: retryQueueRes.rows[0]?.stuck || 0,
+      },
+      portal: portalRates,
+    };
+
+    analyticsCache.set(range, { at: Date.now(), payload });
+    res.json(payload);
+  } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });
