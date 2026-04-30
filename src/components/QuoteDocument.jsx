@@ -132,7 +132,10 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
       <div className="flex justify-between items-start mb-6 border-b-2 border-gray-200 pb-4">
         <div className="flex items-start gap-4">
           {profile.logo && (
-            <img src={profile.logo} alt="Logo" className="max-w-[200px] max-h-[80px] object-contain" />
+            // 245×120 matches the 65×32mm logo on Mark's reference PDF;
+            // was 200×80 (≈53×21mm), which felt undersized next to the
+            // company-name heading.
+            <img src={profile.logo} alt="Logo" className="max-w-[245px] max-h-[120px] object-contain" />
           )}
           <div>
             {profile.companyName?.trim() && (
@@ -191,10 +194,16 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Measurements
         </h2>
-        <ul className="space-y-1">
+        {/* list-disc + pl-6 give us the same filled-bullet glyph Mark's
+             reference PDF uses ("● Length: 4,000mm"). Tailwind preflight
+             strips list markers by default, so without these classes the
+             measurements rendered as flat `Item: value` lines. The DOCX
+             builder already emits real bullets via { bullet: { level: 0 } }
+             so this brings the PDF/preview path into line with that. */}
+        <ul className="list-disc pl-6 space-y-1 marker:text-gray-700">
           {measurements.map((m) => (
-            <li key={m.id} className="flex items-center gap-2 text-lg">
-              <span className="text-gray-700">{m.item}:</span>
+            <li key={m.id} className="text-lg">
+              <span className="text-gray-700">{m.item}:</span>{' '}
               <span className="font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 {m.confirmed ? m.value : <em className="text-amber-500">(unconfirmed)</em>}
               </span>
@@ -373,7 +382,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             >
               {pairIdx === 0 && (
                 <h2
-                  className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-3 border-t border-gray-200 pt-4"
+                  className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-3 border-t border-gray-200 pt-4 text-center"
                   style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
                 >
                   Site Photographs

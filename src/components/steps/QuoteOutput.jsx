@@ -383,8 +383,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           logoImg.src = profile.logo;
           await new Promise(resolve => { logoImg.onload = resolve; logoImg.onerror = resolve; });
           const logoAspect = logoImg.width / logoImg.height;
-          const maxLogoW = 200;
-          const maxLogoH = 80;
+          // 245×120 matches the 65×32mm logo on Mark's reference PDF;
+          // was 200×80 (≈53×21mm at Word's 96dpi), which felt undersized
+          // next to the company-name heading. PDF + DOCX now use the
+          // same logo footprint.
+          const maxLogoW = 245;
+          const maxLogoH = 120;
           let logoW = maxLogoW;
           let logoH = logoW / logoAspect;
           if (logoH > maxLogoH) {
