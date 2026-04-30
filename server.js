@@ -23,7 +23,7 @@ import {
   applyMeasurementPlausibilityBounds,
 } from './src/utils/aiParser.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
-import { renderQuotePdf } from './pdfRenderer.js';
+import { renderQuotePdf, sanitiseQuoteHtml } from './pdfRenderer.js';
 import { buildQuickbooksCSV } from './src/utils/quickbooksExport.js';
 import { fileTypeFromFile } from 'file-type';
 import {
@@ -1301,9 +1301,16 @@ app.get('/api/users/:id/jobs', async (req, res) => {
               client_token_expires_at AS "clientTokenExpiresAt",
               client_viewed_at AS "clientViewedAt",
               client_response AS "clientResponse"
-       FROM jobs WHERE user_id = $1 ORDER BY saved_at DESC`,
+       FROM jobs WHERE user_id = $1 ORDER BY saved_at DESC LIMIT 100`,
       [req.params.id]
     );
+    // TRQ-172 (sec-audit round 5, M-2): LIMIT 100 caps the response
+    // payload. The query returns full quote_snapshot JSONB per row
+    // (50–500 KB each) which Resume Job in App.jsx depends on; the
+    // proper fix is dropping snapshot from the list and lazy-fetching
+    // it on Resume, but that's a multi-file refactor. For two-user
+    // scale (Mark + Paul) the 100-job ceiling is plenty and prevents
+    // unbounded growth from blowing up the dashboard load.
     // Add snapshot alias for backward compatibility
     const jobs = rows.map(r => ({
       ...r,
@@ -1473,6 +1480,20 @@ const pdfRateLimit = rateLimit({
   message: { error: 'Too many PDF requests. Please wait a minute and try again.' },
 });
 
+// TRQ-172 (sec-audit round 5, L-1): hardening cap on the QBO CSV export.
+// Auth-gated and computationally cheap (one DB read + in-memory build),
+// so this is belt-and-braces rather than money protection — but keeps a
+// runaway client from spamming the route while a legitimate user waits.
+const csvExportRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  keyGenerator: (req) => req.params.id || req.ip,
+  message: { error: 'Too many export requests. Please wait a minute and try again.' },
+});
+
 // POST /api/users/:id/jobs/:jobId/pdf
 // Accepts pre-rendered quote HTML (react-dom/server.renderToStaticMarkup
 // on the client) and returns a native PDF using Chromium + public/print.css.
@@ -1490,10 +1511,18 @@ app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
   }
   // TRQ-169: header/footer are bounded — they render on every page so
   // a runaway template would balloon the PDF. 4KB each is generous.
+  // TRQ-172 (sec-audit round 5, M-1): also sanitise. Puppeteer's
+  // headerTemplate/footerTemplate accept arbitrary HTML, and even
+  // though setJavaScriptEnabled(false) blocks <script> execution and
+  // setRequestInterception aborts off-allowlist URLs, a crafted
+  // <img src="data.attacker.com"> could exfiltrate via DNS resolution
+  // before the request abort. Run both through the same sanitiser the
+  // body uses; the legitimate buildPdfHeaderHtml output passes
+  // through unchanged because it only uses safe tags + inline styles.
   const safeHeader = typeof headerHtml === 'string' && headerHtml.length <= 4096
-    ? headerHtml : undefined;
+    ? sanitiseQuoteHtml(headerHtml) : undefined;
   const safeFooter = typeof footerHtml === 'string' && footerHtml.length <= 4096
-    ? footerHtml : undefined;
+    ? sanitiseQuoteHtml(footerHtml) : undefined;
 
   try {
     const pdf = await renderQuotePdf({
@@ -1516,7 +1545,7 @@ app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
 // QuickBooks Online UK — invoice CSV export (file-only, no API / OAuth).
 // Protected by the global `app.use('/api/users/:id', requireAuth, requireOwner)`
 // middleware so ownership is enforced before this handler runs.
-app.get('/api/users/:id/jobs/:jobId/export/quickbooks-csv', async (req, res) => {
+app.get('/api/users/:id/jobs/:jobId/export/quickbooks-csv', csvExportRateLimit, async (req, res) => {
   const { id: userId, jobId } = req.params;
   try {
     const { rows: jobRows } = await pool.query(
