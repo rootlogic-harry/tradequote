@@ -2944,6 +2944,24 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
     return res.status(400).json({ error: 'messages is required' });
   }
 
+  // TRQ-173: Analytics needs per-user / per-quote token spend. Reuse
+  // the agent_runs table with agent_type='analyse' so a single query
+  // covers both analyse calls and background agents. Logging is
+  // best-effort — every catch is silent so observability can't break
+  // the user-facing flow.
+  const analyseStart = Date.now();
+  let analyseRunId = null;
+  try {
+    const r = await pool.query(
+      `INSERT INTO agent_runs (user_id, agent_type, status, model)
+       VALUES ($1, 'analyse', 'running', $2) RETURNING id`,
+      [req.params.id, typeof model === 'string' ? model : 'claude-sonnet-4-20250514']
+    );
+    analyseRunId = r.rows[0]?.id;
+  } catch (err) {
+    console.warn('[Analyse] Failed to insert agent_runs row:', err.message);
+  }
+
   // SECURITY (sec-audit H-1): clamp model + max_tokens to the same
   // allowlist/ceiling the proxy enforces. Prevents an authenticated
   // user from forcing Opus calls or 200k-token outputs.
@@ -3050,7 +3068,31 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
       critiqueNotes,
       promptVersion,
     });
+
+    // TRQ-173: success-path agent_runs completion. Best-effort.
+    if (analyseRunId) {
+      const usage = analysisResponse.usage || {};
+      pool.query(
+        `UPDATE agent_runs SET status = 'ok', prompt_tokens = $1,
+                 completion_tokens = $2, duration_ms = $3 WHERE id = $4`,
+        [
+          Number(usage.input_tokens) || 0,
+          Number(usage.output_tokens) || 0,
+          Date.now() - analyseStart,
+          analyseRunId,
+        ]
+      ).catch((err) => console.warn('[Analyse] Failed to update agent_runs:', err.message));
+    }
   } catch (err) {
+    // TRQ-173: failure-path agent_runs completion. Best-effort, fire
+    // before safeError responds. Captures error message (truncated) so
+    // Analytics can show recent failures.
+    if (analyseRunId) {
+      pool.query(
+        `UPDATE agent_runs SET status = 'failed', duration_ms = $1, error = $2 WHERE id = $3`,
+        [Date.now() - analyseStart, String(err?.message || 'unknown').slice(0, 500), analyseRunId]
+      ).catch(() => {});
+    }
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });
