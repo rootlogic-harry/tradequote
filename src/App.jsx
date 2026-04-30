@@ -18,6 +18,7 @@ import Dashboard from './components/Dashboard.jsx';
 import StatusModal from './components/StatusModal.jsx';
 import LearningDashboard from './components/LearningDashboard.jsx';
 import AgentActivity from './components/AgentActivity.jsx';
+import Analytics from './components/Analytics.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import Sidebar from './components/Sidebar.jsx';
@@ -668,6 +669,11 @@ export default function App() {
   const isAdmin = checkAdminPlan(state.currentUser);
 
   const renderContent = () => {
+    // Analytics dashboard (admin only)
+    if (currentView === 'analytics' && isAdmin) {
+      return <Analytics />;
+    }
+
     // Learning dashboard (admin only)
     if (currentView === 'learning' && isAdmin) {
       return <LearningDashboard currentUserId={state.currentUserId} />;
@@ -831,6 +837,7 @@ export default function App() {
         onStartNewQuote={handleStartNewQuote}
         onGoToDashboard={handleGoToDashboard}
         onGoToSaved={handleGoToSaved}
+        onGoToAnalytics={() => setCurrentView('analytics')}
         onGoToLearning={() => setCurrentView('learning')}
         onGoToAgents={() => setCurrentView('agents')}
         theme={theme}

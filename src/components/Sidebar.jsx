@@ -9,6 +9,7 @@ export default function Sidebar({
   onGoToSaved,
   onGoToLearning,
   onGoToAgents,
+  onGoToAnalytics,
   theme,
   toggleTheme,
   currentUser,
@@ -23,6 +24,7 @@ export default function Sidebar({
     { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon, action: onGoToDashboard },
     { key: 'new', label: `New ${term.title}`, icon: PlusIcon, action: onStartNewQuote },
     { key: 'saved', label: `My ${term.title}s`, icon: FolderIcon, action: onGoToSaved },
+    ...(isAdminPlan && onGoToAnalytics ? [{ key: 'analytics', label: 'Analytics', icon: TrendIcon, action: onGoToAnalytics }] : []),
     ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', icon: ChartIcon, action: onGoToLearning }] : []),
     ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', icon: CpuIcon, action: onGoToAgents }] : []),
   ];
@@ -31,6 +33,7 @@ export default function Sidebar({
     (key === 'dashboard' && currentView === 'dashboard') ||
     (key === 'saved' && currentView === 'saved') ||
     (key === 'new' && currentView === 'editor') ||
+    (key === 'analytics' && currentView === 'analytics') ||
     (key === 'learning' && currentView === 'learning') ||
     (key === 'agents' && currentView === 'agents');
 
@@ -156,6 +159,15 @@ function FolderIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function TrendIcon({ size = 18 }) {
+  // Up-and-to-the-right trend line (Analytics dashboard nav).
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 17 9 11 13 15 21 7" />
+      <polyline points="14 7 21 7 21 14" />
     </svg>
   );
 }
