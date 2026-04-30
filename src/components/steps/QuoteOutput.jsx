@@ -808,11 +808,13 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         for (let i = 0; i < filteredPhotos.length; i += 2) {
           const pageChildren = [];
 
-          // Header for each photo page
+          // Header for each photo page (centred to match the centred
+          // photos below).
           pageChildren.push(
             new Paragraph({
+              alignment: AlignmentType.CENTER,
               children: [txt('SITE PHOTOGRAPHS', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
-              spacing: { after: 200 },
+              spacing: { after: 160 },
             })
           );
 
@@ -831,9 +833,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               img.src = photo.data;
               await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
 
-              // Size to fit — max 6in wide, max 4in tall (2 photos per page)
-              const maxW = 6 * 96;  // 576px at 96dpi
-              const maxH = 3.8 * 96; // 365px — leaves room for caption + header
+              // Size to fit — bumped from 6×3.8in to match the photo
+              // dimensions on Mark's hand-laid-out PDF (158×119mm =
+              // 6.22×4.65in). Bigger photos fill the available content
+              // width within the photo-page section's reduced margins.
+              // 4:3 photos now hit the width cap (≈159×119mm) instead
+              // of being clamped at the old 3.8in height (≈129mm wide).
+              // 16:9 photos render at ≈159×89mm. Two of either fit on
+              // an A4 page given the photo-section margin override
+              // below. Centred via AlignmentType.CENTER on the
+              // containing paragraph (was left-aligned).
+              const maxW = 6.25 * 96;  // 600px → 158.75mm
+              const maxH = 4.65 * 96;  // 446px → 118.1mm
               const aspect = img.width / img.height;
 
               let drawW = maxW;
@@ -845,6 +856,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
               pageChildren.push(
                 new Paragraph({
+                  alignment: AlignmentType.CENTER,
                   children: [
                     new ImageRun({
                       data: byteArray,
@@ -854,7 +866,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                       },
                     }),
                   ],
-                  spacing: { before: 100, after: 200 },
+                  spacing: { before: 60, after: 120 },
                 }),
               );
             } catch (photoErr) {
@@ -862,8 +874,24 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             }
           }
 
+          // Tighter margins on photo pages so two full-width photos +
+          // the SITE PHOTOGRAPHS heading fit on one A4 page. Default
+          // 1in margins left photos at 129mm wide; 0.7in/0.5in
+          // T-B/L-R gives a 261mm × 184mm content box that comfortably
+          // holds 2×119mm-tall photos plus header (Mark's hand-laid
+          // PDF uses ~22mm top/bottom for the same reason).
           photoPageSections.push({
-            properties: { type: SectionType.NEXT_PAGE },
+            properties: {
+              type: SectionType.NEXT_PAGE,
+              page: {
+                margin: {
+                  top: convertInchesToTwip(0.7),
+                  bottom: convertInchesToTwip(0.7),
+                  left: convertInchesToTwip(0.5),
+                  right: convertInchesToTwip(0.5),
+                },
+              },
+            },
             footers: { default: docFooter },
             children: pageChildren,
           });
