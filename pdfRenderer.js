@@ -182,9 +182,14 @@ async function getBrowser() {
  * @param {object} opts
  * @param {string} opts.quoteHtml - the <QuoteDocument /> markup as a string
  * @param {string} [opts.title] - used as the PDF's document title
+ * @param {string} [opts.headerHtml] - inline HTML rendered in the top page
+ *   margin on every page (TRQ-169). Plain text + light styling only — Puppeteer's
+ *   header/footer rendering does not inherit page CSS, so style it inline.
+ * @param {string} [opts.footerHtml] - inline HTML rendered in the bottom page
+ *   margin on every page.
  * @returns {Promise<Buffer>} the PDF as a binary buffer
  */
-export async function renderQuotePdf({ quoteHtml, title = 'Quote' }) {
+export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, footerHtml }) {
   if (typeof quoteHtml !== 'string' || quoteHtml.length === 0) {
     throw new Error('renderQuotePdf: quoteHtml is required');
   }
@@ -239,12 +244,32 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote' }) {
     await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 30000 });
     // Force print CSS to apply inside Chromium's PDF engine
     await page.emulateMediaType('print');
+    // TRQ-169: repeat the trader's header (date · email · phone) and
+    // footer (trading address + VAT) on every page, matching the
+    // hand-laid PDF Mark uses as the visual standard. When the caller
+    // doesn't supply either, fall back to no header/footer (legacy
+    // behaviour) by passing displayHeaderFooter:false.
+    //
+    // Puppeteer's preferCSSPageSize uses @page CSS for *size* but the
+    // margin source depends on whether displayHeaderFooter is true:
+    // when true, Puppeteer's `margin` option wins, so we set both
+    // here. Top/bottom widened from 18/22 → 25/22mm to give the
+    // header/footer zone room without crowding content.
+    const enableHeaderFooter = !!(headerHtml || footerHtml);
+    const headerTemplate = headerHtml
+      || '<div style="font-size:1px"></div>'; // Puppeteer needs *some* template even when empty
+    const footerTemplate = footerHtml
+      || '<div style="font-size:1px"></div>';
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
-      displayHeaderFooter: false,
-      margin: { top: '18mm', right: '18mm', bottom: '22mm', left: '18mm' },
+      displayHeaderFooter: enableHeaderFooter,
+      headerTemplate,
+      footerTemplate,
+      margin: enableHeaderFooter
+        ? { top: '25mm', right: '22mm', bottom: '22mm', left: '22mm' }
+        : { top: '18mm', right: '18mm', bottom: '22mm', left: '18mm' },
     });
     console.log(`[PDF] rendered ${pdf.length} bytes in ${Date.now() - renderStart}ms`);
     return pdf;

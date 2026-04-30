@@ -115,13 +115,13 @@
     page-break-inside: avoid;
   }
 
-  /* Cap each printed photo's size so two photos + the section header fit
-     together on one A4 page (257mm usable height - ~30mm header -
-     ~25mm captions + gaps = 200mm for two photos = 100mm each). Gives us
-     headroom for portrait photos too. */
+  /* Cap each printed photo's size to match Mark's hand-laid reference
+     PDF: 158mm wide × ~118mm tall on 4:3, ~89mm tall on 16:9. Two
+     fit on a page given the renderer's 25mm top + 22mm bottom margins
+     (TRQ-169). Was 95mm-tall — too small, photos felt empty. */
   [data-print-section="photos"] .print-photo img {
     max-width: 100%;
-    max-height: 95mm;
+    max-height: 118mm;
     object-fit: contain;
     display: block;
     margin: 0 auto;

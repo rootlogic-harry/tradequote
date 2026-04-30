@@ -1479,7 +1479,7 @@ const pdfRateLimit = rateLimit({
 // This is the Phase-2 successor to the html2canvas "Download PDF" path; it
 // produces crisp, selectable-text PDFs with correct page breaks every time.
 app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
-  const { quoteHtml, title } = req.body || {};
+  const { quoteHtml, title, headerHtml, footerHtml } = req.body || {};
   if (typeof quoteHtml !== 'string' || quoteHtml.length === 0) {
     return res.status(400).json({ error: 'quoteHtml is required' });
   }
@@ -1488,9 +1488,20 @@ app.post('/api/users/:id/jobs/:jobId/pdf', pdfRateLimit, async (req, res) => {
     // the photos appendix has large data URLs but should never get close.
     return res.status(413).json({ error: 'quoteHtml exceeds 5MB' });
   }
+  // TRQ-169: header/footer are bounded — they render on every page so
+  // a runaway template would balloon the PDF. 4KB each is generous.
+  const safeHeader = typeof headerHtml === 'string' && headerHtml.length <= 4096
+    ? headerHtml : undefined;
+  const safeFooter = typeof footerHtml === 'string' && footerHtml.length <= 4096
+    ? footerHtml : undefined;
 
   try {
-    const pdf = await renderQuotePdf({ quoteHtml, title });
+    const pdf = await renderQuotePdf({
+      quoteHtml,
+      title,
+      headerHtml: safeHeader,
+      footerHtml: safeFooter,
+    });
     const safeFilename = (title || 'Quote').replace(/[^a-zA-Z0-9._-]/g, '-');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);

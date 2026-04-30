@@ -5,6 +5,11 @@ import ClientLinkBlock from '../ClientLinkBlock.jsx';
 import { documentTerm } from '../../utils/documentType.js';
 import { downloadBlob } from '../../utils/downloadBlob.js';
 import { buildEmlMessage } from '../../utils/buildEmlMessage.js';
+import {
+  buildPageChromeText,
+  buildPdfHeaderHtml,
+  buildPdfFooterHtml,
+} from '../../utils/quotePageChrome.js';
 import { shouldUseShareSheetPath } from '../../utils/platform.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import ErrorBoundary from '../common/ErrorBoundary.jsx';
@@ -135,12 +140,20 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45_000);
 
+      // Per-page header (date · email · phone) + footer (trading
+      // address + VAT) — Mark's reference PDF carries both on every
+      // page; passing them lets pdfRenderer turn on Chromium's
+      // displayHeaderFooter (TRQ-169).
+      const chromeText = buildPageChromeText({ profile, jobDetails });
+      const headerHtml = buildPdfHeaderHtml(chromeText);
+      const footerHtml = buildPdfFooterHtml(chromeText);
+
       let res;
       try {
         res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quoteHtml, title }),
+          body: JSON.stringify({ quoteHtml, title, headerHtml, footerHtml }),
           signal: controller.signal,
         });
       } finally {
@@ -303,7 +316,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     try {
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
               WidthType, AlignmentType, BorderStyle, ImageRun, TableLayoutType,
-              convertInchesToTwip, SectionType, Footer } = await import('docx');
+              convertInchesToTwip, SectionType, Footer, Header } = await import('docx');
 
       if (!reviewData) return;
 
@@ -801,6 +814,29 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         })],
       });
 
+      // Header — date · email · phone, three columns, justified across
+      // the page width (TRQ-169). Uses tab stops because docx doesn't
+      // give us a flex layout. The tab characters (\t) plus the LEFT/
+      // CENTER/RIGHT tab stops below produce the same visual result
+      // as Mark's hand-laid PDF header.
+      const headerDateText = jobDetails.quoteDate ? formatDate(jobDetails.quoteDate) : '';
+      const headerHasContent = !!(headerDateText || profile.email || profile.phone);
+      const docHeader = headerHasContent
+        ? new Header({
+            children: [new Paragraph({
+              tabStops: [
+                { type: 'center', position: 4500 },
+                { type: 'right', position: 9000 },
+              ],
+              children: [
+                txt(headerDateText, { size: 18, color: '666666' }),
+                txt('\t' + (profile.email || ''), { size: 18, color: '666666' }),
+                txt('\t' + (profile.phone || ''), { size: 18, color: '666666' }),
+              ],
+            })],
+          })
+        : null;
+
       // Photo appendix — 2 photos per page, each in its own section with page breaks
       const photoPageSections = [];
 
@@ -892,6 +928,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 },
               },
             },
+            ...(docHeader ? { headers: { default: docHeader } } : {}),
             footers: { default: docFooter },
             children: pageChildren,
           });
@@ -918,6 +955,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 },
               },
             },
+            ...(docHeader ? { headers: { default: docHeader } } : {}),
             footers: { default: docFooter },
             children,
           },
@@ -1022,11 +1060,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         const jobId = savedJobId || state.savedJobId || 'draft';
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 45_000);
+        // Same per-page chrome as the Download PDF path (TRQ-169).
+        const chromeText = buildPageChromeText({ profile, jobDetails });
+        const headerHtml = buildPdfHeaderHtml(chromeText);
+        const footerHtml = buildPdfFooterHtml(chromeText);
         try {
           const res = await fetch(`/api/users/${state.currentUserId}/jobs/${jobId}/pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quoteHtml, title }),
+            body: JSON.stringify({ quoteHtml, title, headerHtml, footerHtml }),
             signal: controller.signal,
           });
           if (!res.ok) throw new Error(`PDF failed (${res.status})`);

@@ -510,14 +510,14 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
   test('handler calls buildEmlMessage with a message/rfc822 output', () => {
     const idx = src.indexOf('handleSendViaOutlook = async');
     expect(idx).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 5000);
+    const slice = src.slice(idx, idx + 6000);
     expect(slice).toMatch(/buildEmlMessage\s*\(/);
     expect(slice).toMatch(/message\/rfc822/);
   });
 
   test('handler calls downloadBlob to hand the .eml to the OS', () => {
     const idx = src.indexOf('handleSendViaOutlook = async');
-    const slice = src.slice(idx, idx + 5000);
+    const slice = src.slice(idx, idx + 6000);
     expect(slice).toMatch(/downloadBlob\s*\(/);
     expect(slice).toMatch(/\.eml/);
   });
@@ -532,7 +532,7 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
     // Must not silently fail when profile.email is absent — the user
     // needs a clear instruction ("Add your email in profile").
     const idx = src.indexOf('handleSendViaOutlook = async');
-    const slice = src.slice(idx, idx + 5000);
+    const slice = src.slice(idx, idx + 6000);
     expect(slice).toMatch(/canSendOutlook/);
   });
 
