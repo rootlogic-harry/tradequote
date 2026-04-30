@@ -127,6 +127,39 @@
     margin: 0 auto;
   }
 
+  /* TRQ-171: PDF rendering disables JS (sec-audit C-2 hardening), so
+     Tailwind's CDN runtime never executes — utility classes added to
+     QuoteDocument that don't have a matching rule below silently fail
+     to apply. The three rules in this block guarantee the PDF matches
+     the DOCX layout regardless of whether Tailwind classes are
+     processed.
+
+     1. Logo — match Mark's reference 65×32mm. The Tailwind class
+        max-w-[245px] max-h-[120px] only applies when JIT is running. */
+  #quote-document img[alt="Logo"] {
+    max-width: 245px !important;
+    max-height: 120px !important;
+    object-fit: contain;
+  }
+
+  /* 2. Measurements — render filled bullet glyphs ("● Length: 4,000mm")
+        matching Mark's reference. Tailwind's list-disc pl-6 utilities
+        won't apply without the JIT, and Tailwind's preflight strips
+        the browser default list-style. Force it back on here. */
+  #quote-document [data-print-section="measurements"] ul {
+    list-style: disc !important;
+    padding-left: 24px !important;
+  }
+  #quote-document [data-print-section="measurements"] ul li::marker {
+    color: #374151;
+  }
+
+  /* 3. "Site Photographs" heading — centred above the centred photos
+        below. Tailwind's text-center utility is again JIT-only. */
+  #quote-document [data-print-section="photos"] h2 {
+    text-align: center !important;
+  }
+
   /* Preserve the few coloured elements we actually want in print */
   .bg-gray-50 { background: #f9fafb !important; }
   .bg-gray-100 { background: #f3f4f6 !important; }
