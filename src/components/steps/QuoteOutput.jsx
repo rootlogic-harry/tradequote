@@ -10,6 +10,7 @@ import {
   buildPdfHeaderHtml,
   buildPdfFooterHtml,
 } from '../../utils/quotePageChrome.js';
+import { photoMaxDimensions, loadAspects } from '../../utils/photoLayout.js';
 import { shouldUseShareSheetPath } from '../../utils/platform.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import ErrorBoundary from '../common/ErrorBoundary.jsx';
@@ -125,8 +126,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     };
 
     try {
+      // TRQ-177: precompute aspect ratios so QuoteDocument can emit
+      // data-orientation per photo. Server render disables JS so the
+      // browser side has to attach the aspect before we serialize.
+      const photosWithAspect = await loadAspects(filteredPhotos);
       const quoteHtml = renderToStaticMarkup(
-        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+        <QuoteDocument state={state} showPhotos selectedPhotos={photosWithAspect} />
       );
       const title = buildQuoteFilename({
         clientName: jobDetails.clientName,
@@ -854,10 +859,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       if (filteredPhotos.length > 0) {
         for (let i = 0; i < filteredPhotos.length; i += 2) {
           const pageChildren = [];
+          const isFirstPhotoPage = i === 0;
 
-          // Header for each photo page (centred to match the centred
-          // photos below).
-          pageChildren.push(
+          // TRQ-177: heading only on the FIRST photo page (matches PDF
+          // and Mark's reference). Was every page, which crowded out
+          // photo height when photos were tall portraits.
+          if (isFirstPhotoPage) pageChildren.push(
             new Paragraph({
               alignment: AlignmentType.CENTER,
               children: [txt('SITE PHOTOGRAPHS', { bold: true, size: 24, color: '333333', font: HEADING_FONT })],
@@ -880,19 +887,17 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               img.src = photo.data;
               await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
 
-              // Size to fit — bumped from 6×3.8in to match the photo
-              // dimensions on Mark's hand-laid-out PDF (158×119mm =
-              // 6.22×4.65in). Bigger photos fill the available content
-              // width within the photo-page section's reduced margins.
-              // 4:3 photos now hit the width cap (≈159×119mm) instead
-              // of being clamped at the old 3.8in height (≈129mm wide).
-              // 16:9 photos render at ≈159×89mm. Two of either fit on
-              // an A4 page given the photo-section margin override
-              // below. Centred via AlignmentType.CENTER on the
-              // containing paragraph (was left-aligned).
-              const maxW = 6.25 * 96;  // 600px → 158.75mm
-              const maxH = 4.65 * 96;  // 446px → 118.1mm
+              // TRQ-177: aspect-aware sizing. Landscape photos render
+              // at 158×118mm (matching Mark's reference); portraits cap
+              // at 158×110mm so two stack on one A4 page even in the
+              // worst case. Bands live in src/utils/photoLayout.js so
+              // PDF + DOCX share one source of truth.
               const aspect = img.width / img.height;
+              const { maxWidthMm, maxHeightMm } = photoMaxDimensions(aspect);
+              // Word renders at 96 DPI so 1mm = 96/25.4 = 3.78px.
+              const MM_TO_PX = 96 / 25.4;
+              const maxW = maxWidthMm * MM_TO_PX;
+              const maxH = maxHeightMm * MM_TO_PX;
 
               let drawW = maxW;
               let drawH = drawW / aspect;
@@ -1065,8 +1070,10 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       //    "Tap again to send" label never incorrectly appears.
       let pdfBlob = cachedPdfBlob;
       if (!pdfBlob) {
+        // TRQ-177: same aspect precompute as handleDownloadPdfServer.
+        const photosWithAspect = await loadAspects(filteredPhotos);
         const quoteHtml = renderToStaticMarkup(
-          <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+          <QuoteDocument state={state} showPhotos selectedPhotos={photosWithAspect} />
         );
         const jobId = savedJobId || state.savedJobId || 'draft';
         const controller = new AbortController();

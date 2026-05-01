@@ -115,16 +115,49 @@
     page-break-inside: avoid;
   }
 
-  /* Cap each printed photo's size to match Mark's hand-laid reference
-     PDF: 158mm wide × ~118mm tall on 4:3, ~89mm tall on 16:9. Two
-     fit on a page given the renderer's 25mm top + 22mm bottom margins
-     (TRQ-169). Was 95mm-tall — too small, photos felt empty. */
+  /* Aspect-aware photo sizing (TRQ-177). The data-orientation attr is
+     set by QuoteDocument from the precomputed aspect ratio, so each
+     photo gets a height cap tuned to its shape:
+       - landscape (≥1.3:1)  → 115mm
+       - portrait  (<1:1)    → 110mm
+       - square    (1.0–1.3) → 113mm
+     Caps live in src/utils/photoLayout.js and are mirrored here.
+     Width is always full content width (158mm) — height-cap kicks in
+     only when the aspect would otherwise overflow.
+
+     The 3mm shave from Mark's reference 118mm gives the budget room
+     for the heading (12mm) + spacing (6mm) on the first photo page.
+     12 + 115 + 6 + 115 = 248mm fits the 250mm A4 content area.
+
+     Default rule (used when data-orientation is missing — e.g. an old
+     cached render) caps at landscape height. Safer than no cap. */
   [data-print-section="photos"] .print-photo img {
     max-width: 100%;
-    max-height: 118mm;
+    max-height: 115mm;
     object-fit: contain;
     display: block;
     margin: 0 auto;
+  }
+  [data-print-section="photos"] .print-photo[data-orientation="portrait"] img {
+    max-height: 110mm;
+  }
+  [data-print-section="photos"] .print-photo[data-orientation="square"] img {
+    max-height: 113mm;
+  }
+  /* Tighter inter-photo spacing on the photos section. Tailwind's
+     space-y-6 (24mm) was eating the height budget — 6mm matches the
+     PAIR_INTER_PHOTO_SPACING_MM constant in photoLayout.js. */
+  [data-print-section="photos"] [data-print-pair] > * + * {
+    margin-top: 6mm !important;
+  }
+  /* Neutralise the heading's vertical padding/margins so the
+     12mm budgeted in PAIR_HEADING_HEIGHT_MM is realistic.
+     The h2 itself contributes ~12mm at text-lg. */
+  [data-print-section="photos"] h2 {
+    margin-top: 0 !important;
+    margin-bottom: 4mm !important;
+    padding-top: 0 !important;
+    border-top: 0 !important;
   }
 
   /* TRQ-171: PDF rendering disables JS (sec-audit C-2 hardening), so

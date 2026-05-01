@@ -3,6 +3,7 @@ import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 import { documentTerm } from '../utils/documentType.js';
+import { aspectBand } from '../utils/photoLayout.js';
 
 // Inline-editable text — switches between a static element and an auto-growing
 // textarea (or input) based on `editable`. When not editable the markup is
@@ -392,7 +393,15 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
                 </h2>
               )}
               {docPhotos.slice(pairIdx * 2, pairIdx * 2 + 2).map((p, i) => (
-                <div key={i} className="print-photo">
+                // TRQ-177: data-orientation drives the per-band height
+                // cap in print.css. Aspect is precomputed by
+                // loadAspects() before renderToStaticMarkup; defaults
+                // to 'landscape' (Mark's most common case) if missing.
+                <div
+                  key={i}
+                  className="print-photo"
+                  data-orientation={aspectBand(p.aspect)}
+                >
                   <img src={p.data} alt={p.label} className="w-full rounded" />
                 </div>
               ))}

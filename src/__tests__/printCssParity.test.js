@@ -38,7 +38,10 @@ describe('print.css carries non-Tailwind fallbacks for PDF render', () => {
     );
   });
 
-  test('Photo height capped at 118mm (matches Mark reference, was 95mm)', () => {
-    expect(printCss).toMatch(/max-height:\s*118mm/);
+  test('Photo height capped at 115mm landscape (Mark reference - 3mm budget headroom, TRQ-177)', () => {
+    // Was 118mm pre-TRQ-177; lowered to 115mm so the heading + 2 photos
+    // fit on the first photo page even with portrait-mix worst case.
+    // Tighter portrait/square caps live in photoLayoutWiring.test.js.
+    expect(printCss).toMatch(/max-height:\s*115mm/);
   });
 });
