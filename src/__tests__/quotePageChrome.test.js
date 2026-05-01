@@ -94,7 +94,9 @@ describe('buildPdfFooterHtml', () => {
       vatNumber: 'GB 437 9344 64',
     });
     expect(html).toMatch(/Upper Lane House, 22 Upper Lane, Halifax HX3 7EE/);
-    expect(html).toMatch(/VAT number: GB 437 9344 64/);
+    // TRQ-176: standardised on "VAT No:" everywhere (matches DOCX +
+    // Mark's preferred wording). Was "VAT number:".
+    expect(html).toMatch(/VAT No: GB 437 9344 64/);
     expect(html).toMatch(/text-align:center/);
   });
 

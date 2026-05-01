@@ -58,18 +58,23 @@ export function buildPdfHeaderHtml(parts) {
 
 /**
  * Build the Puppeteer footerTemplate string. Single line, centred:
- * `<address>  ·  VAT number: <number>`. If neither is present, returns
+ * `<address>  ·  VAT No: <number>`. If neither is present, returns
  * an empty string (caller should fall back to no footer).
+ *
+ * TRQ-176: Mark's feedback — drop companyName (it's already in the
+ * header), use "VAT No:" not "VAT number:", switch to near-black so
+ * the line is actually readable on his iPad. Applied to all users,
+ * not Mark-specific.
  */
 export function buildPdfFooterHtml(parts) {
   const { tradingAddress, vatNumber } = parts || {};
   if (!tradingAddress && !vatNumber) return '';
   const segments = [];
   if (tradingAddress) segments.push(escapeHtml(tradingAddress));
-  if (vatNumber) segments.push('VAT number: ' + escapeHtml(vatNumber));
+  if (vatNumber) segments.push('VAT No: ' + escapeHtml(vatNumber));
   return (
     `<div style="width:100%;padding:0 18mm;font-family:Inter,Arial,sans-serif;` +
-    `font-size:9pt;color:#777;text-align:center;">` +
+    `font-size:9pt;color:#222;text-align:center;">` +
     segments.join('  ·  ') +
     `</div>`
   );

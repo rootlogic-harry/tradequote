@@ -74,4 +74,20 @@ describe('admin analytics endpoint guards', () => {
     expect(block).toMatch(/14/);
     expect(block).toMatch(/dormant/);
   });
+
+  // TRQ-176: pre-TRQ-173 agent_runs rows have model IS NULL.
+  // jsonb_object_agg throws on NULL keys → entire endpoint 500'd.
+  // Regression guard: the by_model aggregation must coalesce the
+  // model column to a placeholder before aggregating.
+  test('jsonb_object_agg coerces NULL model to a placeholder key', () => {
+    expect(block).toMatch(/jsonb_object_agg\(COALESCE\(model,\s*['"]unknown['"]\)/);
+  });
+
+  test('analyse_calls counts only agent_type=analyse rows (not all agents)', () => {
+    expect(block).toMatch(/COUNT\(\*\)\s*FILTER\s*\(WHERE\s+agent_type\s*=\s*['"]analyse['"]\)/);
+  });
+
+  test('catch block logs the SQL error code so Railway is grep-able', () => {
+    expect(block).toMatch(/console\.error\(`?\[Analytics\]/);
+  });
 });

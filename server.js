@@ -3003,11 +3003,17 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
         GROUP BY user_id
       ),
       user_tokens AS (
+        -- TRQ-176 fix: jsonb_object_agg throws on a NULL key, and
+        -- pre-TRQ-173 agent_runs rows have model IS NULL. COALESCE the
+        -- key to 'unknown' so old rows bucket cleanly. analyse_calls
+        -- is also filtered to agent_type='analyse' (was counting every
+        -- agent run, including background self_critique/feedback —
+        -- misleading on the dashboard).
         SELECT user_id,
-               COUNT(*)::int AS analyse_calls,
+               COUNT(*) FILTER (WHERE agent_type = 'analyse')::int AS analyse_calls,
                COALESCE(SUM(prompt_tokens), 0)::bigint AS prompt_tokens,
                COALESCE(SUM(completion_tokens), 0)::bigint AS completion_tokens,
-               jsonb_object_agg(model, COALESCE(model_tokens, 0)) AS by_model
+               jsonb_object_agg(COALESCE(model, 'unknown'), COALESCE(model_tokens, 0)) AS by_model
         FROM (
           SELECT user_id, agent_type, model, prompt_tokens, completion_tokens,
                  SUM(COALESCE(prompt_tokens, 0) + COALESCE(completion_tokens, 0))
@@ -3227,6 +3233,11 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
     analyticsCache.set(range, { at: Date.now(), payload });
     res.json(payload);
   } catch (err) {
+    // Explicit log so a Mark-on-prod 500 leaves a footprint in
+    // Railway logs we can grep for. safeError already logs but
+    // genericises the client message; this gives us the SQL detail.
+    console.error(`[Analytics] failed range=${range}: ${err?.message || err}`);
+    if (err?.code) console.error(`[Analytics] pg code=${err.code} pos=${err.position}`);
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });

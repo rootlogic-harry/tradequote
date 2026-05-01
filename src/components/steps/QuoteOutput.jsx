@@ -809,12 +809,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
       }
 
-      // Footer — now rendered via section footers (not inline paragraphs)
-      const docFooterParts = [profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean);
+      // Footer — now rendered via section footers (not inline paragraphs).
+      // TRQ-176: drop companyName (it's already in the header), keep
+      // address + VAT No (if VAT-registered), near-black for readability.
+      // Was: companyName · address · VAT No: NN, light grey 999999.
+      const docFooterAddress = profile.tradingAddress || profile.address || '';
+      const docFooterParts = [
+        docFooterAddress,
+        profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null,
+      ].filter(Boolean);
       const docFooter = new Footer({
         children: [new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [txt(docFooterParts.join('  ·  '), { size: 16, color: '999999' })],
+          children: [txt(docFooterParts.join('  ·  '), { size: 16, color: '222222' })],
         })],
       });
 

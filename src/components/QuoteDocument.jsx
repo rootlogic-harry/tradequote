@@ -355,14 +355,17 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </div>
       )}
 
-      {/* Footer — preview only. handleDownloadPDF overlays a pdf.text footer
-          on every page, so we tell html2canvas to skip this element during
-          PDF capture; otherwise the final page shows two footers. */}
+      {/* Footer — on-screen preview only. Server-side PDF (Puppeteer)
+          repeats its own footer on every page; the legacy html2canvas
+          path overlays a pdf.text footer. Both should skip this element,
+          so it carries data-html2canvas-ignore + .print-hide.
+          TRQ-176: drop companyName (already in header) so the
+          preview matches the per-page footer Mark sees on the PDF. */}
       <div
         data-html2canvas-ignore="true"
-        className="border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-500 text-center"
+        className="print-hide border-t-2 border-gray-200 pt-4 mt-8 text-base text-gray-700 text-center"
       >
-        <p>{[profile.companyName, profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean).join(' · ')}</p>
+        <p>{[profile.tradingAddress || profile.address, profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null].filter(Boolean).join(' · ')}</p>
       </div>
 
       {/* Photos appendix. Layout law for printing:
