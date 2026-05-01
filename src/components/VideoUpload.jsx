@@ -81,16 +81,37 @@ export default function VideoUpload({
 
     videoEl.onloadedmetadata = () => {
       setDuration(videoEl.duration);
-      // Client-side duration check — reject before uploading
-      if (videoEl.duration > maxDurationRef.current) {
-        const msg = `Video must be under ${Math.floor(maxDurationRef.current / 60)} minutes (this one is ${Math.ceil(videoEl.duration / 60)} min)`;
-        if (typeof onErrorRef.current === 'function') onErrorRef.current(msg);
-        else if (typeof onDurationErrorRef.current === 'function') onDurationErrorRef.current(msg);
-        onVideoChangeRef.current(null);
-        return;
+      // TRQ-178: WhatsApp-compressed MP4s ship with the moov atom at
+      // the end of the file. Safari (especially iOS Safari) with
+      // preload="metadata" only fetches the start of the file and
+      // returns videoEl.duration = Infinity in that case. The old
+      // client-side check fired "Video must be under 3 minutes (this
+      // one is Infinity min)" and blocked the upload — even on a
+      // 30-second clip. Skip the client-side check for non-finite
+      // values; the server's ffprobe-based validator catches the real
+      // 3-minute rule and is authoritative anyway.
+      if (Number.isFinite(videoEl.duration)) {
+        if (videoEl.duration > maxDurationRef.current) {
+          const msg = `Video must be under ${Math.floor(maxDurationRef.current / 60)} minutes (this one is ${Math.ceil(videoEl.duration / 60)} min)`;
+          if (typeof onErrorRef.current === 'function') onErrorRef.current(msg);
+          else if (typeof onDurationErrorRef.current === 'function') onDurationErrorRef.current(msg);
+          onVideoChangeRef.current(null);
+          return;
+        }
+        // Seek to 1 second for thumbnail (only safe with finite duration).
+        videoEl.currentTime = Math.min(1, videoEl.duration / 2);
+      } else {
+        console.warn('[VideoUpload] non-finite duration', videoEl.duration,
+          '— deferring duration check to server. Likely WhatsApp / non-streaming MP4.');
       }
-      // Seek to 1 second for thumbnail
-      videoEl.currentTime = Math.min(1, videoEl.duration / 2);
+    };
+
+    // TRQ-178: log metadata-load failures rather than letting the
+    // <video> element silently never fire onloadedmetadata. Upload
+    // still proceeds — server validates via ffprobe.
+    videoEl.onerror = () => {
+      console.warn('[VideoUpload] could not read metadata client-side, proceeding anyway',
+        videoEl.error?.code, videoEl.error?.message);
     };
 
     videoEl.onseeked = () => {
@@ -180,7 +201,7 @@ export default function VideoUpload({
   }, [extraPhotoUrls]);
 
   const formatDuration = (secs) => {
-    if (!secs) return '';
+    if (!secs || !Number.isFinite(secs)) return '';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${String(s).padStart(2, '0')}`;
