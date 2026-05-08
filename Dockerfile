@@ -1,4 +1,4 @@
-# TradeQuote production image.
+# FastQuote production image.
 #
 # Switched from nixpacks.toml to an explicit Dockerfile because Nixpacks
 # v1.41 was silently dropping all but the first entry of `aptPkgs` — the

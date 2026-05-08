@@ -6,7 +6,7 @@ export default function UserSelector({ users = [], onSelectUser }) {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-heading font-bold text-tq-accent tracking-wide mb-2">
-            TRADEQUOTE
+            FASTQUOTE
           </h1>
           <p className="text-tq-muted text-sm">
             Select your profile to continue

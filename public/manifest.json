@@ -1,6 +1,6 @@
 {
-  "name": "TradeQuote",
-  "short_name": "TradeQuote",
+  "name": "FastQuote",
+  "short_name": "FastQuote",
   "description": "AI-powered quote generator for dry stone walling professionals",
   "start_url": "/",
   "display": "standalone",

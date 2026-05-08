@@ -5,7 +5,7 @@
  * CSRF, input sanitisation, rate limiting, GDPR, error leakage,
  * header security, admin route protection, photo access control.
  *
- * Run: DATABASE_URL=postgres://localhost:5432/tradequote node --experimental-vm-modules node_modules/.bin/jest src/__tests__/securityAudit.test.js --runInBand
+ * Run: DATABASE_URL=postgres://localhost:5432/fastquote node --experimental-vm-modules node_modules/.bin/jest src/__tests__/securityAudit.test.js --runInBand
  */
 
 process.env.NODE_ENV = 'test';

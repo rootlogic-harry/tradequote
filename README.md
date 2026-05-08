@@ -1,8 +1,8 @@
-# TradeQuote (FastQuote)
+# FastQuote
 
 AI-powered quote generator for dry stone walling professionals. A tradesman photographs or videos a damaged wall, enters a job address, and receives a professionally formatted, print-ready quote in under 5 minutes.
 
-Production: [fastquote.uk](https://fastquote.uk) · Team: [Trade Quote on Linear](https://linear.app/rootfolio)
+Production: [fastquote.uk](https://fastquote.uk) · Team: [FastQuote on Linear](https://linear.app/rootfolio)
 
 ---
 
@@ -111,7 +111,7 @@ npm run build      # production build to dist/
 Requires Postgres. Set `DATABASE_URL`, and optionally `ANTHROPIC_API_KEY` + `OPENAI_API_KEY`:
 
 ```bash
-export DATABASE_URL=postgres://user:pass@localhost:5432/tradequote
+export DATABASE_URL=postgres://user:pass@localhost:5432/fastquote
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...                  # voice dictation + video transcription
 node server.js                                # Express on :3000, auto-creates schema
@@ -246,7 +246,7 @@ All under `/api` (auth under `/auth`). Detailed contracts in `server.js`.
 
 ## Linear
 
-Tracked under the **Trade Quote** team: [linear.app/rootfolio](https://linear.app/rootfolio). Every commit is prefixed with its TRQ ticket.
+Tracked under the **FastQuote** team: [linear.app/rootfolio](https://linear.app/rootfolio). Every commit is prefixed with its FQ ticket.
 
 ## License
 

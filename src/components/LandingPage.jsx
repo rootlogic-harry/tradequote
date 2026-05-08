@@ -32,7 +32,7 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
             color: '#FFD600',
           }}
         >
-          TRADEQUOTE
+          FASTQUOTE
         </span>
         <button
           onClick={onLogIn}
@@ -199,7 +199,7 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
                 GET STARTED
               </button>
               <a
-                href="mailto:contact@tradequote.com"
+                href="mailto:contact@fastquote.uk"
                 style={{
                   fontFamily: '"Barlow Condensed", sans-serif',
                   fontWeight: 600,
@@ -330,7 +330,7 @@ export default function LandingPage({ onGetStarted, onLogIn }) {
           fontFamily: '"Inter", sans-serif',
         }}
       >
-        TradeQuote 2026
+        FastQuote 2026
       </footer>
 
       {/* Responsive styles. Aligned to the project-wide 900px breakpoint
