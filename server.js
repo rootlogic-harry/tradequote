@@ -11,6 +11,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 import { safeError } from './safeError.js';
+import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
@@ -2429,7 +2430,14 @@ const videoStorage = multer.diskStorage({
 
 const videoUpload = multer({
   storage: videoStorage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB (Paul reports 2-min iPhone clips ~300MB)
+  limits: {
+    fileSize: 500 * 1024 * 1024, // 500MB (Paul reports 2-min iPhone clips ~300MB)
+    // Profile JSON ships embedded as a logo data URL. Multer's default
+    // fieldSize of 1MB rejects with LIMIT_FIELD_VALUE → "Field value
+    // too long" 500 to the client (Paul saw this on bank holiday).
+    // 10MB comfortably fits a 5–6MB logo after base64 inflation.
+    fieldSize: 10 * 1024 * 1024,
+  },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('video/')) cb(null, true);
     else cb(new Error('File must be a video'), false);
@@ -2713,8 +2721,9 @@ app.post('/api/users/:id/jobs/:jobId/video',
     } catch (err) {
       console.error(`[Video] FAIL user=${userId} job=${jobId} error=${err.message}`);
       videoProgress.error(jobId, err.message);
-      if (err.message === 'Video must be under 3 minutes' || err.message === 'Video appears to be empty') {
-        return res.status(400).json({ error: err.message });
+      const classified = classifyAnalysisError(err);
+      if (classified) {
+        return res.status(classified.status).json({ error: classified.message });
       }
       safeError(res, err, `POST /api/users/:id/jobs/:jobId/video user=${userId}`);
     } finally {
@@ -3447,6 +3456,11 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
         `UPDATE agent_runs SET status = 'failed', duration_ms = $1, error = $2 WHERE id = $3`,
         [Date.now() - analyseStart, String(err?.message || 'unknown').slice(0, 500), analyseRunId]
       ).catch(() => {});
+    }
+    const classified = classifyAnalysisError(err);
+    if (classified) {
+      console.error(`[Analyse] FAIL ${req.method} ${req.path} status=${classified.status} error=${err.message}`);
+      return res.status(classified.status).json({ error: classified.message });
     }
     safeError(res, err, `${req.method} ${req.path}`);
   }

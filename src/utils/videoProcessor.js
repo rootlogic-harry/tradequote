@@ -61,8 +61,12 @@ export async function processVideo({
     let transcript = '';
     if (audioResult) {
       const audioBuffer = fs.readFileSync(audioResult);
-      // Pass mimetype based on file extension for Whisper
-      transcript = await transcribe(audioBuffer, 'audio/mp4');
+      // ffmpeg writes audio.m4a (AAC in an MP4 container, audio-only).
+      // Whisper rejects the same bytes when the filename ends in .mp4
+      // (it treats that as a video container) but accepts .m4a — see
+      // OpenAI's accepted-formats list. whisperClient derives the
+      // filename from the mime subtype, so use audio/m4a here.
+      transcript = await transcribe(audioBuffer, 'audio/m4a');
     }
 
     // 5. Extract frames (reduce maxFrames when extra photos are present)

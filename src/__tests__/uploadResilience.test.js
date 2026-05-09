@@ -127,8 +127,12 @@ describe('Upload resilience', () => {
       expect(serverSource).toMatch(/400[\s\S]*No video file/);
     });
 
-    it('returns 400 for duration validation failures', () => {
-      expect(serverSource).toMatch(/400[\s\S]*Video must be under/);
+    it('classifies duration validation failures via friendlyError mapper', () => {
+      // The route used to inline a 400 response for "Video must be under
+      // 3 minutes" / "Video appears to be empty". That mapping moved into
+      // src/utils/friendlyError.js so a single helper covers Whisper,
+      // Anthropic, multer, ffmpeg, etc. The route just delegates.
+      expect(serverSource).toMatch(/classifyAnalysisError\(err\)/);
     });
 
     it('returns 422 for unparseable AI response', () => {
