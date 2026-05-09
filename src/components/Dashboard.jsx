@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
 import { documentTerm } from '../utils/documentType.js';
+import { isThisMonth, isThisYear, buildMonthlyTotals } from '../utils/monthlyTotals.js';
 import {
   needsFollowUp,
   relativeViewedLabel,
@@ -19,13 +20,6 @@ function getGreeting() {
 function todayFormatted() {
   const d = new Date();
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-function isThisMonth(dateStr) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 }
 
 function buildPortalUrl(clientToken) {
@@ -156,12 +150,16 @@ export default function Dashboard({
   // Stat calculations
   const thisMonthJobs = jobs.filter(j => isThisMonth(j.savedAt));
   const thisMonthTotal = thisMonthJobs.reduce((s, j) => s + (j.totalAmount ?? 0), 0);
+  const thisYearTotal = jobs
+    .filter(j => isThisYear(j.savedAt))
+    .reduce((s, j) => s + (j.totalAmount ?? 0), 0);
   const awaitingCount = jobs.filter(j => j.status === 'sent').length;
   const acceptedThisMonth = jobs.filter(j => j.status === 'accepted' && isThisMonth(j.acceptedAt));
   const acceptedValue = acceptedThisMonth.reduce((s, j) => s + (j.totalAmount ?? 0), 0);
-  const sentCount = jobs.filter(j => ['sent', 'accepted', 'declined'].includes(j.status)).length;
-  const acceptedCount = jobs.filter(j => j.status === 'accepted').length;
-  const conversionRate = sentCount > 0 ? Math.round((acceptedCount / sentCount) * 100) : null;
+
+  const monthlyTotals = useMemo(() => buildMonthlyTotals(jobs), [jobs]);
+  const [showMonthly, setShowMonthly] = useState(false);
+  const currentYear = new Date().getFullYear();
 
   const displayJobs = jobs.slice(0, 5);
 
@@ -197,10 +195,14 @@ export default function Dashboard({
       </div>
 
       {/* Stats strip */}
-      <div className="stats-strip mb-8" style={{ borderRadius: 2 }}>
+      <div className="stats-strip" style={{ borderRadius: 2 }}>
         <div className="stat-cell">
           <div className="stat-label">This month</div>
           <div className="stat-value">{formatCurrency(thisMonthTotal)}</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-label">This year</div>
+          <div className="stat-value">{formatCurrency(thisYearTotal)}</div>
         </div>
         <div className="stat-cell">
           <div className="stat-label">Awaiting</div>
@@ -210,10 +212,45 @@ export default function Dashboard({
           <div className="stat-label">Accepted</div>
           <div className="stat-value">{formatCurrency(acceptedValue)}</div>
         </div>
-        <div className="stat-cell">
-          <div className="stat-label">Conversion</div>
-          <div className="stat-value">{conversionRate !== null ? `${conversionRate}%` : '\u2014'}</div>
-        </div>
+      </div>
+
+      <div className="mb-8 mt-2">
+        <button
+          type="button"
+          onClick={() => setShowMonthly(v => !v)}
+          className="text-xs uppercase tracking-wide"
+          style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--tq-muted)' }}
+          aria-expanded={showMonthly}
+        >
+          {showMonthly ? '\u2212' : '+'} Monthly breakdown ({currentYear})
+        </button>
+        {showMonthly && (
+          <div
+            className="mt-3 p-4"
+            style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}
+          >
+            <div className="grid grid-cols-3 fq:grid-cols-6 gap-3">
+              {monthlyTotals.map((m) => (
+                <div key={m.month} className="text-center">
+                  <div
+                    className="text-xs uppercase mb-1"
+                    style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--tq-muted)' }}
+                  >
+                    {m.label}
+                  </div>
+                  <div
+                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: m.total > 0 ? 'var(--tq-text)' : 'var(--tq-muted)' }}
+                  >
+                    {formatCurrency(m.total)}
+                  </div>
+                  <div className="text-[10px]" style={{ color: 'var(--tq-muted)' }}>
+                    {m.count} {term.lower}{m.count === 1 ? '' : 's'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Current draft banner */}
