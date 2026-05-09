@@ -1,4 +1,4 @@
-import { createAgentRun, completeAgentRun, failAgentRun } from '../../agents/agentUtils.js';
+import { createAgentRun, completeAgentRun, failAgentRun, withTimeout } from '../../agents/agentUtils.js';
 
 // Mock pool factory — returns a mock pg Pool with configurable query results
 function mockPool(queryResults = {}) {
@@ -125,5 +125,24 @@ describe('failAgentRun', () => {
     await failAgentRun(pool, 'run-6', '', 100);
     const call = pool._calls[0];
     expect(call.params[0]).toBe('');
+  });
+});
+
+describe('withTimeout', () => {
+  test('resolves with the inner value when the promise wins', async () => {
+    const result = await withTimeout(Promise.resolve('ok'), 50, 'fast');
+    expect(result).toBe('ok');
+  });
+
+  test('rejects with a timeout error when the promise stalls', async () => {
+    const stalled = new Promise(() => {});
+    await expect(withTimeout(stalled, 20, 'self-critique')).rejects.toThrow(
+      /self-critique timed out after 20ms/
+    );
+  });
+
+  test('propagates inner rejections without wrapping', async () => {
+    const inner = new Error('boom');
+    await expect(withTimeout(Promise.reject(inner), 50, 'x')).rejects.toBe(inner);
   });
 });

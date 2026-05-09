@@ -2676,21 +2676,28 @@ app.post('/api/users/:id/jobs/:jobId/video',
 
       videoProgress.emit(jobId, { stage: 'reviewing', progress: 80, message: 'Reviewing analysis...' });
 
-      // Self-critique
+      // Self-critique — wall-clock capped so a slow Haiku call can't
+      // strand the user on the "Reviewing analysis..." screen.
       let finalNormalised = normalised;
       let critiqueNotes = null;
+      const critiqueStart = Date.now();
       try {
-        const critiqueResult = await runSelfCritique({
-          pool,
-          userId,
-          jobId: null,
-          analysis: normalised,
-          briefNotes: result.combinedNotes || '',
-        });
+        const critiqueResult = await withTimeout(
+          runSelfCritique({
+            pool,
+            userId,
+            jobId: null,
+            analysis: normalised,
+            briefNotes: result.combinedNotes || '',
+          }),
+          SELF_CRITIQUE_TIMEOUT_MS,
+          'Video self-critique'
+        );
         finalNormalised = critiqueResult.analysis;
         critiqueNotes = critiqueResult.critique;
+        console.log(`[Video] Self-critique OK user=${userId} job=${jobId} dur=${Date.now() - critiqueStart}ms`);
       } catch (err) {
-        console.warn('[Video] Self-critique failed, returning original analysis:', err.message);
+        console.warn(`[Video] Self-critique skipped user=${userId} job=${jobId} dur=${Date.now() - critiqueStart}ms reason=${err.message}`);
       }
 
       videoProgress.finish(jobId);
@@ -3262,10 +3269,17 @@ app.get('/api/calibration-notes/approved', requireAuth, async (req, res) => {
 import { runSelfCritique } from './agents/selfCritique.js';
 import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
-import { callAnthropicRaw } from './agents/agentUtils.js';
+import { callAnthropicRaw, withTimeout } from './agents/agentUtils.js';
 import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { shouldAutoCalibrate } from './autoCalibration.js';
 import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
+
+// Self-critique is best-effort enrichment; an uncritiqued analysis is
+// still a valid analysis. Cap the wall-clock so a slow Anthropic
+// response can't strand the user on the "Reviewing analysis..." screen
+// (Paul saw 9+ minutes — the socket-idle timeout in callAnthropicRaw
+// doesn't fire when the upstream drips bytes).
+const SELF_CRITIQUE_TIMEOUT_MS = 25_000;
 
 app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -3378,21 +3392,28 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
       });
     }
 
-    // Call 2: Self-critique (fire-and-forget safe — if it fails, return original)
+    // Call 2: Self-critique (fire-and-forget safe — if it fails or
+    // exceeds SELF_CRITIQUE_TIMEOUT_MS, return the uncritiqued analysis)
     let finalAnalysis = analysisJson;
     let critiqueNotes = null;
+    const critiqueStart = Date.now();
     try {
-      const critiqueResult = await runSelfCritique({
-        pool,
-        userId: req.params.id,
-        jobId: null, // job not created yet at this point
-        analysis: analysisJson,
-        briefNotes: req.body.briefNotes || '',
-      });
+      const critiqueResult = await withTimeout(
+        runSelfCritique({
+          pool,
+          userId: req.params.id,
+          jobId: null, // job not created yet at this point
+          analysis: analysisJson,
+          briefNotes: req.body.briefNotes || '',
+        }),
+        SELF_CRITIQUE_TIMEOUT_MS,
+        'Photo self-critique'
+      );
       finalAnalysis = critiqueResult.analysis;
       critiqueNotes = critiqueResult.critique;
+      console.log(`[SelfCritique] OK user=${req.params.id} dur=${Date.now() - critiqueStart}ms`);
     } catch (err) {
-      console.warn('[SelfCritique] Failed, returning original analysis:', err.message);
+      console.warn(`[SelfCritique] Skipped user=${req.params.id} dur=${Date.now() - critiqueStart}ms reason=${err.message}`);
     }
 
     // Return in same format as Anthropic API response for backward compatibility

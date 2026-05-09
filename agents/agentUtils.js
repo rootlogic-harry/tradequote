@@ -169,4 +169,18 @@ async function runAgent({ pool, userId, jobId, agentType, systemPrompt, messages
   }
 }
 
-export { runAgent, createAgentRun, completeAgentRun, failAgentRun, callAnthropicRaw };
+/**
+ * Wall-clock timeout wrapper. The socket-idle timeout in callAnthropicRaw
+ * does not protect against slow drips from the upstream API — once any
+ * byte arrives the idle clock resets. This gives callers a hard deadline
+ * so user-facing flows never block indefinitely on best-effort agents.
+ */
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+export { runAgent, createAgentRun, completeAgentRun, failAgentRun, callAnthropicRaw, withTimeout };
