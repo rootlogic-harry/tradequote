@@ -311,15 +311,22 @@ function reducerCore(state, action) {
         reviewData: { ...state.reviewData, materials: action.materials },
       };
 
-    case 'UPDATE_LABOUR':
+    case 'UPDATE_LABOUR': {
       if (!state.reviewData) return state;
+      // aiValue immutability — Do-Not-Touch List in CLAUDE.md. Strip any
+      // ai*-prefixed key from the incoming payload before merging so a
+      // mistaken dispatch can never overwrite the learning baseline.
+      const safeLabour = Object.fromEntries(
+        Object.entries(action.labour || {}).filter(([k]) => !k.startsWith('ai'))
+      );
       return {
         ...state,
         reviewData: {
           ...state.reviewData,
-          labourEstimate: { ...state.reviewData.labourEstimate, ...action.labour },
+          labourEstimate: { ...state.reviewData.labourEstimate, ...safeLabour },
         },
       };
+    }
 
     case 'UPDATE_ADDITIONAL_COSTS':
       if (!state.reviewData) return state;

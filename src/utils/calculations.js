@@ -1,13 +1,31 @@
+// Sum line totals in pence (integer arithmetic) so the final subtotal
+// matches the per-row displayed totals to the penny. Floating-point sums
+// of 99.96 + 99.97 + 99.98 produce 299.91 → we round once at the end.
 export function calculateMaterialsSubtotal(materials) {
-  return materials.reduce((sum, m) => sum + (m.totalCost || 0), 0);
+  const pence = materials.reduce(
+    (sum, m) => sum + Math.round(((m.totalCost || 0) + Number.EPSILON) * 100),
+    0
+  );
+  return pence / 100;
 }
 
+// NaN-safe: undefined/null inputs collapse to 0 instead of propagating
+// NaN through the subtotal and into the rendered quote ("£NaN").
+// The validators block NaN labour from saving, but a missing dayRate
+// during analysis loadout would still show NaN in the live preview
+// without this guard.
 export function calculateLabourTotal(days, workers, dayRate) {
-  return days * workers * dayRate;
+  const safe = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return safe(days) * safe(workers) * safe(dayRate);
 }
 
 export function calculateAdditionalCostsTotal(additionalCosts) {
-  return additionalCosts.reduce((sum, c) => sum + (c.amount || 0), 0);
+  // Negative amounts are not allowed (validation belongs upstream, but
+  // we floor at 0 here so a stray "-100" can't silently understate a quote).
+  return additionalCosts.reduce(
+    (sum, c) => sum + Math.max(0, c.amount || 0),
+    0
+  );
 }
 
 export function calculateSubtotal(materialsSubtotal, labourTotal, additionalCostsTotal) {

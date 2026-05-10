@@ -139,3 +139,58 @@ describe('calculateAllTotals', () => {
     expect(result.total).toBe(3350);
   });
 });
+
+// Hardening: silent NaN propagation + floating-point sum drift were
+// occasionally producing "£NaN" labour and per-row totals that did not
+// match the displayed subtotal to the penny.
+describe('calculations hardening', () => {
+  test('calculateLabourTotal returns 0 when dayRate is undefined (no NaN leak)', () => {
+    expect(calculateLabourTotal(2, 1, undefined)).toBe(0);
+    expect(calculateLabourTotal(2, undefined, 400)).toBe(0);
+    expect(calculateLabourTotal(undefined, 1, 400)).toBe(0);
+  });
+
+  test('calculateLabourTotal returns 0 for NaN inputs', () => {
+    expect(calculateLabourTotal(NaN, 1, 400)).toBe(0);
+    expect(calculateLabourTotal(2, NaN, 400)).toBe(0);
+    expect(calculateLabourTotal(2, 1, NaN)).toBe(0);
+  });
+
+  test('calculateLabourTotal returns 0 for null inputs', () => {
+    expect(calculateLabourTotal(null, null, null)).toBe(0);
+  });
+
+  test('calculateMaterialsSubtotal sums to exact penny across many fractional rows', () => {
+    // Three rows that each round-display to £100.00 but FP-sum to 299.91
+    // would mismatch the displayed total before integer-pence rounding.
+    const materials = [
+      { totalCost: 99.96 },
+      { totalCost: 99.97 },
+      { totalCost: 99.98 },
+    ];
+    expect(calculateMaterialsSubtotal(materials)).toBe(299.91);
+  });
+
+  test('calculateMaterialsSubtotal handles 0.1 + 0.2 floating-point classic', () => {
+    // 0.1 + 0.2 in raw float = 0.30000000000000004
+    const materials = [{ totalCost: 0.1 }, { totalCost: 0.2 }];
+    expect(calculateMaterialsSubtotal(materials)).toBe(0.3);
+  });
+
+  test('calculateAdditionalCostsTotal floors negative amounts at 0', () => {
+    // A user typing "-100" by mistake (or a regression letting negatives
+    // through validation) must not silently understate the quote.
+    const costs = [{ amount: 100 }, { amount: -50 }];
+    expect(calculateAdditionalCostsTotal(costs)).toBe(100);
+  });
+
+  test('full pipeline survives missing dayRate without leaking NaN', () => {
+    const labourMissing = { days: 2, workers: 1, dayRate: undefined };
+    const result = calculateAllTotals([{ totalCost: 100 }], labourMissing, [], false);
+    expect(Number.isFinite(result.labourTotal)).toBe(true);
+    expect(Number.isFinite(result.subtotal)).toBe(true);
+    expect(Number.isFinite(result.total)).toBe(true);
+    expect(result.labourTotal).toBe(0);
+    expect(result.subtotal).toBe(100);
+  });
+});

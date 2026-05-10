@@ -857,6 +857,34 @@ describe('reducer', () => {
       expect(result.reviewData.labourEstimate.estimatedDays).toBe(4);
       expect(result.reviewData.labourEstimate.numberOfWorkers).toBe(2);
     });
+
+    // aiValue immutability: see Do-Not-Touch List in CLAUDE.md. Even if a
+    // future caller mistakenly dispatches an `aiEstimatedDays` (or any
+    // ai-prefixed key) in the payload, the reducer must strip it so the
+    // learning baseline is not corrupted.
+    test('strips ai-prefixed keys from the payload before merging', () => {
+      const state = makeReviewState();
+      // makeReviewState seeds labourEstimate with aiEstimatedDays = 3.
+      // A malformed dispatch tries to overwrite it with 999. The reducer
+      // must drop the ai-prefixed key from the action so the learning
+      // baseline stays intact.
+      expect(state.reviewData.labourEstimate.aiEstimatedDays).toBe(3);
+      const result = reducer(state, {
+        type: 'UPDATE_LABOUR',
+        labour: { estimatedDays: 5, aiEstimatedDays: 999, aiNumberOfWorkers: 999 },
+      });
+      expect(result.reviewData.labourEstimate.estimatedDays).toBe(5);
+      // Existing ai key preserved at its original value (NOT overwritten).
+      expect(result.reviewData.labourEstimate.aiEstimatedDays).toBe(3);
+      // New ai key from the payload was stripped, never reached the state.
+      expect(result.reviewData.labourEstimate.aiNumberOfWorkers).toBeUndefined();
+    });
+
+    test('does not crash when payload is null/undefined', () => {
+      const state = makeReviewState();
+      expect(() => reducer(state, { type: 'UPDATE_LABOUR', labour: null })).not.toThrow();
+      expect(() => reducer(state, { type: 'UPDATE_LABOUR' })).not.toThrow();
+    });
   });
 
   describe('UPDATE_ADDITIONAL_COSTS', () => {
