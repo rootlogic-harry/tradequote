@@ -93,4 +93,31 @@ describe('Server-side SYSTEM_PROMPT', () => {
       expect(SYSTEM_PROMPT).toMatch(/set confidence: "low"/);
     });
   });
+
+  // Pricing conventions: NET-of-VAT, 2-decimal money, mandatory confidence.
+  // These were silently violated by Claude before — the prompt now states
+  // them as preconditions so post-processing isn't undoing the AI's choices.
+  describe('pricing conventions', () => {
+    test('prompt has a PRICING CONVENTIONS section', () => {
+      expect(SYSTEM_PROMPT).toMatch(/PRICING CONVENTIONS/);
+    });
+
+    test('prompt forbids adding VAT inside the analysis output', () => {
+      expect(SYSTEM_PROMPT).toMatch(/NET of VAT/);
+      expect(SYSTEM_PROMPT).toMatch(/Do NOT add VAT/i);
+    });
+
+    test('prompt requires monetary values to 2 decimal places', () => {
+      expect(SYSTEM_PROMPT).toMatch(/2 decimal places/);
+    });
+
+    test('prompt requires every measurement to carry a confidence value', () => {
+      expect(SYSTEM_PROMPT).toMatch(/MUST have a confidence value/);
+      expect(SYSTEM_PROMPT).toMatch(/Never null, never missing/);
+    });
+
+    test('prompt forbids quantity strings with embedded units', () => {
+      expect(SYSTEM_PROMPT).toMatch(/no "2\.5 t"/);
+    });
+  });
 });

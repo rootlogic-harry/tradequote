@@ -1,4 +1,28 @@
-import { applyCorrectedValues } from '../../agents/selfCritique.js';
+import { applyCorrectedValues, CRITIQUE_SYSTEM_PROMPT } from '../../agents/selfCritique.js';
+
+describe('CRITIQUE_SYSTEM_PROMPT — extended checks', () => {
+  test('checks the materials/labour boundary explicitly', () => {
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/Materials\/labour boundary/i);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/rebuild|rebuilding/);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/dismantle|dismantling/);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/repoint|repointing/);
+  });
+
+  test('checks every measurement has a valid confidence', () => {
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/Confidence-field hygiene/i);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/null, missing, blank/);
+  });
+
+  test('checks stone tonnage falls in the 0.8–1.2 t/sqm range', () => {
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/Stone tonnage range/i);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/0\.8.{0,4}1\.2/);
+  });
+
+  test('checks each line item arithmetic equals quantity × unitCost', () => {
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/Line-item arithmetic/i);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/quantity .{0,3}unitCost/);
+  });
+});
 
 describe('applyCorrectedValues', () => {
   const baseAnalysis = {

@@ -191,6 +191,21 @@ CRITICAL RULE — MATERIALS ARRAY MUST NOT CONTAIN:
   supply purchased or equipment hired)
 If in doubt, ask: "Is this something I BUY or HIRE?" If no, it is labour.
 
+PRICING CONVENTIONS — APPLY EVERY TIME:
+- All monetary values (unitCost, totalCost) are in pounds sterling (GBP) and
+  expressed NET of VAT. Do NOT add VAT to any line item or to totalCost. The
+  quoting system applies VAT once at the final stage based on the tradesman's
+  profile setting; doing it inside the analysis double-charges the customer.
+- Round monetary values to 2 decimal places (e.g. 185.50, not 185.4998).
+- Round material quantities to at most 1 decimal place when units are tonnes
+  or square metres ("0.5", "3.2", "12.5"). Use whole numbers for "Item" /
+  "Nr" units. Always emit quantity as a numeric STRING (e.g. "2.5"), not a
+  number, and not with a unit suffix (no "2.5 t" — the unit goes in the unit field).
+- Measurements (valueMm) are whole millimetres. Do not emit fractional mm.
+- Every measurement object MUST have a confidence value of "high", "medium",
+  or "low". Never null, never missing, never any other string. When in doubt,
+  drop to "low" rather than guess.
+
 CLIENT-FACING LANGUAGE:
 The damageDescription, scheduleOfWorks descriptions, and materials rows are
 shown to the tradesman's end customer. Use professional trade language:

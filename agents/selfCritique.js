@@ -9,6 +9,23 @@ You've been given an AI analysis of job photographs. Check for:
 5. Additional costs that seem inappropriate for the job type
 6. Stone type inconsistency (e.g. limestone pricing used for gritstone)
 7. Schedule of works steps that don't match the damage described
+8. Materials/labour boundary: the materials array must NOT contain labour
+   activities. Flag any line item whose description matches "rebuild",
+   "rebuilding", "dismantle", "dismantling", "repoint", "repointing", "site
+   clearance", "making good", "core consolidation", "core/hearting", "hearting
+   consolidation", "preliminaries", "site survey", or any "@ £X/sqm" rate
+   for walling work. These are covered by the daily labour rate and must be
+   removed from materials.
+9. Confidence-field hygiene: every measurement object must have confidence
+   set to "high", "medium", or "low". Flag any measurement where confidence
+   is null, missing, blank, or set to anything other than those three values.
+10. Stone tonnage range: for a rebuild area, stone tonnage estimate should be
+    within 0.8–1.2 tonnes per square metre of wall face (gritstone runs
+    heavier ~1.1–1.2, limestone lighter ~0.9). Compute the implied
+    tonnes-per-sqm from tonnage / rebuilt area; flag if outside that range.
+11. Line-item arithmetic: every material line's totalCost must equal
+    quantity × unitCost (within £0.01). Flag any row where the product
+    doesn't match the stored totalCost.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 {
