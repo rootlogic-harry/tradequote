@@ -2589,8 +2589,29 @@ app.post('/api/users/:id/jobs/:jobId/video',
 
       videoProgress.emit(jobId, { stage: 'analysing', progress: 50, message: 'Analysing with AI...' });
 
-      // Build imageContent array in the same format as the photo analysis pipeline
+      // Build imageContent array in the same format as the photo analysis pipeline.
+      // Job context goes FIRST so Claude knows location + scale references before
+      // it starts spatial reasoning over the frames. Then a hierarchy preamble
+      // tells the model which images are the primary capture (video frames)
+      // vs supplementary detail (extra photos) so a single labelled reference
+      // card photo isn't lost among 50 walking frames.
       const imageContent = [];
+
+      const videoScaleBlock = scaleReferences.trim()
+        ? `\nUSER-PROVIDED SCALE REFERENCES: ${scaleReferences.trim()}`
+        : '';
+      const tradesmanBlock = result.combinedNotes
+        ? `\nTRADESMAN'S ON-SITE OBSERVATIONS (voice transcript + notes):\n${result.combinedNotes}`
+        : '';
+      imageContent.push({
+        type: 'text',
+        text: `JOB CONTEXT\nSite address: ${siteAddress}${tradesmanBlock}${videoScaleBlock}`,
+      });
+
+      imageContent.push({
+        type: 'text',
+        text: `PRIMARY CAPTURE — ${result.frames.length} key frame${result.frames.length === 1 ? '' : 's'} extracted from a video walkthrough. Use these for spatial coherence and overall scope.${result.extraPhotoFrames.length > 0 ? ` SUPPLEMENTARY — ${result.extraPhotoFrames.length} additional photograph${result.extraPhotoFrames.length === 1 ? '' : 's'} (typically close-ups or a reference card). Use for detail confirmation; the reference card if present is the authoritative scale anchor.` : ''}`,
+      });
 
       // Video frames
       for (let i = 0; i < result.frames.length; i++) {
@@ -2617,15 +2638,6 @@ app.post('/api/users/:id/jobs/:jobId/video',
           },
         });
       }
-
-      // Text (site address + combined notes + scale references)
-      const videoScaleBlock = scaleReferences.trim()
-        ? `\nUSER-PROVIDED SCALE REFERENCES: ${scaleReferences.trim()}`
-        : '';
-      imageContent.push({
-        type: 'text',
-        text: `Site address: ${siteAddress}${result.combinedNotes ? `\nTradesman notes: ${result.combinedNotes}` : ''}${videoScaleBlock}`,
-      });
 
       // Now call the same Anthropic analysis pipeline the photo path uses
       const apiKey = process.env.ANTHROPIC_API_KEY;

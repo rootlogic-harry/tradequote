@@ -3,11 +3,16 @@ import path from 'node:path';
 import { getVideoDuration, validateVideoDuration } from './videoValidator.js';
 import { extractFrames } from './frameExtractor.js';
 import { extractAudio } from './audioExtractor.js';
-import { transcribe } from './whisperClient.js';
+import { transcribe, cleanTranscript } from './whisperClient.js';
 
 const DEFAULT_MAX_FRAMES = 50;
 const FRAME_INTERVAL = 3;
-const MAX_DIMENSION = 2048;
+// Sonnet 4 charges per image token. Wall detail (stonework grain, mortar
+// gaps, batter angle) is fully captured at 1024px on the long edge — at
+// 2048 we paid 4× the tokens for marginal extra resolution. Calibrated
+// against ~50 frames per analysis: 1024 keeps the per-quote image cost
+// in line with the 5-photo path while preserving measurement accuracy.
+const MAX_DIMENSION = 1024;
 
 /**
  * Process a video file: extract frames, extract and transcribe audio,
@@ -57,7 +62,9 @@ export async function processVideo({
     const audioPath = path.join(workDir, 'audio.m4a');
     const audioResult = await extractAudio(videoPath, audioPath);
 
-    // 4. Transcribe audio (if audio exists)
+    // 4. Transcribe audio (if audio exists). cleanTranscript strips
+    // Whisper's filler words ("uhm", "er", repeated stutters) so the
+    // tradesman's actual observations carry more weight in the prompt.
     let transcript = '';
     if (audioResult) {
       const audioBuffer = fs.readFileSync(audioResult);
@@ -66,7 +73,8 @@ export async function processVideo({
       // (it treats that as a video container) but accepts .m4a — see
       // OpenAI's accepted-formats list. whisperClient derives the
       // filename from the mime subtype, so use audio/m4a here.
-      transcript = await transcribe(audioBuffer, 'audio/m4a');
+      const raw = await transcribe(audioBuffer, 'audio/m4a');
+      transcript = cleanTranscript(raw);
     }
 
     // 5. Extract frames (reduce maxFrames when extra photos are present)

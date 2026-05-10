@@ -53,3 +53,29 @@ export async function transcribe(buffer, mimeType) {
 
   return res.text.trim();
 }
+
+/**
+ * Strip Whisper's common filler artefacts so the tradesman's actual
+ * on-site observations get more weight when fed to Claude alongside
+ * the video frames. Conservative — only removes well-known fillers,
+ * leaves all real content intact.
+ *
+ *   "Uhm, the wall is bulging out, er, on the right hand side"
+ *     → "the wall is bulging out, on the right hand side"
+ */
+export function cleanTranscript(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  return raw
+    // Filler tokens (uhm, er, ah, um) standalone with optional repeats
+    .replace(/\b(?:u+h+m+|e+r+|a+h+|u+m+)\b[,]?\s*/gi, '')
+    // De-duplicate immediately repeated words ("the the wall" → "the wall")
+    .replace(/\b(\w+)(?:\s+\1\b)+/gi, '$1')
+    // Collapse runs of whitespace
+    .replace(/\s{2,}/g, ' ')
+    // Tidy spacing before punctuation introduced by filler removal
+    .replace(/\s+([,.!?;:])/g, '$1')
+    // Filler removal can leave consecutive commas ("X, uhm , Y" → "X,, Y").
+    // Collapse to a single comma.
+    .replace(/,(\s*,)+/g, ',')
+    .trim();
+}

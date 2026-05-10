@@ -86,13 +86,17 @@ describe('runAnalysis', () => {
     const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
     const content = body.messages[0].content;
 
-    // Should have text label + image for overview, then closeup, then site address text
-    expect(content[0]).toEqual({ type: 'text', text: '--- Photo: Overview ---' });
-    expect(content[1].type).toBe('image');
-    expect(content[1].source.data).toBe('FAKE_overview');
-    expect(content[2]).toEqual({ type: 'text', text: '--- Photo: Close-up ---' });
-    expect(content[3].type).toBe('image');
-    expect(content[3].source.data).toBe('FAKE_closeup');
+    // content[0] is the JOB CONTEXT preamble (site address + notes go
+    // FIRST so Claude has location/scale before reasoning over images).
+    expect(content[0].type).toBe('text');
+    expect(content[0].text).toMatch(/JOB CONTEXT/);
+    // Then the photo blocks: overview label, overview image, close-up label, close-up image.
+    expect(content[1]).toEqual({ type: 'text', text: '--- Photo: Overview ---' });
+    expect(content[2].type).toBe('image');
+    expect(content[2].source.data).toBe('FAKE_overview');
+    expect(content[3]).toEqual({ type: 'text', text: '--- Photo: Close-up ---' });
+    expect(content[4].type).toBe('image');
+    expect(content[4].source.data).toBe('FAKE_closeup');
   });
 
   test('uses /api/users/:id/analyse when userId provided', async () => {
@@ -225,7 +229,7 @@ describe('runAnalysis', () => {
     expect(dispatched.calls[0].critiqueNotes).toBe('Check tonnage calculation');
   });
 
-  test('includes site address and brief notes in user content', async () => {
+  test('includes site address and brief notes in the leading job-context block', async () => {
     const dispatched = trackDispatch();
     globalThis.fetch = mockFetchOk({
       content: [{ text: JSON.stringify(VALID_AI_JSON) }],
@@ -237,8 +241,12 @@ describe('runAnalysis', () => {
 
     const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
     const content = body.messages[0].content;
-    const lastText = content[content.length - 1];
-    expect(lastText.text).toContain('10 Main St');
-    expect(lastText.text).toContain('Collapsed section');
+    // Site address + notes are the FIRST block — give Claude location and
+    // scale references upfront before any spatial reasoning over photos.
+    const firstText = content[0];
+    expect(firstText.type).toBe('text');
+    expect(firstText.text).toMatch(/JOB CONTEXT/);
+    expect(firstText.text).toContain('10 Main St');
+    expect(firstText.text).toContain('Collapsed section');
   });
 });

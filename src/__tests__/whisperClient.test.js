@@ -15,7 +15,46 @@ jest.unstable_mockModule('openai', () => ({
   toFile: mockToFile,
 }));
 
-const { transcribe, TRADE_PROMPT } = await import('../utils/whisperClient.js');
+const { transcribe, TRADE_PROMPT, cleanTranscript } = await import('../utils/whisperClient.js');
+
+describe('cleanTranscript', () => {
+  test('returns empty string for non-string input', () => {
+    expect(cleanTranscript(null)).toBe('');
+    expect(cleanTranscript(undefined)).toBe('');
+    expect(cleanTranscript('')).toBe('');
+    expect(cleanTranscript(123)).toBe('');
+  });
+
+  test('strips standalone filler words', () => {
+    expect(cleanTranscript('The wall is uhm bulging out')).toBe('The wall is bulging out');
+    expect(cleanTranscript('Er, the right hand side is the worst')).toBe('the right hand side is the worst');
+    expect(cleanTranscript('Ah, around two metres long')).toBe('around two metres long');
+  });
+
+  test('strips repeated filler stutters', () => {
+    expect(cleanTranscript('Uhmmm, the breach is wide')).toBe('the breach is wide');
+    expect(cleanTranscript('The wall is errrr unstable')).toBe('The wall is unstable');
+  });
+
+  test('de-duplicates immediately repeated words', () => {
+    expect(cleanTranscript('The the wall is bulging')).toBe('The wall is bulging');
+    expect(cleanTranscript('It is is about two metres')).toBe('It is about two metres');
+  });
+
+  test('preserves real content including dry-stone vocabulary', () => {
+    const raw = 'Reclaimed gritstone, double-faced, with hearting between courses';
+    expect(cleanTranscript(raw)).toBe(raw);
+  });
+
+  test('cleans up spacing before punctuation', () => {
+    expect(cleanTranscript('The wall, uhm , is bulging')).toBe('The wall, is bulging');
+  });
+
+  test('does not over-aggressively strip — words containing filler letters are kept', () => {
+    // "umbrella", "early", "ahead" — filler regex is word-bounded, won't match
+    expect(cleanTranscript('Umbrella thorn early ahead')).toBe('Umbrella thorn early ahead');
+  });
+});
 
 describe('whisperClient', () => {
   beforeEach(() => {

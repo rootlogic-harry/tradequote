@@ -8,7 +8,23 @@ import {
 
 export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId }) {
   try {
-    const imageContent = [];
+    // Job context goes FIRST so Claude knows location + scale references
+    // before it starts spatial reasoning over the photos. Trailing the
+    // address after the images was forcing the model to re-read with
+    // context it should have had upfront.
+    const scaleBlock = jobDetails.scaleReferences?.trim()
+      ? `\nUSER-PROVIDED SCALE REFERENCES: ${jobDetails.scaleReferences.trim()}`
+      : '';
+    const notesBlock = jobDetails.briefNotes
+      ? `\nTRADESMAN'S ON-SITE OBSERVATIONS:\n${jobDetails.briefNotes}`
+      : '';
+    const imageContent = [
+      {
+        type: 'text',
+        text: `JOB CONTEXT\nSite address: ${jobDetails.siteAddress}${notesBlock}${scaleBlock}`,
+      },
+    ];
+
     for (const slot of PHOTO_SLOTS) {
       const photo = photos[slot.key];
       if (photo) {
@@ -43,14 +59,6 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
         },
       });
     }
-
-    const scaleBlock = jobDetails.scaleReferences?.trim()
-      ? `\nUSER-PROVIDED SCALE REFERENCES: ${jobDetails.scaleReferences.trim()}`
-      : '';
-    imageContent.push({
-      type: 'text',
-      text: `Site address: ${jobDetails.siteAddress}${jobDetails.briefNotes ? `\nTradesman notes: ${jobDetails.briefNotes}` : ''}${scaleBlock}`,
-    });
 
     const controller = new AbortController();
     if (abortRef) abortRef.current = controller;

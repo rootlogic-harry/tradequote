@@ -25,6 +25,8 @@ const mockTranscribe = jest.fn();
 jest.unstable_mockModule('../utils/whisperClient.js', () => ({
   transcribe: mockTranscribe,
   TRADE_PROMPT: 'test prompt',
+  // Passthrough — cleanTranscript's behaviour is exercised in whisperClient.test.js
+  cleanTranscript: (raw) => (typeof raw === 'string' ? raw : ''),
 }));
 
 const { processVideo } = await import('../utils/videoProcessor.js');
@@ -147,7 +149,10 @@ describe('processVideo', () => {
       expect.objectContaining({
         maxFrames: 50,
         intervalSeconds: 3,
-        maxDimension: 2048,
+        // Lowered from 2048 → 1024 to halve image-token cost; wall detail
+        // (stonework grain, mortar gaps, batter angle) is fully captured
+        // at 1024px on the long edge.
+        maxDimension: 1024,
       })
     );
   });
