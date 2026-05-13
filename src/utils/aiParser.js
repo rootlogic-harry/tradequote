@@ -83,6 +83,47 @@ export function validateAIResponse(parsed) {
 const MEASUREMENT_MIN_MM = 10;       // below this is implausible (near-zero)
 const MEASUREMENT_MAX_MM = 100000;   // 100m — any site measurement beyond this is almost certainly wrong
 
+// Per-item-type bounds layered on top of the global fallback. Sourced from the
+// systemPrompt's plausibility section so the prompt and the post-processing
+// stay in lockstep. The 19m wall height Paul saw (Paul, 2026-05-13) passed
+// the global 100m ceiling easily; per-item bounds catch it.
+//
+// We match the item field case-insensitively by substring. The wall- and
+// breach-specific keys take precedence over the generic 'height' / 'length'
+// keys so "Wall length 5m" is bounded by the WALL_LENGTH range, not by a
+// generic length range. If no key matches, we fall back to the global bounds.
+//
+// Each tuple is [min, max] in millimetres. Walls "rare up to 3500mm on
+// estate boundaries" — anything beyond that is the model misreading scale.
+const PER_ITEM_BOUNDS = [
+  // Most-specific keys first — these are checked left-to-right.
+  { keys: ['wall height', 'height of wall', 'height of the wall'], min: 300, max: 3500 },
+  { keys: ['wall thickness', 'wall width', 'thickness of wall', 'wall base'], min: 200, max: 1500 },
+  { keys: ['wall length', 'length of wall', 'total wall length', 'length of the wall'], min: 300, max: 100000 },
+  { keys: ['breach', 'gap', 'collapse', 'collapsed section', 'missing section'], min: 200, max: 50000 },
+  { keys: ['course', 'course depth', 'course height', 'coursing'], min: 50, max: 400 },
+  { keys: ['cope', 'coping', 'cope stone'], min: 80, max: 400 },
+  { keys: ['through stone', 'through-stone', 'throughstone'], min: 200, max: 1200 },
+];
+
+/**
+ * Resolve the [min, max] bounds applicable to a given measurement item name.
+ * Case-insensitive substring match against PER_ITEM_BOUNDS; falls back to the
+ * global MIN/MAX when nothing matches.
+ */
+export function boundsForItem(itemName) {
+  if (typeof itemName !== 'string' || !itemName.trim()) {
+    return { min: MEASUREMENT_MIN_MM, max: MEASUREMENT_MAX_MM };
+  }
+  const lowered = itemName.toLowerCase();
+  for (const entry of PER_ITEM_BOUNDS) {
+    if (entry.keys.some((k) => lowered.includes(k))) {
+      return { min: entry.min, max: entry.max };
+    }
+  }
+  return { min: MEASUREMENT_MIN_MM, max: MEASUREMENT_MAX_MM };
+}
+
 /**
  * Applies a confidence floor to measurements based on available scale anchors
  * and plausibility bounds. Pure function — returns a new object.
@@ -92,7 +133,10 @@ const MEASUREMENT_MAX_MM = 100000;   // 100m — any site measurement beyond thi
  *  1. referenceCardDetected — authoritative scale if true.
  *  2. scaleReferences — user-supplied scale anchors in briefNotes-like text
  *     ("the gate is 1.2m wide"). A non-empty string is treated as a valid anchor.
- *  3. valueMm — if outside [MIN, MAX], always force low (Claude has misread).
+ *  3. valueMm — if outside the per-item-type bounds (falling back to the
+ *     global MIN/MAX when the item name is unknown), always force low.
+ *     Paul saw a re-run produce "19m high" wall — the global ceiling missed it;
+ *     per-item bounds catch it (wall height ≤ 3500mm).
  *
  * @param {object} parsed - the normalized AI response
  * @param {object} context - { scaleReferences?: string }
@@ -110,13 +154,12 @@ export function applyMeasurementPlausibilityBounds(parsed, context = {}) {
 
   const adjusted = parsed.measurements.map((m) => {
     const value = typeof m.valueMm === 'number' ? m.valueMm : null;
-    const implausible = value == null
-      || value < MEASUREMENT_MIN_MM
-      || value > MEASUREMENT_MAX_MM;
+    const { min, max } = boundsForItem(m.item);
+    const implausible = value == null || value < min || value > max;
 
     // Force low if either:
     //   - no scale anchor available at all (everything is a guess)
-    //   - the value itself is out of plausible bounds
+    //   - the value itself is out of plausible bounds for its item type
     if (!hasScaleAnchor || implausible) {
       return { ...m, confidence: 'low' };
     }
