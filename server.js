@@ -2668,6 +2668,12 @@ app.post('/api/users/:id/jobs/:jobId/video',
         messages: [{ role: 'user', content: imageContent }],
         model: 'claude-sonnet-4-20250514',
         maxTokens: 4000,
+        // Low temperature for structured measurement extraction so
+        // identical inputs converge on similar outputs. Without this,
+        // re-running analysis on the same video produced ~£10k swings
+        // (Paul, 2026-05-13). Damage prose can sound slightly more
+        // stilted at 0, so 0.2 balances determinism against readability.
+        temperature: 0.2,
         apiKey,
       });
 
@@ -3378,6 +3384,10 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
           messages,
           model: requestedModel,
           maxTokens: requestedMaxTokens,
+          // Low temperature on the photo path for the same reason the
+          // video path uses 0.2 — re-running analysis on identical
+          // photos must not silently produce a different total.
+          temperature: 0.2,
           apiKey,
         });
         break;

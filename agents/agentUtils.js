@@ -58,13 +58,23 @@ async function failAgentRun(pool, runId, errorMessage, durationMs) {
  * Make a raw HTTPS request to the Anthropic Messages API.
  * Returns the parsed JSON response body.
  */
-function callAnthropicRaw({ systemPrompt, messages, model, maxTokens, apiKey }) {
-  const body = JSON.stringify({
+function callAnthropicRaw({ systemPrompt, messages, model, maxTokens, apiKey, temperature }) {
+  // Anthropic's default temperature is 1.0 (maximum sampling diversity).
+  // For our measurement-extraction task that produces £10k swings between
+  // back-to-back runs on identical inputs (Paul, 2026-05-13). Callers pass
+  // a low temperature explicitly when they want repeatable structured
+  // output; when omitted we leave Anthropic's default so existing agent
+  // calls (self-critique, feedback) aren't subtly altered by this change.
+  const payload = {
     model: model || DEFAULT_MODEL,
     max_tokens: maxTokens || DEFAULT_MAX_TOKENS,
     system: systemPrompt,
     messages,
-  });
+  };
+  if (typeof temperature === 'number' && temperature >= 0 && temperature <= 1) {
+    payload.temperature = temperature;
+  }
+  const body = JSON.stringify(payload);
 
   return new Promise((resolve, reject) => {
     const req = https.request(
