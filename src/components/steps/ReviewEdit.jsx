@@ -294,6 +294,22 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
               <span className="text-xs ml-1" style={{ color: 'var(--tq-muted)', opacity: 0.7 }}>
                 ({labour.days}d × {labour.workers}w × {formatCurrency(labour.dayRate)})
               </span>
+              {/* Discoverability cue — when the customer-portal toggle is on,
+                  Paul still sees the full days × workers × rate breakdown
+                  here. Without the indicator he can forget the customer's
+                  view is stripped and get blindsided by "how many days?" */}
+              {profile.hideLabourDays === true && (
+                <span
+                  className="text-xs ml-2 px-1.5 py-0.5 rounded"
+                  style={{
+                    color: 'var(--tq-muted)',
+                    border: '1px solid var(--tq-border-soft)',
+                  }}
+                  title="The customer's quote shows only the labour total — toggle in Profile › Quote Preferences"
+                >
+                  hidden from customer
+                </span>
+              )}
             </span>
             <span className="font-mono">{formatCurrency(totals.labourTotal)}</span>
           </div>

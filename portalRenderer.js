@@ -130,6 +130,15 @@ function isVatRegistered(v) {
   return v === true;
 }
 
+// Fail-closed boolean check for the hideLabourDays profile toggle. Same
+// shape as isVatRegistered above: only the literal `true` enables hiding.
+// String "true", number 1, objects — all fall through and the breakdown
+// stays visible. Defends against a tampered snapshot writing a coerced
+// truthy value to opt a tradesman out without consent.
+function isHideLabourDays(v) {
+  return v === true;
+}
+
 function totals(materials, labour, additionalCosts, vatRegistered) {
   let subtotal = 0;
   for (const m of materials || []) subtotal += Number(m.totalCost || 0);
@@ -386,6 +395,16 @@ function baseHead(title) {
 </head>`;
 }
 
+// Why hideLabourDays reads from `profile` (= job.client_snapshot_profile)
+// rather than `snapshotProfile` (= snapshot.profile):
+//   VAT anchors to the older snapshot.profile so the tax treatment is
+//   locked at quote-save time. hideLabourDays is a presentation
+//   preference, not a tax-relevant fact, and should track the tradesman's
+//   most recent intent at the moment they decided to share the quote.
+//   client_snapshot_profile is re-frozen on every client-token
+//   regeneration, so toggling the flag and regenerating a link applies
+//   immediately. Strict boolean check via isHideLabourDays — string
+//   "true" / 1 / objects all fail-closed and keep the breakdown visible.
 export function renderClientPortal(job, token) {
   const snapshot = job?.client_snapshot || {};
   const profile = job?.client_snapshot_profile || {};
@@ -441,8 +460,11 @@ export function renderClientPortal(job, token) {
       <h2 class="cp-section-title">Cost breakdown</h2>
       <div class="cp-costs">
         ${materialRows(materials)}
+        <!-- Labour line. See note above renderClientPortal for why
+          hideLabourDays reads from the token-time profile, not the
+          quote-save snapshotProfile. -->
         <div class="cp-cost-row">
-          <div class="cp-cost-label">Labour<small>${escapeHtml(String(labour.estimatedDays || 0))} day${Number(labour.estimatedDays) === 1 ? '' : 's'} × ${escapeHtml(String(labour.numberOfWorkers || 0))} worker${Number(labour.numberOfWorkers) === 1 ? '' : 's'}</small></div>
+          <div class="cp-cost-label">Labour${isHideLabourDays(profile.hideLabourDays) ? '' : `<small>${escapeHtml(String(labour.estimatedDays || 0))} day${Number(labour.estimatedDays) === 1 ? '' : 's'} × ${escapeHtml(String(labour.numberOfWorkers || 0))} worker${Number(labour.numberOfWorkers) === 1 ? '' : 's'}</small>`}</div>
           <div class="cp-cost-value">${formatCurrency(t.labourTotal)}</div>
         </div>
         ${additionalCosts.map((c) => `

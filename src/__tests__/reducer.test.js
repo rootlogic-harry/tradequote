@@ -90,6 +90,13 @@ describe('reducer', () => {
     test('quoteSaveErrorKey defaults to 0', () => {
       expect(initialState.quoteSaveErrorKey).toBe(0);
     });
+
+    // Paul, 2026-05-13: hide day-and-worker breakdown from the customer
+    // portal. Opt-in so existing tradesmen see no behaviour change until
+    // they toggle it in profile preferences.
+    test('hideLabourDays defaults to false (opt-in)', () => {
+      expect(initialState.profile.hideLabourDays).toBe(false);
+    });
   });
 
   // ---- Existing tests ----

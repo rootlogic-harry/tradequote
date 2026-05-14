@@ -235,7 +235,7 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
 
       {/* Quote preferences */}
       <div className="eyebrow mb-3">Quote Preferences</div>
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col gap-3">
         <label className="flex items-center gap-2 cursor-pointer" style={{ minHeight: 48 }}>
           <input
             type="checkbox"
@@ -244,6 +244,20 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
             className="w-5 h-5 accent-tq-accent"
           />
           <span className="text-sm text-tq-text">Show Notes & Conditions on quotes</span>
+        </label>
+        <label className="flex items-start gap-2 cursor-pointer" style={{ minHeight: 48 }}>
+          <input
+            type="checkbox"
+            checked={profile.hideLabourDays === true}
+            onChange={(e) => update('hideLabourDays', e.target.checked)}
+            className="w-5 h-5 accent-tq-accent mt-0.5"
+          />
+          <span className="text-sm text-tq-text">
+            Hide labour days from the customer's quote
+            <span className="block text-xs mt-0.5" style={{ color: 'var(--tq-muted)' }}>
+              You still see the full breakdown when editing. The customer sees only the labour total.
+            </span>
+          </span>
         </label>
       </div>
 

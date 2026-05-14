@@ -47,6 +47,12 @@ export const initialState = {
     dayRate: DEFAULT_DAY_RATE,
     accreditations: '',
     showNotesOnQuote: true,
+    // Hide the "X days × Y workers" sub-label from the customer portal's
+    // labour line. Opt-in; legacy profiles read as false. Paul (2026-05-13)
+    // had customers anchoring on day counts and arguing comparisons across
+    // tradesmen — the toggle removes that comparison axis while leaving
+    // the labour £ total intact. Tradesman still sees days in Step 4.
+    hideLabourDays: false,
     // Client Portal accent — tints the customer-portal's primary CTA,
     // eyebrows, and total-box trim. Four values: amber | rust | moss |
     // slate. Default amber. Legacy profiles without an accent key read

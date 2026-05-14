@@ -394,3 +394,105 @@ describe('renderTokenNotFound / renderTokenExpired — styled, XSS-safe', () => 
     expect(html.toLowerCase()).toContain('expired');
   });
 });
+
+// Paul, 2026-05-13: customers were anchoring on the "6 days × 2 workers"
+// breakdown and arguing that another tradesman "said 4". The total and
+// labour line stay visible; only the day-and-worker count is hidden when
+// the tradesman has opted in via profile.hideLabourDays.
+describe('renderClientPortal — hideLabourDays profile toggle', () => {
+  function jobWithFlag(flagValue) {
+    return makeJob({
+      client_snapshot_profile: { ...baseProfile, hideLabourDays: flagValue },
+    });
+  }
+
+  test('default (flag undefined, legacy snapshot) shows the "X days × Y workers" breakdown', () => {
+    const html = renderClientPortal(makeJob(), TOKEN);
+    expect(html).toMatch(/6\s*days\s*&times;\s*2\s*workers|6\s*days\s*×\s*2\s*workers/);
+  });
+
+  test('flag explicitly false shows the breakdown', () => {
+    const html = renderClientPortal(jobWithFlag(false), TOKEN);
+    expect(html).toMatch(/6\s*days\s*&times;\s*2\s*workers|6\s*days\s*×\s*2\s*workers/);
+  });
+
+  test('flag true omits the day-and-worker breakdown', () => {
+    const html = renderClientPortal(jobWithFlag(true), TOKEN);
+    // The <small> sub-label that holds "X days × Y workers" must not appear.
+    expect(html).not.toMatch(/\d+\s*days?\s*(&times;|×)\s*\d+\s*workers?/i);
+    // And no bare "days" / "workers" leak in the labour row either.
+    const labourRow = html.match(/<div class="cp-cost-label">Labour[\s\S]*?<\/div>/);
+    expect(labourRow).not.toBeNull();
+    expect(labourRow[0]).not.toMatch(/days?/i);
+    expect(labourRow[0]).not.toMatch(/workers?/i);
+  });
+
+  test('flag true keeps the labour line itself (label and £ total)', () => {
+    const html = renderClientPortal(jobWithFlag(true), TOKEN);
+    // Labour label is still rendered — only its <small> sub-line is gone.
+    expect(html).toMatch(/<div class="cp-cost-label">Labour/);
+    // £4,800 = 6 × 2 × 400. The customer still sees what labour costs.
+    expect(html).toMatch(/£4,800\.00/);
+  });
+
+  test('flag true does not strip days from material rows or other labels', () => {
+    // A material line legitimately uses the unit "days" (e.g. plant hire
+    // priced per day). The hide-days toggle must not affect material rows.
+    const job = jobWithFlag(true);
+    job.client_snapshot = {
+      ...baseSnapshot,
+      reviewData: {
+        ...baseSnapshot.reviewData,
+        materials: [
+          { id: 'm1', description: 'Mini digger hire', quantity: '3', unit: 'days', unitCost: 150, totalCost: 450 },
+        ],
+      },
+    };
+    const html = renderClientPortal(job, TOKEN);
+    expect(html).toContain('Mini digger hire');
+    expect(html).toContain('days'); // surviving in the material row's unit cell
+  });
+
+  test('non-boolean truthy values do NOT enable hiding (fail-closed on tampered snapshot)', () => {
+    // Defence-in-depth: the snapshot is frozen JSONB. If something somehow
+    // wrote a string "true" or a number, we should still show days unless
+    // the value is the literal boolean true. Mirrors normaliseVatRegistered.
+    for (const sneaky of ['true', 1, {}, [], 'yes', 'TRUE']) {
+      const html = renderClientPortal(jobWithFlag(sneaky), TOKEN);
+      expect(html).toMatch(/6\s*days/);
+    }
+  });
+
+  test('flag true survives a labourEstimate with missing days / workers', () => {
+    // Defensive: even if the saved labour shape is partial, the renderer
+    // must not crash and must still respect the toggle. Both off and on
+    // should produce the labour row without a thrown exception.
+    const job = jobWithFlag(true);
+    job.client_snapshot = {
+      ...baseSnapshot,
+      reviewData: {
+        ...baseSnapshot.reviewData,
+        labourEstimate: { dayRate: 400 }, // no estimatedDays, no numberOfWorkers
+      },
+    };
+    expect(() => renderClientPortal(job, TOKEN)).not.toThrow();
+    const html = renderClientPortal(job, TOKEN);
+    expect(html).toMatch(/<div class="cp-cost-label">Labour/);
+    expect(html).not.toMatch(/\d+\s*days?\s*(&times;|×)\s*\d+\s*workers?/i);
+  });
+
+  test('flag false with missing labour shape still renders the breakdown safely', () => {
+    const job = jobWithFlag(false);
+    job.client_snapshot = {
+      ...baseSnapshot,
+      reviewData: {
+        ...baseSnapshot.reviewData,
+        labourEstimate: { dayRate: 400 }, // missing days / workers
+      },
+    };
+    expect(() => renderClientPortal(job, TOKEN)).not.toThrow();
+    const html = renderClientPortal(job, TOKEN);
+    // Falls back to "0 days × 0 workers" rather than crashing.
+    expect(html).toMatch(/0\s*days/);
+  });
+});
