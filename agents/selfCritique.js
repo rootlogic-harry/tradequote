@@ -26,6 +26,14 @@ You've been given an AI analysis of job photographs. Check for:
 11. Line-item arithmetic: every material line's totalCost must equal
     quantity × unitCost (within £0.01). Flag any row where the product
     doesn't match the stored totalCost.
+12. Mortar over-inclusion: dry stone walling is dry-laid by default;
+    mortar (lime mortar, NHL, mortar & sand, sand-and-cement) is the
+    exception. Flag any "lime mortar" / "NHL" / "mortar" material line
+    item UNLESS the damageDescription mentions visible mortar joints
+    in the existing wall, OR the scheduleOfWorks describes a mortared
+    bed / mortared cope / repointing step. Recommend removal when the
+    trigger is missing — the customer should not be charged for material
+    the job does not need.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 {

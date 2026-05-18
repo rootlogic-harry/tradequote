@@ -22,6 +22,15 @@ describe('CRITIQUE_SYSTEM_PROMPT — extended checks', () => {
     expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/Line-item arithmetic/i);
     expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/quantity .{0,3}unitCost/);
   });
+
+  // Paul/Harry 2026-05-18 — Claude was treating mortar as a default
+  // material on every quote. The critique should catch a mortar line
+  // item that has no justification in the damage description or
+  // schedule of works.
+  test('flags mortar materials without a documented justification in the analysis', () => {
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/mortar/i);
+    expect(CRITIQUE_SYSTEM_PROMPT).toMatch(/dry-laid|dry laid|default.*dry/i);
+  });
 });
 
 describe('applyCorrectedValues', () => {

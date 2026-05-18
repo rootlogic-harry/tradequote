@@ -120,4 +120,72 @@ describe('Server-side SYSTEM_PROMPT', () => {
       expect(SYSTEM_PROMPT).toMatch(/no "2\.5 t"/);
     });
   });
+
+  // Lime mortar was being over-included (Paul / Harry, 2026-05-18). Dry stone
+  // walling is by definition dry-laid; mortar is the exception, not the
+  // default. The prompt previously listed lime mortar in the default
+  // materials list and used it as the only example in the schedule-of-works
+  // material-specs / construction-techniques bullets, which biased Claude
+  // toward including it on every job.
+  describe('mortar is conditional, not default', () => {
+    test('"dry-laid" default is stated explicitly somewhere in the prompt', () => {
+      // The model needs to know the baseline construction is unmortared
+      // before it can decide when mortar is justified.
+      expect(SYSTEM_PROMPT).toMatch(/dry-laid/i);
+    });
+
+    test('mortar materials are NOT in the default "MATERIALS (include)" block', () => {
+      // Pull the default-materials section (between the section header and
+      // the next major header). Lime mortar / NHL / mortar should not be
+      // listed as a default item there.
+      const block = SYSTEM_PROMPT.match(
+        /MATERIALS \(include in "materials" array[^)]*\):[\s\S]*?(?=PLANT HIRE|MORTAR|LABOUR \()/
+      );
+      expect(block).not.toBeNull();
+      const defaultMaterials = block[0];
+      expect(defaultMaterials).not.toMatch(/lime mortar/i);
+      expect(defaultMaterials).not.toMatch(/NHL/);
+      expect(defaultMaterials).not.toMatch(/^- Mortar & sand/m);
+    });
+
+    test('a dedicated MORTAR section names explicit inclusion triggers', () => {
+      // There should be a section that gates mortar on observable conditions:
+      // existing mortar joints visible, tradesman explicitly spec'd it, or
+      // exposed-site coping that needs bedding. Without one of those triggers,
+      // do not include mortar.
+      expect(SYSTEM_PROMPT).toMatch(/MORTAR/);
+      expect(SYSTEM_PROMPT).toMatch(/only (when|if)/i);
+    });
+
+    test('MORTAR section names all four explicit triggers', () => {
+      // Each trigger must be present in the prompt text so the model has
+      // unambiguous yes/no signals for each path.
+      expect(SYSTEM_PROMPT).toMatch(/visible mortar joints/i);                       // 1
+      expect(SYSTEM_PROMPT).toMatch(/tradesman'?s? notes|briefNotes|voice transcript/i); // 2
+      expect(SYSTEM_PROMPT).toMatch(/structural.*wall|retaining wall.*spec|garden wall|feature wall/i); // 3
+      expect(SYSTEM_PROMPT).toMatch(/cope stones?.*exposed|estate boundary/i);       // 4
+    });
+
+    test('trigger #2 requires the mortared activity to appear in the schedule of works', () => {
+      // Voice notes alone must not be enough — the schedule must reflect
+      // the spec. Mitigates a model misread that could put mortar in the
+      // materials array off a single ambiguous transcript phrase.
+      expect(SYSTEM_PROMPT).toMatch(/voice notes\s+alone are not sufficient/i);
+    });
+
+    test('SCHEDULE OF WORKS examples do not bias toward mortar', () => {
+      // The previous prompt used "NHL 3.5 hydraulic lime mortar" as the ONLY
+      // material-spec example, and "bedded and set plumb on a cement and lime
+      // mortar bed" as the ONLY construction-technique example. Those biased
+      // Claude toward mortared output on every job. Pull the SCHEDULE OF WORKS
+      // DETAIL block and confirm the bullets reference dry-laid alternatives
+      // (or stay generic) — not just mortar.
+      const block = SYSTEM_PROMPT.match(/SCHEDULE OF WORKS DETAIL:[\s\S]*?Do NOT use vague/);
+      expect(block).not.toBeNull();
+      const sched = block[0];
+      // At least one of the examples must explicitly mention dry-laid
+      // construction so the prompt is balanced, not mortar-only.
+      expect(sched).toMatch(/dry-laid|dry laid|without mortar/i);
+    });
+  });
 });

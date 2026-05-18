@@ -134,18 +134,55 @@ buy or hire. All labour activities (dismantling, rebuilding, repointing, site su
 making good, core consolidation) are covered by the daily labour rate and must NOT
 appear as material line items.
 
-MATERIALS (include in "materials" array):
+DEFAULT CONSTRUCTION — DRY-LAID:
+Dry stone walling is by definition dry-laid. Stones are hand-selected,
+hearted, and stacked WITHOUT mortar. The default for every job is no
+mortar of any kind. Mortar is the exception, not the rule — see the
+dedicated MORTAR section below for the narrow set of conditions under
+which it should appear in the materials list.
+
+MATERIALS (include in "materials" array on a default dry-laid job):
 - Replacement stone supply: £170–£200 per tonne (matched walling stone, gritstone/sandstone)
 - Stone consumption: ~0.3 tonnes per m² of wall face
 - Natural stone (facing/coping): price varies by type
-- Hydraulic lime mortar (NHL 3.5): £80–£100 per batch
-- Mortar & sand: price varies
 - Mobile scaffolding hire: £50–£60 per day
 - Temporary propping (Strongboy supports): £200–£250 when required
 - Tool and equipment hire: £100–£200 per job
 - Waste disposal & tipping fees: £100–£140 flat
 - Accommodation: if overnight stays required
 - Travel and fuel expenses: mileage/fuel costs
+
+MORTAR (include ONLY when one of these triggers is observably true):
+Dry stone walls are dry-laid. Mortar (lime mortar, NHL 3.5, sand-and-cement,
+mortar & sand) is conditional and must NOT appear in materials unless at
+least one of the following is true:
+  1. The EXISTING wall in the photos shows visible mortar joints
+     (mortared pointing between stones) — the repair must match the
+     original construction to preserve the wall's character. The
+     damageDescription must explicitly note the visible mortar.
+  2. The tradesman's notes (briefNotes / voice transcript) explicitly
+     specify a mortared bed, mortared cope, or repointing as part of
+     the scope. When this trigger applies, the SCHEDULE OF WORKS must
+     include a step describing the mortared activity — voice notes
+     alone are not sufficient justification for a materials line.
+  3. The job is a structural retaining wall, garden wall, or feature
+     wall whose original specification clearly requires bedding stone
+     in mortar (visible in the photos — render finish, cement strap
+     courses, parapet caps, etc.), and the damageDescription identifies
+     it as such.
+  4. Cope stones on an exposed estate boundary where security against
+     wind/livestock loading justifies bedding the caps in lime mortar,
+     AND the photos show such a setting.
+None of those true → no mortar line items. None. Field walls and
+typical garden boundary walls are dry-laid; the customer must not be
+charged for material the job does not need.
+If a trigger IS met, use:
+  - Hydraulic lime mortar (NHL 3.5): £80–£100 per batch — used with
+    historic walls / heritage settings
+  - Mortar & sand: price varies — used on modern mortared specs
+Cite the trigger in the SCHEDULE OF WORKS step that uses the mortar
+("Bed cope stones in NHL 3.5 because the existing copes are mortared,
+visible in photos 2 and 4") so the tradesman can audit the decision.
 
 PLANT HIRE (include in "materials" array when the job requires them):
 - Hiab / lorry-mounted crane hire: £350–£500 per day
@@ -240,10 +277,17 @@ If there is only one damaged component, still use "1 — [component name]".
 SCHEDULE OF WORKS DETAIL:
 Each schedule step description must include:
 - Specific dimensions of the work area
-- Material specifications (e.g. "NHL 3.5 hydraulic lime mortar", "matched sandstone walling stone")
-- Construction techniques (e.g. "bedded and set plumb on a cement and lime mortar bed")
+- Material specifications. Default to dry-laid wording (e.g. "matched
+  sandstone walling stone reclaimed from the existing wall plus
+  supplementary supply"). Only reference mortar materials when a
+  trigger from the MORTAR section above is met for this job.
+- Construction techniques. Default to dry-laid wording (e.g.
+  "rebuilt to DSWA standards in coursed double-faced construction with
+  through stones at 600mm height intervals and hearting packed
+  tightly to each course"). Use mortared wording (e.g. "bedded on a
+  lime mortar bed") only when the MORTAR triggers apply.
 - Stone coursing or bond pattern details where applicable
-- Mortar types where applicable
+- Mortar types — ONLY where mortar is being used per the trigger rules
 Do NOT use vague descriptions like "Rebuild wall section". Specify exactly what is
 being rebuilt, with what materials, to what dimensions, using what technique.
 
