@@ -83,6 +83,18 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
     if (photos.sideProfile) docPhotos.push({ label: 'Side Profile', data: photos.sideProfile.data });
     if (photos.referenceCard) docPhotos.push({ label: 'Reference Card', data: photos.referenceCard.data });
     if (photos.access) docPhotos.push({ label: 'Access', data: photos.access.data });
+    // Mark (2026-05-19): video-mode quotes had no site images because
+    // the 5 named slots are empty in that mode. Append state.extraPhotos
+    // (populated for BOTH photo mode and video mode now) so the wall
+    // shows on the customer's quote regardless of capture method.
+    // Photo-mode flow already wrote extras here; this line is what
+    // makes video mode reach the same grid.
+    const extras = Array.isArray(state.extraPhotos) ? state.extraPhotos : [];
+    for (const p of extras) {
+      if (p?.data) {
+        docPhotos.push({ label: p.label || 'Site photo', data: p.data });
+      }
+    }
   }
 
   // Filter out empty / £0 material rows for display

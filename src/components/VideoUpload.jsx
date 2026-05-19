@@ -360,22 +360,33 @@ export default function VideoUpload({
         </div>
       </div>
 
-      {/* Add photos toggle */}
+      {/* Add photos toggle. The reviewer flagged the previous version as
+          buried (small text link); promote to a bordered button so
+          tradesmen find it after picking the video. Single affordance
+          serves both purposes — photos go on the quote AND improve
+          measurement accuracy. */}
       {!showPhotoUpload && extraPhotos.length === 0 && (
         <button
           type="button"
           onClick={() => setShowPhotoUpload(true)}
           style={{
-            padding: '8px',
-            border: 'none',
+            padding: '12px 16px',
+            border: '1.5px dashed var(--border, #d0d0d0)',
+            borderRadius: '12px',
             background: 'transparent',
-            color: 'var(--accent, #2563eb)',
+            color: 'var(--text, #222)',
             cursor: 'pointer',
             fontSize: '14px',
+            fontWeight: 600,
             textAlign: 'left',
+            minHeight: '48px',
+            width: '100%',
           }}
         >
-          + Add photos (optional, up to {maxExtraPhotos})
+          + Add site photos for the quote
+          <span style={{ display: 'block', fontWeight: 400, fontSize: '12px', color: 'var(--text-secondary, #888)', marginTop: '2px' }}>
+            Optional &middot; up to {maxExtraPhotos} &middot; appear on the customer's quote
+          </span>
         </button>
       )}
 
@@ -386,8 +397,11 @@ export default function VideoUpload({
           border: '1px solid var(--border, #e0e0e0)',
           borderRadius: '12px',
         }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
-            Extra photos ({extraPhotos.length}/{maxExtraPhotos})
+          <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px' }}>
+            Site photos for the quote ({extraPhotos.length}/{maxExtraPhotos})
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary, #888)', marginBottom: '10px' }}>
+            These appear on your customer's quote and improve measurement accuracy. Optional.
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {extraPhotos.map((photo, i) => (

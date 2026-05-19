@@ -2739,6 +2739,32 @@ app.post('/api/users/:id/jobs/:jobId/video',
         name: f.originalname,
       }));
 
+      // Mark (2026-05-19): "no site images in the quote" — video-mode
+      // attached photos were thrown away with the multer temp files after
+      // analysis. Persist them now into user_photos with the same shape
+      // photo-mode uses (context='draft', slot='extra-N'), BEFORE the
+      // finally-block cleanup. loadPhotos picks them up on Step 4 + save
+      // → user_photos rows are re-keyed to the saved jobId at quote save
+      // time (existing flow). Best-effort per-row: a single malformed
+      // photo blob must not 500 the whole analysis.
+      for (let i = 0; i < extraPhotos.length; i++) {
+        const p = extraPhotos[i];
+        try {
+          await pool.query(
+            `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+             ON CONFLICT (user_id, context, slot)
+             DO UPDATE SET data = $4, label = $5, name = $6, updated_at = NOW()`,
+            [userId, 'draft', `extra-${i}`, p.data, p.label || 'Site photo', p.name || null]
+          );
+        } catch (err) {
+          console.warn(`[Video] persist photo ${i} failed user=${userId} job=${jobId}: ${err.message}`);
+        }
+      }
+      if (extraPhotos.length > 0) {
+        console.log(`[Video] persist photos user=${userId} job=${jobId} count=${extraPhotos.length}`);
+      }
+
       videoProgress.emit(jobId, { stage: 'processing', progress: 10, message: 'Processing video...' });
 
       const result = await processVideo({

@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
 import { runAnalysis } from '../../utils/analyseJob.js';
-import { savePhoto, deletePhoto, saveDraft } from '../../utils/userDB.js';
+import { savePhoto, deletePhoto, saveDraft, loadPhotos } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
@@ -253,6 +253,22 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         },
         maxRetries: 3,
       });
+      // Load photos BEFORE dispatching ANALYSIS_SUCCESS so Step 4 paints
+      // with the photo grid populated in one frame — no flicker between
+      // "empty grid" and "photos appear" (Mark, 2026-05-19). If reload
+      // fails (rare; server-side fetch error), proceed without — photos
+      // will appear on next dashboard / saved-quote navigation.
+      try {
+        const { photos: loadedPhotos, extraPhotos: loadedExtras } =
+          await loadPhotos(state.currentUserId, 'draft');
+        if (
+          (loadedExtras && loadedExtras.length > 0) ||
+          (loadedPhotos && Object.keys(loadedPhotos).length > 0)
+        ) {
+          dispatch({ type: 'RESTORE_PHOTOS', photos: loadedPhotos, extraPhotos: loadedExtras });
+        }
+      } catch { /* non-fatal — photos will appear on next navigation */ }
+
       dispatch({
         type: 'ANALYSIS_SUCCESS',
         normalised: data.normalised,
