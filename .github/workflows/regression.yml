@@ -1,0 +1,167 @@
+# Regression suite — runs only on PRs that touch analysis-affecting code.
+#
+# Inert until you populate real fixtures. Today the suite skips
+# gracefully because regression/fixtures/sample.json's photos don't
+# exist on disk. Once you commit real fixture photos under
+# regression/fixtures/<id>/photos/, the action becomes the gate
+# described in regression/README.md.
+#
+# Cost ~£0.50 per run (3 iters × N fixtures × Sonnet). Path filter
+# means this fires only when prompt / parser / calculations files
+# change — not on every CSS or copy tweak.
+#
+# To enable as a required check: GitHub → repo settings → branches
+# → branch protection rule for `main` → tick "Regression suite".
+
+name: Regression suite
+
+on:
+  pull_request:
+    paths:
+      # AI prompts — the most common source of regressions
+      - 'prompts/systemPrompt.js'
+      - 'agents/selfCritique.js'
+      - 'agents/feedbackAgent.js'
+      - 'agents/calibrationAgent.js'
+      - 'agents/agentUtils.js'
+      # Analysis-shaping logic
+      - 'src/utils/aiParser.js'
+      - 'src/utils/calculations.js'
+      - 'src/utils/analyseJob.js'
+      - 'src/utils/videoProcessor.js'
+      - 'src/utils/whisperClient.js'
+      - 'src/utils/frameExtractor.js'
+      # The analyse route itself
+      - 'server.js'
+      # The suite's own machinery — if we change the harness, validate it
+      - 'regression/fixtures/**'
+      - 'regression/lib/**'
+      - 'regression/run.js'
+  # Manual override for ad-hoc runs without a PR
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: 'Iterations per fixture'
+        required: false
+        default: '3'
+
+# Cancel stale runs on the same PR — only the latest commit matters.
+concurrency:
+  group: regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: fastquote
+          POSTGRES_PASSWORD: fastquote
+          POSTGRES_DB: fastquote_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Test-auth path. server.js TEST_AUTH_ENABLED requires
+      # NODE_ENV != 'production' AND ENABLE_TEST_AUTH=1 — both set here.
+      NODE_ENV: development
+      ENABLE_TEST_AUTH: '1'
+      DATABASE_URL: postgres://fastquote:fastquote@localhost:5432/fastquote_test
+      SESSION_SECRET: ci-not-a-real-secret
+      # Real Anthropic key — add it under repo settings → secrets and
+      # variables → actions → New repository secret → ANTHROPIC_API_KEY.
+      # Without it, Sonnet calls 401 and every fixture errors.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # OpenAI key isn't needed for /analyse (only the video Whisper path
+      # uses it). If you later expand fixtures to cover video uploads,
+      # add OPENAI_API_KEY here as well.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify ANTHROPIC_API_KEY present
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::warning::ANTHROPIC_API_KEY secret not set — Sonnet calls will 401. Add it under Settings → Secrets and variables → Actions."
+            echo "Continuing — the suite will skip if no fixtures are runnable."
+          fi
+
+      - name: Start FastQuote server in background
+        run: |
+          node server.js > server.log 2>&1 &
+          echo $! > server.pid
+          # Wait for the server to accept TCP on :3000. The health check
+          # below polls /; once a 200 lands we proceed.
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/ >/dev/null 2>&1; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://localhost:3000/ >/dev/null 2>&1; then
+            echo "Server failed to start within 30s — log:"
+            cat server.log
+            exit 1
+          fi
+
+      - name: Run regression suite
+        id: regression
+        run: |
+          ITERATIONS="${{ github.event.inputs.iterations || '3' }}"
+          npm run regression -- \
+            --base-url http://localhost:3000 \
+            --user-id markdoyle \
+            --iterations "$ITERATIONS"
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-report
+          path: |
+            regression/reports/
+            server.log
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Summarise on PR
+        if: always()
+        run: |
+          echo "## Regression suite result" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          # Find the most recent report
+          LATEST=$(ls -1t regression/reports/*.md 2>/dev/null | head -1 || true)
+          if [ -z "$LATEST" ]; then
+            echo "No report produced. Most likely the suite skipped because no fixtures have photos on disk yet." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "See \`regression/README.md\` for how to add real fixtures." >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat "$LATEST" >> "$GITHUB_STEP_SUMMARY"
+          fi

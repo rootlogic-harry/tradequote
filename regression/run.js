@@ -56,7 +56,30 @@ function parseArgs(argv) {
   return out;
 }
 
+// A fixture is "runnable" when every photo it references exists on disk.
+// Photos aren't committed (they're customer-specific or large binaries),
+// so a freshly-checked-out repo will have fixture JSON without photos.
+// The action skips these silently instead of failing — the suite stays
+// passive until someone populates real fixture data.
+function fixtureRunnable(fixture) {
+  const photos = fixture._photosResolved || {};
+  for (const p of Object.values(photos)) {
+    if (!fs.existsSync(p)) return { runnable: false, missing: p };
+  }
+  return { runnable: true };
+}
+
 async function runOne(fixture, opts) {
+  const check = fixtureRunnable(fixture);
+  if (!check.runnable) {
+    return {
+      fixture,
+      summary: { totalRuns: 0, passRate: 0, fields: [] },
+      skipped: true,
+      skipReason: `photos not present on disk (e.g. ${path.basename(check.missing)})`,
+    };
+  }
+
   const runs = [];
   for (let i = 0; i < opts.iterations; i++) {
     try {
@@ -108,8 +131,24 @@ async function main() {
   for (const f of fixtures) {
     process.stdout.write(`  ${f.id} ... `);
     const r = await runOne(f, opts);
-    process.stdout.write(r.error ? `error: ${r.error}\n` : `${(r.summary.passRate * 100).toFixed(0)}% pass\n`);
+    if (r.skipped) {
+      process.stdout.write(`skipped (${r.skipReason})\n`);
+    } else if (r.error) {
+      process.stdout.write(`error: ${r.error}\n`);
+    } else {
+      process.stdout.write(`${(r.summary.passRate * 100).toFixed(0)}% pass\n`);
+    }
     fixtureReports.push(r);
+  }
+
+  // If every fixture was skipped (no photos on disk yet), exit 0 with a
+  // friendly message — the suite stays passive in CI until real fixtures
+  // are populated. This is the "wired but inert" state.
+  const runnableReports = fixtureReports.filter((r) => !r.skipped);
+  if (runnableReports.length === 0) {
+    console.log('\nNo runnable fixtures (none have photos on disk). Suite skipped.');
+    console.log('See regression/README.md for how to add real fixtures.');
+    process.exit(0);
   }
 
   const md = renderReport({
@@ -129,7 +168,8 @@ async function main() {
     console.log('\n' + md);
   }
 
-  const allPassed = fixtureReports.every((r) => r.summary.passRate === 1 && !r.error);
+  // Only count runnable fixtures for pass/fail. Skipped ones are noise.
+  const allPassed = runnableReports.every((r) => r.summary.passRate === 1 && !r.error);
   process.exit(allPassed ? 0 : 1);
 }
 
