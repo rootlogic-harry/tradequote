@@ -233,6 +233,101 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
         )}
       </div>
 
+      {/* Your trade — preferences that tell the system who you are and
+          how you work. Drives prompt context per analysis: region (for
+          local style + access assumptions, NOT pricing), preferred
+          stone types (tiebreaker when stone is ambiguous from photos),
+          and mortar usage (strong prior for whether mortar belongs
+          in the materials list). Photos always win — these are priors,
+          not vetoes. (Profile-aware prompting, 2026-06-02.) */}
+      <div className="eyebrow mb-3">Your Trade</div>
+      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+        Optional. Helps tailor your quotes to how you work. You can leave any of these blank and update later.
+      </p>
+      <div className="mb-8 grid grid-cols-1 fq:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Region or postcode area
+          </label>
+          <input
+            type="text"
+            autoComplete="off"
+            placeholder="e.g. West Yorkshire, BD12, Lake District"
+            className={fieldClass('region')}
+            value={profile.region || ''}
+            onChange={(e) => update('region', e.target.value)}
+            onBlur={(e) => update('region', e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Mortar usage
+          </label>
+          <div className="flex gap-2" role="radiogroup" aria-label="Mortar usage">
+            {[
+              { key: 'rarely',    label: 'Rarely',    sub: 'mostly dry-laid' },
+              { key: 'sometimes', label: 'Sometimes', sub: 'mixed' },
+              { key: 'often',     label: 'Often',     sub: 'mortared specs common' },
+            ].map((opt) => {
+              const selected = profile.mortarUsage === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => update('mortarUsage', selected ? null : opt.key)}
+                  className="flex-1 p-2 text-sm rounded transition-colors"
+                  style={{
+                    border: `1.5px solid ${selected ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
+                    background: selected ? 'var(--tq-accent-bg)' : 'transparent',
+                    color: 'var(--tq-text)',
+                    minHeight: 48,
+                  }}
+                >
+                  <div className="font-medium">{opt.label}</div>
+                  <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>{opt.sub}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="fq:col-span-2">
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Typical stone types
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {['gritstone', 'sandstone', 'limestone', 'slate', 'granite'].map((stone) => {
+              const list = Array.isArray(profile.preferredStoneTypes) ? profile.preferredStoneTypes : [];
+              const selected = list.includes(stone);
+              return (
+                <button
+                  key={stone}
+                  type="button"
+                  onClick={() => {
+                    const next = selected
+                      ? list.filter((s) => s !== stone)
+                      : [...list, stone];
+                    update('preferredStoneTypes', next);
+                  }}
+                  aria-pressed={selected}
+                  className="px-3 py-2 text-sm rounded-full transition-colors"
+                  style={{
+                    border: `1.5px solid ${selected ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
+                    background: selected ? 'var(--tq-accent-bg)' : 'transparent',
+                    color: 'var(--tq-text)',
+                    minHeight: 40,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {stone}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Quote preferences */}
       <div className="eyebrow mb-3">Quote Preferences</div>
       <div className="mb-8 flex flex-col gap-3">

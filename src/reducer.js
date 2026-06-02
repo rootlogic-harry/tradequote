@@ -53,6 +53,16 @@ export const initialState = {
     // tradesmen — the toggle removes that comparison axis while leaving
     // the labour £ total intact. Tradesman still sees days in Step 4.
     hideLabourDays: false,
+    // Profile-aware prompting (2026-06-02). Three signals injected into the
+    // analysis prompt as a TRADESMAN PROFILE block above JOB CONTEXT.
+    // Region is CONTEXT ONLY — not used for pricing. Photos always win
+    // over preferences (prior, not veto).
+    //   region              — free-text area / postcode ("West Yorkshire", "BD12")
+    //   preferredStoneTypes — tiebreaker when stone type is ambiguous
+    //   mortarUsage         — 'rarely' | 'sometimes' | 'often' (null = no opinion)
+    region: '',
+    preferredStoneTypes: [],
+    mortarUsage: null,
     // Client Portal accent — tints the customer-portal's primary CTA,
     // eyebrows, and total-box trim. Four values: amber | rust | moss |
     // slate. Default amber. Legacy profiles without an accent key read

@@ -5,13 +5,19 @@ import {
   normalizeAIResponse,
   applyMeasurementPlausibilityBounds,
 } from './aiParser.js';
+import { buildTradesmanProfileBlock } from './tradesmanProfileBlock.js';
 
 export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId }) {
   try {
-    // Job context goes FIRST so Claude knows location + scale references
-    // before it starts spatial reasoning over the photos. Trailing the
-    // address after the images was forcing the model to re-read with
-    // context it should have had upfront.
+    // Multi-tenant prompt assembly:
+    //   1. TRADESMAN PROFILE — who the user is + their working preferences
+    //      (region, typical stones, mortar usage). Priors, not vetoes —
+    //      photos still win.
+    //   2. JOB CONTEXT — site address, on-site observations, scale refs.
+    //   3. Photos + supplementary blocks.
+    // Profile first so Claude knows what kind of tradesman it's serving
+    // before it reasons spatially over the photos.
+    const tradesmanBlock = buildTradesmanProfileBlock(profile);
     const scaleBlock = jobDetails.scaleReferences?.trim()
       ? `\nUSER-PROVIDED SCALE REFERENCES: ${jobDetails.scaleReferences.trim()}`
       : '';
@@ -21,7 +27,7 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
     const imageContent = [
       {
         type: 'text',
-        text: `JOB CONTEXT\nSite address: ${jobDetails.siteAddress}${notesBlock}${scaleBlock}`,
+        text: `${tradesmanBlock}JOB CONTEXT\nSite address: ${jobDetails.siteAddress}${notesBlock}${scaleBlock}`,
       },
     ];
 

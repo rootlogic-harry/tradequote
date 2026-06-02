@@ -17,6 +17,7 @@ import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
 import { processVideo } from './src/utils/videoProcessor.js';
+import { buildTradesmanProfileBlock } from './src/utils/tradesmanProfileBlock.js';
 import {
   parseAIResponse,
   validateAIResponse,
@@ -2791,12 +2792,19 @@ app.post('/api/users/:id/jobs/:jobId/video',
       const videoScaleBlock = scaleReferences.trim()
         ? `\nUSER-PROVIDED SCALE REFERENCES: ${scaleReferences.trim()}`
         : '';
-      const tradesmanBlock = result.combinedNotes
+      const observationsBlock = result.combinedNotes
         ? `\nTRADESMAN'S ON-SITE OBSERVATIONS (voice transcript + notes):\n${result.combinedNotes}`
         : '';
+      // Profile-aware prompting (2026-06-02): emit TRADESMAN PROFILE
+      // ahead of JOB CONTEXT so Claude knows who the tradesman is
+      // (region context, preferred stones, mortar usage) before it
+      // reasons over the video frames. Photos always win over these
+      // priors — see tradesmanProfileBlock.js for the prior-not-veto
+      // wording on mortarUsage.
+      const tradesmanProfileBlock = buildTradesmanProfileBlock(profile);
       imageContent.push({
         type: 'text',
-        text: `JOB CONTEXT\nSite address: ${siteAddress}${tradesmanBlock}${videoScaleBlock}`,
+        text: `${tradesmanProfileBlock}JOB CONTEXT\nSite address: ${siteAddress}${observationsBlock}${videoScaleBlock}`,
       });
 
       imageContent.push({
