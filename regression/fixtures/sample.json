@@ -1,0 +1,36 @@
+{
+  "id": "sample",
+  "name": "Sample fixture — 6m² gritstone breach repair (Brink Farm-style)",
+  "description": "Synthetic fixture demonstrating the schema. Replace photos/ and groundTruth values with a real saved job before relying on it. Without real photos, `npm run regression -- --fixture sample` will fail with 'photo missing' — that's by design; this file is the worked example, not a runnable test.",
+  "inputs": {
+    "siteAddress": "Brink Farm, SK10 5RU",
+    "briefNotes": "Six-metre stretch of double-faced gritstone field wall has collapsed after heavy rain. Stone is scattered at the base, mostly reclaimable. No mortar in the original — dry-laid throughout. Access via field gate, no scaffold needed.",
+    "scaleReferences": "The wooden field gate to the left is 1.2m wide; use as scale anchor.",
+    "photos": {
+      "overview":      "photos/overview.jpg",
+      "closeup":       "photos/closeup.jpg",
+      "sideProfile":   "photos/side-profile.jpg",
+      "referenceCard": "photos/reference-card.jpg",
+      "access":        "photos/access.jpg"
+    }
+  },
+  "groundTruth": {
+    "totalAmount": { "value": 4500, "tolerance": 0.12 },
+    "measurements": {
+      "Wall height":      { "value": 1200, "tolerance": 0.15 },
+      "Wall length":      { "value": 6000, "tolerance": 0.15 },
+      "Wall thickness":   { "value": 600,  "tolerance": 0.20 },
+      "Breach length":    { "value": 6000, "tolerance": 0.15 }
+    },
+    "labour": {
+      "estimatedDays":    { "value": 3,   "abs": 0.5 },
+      "numberOfWorkers":  { "value": 2,   "abs": 0 }
+    },
+    "materials": [
+      { "description": "walling stone" },
+      { "description": "waste disposal" },
+      { "description": "lime mortar", "forbidden": true },
+      { "description": "NHL",         "forbidden": true }
+    ]
+  }
+}
