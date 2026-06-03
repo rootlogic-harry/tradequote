@@ -882,7 +882,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/landing/landing.css" />
+  <link rel="stylesheet" href="/landing/landing.css?v=2" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -956,9 +956,9 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
             <div class="demo-stage-step is-active" data-stage="1">
               <p class="demo-stage-label">01 &middot; Photos go in</p>
               <div class="demo-photos">
-                <div class="demo-photo" aria-hidden="true"></div>
-                <div class="demo-photo" aria-hidden="true"></div>
-                <div class="demo-photo" aria-hidden="true"></div>
+                <div class="demo-photo" aria-hidden="true"><img src="/landing/photos/wall-1-urban.jpg" alt="" /></div>
+                <div class="demo-photo" aria-hidden="true"><img src="/landing/photos/wall-2-village.jpg" alt="" /></div>
+                <div class="demo-photo" aria-hidden="true"><img src="/landing/photos/wall-3-moorland.jpg" alt="" /></div>
               </div>
             </div>
             <div class="demo-stage-step" data-stage="2">
@@ -1154,7 +1154,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     </div>
   </footer>
 
-  <script src="/landing/landing.js" defer></script>
+  <script src="/landing/landing.js?v=2" defer></script>
 </body>
 </html>`;
 

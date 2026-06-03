@@ -63,8 +63,11 @@ describe('LANDING_PAGE_HTML — head + meta', () => {
   });
 
   test('loads landing.css and landing.js from /landing/', () => {
-    expect(html).toMatch(/<link rel="stylesheet" href="\/landing\/landing\.css"/);
-    expect(html).toMatch(/<script src="\/landing\/landing\.js"/);
+    // Cache-bust query allowed (?v=N) — the URL must point at the file but
+    // can carry a version query so a CSS / JS update propagates without
+    // requiring a hard refresh.
+    expect(html).toMatch(/<link rel="stylesheet" href="\/landing\/landing\.css(\?v=\d+)?"/);
+    expect(html).toMatch(/<script src="\/landing\/landing\.js(\?v=\d+)?"/);
   });
 
   test('imports the three spec fonts in a single Google Fonts call', () => {
@@ -145,12 +148,24 @@ describe('LANDING_PAGE_HTML — structure (one page, 5 sections + footer)', () =
   test('"Snap or film the wall" mock shows three real photos, not placeholder divs', () => {
     // Mark (2026-06-03): the placeholder stone-gradient tiles became
     // real photos from his job archive. Lock all three references.
-    expect(html).toMatch(/src="\/landing\/photos\/wall-1-urban\.jpg"/);
-    expect(html).toMatch(/src="\/landing\/photos\/wall-2-village\.jpg"/);
-    expect(html).toMatch(/src="\/landing\/photos\/wall-3-moorland\.jpg"/);
-    expect(html).toMatch(/<img class="step-mock-photo"/);
+    expect(html).toMatch(/<img class="step-mock-photo"[^>]*src="\/landing\/photos\/wall-1-urban\.jpg"/);
+    expect(html).toMatch(/<img class="step-mock-photo"[^>]*src="\/landing\/photos\/wall-2-village\.jpg"/);
+    expect(html).toMatch(/<img class="step-mock-photo"[^>]*src="\/landing\/photos\/wall-3-moorland\.jpg"/);
     // Decorative; no alt text leakage required (aria-hidden on parent)
     expect(html).toMatch(/loading="lazy"/);
+  });
+
+  test('hero live-demo strip uses the same three real photos for "Photos go in"', () => {
+    // The hero demo is the highest-impact surface — Mark's screenshot
+    // showed the placeholder tiles still in place there. The .demo-photo
+    // divs now wrap an <img> over the gradient fallback so the user
+    // watches three real photos slot in, ✓ checks landing on top.
+    const demoBlock = html.match(/<div class="demo-photos">[\s\S]*?<\/div>\s*<\/div>/);
+    expect(demoBlock).not.toBeNull();
+    const inner = demoBlock[0];
+    expect(inner).toMatch(/src="\/landing\/photos\/wall-1-urban\.jpg"/);
+    expect(inner).toMatch(/src="\/landing\/photos\/wall-2-village\.jpg"/);
+    expect(inner).toMatch(/src="\/landing\/photos\/wall-3-moorland\.jpg"/);
   });
 
   test('pricing section headline no longer signals "one-person trade"', () => {
