@@ -1044,9 +1044,9 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
           </p>
           <div class="step-mock" aria-hidden="true">
             <div class="step-mock-photos">
-              <div class="step-mock-photo"></div>
-              <div class="step-mock-photo"></div>
-              <div class="step-mock-photo"></div>
+              <img class="step-mock-photo" src="/landing/photos/wall-1-urban.jpg" alt="" loading="lazy" />
+              <img class="step-mock-photo" src="/landing/photos/wall-2-village.jpg" alt="" loading="lazy" />
+              <img class="step-mock-photo" src="/landing/photos/wall-3-moorland.jpg" alt="" loading="lazy" />
             </div>
           </div>
         </article>
@@ -1089,7 +1089,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     <div class="pricing-inner">
       <div class="pricing-head">
         <span class="eyebrow section-eyebrow">Pricing</span>
-        <h2 class="section-title">One plan. Built for a one-person trade.</h2>
+        <h2 class="section-title">One plan. Built to grow your trade.</h2>
       </div>
       <div class="pricing-card">
         <div class="pricing-money">

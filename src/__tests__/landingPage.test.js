@@ -142,6 +142,25 @@ describe('LANDING_PAGE_HTML — structure (one page, 5 sections + footer)', () =
     expect(html).toMatch(/Send\. Track\. Get on with it\./);
   });
 
+  test('"Snap or film the wall" mock shows three real photos, not placeholder divs', () => {
+    // Mark (2026-06-03): the placeholder stone-gradient tiles became
+    // real photos from his job archive. Lock all three references.
+    expect(html).toMatch(/src="\/landing\/photos\/wall-1-urban\.jpg"/);
+    expect(html).toMatch(/src="\/landing\/photos\/wall-2-village\.jpg"/);
+    expect(html).toMatch(/src="\/landing\/photos\/wall-3-moorland\.jpg"/);
+    expect(html).toMatch(/<img class="step-mock-photo"/);
+    // Decorative; no alt text leakage required (aria-hidden on parent)
+    expect(html).toMatch(/loading="lazy"/);
+  });
+
+  test('pricing section headline no longer signals "one-person trade"', () => {
+    // Mark's brief (2026-06-03): "Get rid of the 'built for a one
+    // person trade' — we need another strap line." Signals to growing
+    // tradesmen that the product is for them, not just Mark.
+    expect(html).not.toMatch(/one-person trade/i);
+    expect(html).toMatch(/Built to grow your trade/);
+  });
+
   test('pricing section teases without a numeric price (per spec)', () => {
     const pricing = html.match(/<section class="pricing" id="pricing">[\s\S]*?<\/section>/);
     expect(pricing).not.toBeNull();

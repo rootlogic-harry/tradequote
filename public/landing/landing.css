@@ -638,12 +638,12 @@ img { display: block; max-width: 100%; }
 }
 .step-mock-photo {
   aspect-ratio: 4 / 5;
+  width: 100%;
   border: 1px solid var(--rule-2);
   border-radius: 2px;
-  background:
-    radial-gradient(circle at 30% 40%, rgba(180, 150, 110, 0.16), transparent 55%),
-    radial-gradient(circle at 70% 60%, rgba(120, 95, 70, 0.18), transparent 50%),
-    linear-gradient(135deg, #2c241c 0%, #1a1410 100%);
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, #2c241c 0%, #1a1410 100%);
 }
 .step-mock-table {
   display: flex;
