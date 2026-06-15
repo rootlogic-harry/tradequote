@@ -79,19 +79,21 @@ VideoUpload ──XHR──→ multer ──→   │       │           │
 
 | Layer | Tech |
 |-------|------|
-| Frontend | React 18, Vite 5, Tailwind CSS (CDN) |
+| Frontend | React 19, Vite 5, Tailwind CSS (CDN) |
 | Backend | Express 5.2, Node 20+, raw `pg` |
 | Database | Postgres 15+ (Railway), JSONB |
-| AI (primary) | Anthropic Claude Sonnet 4 (server-proxied) |
+| AI (primary) | Anthropic Claude Sonnet 4 / Sonnet 4.5 (server-proxied) |
 | AI (agents) | Anthropic Claude Haiku 4.5 |
 | Audio | OpenAI Whisper |
 | Video | ffmpeg (via `fluent-ffmpeg`) |
-| PDF | html2canvas + jsPDF (CDN) |
+| PDF (primary) | Server-side Puppeteer (`puppeteer-core`) + `@sparticuz/chromium` via `pdfRenderer.js` |
+| PDF (fallback) | Client-side `html2canvas` + `jsPDF` (CDN) — used when the server path fails |
 | DOCX | `docx` (bundled) |
 | Auth | Google OAuth 2.0 (`passport`) + `connect-pg-simple` sessions |
 | Uploads | `multer` |
 | Rate limiting | `express-rate-limit` |
 | Testing | Jest 29, ESM |
+| Build | `Dockerfile` (Node 20, apt-installs ffmpeg + Chromium runtime libs) |
 | Hosting | Railway (auto-deploy on push to `main`) |
 | Fonts | Barlow Condensed, Inter, JetBrains Mono |
 
@@ -102,7 +104,7 @@ VideoUpload ──XHR──→ multer ──→   │       │           │
 ```bash
 npm install
 npm run dev        # Vite on :5173, proxies /api to :3000
-npm test           # 1154 tests across 56 suites
+npm test           # ~2,250 tests across ~110 suites
 npm run build      # production build to dist/
 ```
 
@@ -123,7 +125,7 @@ Two-terminal dev:
 
 ### Test scripts
 ```bash
-npm test                # unit suite (56 suites, 1154 tests) — excludes api/security
+npm test                # unit suite (~110 suites, ~2,250 tests) — excludes api/security
 npm run test:api        # API integration tests (requires DATABASE_URL)
 npm run test:security   # security audit suite (requires DATABASE_URL)
 npm run test:watch      # watch mode
@@ -134,7 +136,7 @@ npm run test:coverage   # coverage report
 
 ## Deployment
 
-Railway via `git push main`. Build uses Nixpacks which installs `ffmpeg` (declared in `nixpacks.toml`).
+Railway via `git push main`. **Build uses the repo `Dockerfile`** (Node 20 base + apt-installs ffmpeg + Chromium runtime libs that `@sparticuz/chromium` needs). Nixpacks was abandoned because it silently dropped all but the first `aptPkgs` entry, which would have broken server-side PDF in production. `railway.toml` declares `builder = "dockerfile"`.
 
 Required env:
 - `DATABASE_URL` — auto-injected by Railway's Postgres plugin
@@ -152,13 +154,16 @@ git push origin main   # triggers Railway deploy
 ## Project structure
 
 ```
-server.js                            # Express API (~91KB, single file)
+server.js                            # Express API (~4,300 lines, single file)
+pdfRenderer.js                       # Server-side Puppeteer PDF renderer (@sparticuz/chromium)
+portalRenderer.js                    # Client-portal HTML renderer (frozen-snapshot reads only)
+safeError.js                         # Centralised 5xx response + system_errors capture (TRQ-15)
 prompts/systemPrompt.js              # single-source AI system prompt + prompt-version hash
 agents/                              # self-critique, feedback, calibration + orchestration utils
-public/                              # static assets (favicon, manifest)
+public/                              # static assets (favicon, manifest, landing/, print.css)
 index.html                           # Tailwind CDN + theme CSS + tailwind.config
-nixpacks.toml                        # Railway build config (installs ffmpeg)
-railway.toml                         # Railway deploy config
+Dockerfile                           # Build image (Node 20 + ffmpeg + Chromium libs)
+railway.toml                         # Railway deploy config (declares Dockerfile builder)
 
 src/
 ├─ App.jsx                           # useReducer orchestrator
@@ -204,7 +209,7 @@ src/
 │   ├─ ramsBuilder.js                # RAMS document assembly
 │   ├─ validators.js                 # form + schema validation
 │   └─ defaultNotes.js               # boilerplate Notes & Conditions
-└─ __tests__/                        # 56 suites, 1154 tests (excludes api + securityAudit)
+└─ __tests__/                        # ~110 suites, ~2,250 tests (excludes api + securityAudit)
 ```
 
 Docs at the repo root:
