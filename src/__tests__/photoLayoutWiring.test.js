@@ -14,7 +14,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const printCss = readFileSync(join(__dirname, '../../public/print.css'), 'utf8');
 const quoteDocSrc = readFileSync(join(__dirname, '../components/QuoteDocument.jsx'), 'utf8');
-const quoteOutputSrc = readFileSync(join(__dirname, '../components/steps/QuoteOutput.jsx'), 'utf8');
+// TRQ-118 split QuoteOutput.jsx — DOCX body lives in exportDocx.js. Tests
+// that source-scan for DOCX builder behaviour read both files now so the
+// assertions stay valid regardless of which file the code lives in.
+const quoteOutputSrc =
+  readFileSync(join(__dirname, '../components/steps/QuoteOutput.jsx'), 'utf8') +
+  '\n' +
+  readFileSync(join(__dirname, '../utils/exportDocx.js'), 'utf8') +
+  '\n' +
+  readFileSync(join(__dirname, '../utils/exportPdf.js'), 'utf8');
 
 describe('print.css carries the per-orientation height caps', () => {
   test('default photo cap is 115mm (landscape — Mark reference minus 3mm)', () => {
@@ -75,8 +83,12 @@ describe('PDF render paths precompute aspects before serialisation', () => {
 
 describe('DOCX builder uses per-band dimensions, not fixed 6.25/4.65 inches', () => {
   test('imports photoMaxDimensions from photoLayout', () => {
+    // TRQ-118: DOCX body moved into src/utils/exportDocx.js which sits
+    // next to photoLayout.js — so the import path there is './photoLayout'.
+    // Accept either relative path so the test passes wherever the code
+    // ends up living.
     expect(quoteOutputSrc).toMatch(
-      /import\s*\{[^}]*photoMaxDimensions[^}]*\}\s*from\s*['"]\.\.\/\.\.\/utils\/photoLayout/
+      /import\s*\{[^}]*photoMaxDimensions[^}]*\}\s*from\s*['"](?:\.\.?\/)+(?:utils\/)?photoLayout/
     );
   });
 

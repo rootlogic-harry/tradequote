@@ -115,9 +115,15 @@ describe('buildPdfFooterHtml', () => {
 // have to use the new chrome data so a future regression doesn't drop
 // the headers/footers Mark relies on.
 describe('quotePageChrome wiring', () => {
-  const quoteOutputSrc = readFileSync(
-    join(__dirname, '../components/steps/QuoteOutput.jsx'), 'utf8'
-  );
+  // TRQ-118: DOCX/PDF bodies extracted from QuoteOutput.jsx into
+  // exportDocx.js / exportPdf.js. Read all three so the chrome
+  // assertions catch the right code regardless of where it lives.
+  const quoteOutputSrc =
+    readFileSync(join(__dirname, '../components/steps/QuoteOutput.jsx'), 'utf8') +
+    '\n' +
+    readFileSync(join(__dirname, '../utils/exportDocx.js'), 'utf8') +
+    '\n' +
+    readFileSync(join(__dirname, '../utils/exportPdf.js'), 'utf8');
   const pdfRendererSrc = readFileSync(
     join(__dirname, '../../pdfRenderer.js'), 'utf8'
   );
@@ -150,8 +156,12 @@ describe('quotePageChrome wiring', () => {
 
   test('DOCX builder constructs a Header (mirrors the existing Footer)', () => {
     // Header was missing — Mark's PDF has it on every page. Now both
-    // outputs match.
-    expect(quoteOutputSrc).toMatch(/import.*Header.*from\s+['"]docx['"]|Header\s*\}\s*=\s*await import\(['"]docx['"]\)/);
+    // outputs match. Accept Header anywhere in the docx import (static
+    // or dynamic destructure) since TRQ-118 moved this into exportDocx.js
+    // where the destructure list places Header in the middle, not at the end.
+    expect(quoteOutputSrc).toMatch(
+      /import[\s\S]*?Header[\s\S]*?from\s+['"]docx['"]|Header[,\s\}][\s\S]{0,300}?await import\(['"]docx['"]\)/
+    );
     expect(quoteOutputSrc).toMatch(/const docHeader/);
     expect(quoteOutputSrc).toMatch(/headers:\s*\{\s*default:\s*docHeader\s*\}/);
   });

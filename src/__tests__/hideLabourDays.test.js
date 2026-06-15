@@ -145,8 +145,9 @@ describe('QuoteDocument — regression: never shows day breakdown', () => {
 });
 
 describe('QuoteOutput DOCX builder — regression: never shows day breakdown', () => {
-  // Same contract for the DOCX export path.
-  const src = readFileSync(join(repoRoot, 'src/components/steps/QuoteOutput.jsx'), 'utf8');
+  // TRQ-118: DOCX builder body lives in src/utils/exportDocx.js now.
+  // Read it directly — the labour-row contract still applies there.
+  const src = readFileSync(join(repoRoot, 'src/utils/exportDocx.js'), 'utf8');
 
   test('docx Labour TableRow does not interpolate days or workers into the label', () => {
     // Match the labour TableRow (it's currently colSpan 4 with the £ total

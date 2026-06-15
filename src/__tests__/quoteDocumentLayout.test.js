@@ -43,10 +43,12 @@ describe('QuoteDocument layout — printed quote output', () => {
   describe('DOCX cost breakdown table column widths', () => {
     let quoteOutputSrc;
     beforeAll(() => {
-      quoteOutputSrc = readFileSync(
-        join(srcDir, 'components/steps/QuoteOutput.jsx'),
-        'utf8'
-      );
+      // TRQ-118: DOCX body lives in exportDocx.js now. Concatenate so
+      // assertions on "Word builder uses Fixed table layout" etc. match.
+      quoteOutputSrc =
+        readFileSync(join(srcDir, 'components/steps/QuoteOutput.jsx'), 'utf8') +
+        '\n' +
+        readFileSync(join(srcDir, 'utils/exportDocx.js'), 'utf8');
     });
 
     it('imports TableLayoutType from docx', () => {

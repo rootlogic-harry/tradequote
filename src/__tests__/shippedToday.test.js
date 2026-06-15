@@ -29,7 +29,14 @@ const files = {
   serverJs: readFileSync(join(repoRoot, 'server.js'), 'utf8'),
   pdfRenderer: readFileSync(join(repoRoot, 'pdfRenderer.js'), 'utf8'),
   quoteDoc: readFileSync(join(repoRoot, 'src/components/QuoteDocument.jsx'), 'utf8'),
-  quoteOutput: readFileSync(join(repoRoot, 'src/components/steps/QuoteOutput.jsx'), 'utf8'),
+  // TRQ-118: DOCX/PDF bodies extracted to exportDocx.js / exportPdf.js.
+  // Concatenate so the "shipped today" assertions still see the union.
+  quoteOutput:
+    readFileSync(join(repoRoot, 'src/components/steps/QuoteOutput.jsx'), 'utf8') +
+    '\n' +
+    readFileSync(join(repoRoot, 'src/utils/exportDocx.js'), 'utf8') +
+    '\n' +
+    readFileSync(join(repoRoot, 'src/utils/exportPdf.js'), 'utf8'),
   ramsOutput: readFileSync(join(repoRoot, 'src/components/rams/RamsOutput.jsx'), 'utf8'),
   livePreview: readFileSync(join(repoRoot, 'src/components/review/LivePreview.jsx'), 'utf8'),
   scheduleList: readFileSync(join(repoRoot, 'src/components/review/ScheduleList.jsx'), 'utf8'),

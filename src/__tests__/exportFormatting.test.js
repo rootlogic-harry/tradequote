@@ -16,7 +16,14 @@ const repoRoot = join(__dirname, '../../');
 
 const printCss = readFileSync(join(repoRoot, 'public/print.css'), 'utf8');
 const quoteDoc = readFileSync(join(repoRoot, 'src/components/QuoteDocument.jsx'), 'utf8');
-const quoteOutput = readFileSync(join(repoRoot, 'src/components/steps/QuoteOutput.jsx'), 'utf8');
+// TRQ-118: DOCX/PDF bodies extracted to exportDocx.js / exportPdf.js.
+// Read all three so the source-scan assertions stay valid.
+const quoteOutput =
+  readFileSync(join(repoRoot, 'src/components/steps/QuoteOutput.jsx'), 'utf8') +
+  '\n' +
+  readFileSync(join(repoRoot, 'src/utils/exportDocx.js'), 'utf8') +
+  '\n' +
+  readFileSync(join(repoRoot, 'src/utils/exportPdf.js'), 'utf8');
 const autoGrow = readFileSync(join(repoRoot, 'src/components/common/AutoGrowTextarea.jsx'), 'utf8');
 
 // ─────────────────────────────────────────────────────────────────────────
