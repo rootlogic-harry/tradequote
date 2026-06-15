@@ -249,6 +249,18 @@ async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'local';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider_id TEXT;
+      -- TRQ-151: legal-acceptance audit trail. version + timestamp
+      -- recorded at OAuth callback when a new user record is inserted.
+      -- Existing users (Mark / Paul / Harry) stay NULL — we don't
+      -- retroactively force them to re-accept because that would log
+      -- them out, and they predate the formal text. New signups must
+      -- carry these.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_version TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_version TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS dpa_accepted_version TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS dpa_accepted_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'basic';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT false;
@@ -570,12 +582,24 @@ async (accessToken, refreshToken, profile, done) => {
       userId = `${baseId}_${crypto.randomBytes(4).toString('hex')}`;
     }
 
+    // TRQ-151: record legal acceptance for new signups. By
+    // completing Google OAuth they have accepted the current
+    // versions of Terms, Privacy Policy, and DPA. Versions are
+    // pinned at the moment of signup so the audit trail captures
+    // exactly which text they agreed to.
     const inserted = await pool.query(
       `INSERT INTO users (id, name, email, avatar_url, auth_provider, auth_provider_id,
-        plan, profile_complete, created_at, last_login_at)
-       VALUES ($1, $2, $3, $4, 'google', $5, 'basic', false, NOW(), NOW())
+        plan, profile_complete, created_at, last_login_at,
+        terms_accepted_version, terms_accepted_at,
+        privacy_accepted_version, privacy_accepted_at,
+        dpa_accepted_version, dpa_accepted_at)
+       VALUES ($1, $2, $3, $4, 'google', $5, 'basic', false, NOW(), NOW(),
+        $6, NOW(), $7, NOW(), $8, NOW())
        RETURNING *`,
-      [userId, name, email, avatar, googleId]
+      [
+        userId, name, email, avatar, googleId,
+        LEGAL_VERSIONS.terms, LEGAL_VERSIONS.privacy, LEGAL_VERSIONS.dpa,
+      ]
     );
     return done(null, inserted.rows[0]);
   } catch (err) {
@@ -838,6 +862,22 @@ app.get('/login', (req, res) => {
 
 // --- Legal pages ---
 
+// TRQ-151: legal document versions. Bump these when the published
+// text changes. The OAuth callback writes the current version into
+// `users.{terms,privacy,dpa}_accepted_version` for every new signup
+// so we always know which text someone agreed to. Existing users
+// keep NULL — they predate this audit trail.
+//
+// HARRY: when you finalise legal wording, you can either bump the
+// date here (and existing users stay on the prior version) or push
+// a one-off re-acceptance flow. The schema supports both — this PR
+// just lays the audit trail.
+const LEGAL_VERSIONS = Object.freeze({
+  privacy: '2026-06-15',
+  terms: '2026-06-15',
+  dpa: '2026-06-15',
+});
+
 const LEGAL_PAGE_STYLE = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', sans-serif; background: #1a1714; color: #f0ede8; min-height: 100vh; }
@@ -857,50 +897,155 @@ app.get('/privacy', (req, res) => {
   res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote &mdash; Privacy Policy</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet"><style>${LEGAL_PAGE_STYLE}</style></head><body><div class="wrap">
   <a href="/" class="brand">FASTQUOTE</a>
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: April 2026</p>
+  <p class="updated">Version ${LEGAL_VERSIONS.privacy}</p>
+
+  <h2>About this notice</h2>
+  <p>FastQuote is operated by Harry Doyle (sole trader, trading as "FastQuote"), based in the United Kingdom. This policy explains what personal data we hold, why, and what your rights are. UK GDPR and the Data Protection Act 2018 apply.</p>
+
+  <h2>Two groups of people</h2>
+  <p>FastQuote handles personal data about two distinct groups:</p>
+  <ul>
+    <li><strong>You, the tradesperson</strong> &mdash; you signed up, you have an account, you are our customer. We are the controller of your personal data.</li>
+    <li><strong>Your end clients</strong> &mdash; the homeowners or businesses whose property you are quoting for. Their names, site addresses, and photos enter the system because you upload them. <strong>You are the controller of their data. FastQuote is your processor.</strong> See our <a href="/dpa">Data Processing Agreement</a> for the detail.</li>
+  </ul>
 
   <h2>What we collect</h2>
-  <p>When you use FastQuote, we collect and store:</p>
+  <p><strong>About you (the tradesperson):</strong></p>
   <ul>
-    <li>Your name, email address, and business details (company name, phone, address)</li>
-    <li>Job photographs you upload for AI analysis</li>
-    <li>Quote data including measurements, materials, labour estimates, and generated documents</li>
-    <li>Learning data: the differences between AI suggestions and your confirmed values</li>
+    <li>Name and email address (from Google when you sign in).</li>
+    <li>Business details you enter into your profile: company name, phone, trading address, VAT number, day rate.</li>
+    <li>Session cookies so you stay signed in.</li>
+    <li>Anonymous pageviews of the marketing site (path + session id, no personal identifier). See "Analytics" below.</li>
+  </ul>
+  <p><strong>About your end clients (uploaded by you):</strong></p>
+  <ul>
+    <li>Client name, site address, contact details you choose to enter on a quote.</li>
+    <li>Job photographs or video walkthroughs of their property.</li>
+    <li>Quote content, measurements, and generated documents.</li>
   </ul>
 
-  <h2>How we use it</h2>
-  <p>Your data is used solely to provide the FastQuote quoting service. Specifically:</p>
+  <h2>Why we hold it &mdash; lawful basis</h2>
   <ul>
-    <li>To generate, store, and retrieve your quotes</li>
-    <li>To improve the AI's accuracy over time using anonymised learning data</li>
-    <li>To authenticate your account</li>
+    <li><strong>Your account data</strong> &mdash; contract (Article 6(1)(b)): we need it to provide the service you signed up for.</li>
+    <li><strong>End-client data you upload</strong> &mdash; on your behalf, under your lawful basis (typically your contract with that client). FastQuote does not independently determine why this data is processed.</li>
+    <li><strong>Learning data</strong> (anonymous diffs of AI suggestions vs your confirmed values) &mdash; legitimate interests (Article 6(1)(f)): improving the service. Anonymised before storage; no personal data leaks into the learning loop.</li>
+    <li><strong>Anonymous pageviews</strong> &mdash; legitimate interests: understanding which landing pages convert. No identifier, no cross-site tracking, honours <code>navigator.doNotTrack</code>.</li>
   </ul>
 
-  <h2>Who can see your data</h2>
-  <p>Only you. Your data is completely isolated from other users. No other FastQuote user can access your quotes, photos, or business details.</p>
-
-  <h2>Third parties</h2>
+  <h2>Processors we use</h2>
+  <p>To run the service we send data to these third parties:</p>
   <ul>
-    <li><strong>Anthropic</strong> &mdash; your job photographs are sent to Anthropic's Claude API for AI analysis. Photos are processed and not retained by Anthropic beyond the API request.</li>
-    <li><strong>Railway</strong> &mdash; our hosting provider. Your data is stored on Railway's infrastructure.</li>
-    <li><strong>Google</strong> &mdash; used for sign-in authentication only. We receive your name and email.</li>
+    <li><strong>Anthropic, PBC</strong> (United States) &mdash; job photographs + transcripts are sent to the Claude API for analysis. Per Anthropic's API terms, inputs are not used to train their models and are not retained beyond the API request. Transfer to the US is covered by the UK Addendum to the EU Standard Contractual Clauses.</li>
+    <li><strong>OpenAI, LLC</strong> (United States) &mdash; audio from voice dictation and video walkthroughs is sent to Whisper for transcription. Audio is in-memory only; never persisted. Same transfer safeguards as Anthropic.</li>
+    <li><strong>Railway Corp.</strong> &mdash; hosting + managed Postgres. Production data is currently in Railway's US West region; we are migrating to Railway's EU region (see "Data storage" below).</li>
+    <li><strong>Cloudflare R2</strong> &mdash; off-platform encrypted backups of the database. Bucket is access-token-scoped; AES256 server-side encryption at rest.</li>
+    <li><strong>Google LLC</strong> &mdash; sign-in only. We receive your name and email. No other Google services used.</li>
+    <li><strong>Stripe, Inc.</strong> (once billing is live) &mdash; payment processing for the £19.99/month subscription. Stripe is the controller for payment data; we never see your full card number.</li>
   </ul>
+
+  <h2>Data storage and international transfers</h2>
+  <p>Your account database currently lives in Railway's US West region. <strong>Migration to Railway's EU region is in progress.</strong> Backups (Cloudflare R2) follow the database. This policy will be updated when the migration completes; we are not waiting on this to be lawful — the US transfers are covered by the SCCs and UK Addendum, but EU residency is the path we are committing to.</p>
+
+  <h2>Retention</h2>
+  <ul>
+    <li>Account data &mdash; for as long as your account is active. On account deletion, account data is removed within 30 days from the live database.</li>
+    <li>Quote data &mdash; same lifecycle. Anonymous learning data (diffs only, no PII) is retained indefinitely.</li>
+    <li>Backups &mdash; 7 daily + 4 weekly snapshots. Deleting your account does not surgically edit existing backups; data ages out of backups within ~5 weeks of deletion.</li>
+    <li>Pageviews &mdash; 30 days rolling.</li>
+  </ul>
+
+  <h2>Your rights</h2>
+  <p>You have the right to access, correct, port, restrict, or delete your personal data, and to object to processing. To exercise any of these, email <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>. We respond within 30 days. If you are unhappy with our handling, you can complain to the UK Information Commissioner's Office (<a href="https://ico.org.uk">ico.org.uk</a>).</p>
 
   <h2>What we don't do</h2>
   <ul>
-    <li>We do not sell your data</li>
-    <li>We do not use advertising or tracking</li>
-    <li>We do not share your data with anyone beyond the services listed above</li>
+    <li>We do not sell or share your data with advertisers.</li>
+    <li>We do not use any third-party tracking or analytics SDK on the app (no Google Analytics, no Mixpanel, no Sentry).</li>
+    <li>We do not profile end clients for any purpose.</li>
   </ul>
 
-  <h2>Data retention</h2>
-  <p>Your data is retained until you request its deletion. You can request access to or deletion of all your data at any time.</p>
-
-  <h2>Your rights</h2>
-  <p>You have the right to access, correct, or delete your personal data. To exercise these rights, contact Harry at the email address provided during onboarding.</p>
+  <h2>Security</h2>
+  <p>HTTPS-only. Session secrets and database passwords are stored as Railway environment variables, never in code. Database backups are encrypted at rest. We run secret-scanning on every commit. See our <a href="/terms">Terms of Service</a> for limits on liability.</p>
 
   <h2>Contact</h2>
-  <p>For privacy questions, contact the FastQuote team via the email used during your invitation.</p>
+  <p>Controller: Harry Doyle (sole trader t/a FastQuote), United Kingdom.<br>Email: <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a></p>
+  </div></body></html>`);
+});
+
+app.get('/dpa', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote &mdash; Data Processing Agreement</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet"><style>${LEGAL_PAGE_STYLE}</style></head><body><div class="wrap">
+  <a href="/" class="brand">FASTQUOTE</a>
+  <h1>Data Processing Agreement</h1>
+  <p class="updated">Version ${LEGAL_VERSIONS.dpa}</p>
+
+  <h2>Why this exists</h2>
+  <p>When you upload your end clients' personal data (their names, site addresses, photos of their property) to FastQuote, you are the data controller and FastQuote is your processor. UK GDPR Article 28 requires a written agreement between us. This page IS that agreement. Accepting the Terms at signup also accepts this DPA.</p>
+
+  <h2>1. Definitions</h2>
+  <ul>
+    <li><strong>You / "Controller"</strong>: the tradesperson with a FastQuote account.</li>
+    <li><strong>FastQuote / "Processor"</strong>: Harry Doyle, sole trader t/a FastQuote.</li>
+    <li><strong>End Client Data</strong>: personal data about your end clients (homeowners, businesses) that you upload to FastQuote.</li>
+    <li><strong>UK GDPR</strong>: the United Kingdom General Data Protection Regulation.</li>
+  </ul>
+
+  <h2>2. Subject matter and duration</h2>
+  <p>FastQuote processes End Client Data solely to provide the quoting service to you: to analyse photos, generate quotes, store quotes for retrieval, and deliver quotes via the client portal. Processing continues for as long as you have an account or as required to provide the service.</p>
+
+  <h2>3. Nature and purpose of processing</h2>
+  <ul>
+    <li>Storage of End Client Data in our database.</li>
+    <li>Transmission of photos and transcripts to Anthropic for AI analysis.</li>
+    <li>Transmission of audio to OpenAI Whisper for transcription.</li>
+    <li>Generation and delivery of quote documents (PDF, DOCX, client portal URL).</li>
+    <li>Encrypted backups via Cloudflare R2.</li>
+  </ul>
+
+  <h2>4. Categories of data and data subjects</h2>
+  <ul>
+    <li><strong>Categories of personal data</strong>: name, address, telephone, email, photographs of property, video walkthroughs, quote-specific notes.</li>
+    <li><strong>Data subjects</strong>: your end clients (homeowners, business owners commissioning trade work).</li>
+  </ul>
+
+  <h2>5. Your obligations as controller</h2>
+  <ul>
+    <li>You confirm you have a lawful basis to collect and upload End Client Data (typically your contract with the client).</li>
+    <li>You will inform your end clients that a digital tool is used to prepare their quote (a short verbal mention is sufficient).</li>
+    <li>You will respond to their data-subject requests directly; FastQuote will assist where technically necessary.</li>
+  </ul>
+
+  <h2>6. FastQuote's obligations as processor</h2>
+  <ul>
+    <li>Process End Client Data only on your documented instructions (the act of using the service constitutes instruction).</li>
+    <li>Ensure persons authorised to process the data are bound by confidentiality (currently only Harry has access).</li>
+    <li>Apply appropriate technical and organisational security measures (HTTPS, encrypted backups, environment-variable secrets, no third-party tracking, see Privacy Policy for detail).</li>
+    <li>Assist you in responding to data-subject requests (access, correction, deletion) within a reasonable time.</li>
+    <li>Notify you without undue delay (within 72 hours) on becoming aware of a personal data breach.</li>
+    <li>Return or delete all End Client Data after the end of services, subject to backup retention windows (~5 weeks).</li>
+  </ul>
+
+  <h2>7. Sub-processors</h2>
+  <p>FastQuote uses the following sub-processors. By accepting this DPA you provide general authorisation; we will notify you of new sub-processors with a chance to object.</p>
+  <ul>
+    <li><strong>Anthropic, PBC</strong> &mdash; AI analysis (US, SCCs + UK Addendum).</li>
+    <li><strong>OpenAI, LLC</strong> &mdash; voice-to-text (US, SCCs + UK Addendum).</li>
+    <li><strong>Railway Corp.</strong> &mdash; hosting + managed Postgres (currently US, migrating to EU).</li>
+    <li><strong>Cloudflare, Inc.</strong> &mdash; encrypted backup storage (R2, multi-region with EU option).</li>
+    <li><strong>Google LLC</strong> &mdash; authentication only.</li>
+    <li><strong>Stripe, Inc.</strong> &mdash; payment processing (controller for payment data, not a sub-processor of yours).</li>
+  </ul>
+
+  <h2>8. International transfers</h2>
+  <p>Transfers to US-based sub-processors (Anthropic, OpenAI, Stripe) are covered by the UK Addendum to the EU Standard Contractual Clauses. Railway production data is in transit to the EU region.</p>
+
+  <h2>9. Liability</h2>
+  <p>Each party is liable for damages caused by its own breach of UK GDPR or this agreement. FastQuote's overall liability is limited as set out in the <a href="/terms">Terms of Service</a>.</p>
+
+  <h2>10. Governing law</h2>
+  <p>This agreement is governed by the laws of England and Wales.</p>
+
+  <p style="margin-top:32px;font-size:13px;">Accepted on signup. Version recorded against your user record with a timestamp.</p>
   </div></body></html>`);
 });
 
@@ -909,31 +1054,47 @@ app.get('/terms', (req, res) => {
   res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote &mdash; Terms of Service</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet"><style>${LEGAL_PAGE_STYLE}</style></head><body><div class="wrap">
   <a href="/" class="brand">FASTQUOTE</a>
   <h1>Terms of Service</h1>
-  <p class="updated">Last updated: April 2026</p>
+  <p class="updated">Version ${LEGAL_VERSIONS.terms}</p>
 
   <h2>What FastQuote is</h2>
-  <p>FastQuote is an AI-assisted quoting tool for tradespeople. It helps you generate professional quotes from job photographs. It is provided as a free, invite-only service.</p>
+  <p>FastQuote is an AI-assisted quoting tool for tradespeople. You photograph a job, FastQuote produces a draft quote, and you finalise and send it to your client. It is provided by Harry Doyle (sole trader, trading as "FastQuote"), based in the United Kingdom.</p>
 
-  <h2>Access</h2>
-  <p>Access to FastQuote is by invitation only. We reserve the right to withdraw access at any time without notice. There is no guarantee of continued availability.</p>
+  <h2>Signup and account</h2>
+  <p>Accounts are created via Google sign-in. By signing up you confirm you are at least 18, that you intend to use FastQuote in the course of your trade or business, and that you accept these Terms, our <a href="/privacy">Privacy Policy</a>, and our <a href="/dpa">Data Processing Agreement</a> as the same version that was current when you signed in. We record the version and timestamp against your account so we both know what you agreed to.</p>
 
-  <h2>Your responsibility</h2>
-  <p>You are solely responsible for the accuracy of any quote you send to a client. FastQuote provides AI-generated suggestions that you must review, confirm, and adjust before issuing. Every measurement and cost figure must be verified by you before the quote leaves the system.</p>
+  <h2>Subscription and billing</h2>
+  <p>FastQuote is offered at &pound;19.99 per month after a 1-month no-card trial. Pricing and payment terms appear before any card is collected. Cancel anytime; access continues until the end of the paid period. Refunds are at our discretion within seven days of payment.</p>
+
+  <h2>Your data, your clients' data</h2>
+  <p>You retain ownership of all data you enter into FastQuote. When you upload information about your end clients (homeowners, businesses), <strong>you are the data controller</strong> and FastQuote is your processor &mdash; see our <a href="/dpa">Data Processing Agreement</a> for the formal terms.</p>
+
+  <h2>You confirm, when you upload</h2>
+  <ul>
+    <li>You have the right to upload photographs of the property and any details about the end client (typically because you are quoting for them under a verbal or written agreement).</li>
+    <li>You will inform your end client that a digital tool is used to prepare quotes. A brief verbal mention is sufficient; no signed waiver required.</li>
+    <li>You do not upload data that is unrelated to a genuine quote (e.g. photos of unconnected third parties, sensitive identification documents).</li>
+  </ul>
+
+  <h2>Your responsibility for accuracy</h2>
+  <p>FastQuote produces AI-generated suggestions. You must review, confirm, and adjust every measurement, material quantity, labour estimate, and cost figure before the quote leaves the system. Your professional judgement is the final authority &mdash; FastQuote is a tool, not a replacement for it.</p>
 
   <h2>Limitation of liability</h2>
-  <p>FastQuote is not liable for errors in AI-generated content, including incorrect measurements, material estimates, labour calculations, or any other suggested values. The AI is a tool to assist your professional judgement, not a replacement for it.</p>
-
-  <h2>Your data</h2>
-  <p>You retain ownership of all data you enter into FastQuote. See our <a href="/privacy">Privacy Policy</a> for how we handle your data.</p>
+  <p>To the extent permitted by law, FastQuote is not liable for: errors in AI-generated content; losses arising from a quote you sent to a client; service interruptions; or consequential loss. Our total liability in any twelve-month period is capped at the amount you paid us in that period (and is zero during the free trial). Nothing in these Terms limits liability that cannot be limited by law (e.g. fraud, personal injury caused by negligence).</p>
 
   <h2>Acceptable use</h2>
-  <p>You agree to use FastQuote only for its intended purpose: generating professional quotes for legitimate trade work. You must not attempt to access other users' data or interfere with the service.</p>
+  <p>Use FastQuote only for its intended purpose: generating professional quotes for legitimate trade work. Do not attempt to access other users' data, reverse-engineer the service, or interfere with its operation.</p>
 
-  <h2>Changes to terms</h2>
-  <p>We may update these terms from time to time. Continued use of FastQuote after changes constitutes acceptance of the updated terms.</p>
+  <h2>Termination</h2>
+  <p>You can delete your account at any time by emailing <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>. We may suspend or terminate accounts for breach of these Terms after reasonable notice (except in cases of fraud or serious misuse, where notice may be immediate).</p>
+
+  <h2>Changes to these terms</h2>
+  <p>We may update these terms; when we do, we increment the version and update the signup acceptance flow. Continued use after a change constitutes acceptance of the new version. We will notify you by email of material changes.</p>
 
   <h2>Governing law</h2>
-  <p>These terms are governed by the laws of England and Wales.</p>
+  <p>These terms are governed by the laws of England and Wales. Any disputes will be resolved in the courts of England and Wales.</p>
+
+  <h2>Contact</h2>
+  <p>Harry Doyle (sole trader t/a FastQuote), United Kingdom.<br>Email: <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a></p>
   </div></body></html>`);
 });
 
@@ -1261,6 +1422,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
       <div class="foot-links">
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
+        <a href="/dpa">DPA</a>
         <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>
       </div>
       <div class="foot-right">&copy; 2026 FastQuote &middot; Built in West Yorkshire</div>
