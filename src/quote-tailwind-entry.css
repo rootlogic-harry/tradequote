@@ -1,0 +1,15 @@
+/*
+ * Tailwind entry point for the PDF-only static stylesheet.
+ *
+ * Compiled by scripts/build-pdf-css.js into public/quote-tailwind.css.
+ * Inlined by pdfRenderer.js at PDF render time. NOT used by the SPA —
+ * the in-app React app keeps using the Tailwind CDN runtime in
+ * index.html.
+ *
+ * We don't pull `@tailwind base` because tailwind.config.cjs has
+ * preflight disabled — print.css already does the reset. The
+ * components + utilities layers are what the QuoteDocument's class
+ * names compile to.
+ */
+@tailwind components;
+@tailwind utilities;
