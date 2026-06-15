@@ -158,7 +158,7 @@ describe('pdfRenderer — defence layers wired', () => {
     expect(rendererSrc).toMatch(/console\.warn[\s\S]{0,200}blocked off-allowlist/);
   });
 
-  test('allowlist contains only trusted CDNs (fonts, Tailwind)', () => {
+  test('allowlist contains only trusted CDNs (Google Fonts)', () => {
     // Extract the literal allowlist Set body so we test only what's
     // actually in the runtime allowlist, not text mentioned in comments.
     const setMatch = rendererSrc.match(
@@ -168,9 +168,14 @@ describe('pdfRenderer — defence layers wired', () => {
     const body = setMatch[1];
     expect(body).toMatch(/fonts\.googleapis\.com/);
     expect(body).toMatch(/fonts\.gstatic\.com/);
-    expect(body).toMatch(/cdn\.tailwindcss\.com/);
-    // Anything else in the set is suspect — count entries, expect 3.
+    // cdn.tailwindcss.com was REMOVED (Mark's Pro Drive PDF, June 2026):
+    // the CDN script needed JS to JIT-compile, but the renderer keeps JS
+    // disabled, so it produced no CSS and the cost table collapsed.
+    // Tailwind is now compiled ahead of time and inlined — no network
+    // dep, no allowlist entry needed.
+    expect(body).not.toMatch(/cdn\.tailwindcss\.com/);
+    // Anything else in the set is suspect — count entries, expect exactly 2.
     const entries = body.match(/'[^']+'/g) || [];
-    expect(entries.length).toBe(3);
+    expect(entries.length).toBe(2);
   });
 });

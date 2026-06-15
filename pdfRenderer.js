@@ -28,14 +28,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The QuoteDocument component never emits scripts, iframes, or
 // off-allowlist URLs, so legitimate renders are unaffected.
 
-// Hosts allowed at network level. Fonts come from Google; the print
-// stylesheet ships inline. Tailwind CDN is allowlisted because we
-// load it in the boilerplate; if we ever self-host Tailwind we should
-// drop it from this list.
+// Hosts allowed at network level. Only Google Fonts now — Tailwind
+// used to be a CDN script (cdn.tailwindcss.com), but that needed JS
+// to execute its JIT runtime, and we keep JS disabled in the
+// rendering page as a defence layer. The cost-table + totals block
+// collapsed because no utility CSS was emitted (Mark caught it on
+// the Pro Drive quote, June 2026). Now we ship a static compiled
+// stylesheet via public/quote-tailwind.css instead — same pattern
+// as print.css.
 const REQUEST_ALLOWLIST = new Set([
   'fonts.googleapis.com',
   'fonts.gstatic.com',
-  'cdn.tailwindcss.com',
 ]);
 
 const SANITIZE_OPTIONS = {
@@ -124,6 +127,32 @@ export function sanitiseQuoteHtml(html) {
 // /print.css when users click "Save as PDF" — single source of truth.
 const PRINT_CSS = fs.readFileSync(path.join(__dirname, 'public/print.css'), 'utf8');
 
+// Tailwind utility CSS compiled ahead of time by scripts/build-pdf-css.js.
+// QuoteDocument.jsx uses many Tailwind classes for layout (flex,
+// justify-between, text-right, w-2/3, border-t-2, etc.); we used to
+// rely on the Tailwind CDN script's JIT runtime, but disabling JS in
+// the rendering page meant nothing got emitted and the cost-breakdown
+// table collapsed. The compile step lands the actual CSS at
+// public/quote-tailwind.css; we inline it the same way as print.css.
+//
+// If the build step is skipped (e.g. `node server.js` without
+// `npm run build` first), the file may be missing. Fail soft — render
+// continues, but PDFs will look as bad as before. The error is loud
+// at boot so it's caught quickly.
+let TAILWIND_CSS = '';
+try {
+  TAILWIND_CSS = fs.readFileSync(
+    path.join(__dirname, 'public/quote-tailwind.css'),
+    'utf8'
+  );
+} catch (err) {
+  console.error(
+    '[PDF] WARNING: public/quote-tailwind.css missing — Tailwind utility ' +
+    'classes will not render in PDFs. Run `npm run build:pdf-css` to fix. ' +
+    `(${err.code || err.message})`
+  );
+}
+
 // Fonts used in the quote. Loaded from Google Fonts inside the headless
 // browser so text is crisp + selectable. If Railway ever loses outbound
 // HTTPS to Google, we'd swap this for self-hosted @font-face files under
@@ -204,7 +233,7 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, f
   <meta charset="UTF-8" />
   <title>${escapeHtml(title)}</title>
   <link href="${FONTS_HREF}" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <style>${TAILWIND_CSS}</style>
   <style>${PRINT_CSS}</style>
 </head>
 <body>
