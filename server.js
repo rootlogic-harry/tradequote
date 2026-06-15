@@ -3932,10 +3932,15 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
     });
 
     // TRQ-173: success-path agent_runs completion. Best-effort.
+    // TRQ-140: success status is 'completed', NOT 'ok'. The single
+    // canonical enum is documented in agents/agentUtils.js — every
+    // analytics filter, calibration query, and reliability count keys
+    // on 'completed'. Writing 'ok' here used to make the bulk of
+    // Anthropic spend invisible to the calibration agent.
     if (analyseRunId) {
       const usage = analysisResponse.usage || {};
       pool.query(
-        `UPDATE agent_runs SET status = 'ok', prompt_tokens = $1,
+        `UPDATE agent_runs SET status = 'completed', prompt_tokens = $1,
                  completion_tokens = $2, duration_ms = $3 WHERE id = $4`,
         [
           Number(usage.input_tokens) || 0,
