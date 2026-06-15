@@ -38,8 +38,18 @@ describe('TRQ-156 — secret-scan workflow', () => {
     expect(workflowYml).toMatch(/gitleaks\/gitleaks-action/);
   });
 
-  test('fetches full history on push (so historic commits are scanned, not just the diff)', () => {
-    expect(workflowYml).toMatch(/fetch-depth:\s*\$\{\{\s*github\.event_name\s*==\s*'push'\s*&&\s*0\s*\|\|\s*1\s*\}\}/);
+  test('fetches full history (gitleaks needs <sha>^..<sha> which requires depth > 1)', () => {
+    // Was previously `fetch-depth: ${{ github.event_name == 'push' && 0 || 1 }}`
+    // — that gave PR runs a shallow clone and crashed gitleaks because
+    // `<sha>^` did not exist in the partial clone. Always fetch full
+    // history; it's cheap and it's what both the PR scan and the push
+    // scan want.
+    //
+    // Anchor on a true YAML directive (line-start indent, then key),
+    // not a comment, so the explanatory comment above doesn't trip
+    // the negative assertion.
+    expect(workflowYml).toMatch(/^\s+fetch-depth:\s*0\s*$/m);
+    expect(workflowYml).not.toMatch(/^\s+fetch-depth:\s*1\s*$/m);
   });
 
   test('5-minute timeout — workflow can never hang a PR indefinitely', () => {
