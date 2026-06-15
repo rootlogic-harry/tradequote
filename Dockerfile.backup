@@ -1,0 +1,43 @@
+# FastQuote backup-service image.
+#
+# A SEPARATE Railway service runs this image on a daily cron schedule.
+# Distinct from the main app image because:
+#   - Needs `postgresql-client` (for pg_dump). The main app doesn't.
+#   - No Chromium, no ffmpeg, no Vite build step — kept lean.
+#   - Different env var surface (R2 creds, no Stripe / OAuth).
+#
+# Deploy:
+#   - Railway project → New Service → Deploy from GitHub repo
+#   - Dockerfile path: Dockerfile.backup
+#   - Add cron schedule: "0 3 * * *" (03:00 UTC daily)
+#   - Add env vars: DATABASE_URL (ref the main app's), R2_*,
+#     optionally BACKUP_ALERT_WEBHOOK
+#   - See docs/BACKUP.md for the full runbook.
+
+FROM node:20-bullseye-slim
+
+# postgresql-client provides pg_dump. ca-certificates is required by
+# the AWS SDK's HTTPS calls to Cloudflare R2.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+      postgresql-client \
+      ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dep install first for layer caching. We need ONLY @aws-sdk/client-s3
+# and @aws-sdk/lib-storage at runtime; everything else in package.json
+# is for the main app. `npm ci --omit=dev` keeps the install lean.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+# The script. Keep the copy narrow so a stray change elsewhere doesn't
+# bust the layer cache.
+COPY scripts/backup-to-r2.js ./scripts/backup-to-r2.js
+
+ENV NODE_ENV=production
+
+# Railway invokes `startCommand` — we declare it here as the default
+# so the image is self-contained for local testing too.
+CMD ["node", "scripts/backup-to-r2.js"]

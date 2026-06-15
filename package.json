@@ -18,6 +18,8 @@
     "regression": "node regression/run.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1068.0",
+    "@aws-sdk/lib-storage": "^3.1068.0",
     "@sparticuz/chromium": "^147.0.2",
     "connect-pg-simple": "^10.0.0",
     "docx": "^9.6.1",
