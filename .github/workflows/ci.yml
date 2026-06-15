@@ -1,0 +1,61 @@
+# Required-status CI gate for every PR to main.
+#
+# Runs the full Jest suite + Vite build on every pull request and every
+# push to main. Surfaces as the "ci / test" GitHub check that branch
+# protection requires to be green before merge.
+#
+# Scope on purpose:
+#   - npm test           — the deterministic suite (no live DB needed)
+#   - npm run build      — catches React/Vite breakage before deploy
+# Out of scope:
+#   - test:api and test:security need a live DATABASE_URL and run only
+#     manually (npm run test:api / test:security) for now.
+#   - The regression workflow (regression.yml) runs separately on
+#     prompt/parser changes — gated on path filters + cost.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Stop in-flight runs when a new push lands on the same PR — only the
+# latest commit matters for the merge gate.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Upload build output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-on-failure
+          path: dist/
+          retention-days: 3
+          if-no-files-found: ignore
