@@ -6,6 +6,33 @@ const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 const DEFAULT_MAX_TOKENS = 4000;
 
 /**
+ * Canonical `agent_runs.status` enum — DO NOT add new values without
+ * a deliberate migration.
+ *
+ *   'running'   → row inserted, agent in flight
+ *   'completed' → finished successfully (THE single success string)
+ *   'failed'    → threw or returned an error
+ *
+ * TRQ-140 history: the /api/users/:id/analyse path used to write 'ok'
+ * here, which made every analyse row invisible to filters keyed on
+ * 'completed' (the calibration agent's "recent completed runs" query
+ * and the auto-calibration trigger). All writers now use 'completed'.
+ * A one-shot migration (scripts/migrate-agent-runs-status-ok.js)
+ * converts legacy 'ok' rows.
+ *
+ * If you ever need a new status, update:
+ *   1. This comment
+ *   2. Every writer (currently this file + server.js:/analyse path)
+ *   3. Every reader / FILTER clause in server.js + agents/*.js
+ *   4. The Analytics dashboard payload if exposing it
+ */
+export const AGENT_RUN_STATUS = Object.freeze({
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+});
+
+/**
  * Create an agent_run row in the database with status 'running'.
  */
 async function createAgentRun(pool, { userId, jobId, agentType, inputSummary }) {

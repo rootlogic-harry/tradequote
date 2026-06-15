@@ -28,7 +28,10 @@ describe('analyse route logs to agent_runs', () => {
   });
 
   test('updates agent_runs with token usage on success', () => {
-    expect(block).toMatch(/UPDATE agent_runs SET status = 'ok'[\s\S]*prompt_tokens/);
+    // TRQ-140: success status standardised on 'completed' (was 'ok'),
+    // matching agents/agentUtils.js. Whole-codebase enum guarded by
+    // agentRunsStatus.test.js.
+    expect(block).toMatch(/UPDATE agent_runs SET status = 'completed'[\s\S]*prompt_tokens/);
     expect(block).toMatch(/usage\.input_tokens/);
     expect(block).toMatch(/usage\.output_tokens/);
   });
