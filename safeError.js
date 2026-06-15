@@ -11,9 +11,29 @@
  */
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 
+// TRQ-15 — system_errors capture. We don't import pool here (would
+// create a circular dep with server.js). Instead server.js calls
+// setSystemErrorLogger() once after the DB is ready. The logger is
+// called with (req, err, statusCode); failure to log is swallowed.
+let systemErrorLogger = null;
+export function setSystemErrorLogger(fn) {
+  systemErrorLogger = typeof fn === 'function' ? fn : null;
+}
+
 export function safeError(res, err, context, statusCode = 500) {
   const message = err?.message || 'Unknown error';
   console.error(`[${context}]`, message);
+
+  // Persist to system_errors for the analytics dashboard. Only for
+  // genuine 5xx (not transient infra blips, not 4xx user errors).
+  // Fire-and-forget — logging failures never block the response.
+  if (statusCode >= 500 && !isTransientInfrastructureError(err) && systemErrorLogger) {
+    try {
+      systemErrorLogger(res.req, err, statusCode);
+    } catch {
+      // Never let logging interfere with the response.
+    }
+  }
 
   if (statusCode >= 500 && isTransientInfrastructureError(err)) {
     // 503 Service Unavailable + Retry-After makes well-behaved clients

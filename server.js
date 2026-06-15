@@ -10,7 +10,7 @@ import connectPgSimple from 'connect-pg-simple';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
-import { safeError } from './safeError.js';
+import { safeError, setSystemErrorLogger } from './safeError.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
@@ -380,6 +380,51 @@ async function initDB() {
         );
       `);
     }
+
+    // TRQ-15 — General error capture. Every Express 5xx writes one row
+    // here BEFORE safeError swaps the message for the generic client-
+    // facing one, so we keep the real stack/message for the analytics
+    // dashboard. user_id is nullable because errors can happen before
+    // auth (e.g. OAuth callback failures).
+    //
+    // Retention is intentionally NOT trimmed in code — the row count
+    // stays small for the foreseeable future. If it grows we'll add a
+    // nightly truncate.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_errors (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT REFERENCES users(id),
+        source TEXT NOT NULL,
+        route TEXT,
+        status_code INTEGER,
+        message TEXT NOT NULL,
+        stack TEXT,
+        user_agent TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_system_errors_created ON system_errors(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_errors_source ON system_errors(source);
+    `);
+
+    // TRQ-15 — Pageview telemetry for the landing page + SPA route
+    // changes. Anonymous: only path/referrer/sha256-hashed UA/random
+    // session-scoped ID. No IP, no fingerprint, no user_id unless the
+    // beacon fires while the user is signed in (NULL otherwise). Honours
+    // navigator.doNotTrack client-side. Public POST /api/track writes
+    // here; /api/admin/analytics reads the daily aggregate.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pageviews (
+        id SERIAL PRIMARY KEY,
+        path TEXT NOT NULL,
+        referrer TEXT,
+        ua_hash TEXT,
+        session_id TEXT,
+        user_id TEXT REFERENCES users(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_pageviews_created ON pageviews(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pageviews_path ON pageviews(path);
+    `);
 
     // Migrate hardcoded calibration notes to DB (idempotent)
     const hardcodedNotes = [
@@ -894,6 +939,36 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     "url": "https://fastquote.uk/",
     "description": "Quoting tools for dry stone wallers — photo or short video in, professional quote out, in under five minutes."
   }
+  </script>
+  <!-- TRQ-15: landing pageview beacon. Fires one anonymous POST to
+       /api/track. Honours navigator.doNotTrack. Failure is silent.
+       Inline so it runs before any deferred scripts and so a blocked
+       landing.js can't suppress the analytics signal. -->
+  <script>
+    (function() {
+      try {
+        var dnt = navigator.doNotTrack || window.doNotTrack;
+        if (dnt === '1' || dnt === 'yes') return;
+        var sid = sessionStorage.getItem('fq_session_id');
+        if (!sid) {
+          sid = (crypto && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+          sessionStorage.setItem('fq_session_id', sid);
+        }
+        fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: location.pathname || '/',
+            referrer: document.referrer || '',
+            sessionId: sid,
+          }),
+          keepalive: true,
+          credentials: 'same-origin',
+        }).catch(function () {});
+      } catch (_) {}
+    })();
   </script>
 </head>
 <body>
@@ -3227,13 +3302,29 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
     // Joins jobs with agent_runs (token spend includes both 'analyse'
     // calls and background agent_types) and dictation_runs (Whisper).
     // Returns one row per user so the dashboard table can sort/filter.
+    //
+    // TRQ-15 additions: ramsCount (how many of this user's quotes have
+    // RAMS attached), failedAnalyseCalls (per-user failure attribution),
+    // activeDays (distinct days this user actually saved a quote in
+    // the window — a "did they show up" metric better than raw login
+    // counts since we don't log every sign-in event).
     const perUserQuery = pool.query(`
       WITH user_jobs AS (
         SELECT user_id,
                COUNT(*)::int AS jobs,
+               COUNT(*) FILTER (WHERE has_rams = TRUE)::int AS rams_count,
+               COUNT(DISTINCT DATE(saved_at))::int AS active_days,
                COALESCE(SUM(total_amount) FILTER (WHERE status IN ('sent','accepted','completed')), 0)::float AS quoted_value,
                MAX(saved_at) AS last_quote_at
         FROM jobs WHERE ${sinceFilter('saved_at')}
+        GROUP BY user_id
+      ),
+      user_fails AS (
+        SELECT user_id,
+               COUNT(*) FILTER (WHERE agent_type = 'analyse')::int AS failed_analyse,
+               COUNT(*)::int AS failed_total
+        FROM agent_runs
+        WHERE status = 'failed' AND ${sinceFilter('created_at')}
         GROUP BY user_id
       ),
       user_tokens AS (
@@ -3264,9 +3355,13 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       SELECT
         u.id AS "userId", u.name, u.plan, u.last_login_at AS "lastLoginAt",
         COALESCE(j.jobs, 0) AS "jobs",
+        COALESCE(j.rams_count, 0) AS "ramsCount",
+        COALESCE(j.active_days, 0) AS "activeDays",
         COALESCE(j.quoted_value, 0) AS "quotedValue",
         j.last_quote_at AS "lastQuoteAt",
         COALESCE(t.analyse_calls, 0) AS "analyseCalls",
+        COALESCE(f.failed_analyse, 0) AS "failedAnalyseCalls",
+        COALESCE(f.failed_total, 0) AS "failedTotal",
         COALESCE(t.prompt_tokens, 0)::bigint AS "promptTokens",
         COALESCE(t.completion_tokens, 0)::bigint AS "completionTokens",
         t.by_model AS "tokensByModel",
@@ -3274,6 +3369,7 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       FROM users u
       LEFT JOIN user_jobs j ON j.user_id = u.id
       LEFT JOIN user_tokens t ON t.user_id = u.id
+      LEFT JOIN user_fails f ON f.user_id = u.id
       LEFT JOIN user_audio a ON a.user_id = u.id
       ORDER BY COALESCE(t.prompt_tokens + t.completion_tokens, 0) DESC
     `);
@@ -3343,12 +3439,139 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       ORDER BY DATE(created_at) ASC
     `);
 
+    // ── TRQ-15: new time series ──────────────────────────────────────
+    // All windowed to fixed periods (not the selected range) so the
+    // charts always show meaningful history regardless of the user's
+    // filter. The dashboard re-renders these as sparklines.
+
+    // Quotes saved per week (12 weeks) — answers ticket req #11.
+    const quotesPerWeekQuery = pool.query(`
+      SELECT DATE_TRUNC('week', saved_at)::date AS "week",
+             COUNT(*)::int AS "count"
+      FROM jobs
+      WHERE saved_at > NOW() - INTERVAL '12 weeks'
+      GROUP BY DATE_TRUNC('week', saved_at)
+      ORDER BY DATE_TRUNC('week', saved_at) ASC
+    `);
+
+    // Failures per day (30d) — agent_type='analyse' + RAMS subtype if
+    // we add one later. For now any failed agent_run counts; the chart
+    // separates by agent_type via the optional groupings field.
+    const failuresPerDayQuery = pool.query(`
+      SELECT DATE(created_at) AS "date",
+             COUNT(*)::int AS "count",
+             COUNT(*) FILTER (WHERE agent_type = 'analyse')::int AS "analyseFails"
+      FROM agent_runs
+      WHERE status = 'failed' AND created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) ASC
+    `);
+
+    // Signups per day (30d) — for the growth chart.
+    const signupsPerDayQuery = pool.query(`
+      SELECT DATE(created_at) AS "date",
+             COUNT(*)::int AS "count"
+      FROM users
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) ASC
+    `);
+
+    // Page views per day (30d) — landing + SPA route changes.
+    // Anonymous (user_id NULL) and authenticated views are summed; the
+    // distinct-sessions metric is computed in JS below.
+    const pageviewsPerDayQuery = pool.query(`
+      SELECT DATE(created_at) AS "date",
+             COUNT(*)::int AS "count",
+             COUNT(DISTINCT session_id)::int AS "sessions"
+      FROM pageviews
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) ASC
+    `);
+
+    // Pageviews top paths (30d) — answers "which landing pages get traffic".
+    const pageviewsTopPathsQuery = pool.query(`
+      SELECT path, COUNT(*)::int AS "count"
+      FROM pageviews
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY path
+      ORDER BY COUNT(*) DESC
+      LIMIT 10
+    `);
+
+    // System errors over time + recent. Limited to 30 days for the
+    // chart and 50 rows for the table. Both feed the new Errors
+    // section in Analytics.jsx.
+    const errorsPerDayQuery = pool.query(`
+      SELECT DATE(created_at) AS "date",
+             COUNT(*)::int AS "count"
+      FROM system_errors
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY DATE(created_at) ASC
+    `);
+    const errorsRecentQuery = pool.query(`
+      SELECT id, user_id AS "userId", source, route, status_code AS "statusCode",
+             message, created_at AS "createdAt"
+      FROM system_errors
+      ORDER BY created_at DESC LIMIT 50
+    `);
+
+    // Retention — simple metrics, not a full cohort grid (2 users today
+    // would make the grid meaningless). Three signals:
+    //   - signups7d / converted7d : of last week's signups, how many
+    //     saved at least one quote within 7 days of joining?
+    //   - d7Active / d14Active     : of all users who signed up >=7d
+    //     ago, how many were active in the last 7d / 14d?
+    const retentionQuery = pool.query(`
+      WITH new_signups AS (
+        SELECT id, created_at FROM users
+        WHERE created_at > NOW() - INTERVAL '30 days'
+      ),
+      converted AS (
+        SELECT n.id
+        FROM new_signups n
+        WHERE EXISTS (
+          SELECT 1 FROM jobs j
+          WHERE j.user_id = n.id
+            AND j.saved_at BETWEEN n.created_at AND n.created_at + INTERVAL '7 days'
+        )
+      ),
+      eligible AS (
+        -- "Established" users — signed up at least 7 days ago. Avoids
+        -- counting brand-new users (who haven't HAD 7 days to be
+        -- inactive) as churned.
+        SELECT id FROM users WHERE created_at < NOW() - INTERVAL '7 days'
+      ),
+      active_7d AS (
+        SELECT DISTINCT user_id FROM jobs
+        WHERE saved_at > NOW() - INTERVAL '7 days'
+      ),
+      active_14d AS (
+        SELECT DISTINCT user_id FROM jobs
+        WHERE saved_at > NOW() - INTERVAL '14 days'
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM new_signups) AS "newSignups30d",
+        (SELECT COUNT(*)::int FROM converted) AS "convertedIn7d",
+        (SELECT COUNT(*)::int FROM eligible) AS "eligibleUsers",
+        (SELECT COUNT(*)::int FROM eligible e JOIN active_7d a ON a.user_id = e.id) AS "d7Active",
+        (SELECT COUNT(*)::int FROM eligible e JOIN active_14d a ON a.user_id = e.id) AS "d14Active"
+    `);
+
     const [
       usersRes, signupsRes, quotesRes, perUserRes, perQuoteRes,
       spendByModelRes, failuresRes, retryQueueRes, portalRes, dailyTrendRes,
+      quotesPerWeekRes, failuresPerDayRes, signupsPerDayRes,
+      pageviewsPerDayRes, pageviewsTopPathsRes,
+      errorsPerDayRes, errorsRecentRes, retentionRes,
     ] = await Promise.all([
       usersQuery, signupsQuery, quotesQuery, perUserQuery, perQuoteQuery,
       spendByModelQuery, failuresQuery, retryQueueQuery, portalQuery, dailyTrendQuery,
+      quotesPerWeekQuery, failuresPerDayQuery, signupsPerDayQuery,
+      pageviewsPerDayQuery, pageviewsTopPathsQuery,
+      errorsPerDayQuery, errorsRecentQuery, retentionQuery,
     ]);
 
     // Convert per-user token totals into £ for the dashboard. Per-user
@@ -3430,6 +3653,24 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       (u) => !u.lastLoginAt || new Date(u.lastLoginAt) < fourteenDaysAgo
     ).length;
 
+    // TRQ-15: retention math. The SQL returns raw counts; the rates are
+    // computed here so the client doesn't have to redo the divisions
+    // for every render.
+    const retention = retentionRes.rows[0] || {};
+    const retentionMetrics = {
+      newSignups30d: retention.newSignups30d || 0,
+      convertedIn7d: retention.convertedIn7d || 0,
+      conversionRate: retention.newSignups30d > 0
+        ? Number((retention.convertedIn7d / retention.newSignups30d).toFixed(2)) : 0,
+      eligibleUsers: retention.eligibleUsers || 0,
+      d7Active: retention.d7Active || 0,
+      d14Active: retention.d14Active || 0,
+      d7Rate: retention.eligibleUsers > 0
+        ? Number((retention.d7Active / retention.eligibleUsers).toFixed(2)) : 0,
+      d14Rate: retention.eligibleUsers > 0
+        ? Number((retention.d14Active / retention.eligibleUsers).toFixed(2)) : 0,
+    };
+
     const payload = {
       range,
       generatedAt: new Date().toISOString(),
@@ -3462,6 +3703,41 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
         retryQueueStuck: retryQueueRes.rows[0]?.stuck || 0,
       },
       portal: portalRates,
+      // TRQ-15 — new sections ────────────────────────────────────────
+      series: {
+        quotesPerWeek: quotesPerWeekRes.rows.map((r) => ({
+          week: r.week, count: r.count,
+        })),
+        failuresPerDay: failuresPerDayRes.rows.map((r) => ({
+          date: r.date, count: r.count, analyseFails: r.analyseFails,
+        })),
+        signupsPerDay: signupsPerDayRes.rows.map((r) => ({
+          date: r.date, count: r.count,
+        })),
+        pageviewsPerDay: pageviewsPerDayRes.rows.map((r) => ({
+          date: r.date, count: r.count, sessions: r.sessions,
+        })),
+      },
+      pageviews: {
+        // Total + sessions for the 30d window so the dashboard can
+        // render headline cards without re-summing the daily series.
+        total30d: pageviewsPerDayRes.rows.reduce((sum, r) => sum + r.count, 0),
+        sessions30d: pageviewsPerDayRes.rows.reduce((sum, r) => sum + r.sessions, 0),
+        topPaths: pageviewsTopPathsRes.rows,
+      },
+      retention: retentionMetrics,
+      errors: {
+        perDay: errorsPerDayRes.rows.map((r) => ({
+          date: r.date, count: r.count,
+        })),
+        recent: errorsRecentRes.rows.map((r) => ({
+          ...r,
+          // Truncate the per-row message so the JSON payload doesn't
+          // balloon with one stack-trace-heavy row.
+          message: (r.message || '').slice(0, 300),
+        })),
+        total30d: errorsPerDayRes.rows.reduce((sum, r) => sum + r.count, 0),
+      },
     };
 
     analyticsCache.set(range, { at: Date.now(), payload });
@@ -3857,6 +4133,95 @@ app.post('/q/:token/respond', async (req, res) => {
   }
 });
 
+// --- TRQ-15: system_errors write helper + /api/track pageview beacon ---
+
+// Defensively truncate user-controlled or runaway-recursion strings
+// before INSERT so a 50KB stack can't bloat the analytics table.
+function logSystemError(req, err, statusCode) {
+  const route = req ? `${req.method} ${req.path}` : null;
+  const userId = req?.user?.id || req?.session?.legacyUserId || null;
+  const ua = req?.get ? (req.get('user-agent') || null) : null;
+  const message = (err?.message || 'Unknown error').slice(0, 2000);
+  const stack = err?.stack ? String(err.stack).slice(0, 8000) : null;
+  pool.query(
+    `INSERT INTO system_errors (user_id, source, route, status_code, message, stack, user_agent)
+     VALUES ($1, 'server_5xx', $2, $3, $4, $5, $6)`,
+    [userId, route, statusCode, message, stack, ua]
+  ).catch((logErr) => {
+    console.error('[system_errors INSERT failed]', logErr?.message || logErr);
+  });
+}
+
+// Anonymous pageview beacon. 60/min/IP is generous enough to allow
+// rapid SPA route navigation (the beacon fires on every history.push)
+// but cheap enough to discourage abuse.
+const pageviewRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many tracking requests.' },
+});
+
+// Bot UAs we don't want clogging up pageviews. Conservative list —
+// we'd rather over-count than fingerprint borderline UAs and miss
+// real signals. Lowercased substring match.
+const BOT_UA_PATTERNS = [
+  'bot', 'crawler', 'spider', 'scrape', 'curl/', 'wget/',
+  'python-requests', 'go-http-client', 'java/',
+  'facebookexternalhit', 'slackbot', 'twitterbot', 'linkedinbot',
+  'whatsapp', 'pingdom', 'uptimerobot',
+];
+function isBotUserAgent(ua) {
+  if (!ua) return true; // No UA → probably automation.
+  const lower = ua.toLowerCase();
+  return BOT_UA_PATTERNS.some((pat) => lower.includes(pat));
+}
+
+app.post('/api/track', pageviewRateLimit, async (req, res) => {
+  try {
+    const { path, referrer, sessionId } = req.body || {};
+    if (!path || typeof path !== 'string') {
+      // 204 not 400 — we never want the beacon to surface errors in
+      // the client console. Silently drop malformed payloads.
+      return res.status(204).end();
+    }
+    const ua = (req.get('user-agent') || '').slice(0, 500);
+    if (isBotUserAgent(ua)) {
+      return res.status(204).end();
+    }
+    // Hash UA to ua_hash for de-duplication / cohort grouping without
+    // storing the raw string (privacy: no fingerprinting back to the
+    // exact browser). SHA-256 truncated to 16 chars is plenty for
+    // distinct counts at our scale.
+    const uaHash = ua
+      ? crypto.createHash('sha256').update(ua).digest('hex').slice(0, 16)
+      : null;
+    // Normalize path: strip query string and trailing slash, cap length.
+    const cleanPath = String(path).split('?')[0].replace(/\/$/, '').slice(0, 200) || '/';
+    const cleanReferrer = referrer
+      ? String(referrer).split('?')[0].slice(0, 200)
+      : null;
+    const cleanSession = sessionId
+      ? String(sessionId).slice(0, 64)
+      : null;
+    // Only attach user_id if the request is from an authenticated
+    // session — anonymous landing visits stay anonymous.
+    const userId = req.user?.id || req.session?.legacyUserId || null;
+    await pool.query(
+      `INSERT INTO pageviews (path, referrer, ua_hash, session_id, user_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [cleanPath, cleanReferrer, uaHash, cleanSession, userId]
+    );
+    res.status(204).end();
+  } catch (err) {
+    // Tracking failures never surface to the client. Log + return 204
+    // so retries don't compound the problem.
+    console.error('[/api/track]', err?.message || err);
+    res.status(204).end();
+  }
+});
+
 // --- Error handler for body-parser / payload too large ---
 
 app.use((err, req, res, _next) => {
@@ -3867,6 +4232,10 @@ app.use((err, req, res, _next) => {
     });
   }
   console.error(`Server error on ${req.method} ${req.path}:`, err.message);
+  // TRQ-15: the global error handler catches anything that wasn't
+  // routed through safeError (body-parser failures, uncaught throws).
+  // Persist these too so the analytics dashboard sees the full picture.
+  logSystemError(req, err, 500);
   if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -3911,6 +4280,12 @@ if (process.env.NODE_ENV !== 'test') {
 
 const dbReady = initDB()
   .then(async () => {
+    // TRQ-15 — once the DB is ready, register the system_errors writer
+    // with safeError so every 5xx persists for the analytics dashboard.
+    // logSystemError() is defined at module scope (below) so the global
+    // express error handler at the bottom of the file can call it too.
+    setSystemErrorLogger(logSystemError);
+
     // Sweep retry queue on startup
     if (process.env.NODE_ENV !== 'test') {
       try {
