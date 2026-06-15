@@ -21,7 +21,7 @@ import { documentTerm } from '../utils/documentType.js';
  * block redirects to /login?error=session_expired, matching the
  * dashboard's behaviour (TRQ-128).
  */
-export default function ClientLinkBlock({ currentUserId, jobId, profile, showToast }) {
+export default function ClientLinkBlock({ currentUserId, jobId, profile, showToast, requireProfile }) {
   const term = documentTerm(profile);
   const [status, setStatus] = useState(null);   // null = loading; {} = loaded
   const [loadError, setLoadError] = useState(null);
@@ -46,6 +46,11 @@ export default function ClientLinkBlock({ currentUserId, jobId, profile, showToa
   useEffect(() => { refresh(); }, [refresh]);
 
   async function handleGenerate() {
+    // TRQ-94: block link generation until the tradesman's company
+    // details are filled in. The portal renders profile.companyName,
+    // address, VAT etc. — generating with a blank profile would freeze
+    // an embarrassing snapshot (see CLAUDE.md frozen-snapshot contract).
+    if (requireProfile && !requireProfile()) return;
     setGenerating(true);
     try {
       await generateClientToken(currentUserId, jobId);

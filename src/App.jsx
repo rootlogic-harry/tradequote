@@ -617,40 +617,11 @@ export default function App() {
     );
   }
 
-  // --- Onboarding gate: new Google users land on profile setup before anything else ---
-  if (state.currentUser && state.currentUser.profileComplete === false) {
-    return (
-      <div className="min-h-screen bg-tq-bg text-tq-text font-body">
-        <div className="max-w-3xl mx-auto px-4 py-6">
-          <ProfileSetup
-            state={state}
-            dispatch={dispatch}
-            onProfileComplete={async () => {
-              if (state.currentUserId) {
-                try {
-                  await saveProfile(state.currentUserId, state.profile);
-                  await fetch(`/api/users/${state.currentUserId}/settings/profile_complete`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ value: true }),
-                  });
-                } catch {}
-              }
-              dispatch({
-                type: 'INIT_COMPLETE',
-                user: { ...state.currentUser, profileComplete: true },
-              });
-              setCurrentView('dashboard');
-              showToast('Profile saved \u2014 welcome to FastQuote', 'success');
-            }}
-          />
-        </div>
-        {toast && (
-          <Toast key={toast.key} message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
-        )}
-      </div>
-    );
-  }
+  // TRQ-94: onboarding gate REMOVED. New Google users now land on the
+  // dashboard with profileComplete=false and can make their first quote
+  // immediately. The profile is only required at "Send to client" \u2014 see
+  // ProfileGateModal in QuoteOutput. The gear icon \u2192 profile modal
+  // remains the way to fill / edit company details at any time.
 
   const handleGoToSaved = () => {
     setCurrentView('saved');
@@ -819,6 +790,7 @@ export default function App() {
               onCreateRams={handleCreateRams}
               onSaved={() => fetchIncompleteJobs(state.currentUserId)}
               isAdminPlan={isAdmin}
+              onRequestOpenProfile={() => setShowProfileModal(true)}
             />
           </ErrorBoundary>
         );
@@ -898,10 +870,27 @@ export default function App() {
               state={state}
               dispatch={dispatch}
               isModal
-              onClose={() => {
+              onClose={async () => {
                 setShowProfileModal(false);
                 if (state.currentUserId) {
-                  saveProfile(state.currentUserId, state.profile).catch(() => {});
+                  // Save the profile first.
+                  await saveProfile(state.currentUserId, state.profile).catch(() => {});
+                  // TRQ-94: ProfileSetup only invokes onClose when the
+                  // form is valid (validateProfile passes). That's the
+                  // signal to flip profile_complete=true so the Send-
+                  // to-client gate stops blocking. Fire-and-forget —
+                  // the toast confirms save regardless.
+                  if (state.currentUser && state.currentUser.profileComplete === false) {
+                    fetch(`/api/users/${state.currentUserId}/settings/profile_complete`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ value: true }),
+                    }).catch(() => {});
+                    dispatch({
+                      type: 'INIT_COMPLETE',
+                      user: { ...state.currentUser, profileComplete: true },
+                    });
+                  }
                 }
               }}
             />

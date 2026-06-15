@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import QuoteDocument from '../QuoteDocument.jsx';
 import ClientLinkBlock from '../ClientLinkBlock.jsx';
+import ProfileGateModal from '../ProfileGateModal.jsx';
 import { documentTerm } from '../../utils/documentType.js';
 import { downloadBlob } from '../../utils/downloadBlob.js';
 import { buildEmlMessage } from '../../utils/buildEmlMessage.js';
@@ -20,7 +21,27 @@ import { exportQuoteAsPdf } from '../../utils/exportPdf.js';
 import { exportQuoteAsDocx } from '../../utils/exportDocx.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false, onRequestOpenProfile }) {
+  // TRQ-94: profile is no longer enforced at sign-up. We block ONLY at
+  // the customer-facing surfaces — Send via Outlook, the .eml mailto
+  // handler, the generated client portal link, and the PDF/DOCX
+  // downloads — because those are the artifacts that need the
+  // tradesman's company name, address, and VAT details to look right
+  // when the client opens them. Saving + reviewing a quote internally
+  // is fine without a profile.
+  const profileIncomplete = state.currentUser && state.currentUser.profileComplete === false;
+  const [showProfileGate, setShowProfileGate] = useState(false);
+  // requireProfile() returns true if the user is good to proceed, false
+  // if it raised the gate (caller should bail out). Single source of
+  // truth so the wording / behaviour stays consistent across every
+  // customer-facing action.
+  const requireProfile = () => {
+    if (profileIncomplete) {
+      setShowProfileGate(true);
+      return false;
+    }
+    return true;
+  };
   const quoteRef = useRef(null);
   const { profile, jobDetails, reviewData, photos = {}, extraPhotos = [] } = state;
   const term = documentTerm(profile);
@@ -117,6 +138,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       showToast?.(`Save the ${term.lower} first, then download PDF.`, 'error');
       return;
     }
+    if (!requireProfile()) return; // TRQ-94 gate
     setGeneratingServerPdf(true);
 
     const falLbackToPrint = (reason) => {
@@ -197,6 +219,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const handleDownloadPDF = async () => {
     const element = quoteRef.current;
     if (!element) return;
+    if (!requireProfile()) return; // TRQ-94 gate
 
     setGeneratingPDF(true);
     try {
@@ -232,6 +255,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   // is dynamically imported inside the builder so the main bundle stays
   // lean.
   const handleDownloadDocx = async () => {
+    if (!requireProfile()) return; // TRQ-94 gate
     setGeneratingDocx(true);
     try {
       if (!reviewData) return;
@@ -275,6 +299,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   };
 
   const handleEmail = () => {
+    if (!requireProfile()) return; // TRQ-94 gate
     const subject = encodeURIComponent(
       `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
     );
@@ -313,6 +338,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const [cachedPdfBlob, setCachedPdfBlob] = useState(null);
   const canSendOutlook = Boolean(profile?.email);
   const handleSendViaOutlook = async () => {
+    if (!requireProfile()) return; // TRQ-94 gate — block before the email-check toast fires
     if (!canSendOutlook) {
       showToast?.('Add your email address in your profile first.', 'error');
       return;
@@ -700,6 +726,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           jobId={savedJobId}
           profile={profile}
           showToast={showToast}
+          requireProfile={requireProfile}
         />
       )}
 
@@ -813,6 +840,20 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       <div className="print-root print-only" aria-hidden="true">
         <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
       </div>
+
+      {/* TRQ-94: Profile gate. Raised by requireProfile() when the user
+           tries a customer-facing action (PDF/DOCX download, email,
+           Outlook send, client link) before filling in their company
+           details. Tapping "Add details" hands off to the existing
+           profile modal at App.jsx via onRequestOpenProfile; closing
+           that modal flips profile_complete=true and they can retry
+           the action. */}
+      <ProfileGateModal
+        open={showProfileGate}
+        term={term}
+        onClose={() => setShowProfileGate(false)}
+        onOpenProfile={onRequestOpenProfile}
+      />
     </div>
   );
 }

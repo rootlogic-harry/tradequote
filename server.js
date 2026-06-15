@@ -556,9 +556,10 @@ app.get('/auth/google/callback',
     });
   },
   (req, res) => {
-    if (!req.user.profile_complete) {
-      return res.redirect('/?onboarding=true');
-    }
+    // TRQ-94: always land on the dashboard. The old `?onboarding=true`
+    // branch fed into a full-page onboarding gate that has been removed
+    // — the profile is now only required at the moment the customer is
+    // about to see it (see ProfileGateModal in QuoteOutput).
     res.redirect('/');
   },
   handleOauthFailure,
