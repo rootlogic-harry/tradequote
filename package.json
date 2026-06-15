@@ -15,7 +15,8 @@
     "test:security": "node --experimental-vm-modules node_modules/.bin/jest --runInBand -- src/__tests__/securityAudit.test.js",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch --testPathIgnorePatterns='(api|securityAudit)\\.test\\.js'",
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage --testPathIgnorePatterns='(api|securityAudit)\\.test\\.js'",
-    "regression": "node regression/run.js"
+    "regression": "node regression/run.js",
+    "check:moat": "node scripts/check-moat.js"
   },
   "dependencies": {
     "@sparticuz/chromium": "^147.0.2",
