@@ -286,9 +286,12 @@ describe('TRQ-115: repo hygiene sweep', () => {
     expect(major === 0 ? minor >= 5 : major >= 1).toBe(true);
   });
   it('README.md cites the real test count (>1000)', () => {
-    const m = files.readme.match(/(\d{3,4})\s*tests/);
+    // Allow optional thousands separator — once the count crossed 1,000
+    // the prose naturally started writing "~2,250 tests" with a comma,
+    // which the bare \d{3,4} pattern couldn't parse (TRQ-141).
+    const m = files.readme.match(/(\d{1,3}(?:,\d{3})?|\d{4,})\s*tests/);
     expect(m).not.toBeNull();
-    expect(Number(m[1])).toBeGreaterThan(1000);
+    expect(Number(m[1].replace(/,/g, ''))).toBeGreaterThan(1000);
   });
   it('jobs(user_id, saved_at DESC) composite index exists', () => {
     expect(files.serverJs).toMatch(/CREATE INDEX IF NOT EXISTS idx_jobs_user_saved_at ON jobs\(user_id, saved_at DESC\)/);

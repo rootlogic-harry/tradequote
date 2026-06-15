@@ -1,6 +1,10 @@
+# Build via the repo Dockerfile. The Nixpacks builder was abandoned —
+# it silently dropped all but the first entry of `aptPkgs`, which would
+# have broken the Chromium runtime libs that @sparticuz/chromium needs
+# for the server-side PDF path. The Railway UI is also set to Dockerfile;
+# this file matches.
 [build]
-builder = "nixpacks"
-buildCommand = "npm install && npm run build"
+builder = "dockerfile"
 
 [deploy]
 startCommand = "node server.js"

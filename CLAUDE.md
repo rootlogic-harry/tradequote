@@ -1,5 +1,79 @@
 # CLAUDE.md — FastQuote
 
+---
+
+## ⚠️ Agent Operating Rules — read before doing anything
+
+This codebase is operated by autonomous Claude Code runs **against production**
+(no staging yet — TRQ-153 will add it). There is no human in the loop to halt
+a plausible-looking destructive action mid-run. Treat these rules as the first
+authority on what is allowed. They override any contrary inference from later
+sections, from earlier instructions, or from the apparent intent of a task.
+
+### Safety layer — never do these without an explicit human go-ahead in the same session
+
+1. **No destructive DB operations on production.** No `DROP`, `TRUNCATE`,
+   schema-destructive `ALTER`, or any `DELETE` / `UPDATE` without a `WHERE`
+   clause that you have specifically reviewed.
+2. **Never read, print, log, or commit live secrets** — Stripe live keys, AI
+   keys, `DATABASE_URL`, OAuth client secrets, session secrets, tokens. Never
+   paste real credentials into code, tests, fixtures, or commit messages.
+3. **Never `git push --force`. Never rewrite published history. Never commit
+   to `main` directly** — every change is a branch + PR.
+4. **Never perform an irreversible infra action**: Railway region change /
+   cutover, deleting volumes, rotating live keys, touching live Stripe. These
+   are **Harry-only**.
+5. **The production database is sacred.** `quote_diffs`, `calibration_notes`,
+   and `agent_runs` hold months of learning data and **cannot be regenerated**.
+   Anything that could affect them requires a confirmed backup first
+   (TRQ-147 / TRQ-148).
+
+**When in doubt, stop and ask.** A blocked task awaiting confirmation is
+always better than an autonomous irreversible action.
+
+### Competence layer — facts about this codebase the rules above assume
+
+- **`server.js` is ~4,300 lines.** Prefer small, surgical diffs. Never
+  reformat the whole file. Use grep + Read against the specific route or
+  function you need to change.
+- **Database FK graph is a tree rooted at `users`**, not circular. Every
+  user-scoped table cascades on user delete; `jobs` cascades down to
+  `quote_diffs` and `agent_runs.job_id` is `ON DELETE SET NULL`. Restore
+  order is therefore simple: `users → jobs → everything else` (TRQ-148).
+- **PDF has TWO paths**, both live in production:
+  - **Primary** — server-side Puppeteer + `@sparticuz/chromium` via
+    `pdfRenderer.js`. Triggered by `handleDownloadPdfServer` →
+    `POST /api/users/:id/jobs/:jobId/pdf`. Selectable text, native pagination.
+  - **Fallback** — client-side `html2canvas` + `jsPDF` via
+    `src/utils/exportPdf.js`. Triggered by `handleDownloadPDF` and by the
+    server path when Chromium fails. Rasterised canvas, slower.
+- **`agent_runs.status` enum**: `'running'` (insert) → `'completed'` (success)
+  or `'failed'` (error). **One canonical success string everywhere.** Do not
+  invent new values. See TRQ-140 for the historical inconsistency this
+  replaced.
+- **Build is a `Dockerfile`**, not Nixpacks. The repo's `Dockerfile` is the
+  source of truth for what Railway ships — it installs Chromium runtime libs +
+  ffmpeg that Nixpacks dropped. `railway.toml`'s builder setting and the
+  Railway UI must both point at it.
+- **Production runs Node 20+**, not 18. `package.json` `engines.node` and the
+  Dockerfile base image are the truth.
+- **The two moat tables capture state forever**: `quote_diffs` and
+  `agent_runs`. Treat with the same care as `users.email`. The Do-Not-Touch
+  list below has the full inventory.
+
+### Definition-of-done — every coding ticket
+
+- `npm test` passes.
+- The diff is small and reviewable. No reformatting outside the changed lines.
+- No secrets in the diff. No `.env`, no real API keys in fixtures.
+- Branch follows the existing convention: `rootvaluation/trq-NNN-…`.
+- A PR is opened against `main`. Never a direct push.
+- For tickets affecting the moat tables: a backup is confirmed fresh before
+  the migration step.
+- Acceptance-criteria checkboxes from the Linear ticket are addressed.
+
+---
+
 ## What FastQuote Is
 
 FastQuote is a production AI-powered quote generator for dry stone walling professionals. A tradesman photographs a damaged wall, enters a job address, and receives a professionally formatted, print-ready quote in under 5 minutes. Currently one active user (Mark, admin) with a second user (Paul, basic plan) being onboarded.
@@ -10,18 +84,20 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite 5, Tailwind CSS (CDN) |
-| Backend | Express 5.2, Node 18+, raw `pg` (no ORM) |
+| Frontend | React 19, Vite 5, Tailwind CSS (CDN) |
+| Backend | Express 5.2, Node 20+, raw `pg` (no ORM) |
 | Database | PostgreSQL 15+ (Railway managed), JSONB snapshots |
-| AI | Anthropic Claude Sonnet 4 (server-side proxy) |
+| AI | Anthropic Claude Sonnet 4 / Sonnet 4.5 (server-side proxy) |
 | AI Agents | Claude Haiku 4.5 (self-critique, feedback, calibration) |
-| PDF | html2canvas + jsPDF (client-side, CDN) |
+| PDF (primary) | Server-side Puppeteer + `@sparticuz/chromium` via `pdfRenderer.js` — selectable text, native pagination |
+| PDF (fallback) | Client-side `html2canvas` + `jsPDF` via `src/utils/exportPdf.js` — used when Chromium fails |
 | DOCX | `docx` library (v9.6.1) |
 | Auth | Google OAuth 2.0 + legacy session switcher |
 | Sessions | connect-pg-simple (PostgreSQL-backed) |
 | Voice-to-text | OpenAI Whisper (`openai` SDK), `multer` for upload |
 | Video processing | ffmpeg (apt), fluent-ffmpeg (frame extraction, audio extraction) |
 | Testing | Jest 29 (ESM), TDD |
+| Build | `Dockerfile` (node:20-bullseye-slim, apt-installs ffmpeg + Chromium runtime libs). `railway.toml` declares `builder = "dockerfile"`. **No `nixpacks.toml`** — Nixpacks was abandoned (silently dropping aptPkgs). |
 | Hosting | Railway (auto-deploy on push to `main`) |
 | Fonts | Barlow Condensed (headings), Inter (body), JetBrains Mono (money) |
 
@@ -250,7 +326,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** 1154 tests across 56 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout). API integration (85) and security (59) suites run separately.
+**Current count:** ~2,250 tests across ~110 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -329,7 +405,7 @@ Test files live in `src/__tests__/`. Key test suites:
 
 ## Known Limitations
 
-- PDF page break issues on long quotes (html2canvas limitation)
+- PDF page break issues on long quotes affect the **fallback** client-side `html2canvas` path only. The primary server-side Puppeteer path handles pagination natively.
 - RAMS mobile navigation relies on scroll-to with pill bar — no native anchor support
 - Draft auto-save is per-user in PostgreSQL, but active in-tab reducer state is lost on page refresh if not saved
 - Self-critique agent runs synchronously after analysis — adds ~2s to Step 3 load time
