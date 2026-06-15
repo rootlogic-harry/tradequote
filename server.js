@@ -73,8 +73,45 @@ if (process.env.NODE_ENV === 'production') {
 const app = express();
 app.set('trust proxy', 1); // trust first proxy (Railway)
 
-// --- Healthcheck (before any middleware — must respond 200 for Railway) ---
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+// --- Healthcheck (before any middleware — must respond fast for Railway) ---
+//
+// TRQ-155: actually probes the DB. The previous trivial
+// `res.json({ status: 'ok' })` returned 200 even when Postgres was
+// unreachable, which would have made any uptime monitor pointed at it
+// say "up" during an outage.
+//
+// Cheap: one `SELECT 1` with a 2-second timeout. No AI calls, no
+// heavy queries. The 2s upper bound is well under Railway's
+// 60s healthcheckTimeout so a slow probe still passes.
+//
+// Returns 200 {status:'ok'} on a healthy DB, 503 {status:'degraded'}
+// otherwise. The 503 payload carries a category ('timeout' vs
+// 'unreachable') so a monitor's alert can distinguish slow PG from
+// gone PG — useful triage signal at 3 AM.
+//
+// `pool` is declared further down with const, but this handler closes
+// over it lazily — by the time any HTTP request hits the route, the
+// pool is initialised.
+app.get('/health', async (_req, res) => {
+  const t0 = Date.now();
+  try {
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('db-timeout')), 2000)
+      ),
+    ]);
+    res.json({ status: 'ok', db: 'ok', latency_ms: Date.now() - t0 });
+  } catch (err) {
+    // Server-side log for diagnostics; client gets the category only.
+    console.warn('[/health] DB probe failed:', err?.message || err);
+    res.status(503).json({
+      status: 'degraded',
+      db: err?.message === 'db-timeout' ? 'timeout' : 'unreachable',
+      latency_ms: Date.now() - t0,
+    });
+  }
+});
 
 app.use(express.json({ limit: '50mb' }));
 
