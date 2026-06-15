@@ -669,6 +669,31 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         Photo Upload
       </h3>
 
+      {/* TRQ-151: inline upload-consent line. Plain text, no click,
+          no modal — invisible to anyone not looking. The waller is
+          the controller of their end-client's data (see /dpa); this
+          is the visual prompt that they've assumed that responsibility.
+          The Terms say the same thing; this is the moment-of-truth
+          reminder. */}
+      <p
+        className="text-xs mb-3"
+        style={{ color: 'var(--tq-muted)' }}
+        data-testid="upload-consent-line"
+      >
+        By uploading, you confirm you have permission to use these photos
+        for the purpose of preparing a quote. See <a
+          href="/terms"
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: 'var(--tq-muted)', textDecoration: 'underline' }}
+        >Terms</a> · <a
+          href="/dpa"
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: 'var(--tq-muted)', textDecoration: 'underline' }}
+        >DPA</a>.
+      </p>
+
       {/* 2-cols on every viewport: stacking 5 photo cards on a 375px
           phone produced a ~1400px wall of photos (4 screen-heights of
           scrolling). Two columns at 165px each is still a meaningful
