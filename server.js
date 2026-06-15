@@ -11,6 +11,16 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import rateLimit from 'express-rate-limit';
 import { safeError, setSystemErrorLogger } from './safeError.js';
+import {
+  PRICE_GBP, TRIAL_DAYS,
+  hasStripeKey,
+  createCheckoutSession,
+  createPortalSession,
+  parseWebhookEvent,
+  applySubscriptionEventToDb,
+  currentSubscriptionState,
+  daysOfTrialRemaining,
+} from './billing.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
@@ -112,6 +122,43 @@ app.get('/health', async (_req, res) => {
     });
   }
 });
+
+// TRQ-150 — Stripe webhook. MUST be mounted BEFORE express.json so
+// the raw body is available for HMAC signature verification. If we
+// let express.json parse it first, Stripe's signature check fails
+// every time. Body is small (Stripe events) so the per-route raw
+// parser doesn't risk OOMing.
+app.post('/api/billing/webhook',
+  express.raw({ type: 'application/json', limit: '1mb' }),
+  async (req, res) => {
+    const signature = req.get('stripe-signature');
+    if (!signature) {
+      // Reject silently with 400; we don't want to leak whether the
+      // endpoint exists to a probe.
+      return res.status(400).json({ error: 'missing signature' });
+    }
+    let event;
+    try {
+      event = parseWebhookEvent(req.body, signature);
+    } catch (err) {
+      // Signature verification failed OR webhook secret missing.
+      // Server-log it; client gets a generic 400.
+      console.warn('[stripe webhook] verify failed:', err?.message || err);
+      return res.status(400).json({ error: 'invalid signature' });
+    }
+    try {
+      const result = await applySubscriptionEventToDb(pool, event);
+      // 200 ACKs the event; Stripe stops retrying. Even if we couldn't
+      // apply the event (e.g. unhandled type), ACK — otherwise Stripe
+      // re-delivers the same event endlessly.
+      res.json({ received: true, applied: result.applied });
+    } catch (err) {
+      // Real failure (DB unreachable etc.) — 500 so Stripe retries.
+      console.error('[stripe webhook] apply failed:', err?.message || err);
+      res.status(500).json({ error: 'apply failed' });
+    }
+  }
+);
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -261,6 +308,17 @@ async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS dpa_accepted_version TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS dpa_accepted_at TIMESTAMPTZ;
+      -- TRQ-150: Stripe subscription state. All nullable — users who
+      -- predate billing stay NULL; new signups get trial_ends_at set
+      -- by the OAuth callback. subscription_status mirrors Stripe's
+      -- enum so a webhook delete or invoice failure is visible to
+      -- the app immediately.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT UNIQUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'basic';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT false;
@@ -587,14 +645,22 @@ async (accessToken, refreshToken, profile, done) => {
     // versions of Terms, Privacy Policy, and DPA. Versions are
     // pinned at the moment of signup so the audit trail captures
     // exactly which text they agreed to.
+    //
+    // TRQ-150: start the 30-day no-card trial clock NOW. The trial
+    // is FastQuote-side (not Stripe-side) because we don't collect a
+    // card at signup. When the user later clicks Subscribe, Stripe
+    // sees a subscription with no trial — the FastQuote-side clock
+    // is already wound down by then.
     const inserted = await pool.query(
       `INSERT INTO users (id, name, email, avatar_url, auth_provider, auth_provider_id,
         plan, profile_complete, created_at, last_login_at,
         terms_accepted_version, terms_accepted_at,
         privacy_accepted_version, privacy_accepted_at,
-        dpa_accepted_version, dpa_accepted_at)
+        dpa_accepted_version, dpa_accepted_at,
+        trial_ends_at, subscription_status)
        VALUES ($1, $2, $3, $4, 'google', $5, 'basic', false, NOW(), NOW(),
-        $6, NOW(), $7, NOW(), $8, NOW())
+        $6, NOW(), $7, NOW(), $8, NOW(),
+        NOW() + INTERVAL '30 days', 'trialing')
        RETURNING *`,
       [
         userId, name, email, avatar, googleId,
@@ -3950,6 +4016,119 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
     safeError(res, err, `${req.method} ${req.path}`);
   }
 });
+
+// ───── TRQ-150 — Stripe subscription billing (test mode for now) ─────
+//
+// The webhook is registered above (before express.json). These three
+// routes are the user-facing surface:
+//   - GET  /api/billing/status      — what the trial banner reads
+//   - POST /api/billing/checkout    — opens a Stripe Checkout session
+//   - POST /api/billing/portal      — opens the Stripe billing portal
+//
+// All three require auth. Billing routes return 503 if STRIPE_SECRET_KEY
+// isn't configured rather than 500 — communicates "billing not wired
+// in this environment" cleanly to the client. Staging may run without
+// Stripe keys.
+
+const billingRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10, // 10/min/IP per route — generous for legit users, cheap on abuse
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many billing requests — wait a moment.' },
+});
+
+function requireStripe(_req, res, next) {
+  if (!hasStripeKey()) {
+    return res.status(503).json({
+      error: 'Billing is not configured in this environment.',
+      configured: false,
+    });
+  }
+  next();
+}
+
+app.get('/api/billing/status', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { rows } = await pool.query(
+      `SELECT id, plan, trial_ends_at, subscription_status,
+              stripe_customer_id, current_period_end, cancel_at_period_end
+       FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'user not found' });
+    res.json({
+      state: currentSubscriptionState(user),
+      daysOfTrialRemaining: daysOfTrialRemaining(user),
+      trialEndsAt: user.trial_ends_at,
+      currentPeriodEnd: user.current_period_end,
+      cancelAtPeriodEnd: user.cancel_at_period_end || false,
+      hasStripeCustomer: Boolean(user.stripe_customer_id),
+      // Display copy for the trial banner — keeps the client thin.
+      pricing: { gbpPerMonth: PRICE_GBP, trialDays: TRIAL_DAYS },
+      configured: hasStripeKey(),
+    });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.post('/api/billing/checkout', requireAuth, billingRateLimit, requireStripe, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { rows } = await pool.query(
+      `SELECT id, name, email, subscription_status FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'user not found' });
+    if (user.subscription_status === 'active') {
+      return res.status(409).json({ error: 'already subscribed' });
+    }
+
+    // Paul's free-month is keyed off the user's id (set in env so it's
+    // not hardcoded into source). When the env var holds 'paul'
+    // (the seed user id) AND a coupon is configured, apply it.
+    const withPaulCoupon = userId === process.env.STRIPE_PAUL_COUPON_USER_ID;
+
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const { url } = await createCheckoutSession({
+      userId,
+      email: user.email,
+      withPaulCoupon,
+      successUrl: `${baseUrl}/?billing=success`,
+      cancelUrl: `${baseUrl}/?billing=cancelled`,
+    });
+    res.json({ url });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.post('/api/billing/portal', requireAuth, billingRateLimit, requireStripe, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { rows } = await pool.query(
+      `SELECT stripe_customer_id FROM users WHERE id = $1`,
+      [userId]
+    );
+    const customerId = rows[0]?.stripe_customer_id;
+    if (!customerId) {
+      return res.status(409).json({
+        error: 'No subscription on file — start one via /api/billing/checkout first.',
+      });
+    }
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const { url } = await createPortalSession(customerId, `${baseUrl}/`);
+    res.json({ url });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// ───── End TRQ-150 billing routes ─────
 
 // Approved calibration notes for system prompt assembly
 app.get('/api/calibration-notes/approved', requireAuth, async (req, res) => {
