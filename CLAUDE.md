@@ -547,6 +547,17 @@ When something is broken and you don't know why:
 
 ## Verification & Self-Healing
 
+### When production is broken (incident path — TRQ-154)
+
+If you're reading this mid-incident: **see `docs/ROLLBACK.md`**. It
+covers the under-5-minute app-rollback procedure via Railway's
+deploy history, the (slower) DB-restore path, and the decision
+criteria for roll-back-vs-fix-forward. Default to rollback when in
+doubt. If a DB rollback is needed and you're autonomous, **stop
+and escalate to Harry** — DB restores lose writes since the backup
+timestamp and the constitution requires explicit human go-ahead for
+irreversible actions.
+
 ### After Every Code Change
 
 ```bash
