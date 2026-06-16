@@ -87,7 +87,7 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 | Frontend | React 19, Vite 5, Tailwind CSS (CDN) |
 | Backend | Express 5.2, Node 20+, raw `pg` (no ORM) |
 | Database | PostgreSQL 15+ (Railway managed), JSONB snapshots |
-| AI | Anthropic Claude Sonnet 4 / Sonnet 4.5 (server-side proxy) |
+| AI | Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`, server-side proxy). Sonnet 4 was retired by Anthropic on 2026-06-16; we migrated the same day. |
 | AI Agents | Claude Haiku 4.5 (self-critique, feedback, calibration) |
 | PDF (primary) | Server-side Puppeteer + `@sparticuz/chromium` via `pdfRenderer.js` — selectable text, native pagination |
 | PDF (fallback) | Client-side `html2canvas` + `jsPDF` via `src/utils/exportPdf.js` — used when Chromium fails |

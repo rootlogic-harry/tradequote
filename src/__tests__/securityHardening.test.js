@@ -80,7 +80,9 @@ describe('sec-audit H-1 — Anthropic proxy enforces model + token caps', () => 
   test('declares an explicit model allowlist (no wildcards)', () => {
     expect(serverSrc).toMatch(/ANTHROPIC_MODEL_ALLOWLIST\s*=\s*new\s+Set\(\[/);
     // The two models we actually use.
-    expect(serverSrc).toMatch(/['"]claude-sonnet-4-20250514['"]/);
+    // Hotfix 2026-06-16: Anthropic retired claude-sonnet-4-20250514.
+    // Migrated to Sonnet 4.5.
+    expect(serverSrc).toMatch(/['"]claude-sonnet-4-5-20250929['"]/);
     expect(serverSrc).toMatch(/['"]claude-haiku-4-5-20251001['"]/);
   });
 
