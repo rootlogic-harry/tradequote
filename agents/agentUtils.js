@@ -2,7 +2,12 @@ import https from 'https';
 
 const ANTHROPIC_API_URL = 'api.anthropic.com';
 const ANTHROPIC_API_PATH = '/v1/messages';
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+// Hotfix 2026-06-16: Anthropic retired claude-sonnet-4-20250514
+// (Paul started hitting 404 not_found_error on every analyse call).
+// Migrated to Sonnet 4.5 — same pricing ($3/$15 per MTok), behaviourally
+// close. The old string is kept in src/utils/anthropicPricing.js for
+// historical agent_runs row cost-out only.
+const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
 const DEFAULT_MAX_TOKENS = 4000;
 
 /**

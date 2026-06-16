@@ -82,7 +82,7 @@ VideoUpload ──XHR──→ multer ──→   │       │           │
 | Frontend | React 19, Vite 5, Tailwind CSS (CDN) |
 | Backend | Express 5.2, Node 20+, raw `pg` |
 | Database | Postgres 15+ (Railway), JSONB |
-| AI (primary) | Anthropic Claude Sonnet 4 / Sonnet 4.5 (server-proxied) |
+| AI (primary) | Anthropic Claude Sonnet 4.5 (server-proxied) |
 | AI (agents) | Anthropic Claude Haiku 4.5 |
 | Audio | OpenAI Whisper |
 | Video | ffmpeg (via `fluent-ffmpeg`) |
