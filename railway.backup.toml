@@ -1,0 +1,21 @@
+# Per-service Railway config for the backup cron worker.
+#
+# Why this file exists: Railway auto-discovers `railway.toml` at the
+# repo root and applies it to every service that doesn't point
+# elsewhere. The repo-root `railway.toml` declares
+# `startCommand = "node server.js"` for the main app, which would
+# crash this service on every cron tick (no server.js in the backup
+# image). Pointing the backup service at this file via its dashboard
+# settings keeps the two services from sharing settings that don't
+# apply to both.
+#
+# The cron schedule itself is set in the Railway dashboard, not here,
+# since it's per-environment and shouldn't be committed.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile.backup"
+
+[deploy]
+startCommand = "node scripts/backup-to-r2.js"
+restartPolicyType = "never"
