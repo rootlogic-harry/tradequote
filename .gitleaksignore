@@ -1,0 +1,32 @@
+# gitleaks suppression list — historical false positives only.
+#
+# Format: each line is `<commit>:<file>:<rule>:<startLine>` — the
+# fingerprint gitleaks emits for a finding. An entry here silences
+# that specific commit/file/line combination on future scans.
+#
+# Adding new entries: run
+#   gitleaks detect --source . --log-opts="--all" --report-path=/tmp/leaks.json
+#   cat /tmp/leaks.json | jq -r '.[] | .Fingerprint'
+# and paste any LEGITIMATELY-FALSE-POSITIVE rows here with a comment
+# explaining WHY they're a false positive. Never add a line without
+# the why — otherwise this file becomes a hiding place for real leaks.
+
+# ──────────────────────────────────────────────────────────────────
+# Client-portal test-fixture UUID (TRQ-125 era)
+#
+# Every test that exercises the `/q/:token` route uses the same
+# hardcoded UUID `a3f7c091-2e84-4b1a-9f23-8d05e7b61c3a` as a
+# deterministic input. It's never an active token in the database
+# and has no auth value — it exists solely so tests can assert
+# "URL parses to /q/<this>".
+#
+# gitleaks' `generic-api-key` rule fires on it because UUIDs are
+# high-entropy and the literal `TOKEN = '...'` matches its
+# context heuristic. False positive — confirmed safe by inspection
+# 2026-06-16 during the TRQ-156 history scan.
+70c99efcde4d5a091165f1dcee46b4a2fed0ab17:src/__tests__/portalHead.test.js:generic-api-key:11
+1f51974f8eb7fe4239497d5258a4847f26e75289:src/__tests__/documentType.test.js:generic-api-key:157
+9c78d175ef085b2568bad6b3a453fbe284916681:src/__tests__/clientLinkBlock.test.js:generic-api-key:59
+2b370eaff81331233fa88414d5502f7d7ffeb3ee:src/__tests__/keyFlows.test.js:generic-api-key:117
+2b370eaff81331233fa88414d5502f7d7ffeb3ee:src/__tests__/keyFlows.test.js:generic-api-key:315
+ebe5b88feb8e6a7ecedd30e4e39dcf62dca905de:src/__tests__/portalRenderer.test.js:generic-api-key:25
