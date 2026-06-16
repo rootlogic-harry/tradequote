@@ -16,12 +16,26 @@
 
 FROM node:20-bullseye-slim
 
-# postgresql-client provides pg_dump. ca-certificates is required by
-# the AWS SDK's HTTPS calls to Cloudflare R2.
+# postgresql-client-18 provides pg_dump matching the Railway-managed
+# Postgres 18 server. Debian bullseye's default `postgresql-client`
+# metapackage is v13, which pg_dump refuses to use against a v18
+# server ("server version mismatch"). We pull the matching major
+# from the PGDG APT repo. curl + gnupg are needed only to fetch and
+# trust the PGDG signing key; we purge them after to keep the image
+# lean.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-      postgresql-client \
       ca-certificates \
+      curl \
+      gnupg \
+  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+  && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bullseye-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-client-18 \
+  && apt-get purge -y curl gnupg \
+  && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
