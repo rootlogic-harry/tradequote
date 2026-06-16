@@ -159,10 +159,13 @@ describe('downloadBlob — wiring in QuoteOutput export paths', () => {
   test('server PDF handler calls downloadBlob', () => {
     // Grab a generous slice from the handler keyword forward — the
     // arrow-function body is long and contains try/catch/finally, so
-    // a lazy regex terminates too early.
+    // a lazy regex terminates too early. Slice bumped to 5000 chars
+    // when worker-copy was added (the new filename-suffix branch +
+    // hideCosts param + their comments pushed downloadBlob() past
+    // the previous 3000-char window).
     const idx = src.indexOf('handleDownloadPdfServer = async');
     expect(idx).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 3000);
+    const slice = src.slice(idx, idx + 5000);
     expect(slice).toMatch(/downloadBlob\s*\(/);
   });
 

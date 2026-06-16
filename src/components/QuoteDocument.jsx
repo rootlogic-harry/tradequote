@@ -46,7 +46,7 @@ function EditableText({ value, onChange, editable, multiline = true, className =
   );
 }
 
-export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp, editable = false, dispatch }) {
+export default function QuoteDocument({ state, showPhotos = true, selectedPhotos: selectedPhotosProp, editable = false, dispatch, hideCosts = false }) {
   // editable requires dispatch — guard so we never render edit affordances
   // without a way to commit changes (e.g. SavedQuoteViewer passes no dispatch).
   const canEdit = editable && typeof dispatch === 'function';
@@ -173,9 +173,15 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </div>
       </div>
 
-      {/* Reference line */}
+      {/* Reference line. Worker-copy mode (hideCosts) reframes this as
+           "Job Details" because the document the tradesman gives Paul /
+           Jordan on site shouldn't read like a customer quote. The
+           quote reference + client name are kept off the heading too
+           in worker mode — the worker just needs the address. */}
       <div className="bg-gray-50 px-4 py-2 rounded mb-6 text-base font-medium">
-        {term.title} ref: {jobDetails.quoteReference} — {jobDetails.clientName}, {jobDetails.siteAddress}
+        {hideCosts
+          ? <>Job Details — {jobDetails.siteAddress}</>
+          : <>{term.title} ref: {jobDetails.quoteReference} — {jobDetails.clientName}, {jobDetails.siteAddress}</>}
       </div>
 
       {/* Section 1: Damage */}
@@ -272,7 +278,11 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
         </ol>
       </div>
 
-      {/* Section 4: Cost Breakdown */}
+      {/* Section 4: Cost Breakdown. Hidden in worker-copy mode so Mark
+           can hand the document to Paul / Jordan without exposing the
+           customer's price. Everything else stays — address, schedule,
+           measurements, notes, photos. */}
+      {!hideCosts && (
       <div className="mb-12" data-print-section="cost-breakdown">
         <h2 className="text-lg font-bold uppercase tracking-wide text-gray-700 mb-2 border-b border-gray-200 pb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Cost Breakdown
@@ -336,6 +346,7 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           </div>
         </div>
       </div>
+      )}
 
       {/* Notes & Conditions — hidden when user disables in profile */}
       {profile.showNotesOnQuote !== false && (

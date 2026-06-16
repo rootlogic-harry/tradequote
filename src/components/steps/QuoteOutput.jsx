@@ -133,7 +133,12 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   // user always gets a PDF option, no dead-end. The fallback produces the
   // same document because both render paths share public/print.css.
   const [generatingServerPdf, setGeneratingServerPdf] = useState(false);
-  const handleDownloadPdfServer = async () => {
+  // hideCosts=true is the "worker copy" path Mark uses when sending
+  // Paul or Jordan to site without him. Same pipeline; QuoteDocument
+  // skips the Cost Breakdown + Totals block and reframes the
+  // reference line as "Job Details". Filename suffix prevents the
+  // unredacted PDF from accidentally going to the customer.
+  const handleDownloadPdfServer = async ({ hideCosts = false } = {}) => {
     if (!state.currentUserId) {
       showToast?.(`Save the ${term.lower} first, then download PDF.`, 'error');
       return;
@@ -153,13 +158,18 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       // browser side has to attach the aspect before we serialize.
       const photosWithAspect = await loadAspects(filteredPhotos);
       const quoteHtml = renderToStaticMarkup(
-        <QuoteDocument state={state} showPhotos selectedPhotos={photosWithAspect} />
+        <QuoteDocument state={state} showPhotos selectedPhotos={photosWithAspect} hideCosts={hideCosts} />
       );
-      const title = buildQuoteFilename({
+      const baseTitle = buildQuoteFilename({
         clientName: jobDetails.clientName,
         siteAddress: jobDetails.siteAddress,
         fallbackLabel: term.title,
       });
+      // Suffix the filename in worker-copy mode so a glance at the
+      // file name in an email attachment makes it obvious which one
+      // it is. Defensive: prevents Mark accidentally sending the
+      // un-redacted file to the customer.
+      const title = hideCosts ? `${baseTitle} - worker copy` : baseTitle;
       const jobId = savedJobId || state.savedJobId || 'draft';
 
       // Bound the request so a hung Chromium can't leave the user staring
@@ -611,6 +621,21 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           {generatingServerPdf && <InlineSpinner />}
           {generatingServerPdf ? 'Generating PDF...' : 'Download PDF'}
         </button>
+        {/* Worker copy — admin-only. Same PDF, costs hidden, suffix
+             on the filename, "Job Details" instead of "Quote ref" in
+             the header. Mark sends this to Paul / Jordan when they
+             do a job without him on site. */}
+        {isAdminPlan && (
+          <button
+            onClick={() => handleDownloadPdfServer({ hideCosts: true })}
+            disabled={generatingServerPdf}
+            className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            title="Same PDF with the cost breakdown removed. For sending workers to site without exposing the customer's price."
+          >
+            {generatingServerPdf && <InlineSpinner />}
+            Download worker copy
+          </button>
+        )}
         <button
           onClick={handlePrint}
           disabled={printing}
