@@ -21,6 +21,7 @@ import AgentActivity from './components/AgentActivity.jsx';
 import Analytics from './components/Analytics.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
+import SubscriptionBanner from './components/SubscriptionBanner.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
@@ -834,6 +835,7 @@ export default function App() {
         />
         <div className="max-w-5xl mx-auto px-3 fq:px-4 py-4 fq:py-6">
           <OfflineBanner />
+          <SubscriptionBanner />
           <SaveErrorBanner
             error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}
             onDismiss={() => setDismissedSaveErrorKey(state.quoteSaveErrorKey || 0)}
