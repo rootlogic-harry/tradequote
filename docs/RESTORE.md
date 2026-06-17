@@ -15,14 +15,20 @@ and verification depth. Don't mix them up.
 
 ## 1. Restore-test (routine — agent-safe)
 
-### What it does
+There are two ways to run this. The Docker-based script
+(`scripts/restore-test.js`) is the intended automation; the
+manual brew/`initdb` path below is the no-Docker fallback and
+is what was actually executed for the first TRQ-148 drill on
+2026-06-17.
 
-`scripts/restore-test.js`:
+### 1A. Automated path — `scripts/restore-test.js` (requires Docker)
+
+What it does:
 
 1. Picks the latest `.sql.gz` from R2 (or accepts `--file` /
    `--r2-key` for a specific dump).
 2. Downloads it into the host `/tmp`.
-3. Spins up a throwaway `postgres:15` container on a random
+3. Spins up a throwaway `postgres:18` container on a random
    ephemeral port. Container name: `restore-test-<rand>`. Uses
    `docker run --rm` so the container self-destructs.
 4. Streams `gunzip -c | docker exec psql -v ON_ERROR_STOP=1` —
@@ -38,19 +44,85 @@ If the URL ever resolves to a non-localhost host, the script refuses
 to run. There is no path through this script that can touch
 production.
 
-### Prerequisites
+> ⚠️ As of 2026-06-17 the script still references `postgres:15`. It
+> has not been updated since prod moved to Postgres 18. Tracked in
+> a follow-up ticket (TRQ-162) — until then, use 1B below or pass
+> `--keep` and inspect manually.
 
-- Docker Desktop running locally (Harry's Mac has this).
+### Prerequisites for 1A
+
+- Docker Desktop running locally. **Not currently installed on
+  Harry's Mac (as of 2026-06-17)** — until then, see 1B.
 - R2 env vars set in shell if reading from R2:
   ```bash
-  export R2_ENDPOINT=https://<acct>.r2.cloudflarestorage.com
+  export R2_ENDPOINT=https://<acct>.eu.r2.cloudflarestorage.com   # note the .eu. infix
   export R2_BUCKET=fastquote-backups
   export R2_ACCESS_KEY_ID=...
   export R2_SECRET_ACCESS_KEY=...
   ```
 - No DB env needed — the script picks its own ephemeral port.
 
-### Run it
+### 1B. Manual path — brew + `initdb` (no Docker needed)
+
+The path actually used for the first TRQ-148 drill. Works on Harry's
+M3 Mac end-to-end in ~6 minutes including the one-time brew install.
+
+```bash
+# One-time setup — installs Postgres 18 binaries (psql, initdb,
+# pg_ctl, pg_dump). Matches the production major.
+brew install postgresql@18
+
+# Throwaway working dir — /tmp so the OS reaps it even if cleanup
+# is forgotten.
+mkdir -p /tmp/fastquote-restore
+cd /tmp/fastquote-restore
+
+# Download the newest dump from R2. Easiest is the Cloudflare R2
+# dashboard → fastquote-backups → sort by Last Modified → Download.
+# Save as /tmp/fastquote-restore/latest.sql.gz.
+
+# Spin up an ephemeral cluster on port 55432. Unix socket lives in
+# the working dir so authentication is local-only (no TCP open).
+PG_BIN=/opt/homebrew/opt/postgresql@18/bin
+SOCK=/tmp/fastquote-restore
+
+$PG_BIN/initdb -D $SOCK/pgdata -E UTF-8 --locale=en_US.UTF-8 \
+  -U restore_user --auth=trust
+$PG_BIN/pg_ctl -D $SOCK/pgdata -l $SOCK/pg.log \
+  -o "-p 55432 -k $SOCK" start
+$PG_BIN/createdb -h $SOCK -p 55432 -U restore_user restore_scratch
+
+# Restore. Plain SQL dump → psql, NOT pg_restore. ON_ERROR_STOP=0
+# tolerates a few set_config warnings during the prelude; check
+# stderr afterwards for actual ERROR: lines.
+gunzip -c latest.sql.gz | $PG_BIN/psql -h $SOCK -p 55432 \
+  -U restore_user -d restore_scratch -v ON_ERROR_STOP=0 -X --quiet \
+  2> psql.err
+grep -i '^ERROR:' psql.err || echo "clean restore"
+
+# Verify with the same script CI uses on prod.
+cd ~/Documents/Cloud\ Drive/FastQuote
+DATABASE_URL="postgres://restore_user@localhost:55432/restore_scratch" \
+  node scripts/check-moat.js
+
+# Sanity: row-count parity with prod (see step 2 of the runbook
+# below for the prod side via railway run).
+
+# Tear down.
+$PG_BIN/pg_ctl -D /tmp/fastquote-restore/pgdata stop
+rm -rf /tmp/fastquote-restore
+```
+
+The brew install of `postgresql@18` stays — it's the tool, not data.
+
+### Prerequisites for 1B
+
+- `brew install postgresql@18` (one-time, ~2 min).
+- An R2 dashboard tab open (or the credentials handy) to grab the
+  latest dump. The dump is ~300 MB compressed.
+- ~600 MB free in `/tmp`.
+
+### Run the automated path (1A — needs Docker)
 
 ```bash
 # Most common — use the newest backup in R2
@@ -92,6 +164,29 @@ docker: stopping restore-test-ab12cd34…
 Harry must personally watch this run succeed end-to-end at least
 once before the EU migration (TRQ-149) is allowed to proceed. The
 output above is what "succeeded" looks like.
+
+#### First drill — 2026-06-17
+
+Path 1B (manual brew + `initdb`) against
+`daily/fastquote-2026-06-17T0725Z-wed.sql.gz` (304 MB gzipped).
+
+```
+✓ quote_diffs          642 rows (floor 100)
+✓ calibration_notes    16 rows (floor 1)
+✓ agent_runs           154 rows (floor 100)
+All moat checks passed.
+```
+
+Row counts matched production exactly across `quote_diffs` (642),
+`calibration_notes` (16), `agent_runs` (154), `users` (10), `jobs`
+(58), `profiles` (8), `drafts` (5). FK orphan check returned six
+zeroes across the parent/child relationships
+(`jobs→users`, `quote_diffs→jobs`, `agent_runs→users`,
+`agent_runs→jobs`, `profiles→users`, `drafts→users`). 14 FK
+constraints + 37 indexes restored. End-to-end wall time on Harry's
+M3 Mac was under 6 minutes including the brew install.
+
+Next scheduled drill: **2026-09-17** (quarterly cadence).
 
 ### Exit codes
 

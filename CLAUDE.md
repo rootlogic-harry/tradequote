@@ -558,6 +558,23 @@ and escalate to Harry** — DB restores lose writes since the backup
 timestamp and the constitution requires explicit human go-ahead for
 irreversible actions.
 
+### Backups + restore (TRQ-147 / TRQ-148)
+
+- **Backups**: `docs/BACKUP.md` — daily PG dump → Cloudflare R2
+  (`fastquote-backups` bucket, EU jurisdiction) at `0 3 * * *` UTC.
+  Service: `fastquote-backup-service` on Railway, runs
+  `scripts/backup-to-r2.js` via `Dockerfile.backup`. Retention
+  defaults: 7 daily + 4 weekly Sunday anchors.
+- **Restore drill**: `docs/RESTORE.md` — quarterly drill verifying
+  the latest dump is restorable into a throwaway scratch DB and
+  passes `scripts/check-moat.js`. First green drill: 2026-06-17
+  (`fastquote-2026-06-17T0725Z-wed.sql.gz`). Next: 2026-09-17.
+  The runbook has both an automated path (Docker) and a manual
+  brew/`initdb` fallback that was used for the first drill.
+- **Disaster recovery**: `docs/RESTORE.md` §2 — Harry-only path
+  for restoring INTO production. Autonomous agents never run this;
+  irreversible action gated on explicit human go-ahead.
+
 ### After Every Code Change
 
 ```bash
