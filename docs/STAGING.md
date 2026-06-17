@@ -89,10 +89,10 @@ node scripts/download-r2-backup.js --r2-key daily/<chosen>.sql.gz | \
 DATABASE_URL="$STAGING_DATABASE_URL" npm run check:moat
 ```
 
-The `download-r2-backup.js` helper doesn't exist as a standalone yet
-(this PR doesn't ship it). For now, use `aws --endpoint-url ... s3 cp`
-or do the download from inside `restore-test.js --keep` and grab the
-file from `/tmp/fq-restore-*/backup.sql.gz`.
+`download-r2-backup.js` streams the chosen object to stdout (or
+`--output <path>` for a file). Logs all go to stderr so the stdout
+stream is clean .sql.gz bytes ready to pipe. Run with `--list` to
+see what's in the bucket without downloading.
 
 ### 3. Verify isolation (2 min)
 
@@ -219,13 +219,12 @@ from ~£1,040 to ~£1,020/mo. Worth the safety.
 
 ## What's NOT in this PR
 
-This PR ships the sanitiser script + the runbook. It does NOT:
+The initial sanitiser PR shipped the script + the runbook.
+`scripts/download-r2-backup.js` shipped as a follow-up. Still NOT
+shipped:
 
 - Create the staging Railway environment (Harry-only — Railway
   console).
-- Provide a standalone `scripts/download-r2-backup.js` (the
-  existing `restore-test.js --keep` is the workaround until
-  someone needs it).
 - Wire promote-to-prod automation (Railway's deployment-trigger
   config is in their dashboard, not in this repo).
 
