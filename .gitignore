@@ -31,3 +31,6 @@ coverage/
 
 # Logs
 npm-debug.log*
+
+# Local Claude Code agent config (per-machine, never committed)
+.claude/

@@ -188,12 +188,24 @@ describe('SubscriptionBanner.jsx — wiring contract', () => {
     }
   });
 
-  test('expired + canceled CTAs hit /api/billing/checkout', () => {
+  test('expired, canceled, AND trial-ending CTAs hit /api/billing/checkout', () => {
+    // trial-ending uses checkout (not portal) because during the
+    // no-card-upfront trial the user has no Stripe customer yet —
+    // Portal would 400 with "No subscription on file". Checkout
+    // creates the customer + subscription in one go.
     expect(bannerSrc).toMatch(/fetch\(['"]\/api\/billing\/checkout['"]/);
+    // Trial-ending Strip block must use openCheckout (matches the
+    // whole Strip JSX from variant check to closing /Strip).
+    expect(bannerSrc).toMatch(
+      /variant === 'trial-ending'[\s\S]*?testId="subscription-banner-trial-ending"[\s\S]*?onClick=\{openCheckout\}[\s\S]*?<\/Strip>/
+    );
   });
 
-  test('past_due + trial-ending CTAs hit /api/billing/portal', () => {
+  test('past_due CTA hits /api/billing/portal (existing customer needs to update card)', () => {
     expect(bannerSrc).toMatch(/fetch\(['"]\/api\/billing\/portal['"]/);
+    expect(bannerSrc).toMatch(
+      /variant === 'past-due'[\s\S]*?testId="subscription-banner-past-due"[\s\S]*?onClick=\{openPortal\}[\s\S]*?<\/Strip>/
+    );
   });
 
   test('redirects to the returned Stripe URL via window.location.href', () => {
