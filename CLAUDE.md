@@ -50,7 +50,12 @@ always better than an autonomous irreversible action.
 - **`agent_runs.status` enum**: `'running'` (insert) → `'completed'` (success)
   or `'failed'` (error). **One canonical success string everywhere.** Do not
   invent new values. See TRQ-140 for the historical inconsistency this
-  replaced.
+  replaced. Stuck `'running'` rows (handler never fired — outage, container
+  kill, missing await) are swept to `'failed'` by `reapOrphanedRuns` in
+  `agents/retryQueue.js`, called from `processRetryQueue` on server start.
+  Default threshold: 60 minutes. The reaper appends an audit marker to the
+  `error` column so analytics can distinguish "reaped" from "real failure"
+  (TRQ-163).
 - **Build is a `Dockerfile`**, not Nixpacks. The repo's `Dockerfile` is the
   source of truth for what Railway ships — it installs Chromium runtime libs +
   ffmpeg that Nixpacks dropped. `railway.toml`'s builder setting and the

@@ -43,9 +43,60 @@ export async function enqueueRetry(pool, agentType, payload, error, maxAttempts 
 }
 
 /**
+ * Mark orphaned `status = 'running'` agent_runs rows as `'failed'`.
+ *
+ * Background (TRQ-163): rows are INSERTed with status='running' at
+ * the start of an agent run; the UPDATE to 'completed' or 'failed'
+ * lives in the success/error handler. Anything that prevents the
+ * handler from firing — Anthropic API outage, container kill mid-
+ * request, missing await — leaves a row stuck on 'running' forever.
+ * Those rows then pollute analytics ("X% of analyse runs never
+ * finished") and never get cleaned up because there's no retry
+ * entry for them.
+ *
+ * This sweeper is the structural answer to the one-shot manual
+ * UPDATE that was needed during TRQ-140 sign-off. It runs whenever
+ * processRetryQueue() runs, which is on server start.
+ *
+ * Threshold: 1 hour. Real analyse runs are usually <30s; calibration
+ * /feedback can take minutes but never an hour. A row in 'running'
+ * for >1h is dead by definition.
+ *
+ * Returns the count of reaped rows (0 if nothing to do).
+ */
+export async function reapOrphanedRuns(pool, options = {}) {
+  const staleAfterMinutes = options.staleAfterMinutes ?? 60;
+  const marker = options.marker
+    ?? `[reaper: orphaned 'running' run, age > ${staleAfterMinutes}m]`;
+
+  const { rowCount } = await pool.query(
+    `UPDATE agent_runs
+        SET status = 'failed',
+            error = COALESCE(error, '') || $1
+      WHERE status = 'running'
+        AND created_at < NOW() - ($2 || ' minutes')::interval`,
+    [' ' + marker, String(staleAfterMinutes)]
+  );
+
+  if (rowCount > 0) {
+    console.log(`[RetryQueue] Reaped ${rowCount} orphaned 'running' agent_runs row(s) (threshold ${staleAfterMinutes}m).`);
+  }
+  return rowCount;
+}
+
+/**
  * Process pending retries. Calls the provided runner for each due entry.
+ * Also reaps any orphaned `status='running'` rows (see reapOrphanedRuns).
  */
 export async function processRetryQueue(pool, runners) {
+  // Reaper pass first — keeps analytics clean before the retry-attempt
+  // loop starts. Failures here shouldn't block retries; log + continue.
+  try {
+    await reapOrphanedRuns(pool);
+  } catch (err) {
+    console.warn(`[RetryQueue] reapOrphanedRuns failed: ${err.message}`);
+  }
+
   const { rows } = await pool.query(
     `SELECT * FROM agent_retry_queue
      WHERE attempts < max_attempts AND next_retry_at <= NOW()
