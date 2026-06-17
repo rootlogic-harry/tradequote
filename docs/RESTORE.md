@@ -21,7 +21,7 @@ manual brew/`initdb` path below is the no-Docker fallback and
 is what was actually executed for the first TRQ-148 drill on
 2026-06-17.
 
-### 1A. Automated path — `scripts/restore-test.js` (requires Docker)
+### 1A. Automated path — `scripts/restore-test.js`
 
 What it does:
 
@@ -29,38 +29,40 @@ What it does:
    `--r2-key` for a specific dump).
 2. Downloads it into the host `/tmp`.
 3. Spins up a throwaway `postgres:18` container on a random
-   ephemeral port. Container name: `restore-test-<rand>`. Uses
-   `docker run --rm` so the container self-destructs.
-4. Streams `gunzip -c | docker exec psql -v ON_ERROR_STOP=1` —
-   fails fast on the first SQL error rather than leaving a
-   half-restored DB.
-5. Runs `scripts/check-moat.js --fresh` against the restored
-   container.
-6. Tears the container down (unless `--keep`).
+   ephemeral port (Docker default). With `--no-docker`, runs
+   brew's `postgresql@18` cluster in `/tmp` via `initdb` +
+   `pg_ctl` — same outcome, no Docker required.
+4. Streams `gunzip -c | psql -v ON_ERROR_STOP=1` — fails fast
+   on the first SQL error rather than leaving a half-restored DB.
+5. Runs `scripts/check-moat.js --fresh` against the restored DB.
+6. Tears it down (unless `--keep`).
 
 **Hard rule, mechanically enforced:** the `DATABASE_URL` this script
-uses is always `postgres://restore-test:restore-test@localhost:<port>/postgres`.
+uses is always `postgres://restore-test:restore-test@localhost:<port>/postgres`
+(Docker) or `postgres://restore-test@localhost:<port>/postgres`
+(no-Docker — trust auth on Unix socket, no password needed).
 If the URL ever resolves to a non-localhost host, the script refuses
 to run. There is no path through this script that can touch
 production.
 
-> ⚠️ As of 2026-06-17 the script still references `postgres:15`. It
-> has not been updated since prod moved to Postgres 18. Tracked in
-> a follow-up ticket (TRQ-162) — until then, use 1B below or pass
-> `--keep` and inspect manually.
-
 ### Prerequisites for 1A
 
-- Docker Desktop running locally. **Not currently installed on
-  Harry's Mac (as of 2026-06-17)** — until then, see 1B.
-- R2 env vars set in shell if reading from R2:
-  ```bash
-  export R2_ENDPOINT=https://<acct>.eu.r2.cloudflarestorage.com   # note the .eu. infix
-  export R2_BUCKET=fastquote-backups
-  export R2_ACCESS_KEY_ID=...
-  export R2_SECRET_ACCESS_KEY=...
-  ```
-- No DB env needed — the script picks its own ephemeral port.
+Either Docker OR brew's postgresql@18. The script auto-detects which
+one is in play based on `--no-docker`:
+
+- **Docker path** (default): Docker Desktop running locally.
+- **No-Docker path**: `brew install postgresql@18` (one-time).
+  Override `PG_BIN` if your install lives elsewhere.
+
+R2 env vars (only if reading directly from R2 — `--file` skips these):
+```bash
+export R2_ENDPOINT=https://<acct>.eu.r2.cloudflarestorage.com   # note the .eu. infix
+export R2_BUCKET=fastquote-backups
+export R2_ACCESS_KEY_ID=...
+export R2_SECRET_ACCESS_KEY=...
+```
+
+No DB env needed — the script picks its own ephemeral port.
 
 ### 1B. Manual path — brew + `initdb` (no Docker needed)
 
@@ -122,10 +124,10 @@ The brew install of `postgresql@18` stays — it's the tool, not data.
   latest dump. The dump is ~300 MB compressed.
 - ~600 MB free in `/tmp`.
 
-### Run the automated path (1A — needs Docker)
+### Run the automated path (1A)
 
 ```bash
-# Most common — use the newest backup in R2
+# Most common — newest R2 backup, Docker
 node scripts/restore-test.js
 
 # A specific R2 backup
@@ -134,8 +136,11 @@ node scripts/restore-test.js --r2-key daily/fastquote-2026-06-14T0300Z-sat.sql.g
 # A local file (e.g. after manual download)
 node scripts/restore-test.js --file ~/Downloads/dump.sql.gz
 
-# Keep the container after success (useful for ad-hoc inspection)
+# Keep the scratch DB after success (useful for ad-hoc inspection)
 node scripts/restore-test.js --keep
+
+# Skip Docker, use brew postgresql@18 instead
+node scripts/restore-test.js --no-docker --file ~/Downloads/dump.sql.gz
 ```
 
 ### Expected output (happy path)
