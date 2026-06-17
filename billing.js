@@ -263,6 +263,34 @@ export async function applySubscriptionEventToDb(pool, event) {
       return { applied: true, userId, status: 'canceled' };
     }
 
+    case 'customer.subscription.trial_will_end': {
+      // Stripe fires this ~3 days before a trialing subscription
+      // converts. For the no-card-upfront model (TRQ-150), this is the
+      // hook to flip the in-app banner from "trial in progress" to
+      // "ends in N days — add a card to keep using" without making the
+      // UI poll Stripe every render. The schema column is
+      // trial_will_end_at; the UI reads it via /api/billing/status.
+      //
+      // No email is sent from here — that becomes its own ticket once
+      // a transactional-email path exists. The signal is captured so
+      // the email handler can pick it up later without backfill.
+      const sub = event.data.object;
+      const userId = sub.metadata?.fastquote_user_id;
+      if (!userId) return { applied: false, reason: 'no fastquote_user_id in metadata' };
+      // trial_end is the Unix timestamp when the trial ends. Stripe
+      // schedules trial_will_end 3 days before that point.
+      const trialEnd = sub.trial_end
+        ? new Date(sub.trial_end * 1000)
+        : null;
+      await pool.query(
+        `UPDATE users
+            SET trial_will_end_at = $1
+          WHERE id = $2`,
+        [trialEnd, userId]
+      );
+      return { applied: true, userId, trialEndsAt: trialEnd };
+    }
+
     case 'invoice.payment_failed': {
       const invoice = event.data.object;
       // Map invoice.customer → user via stripe_customer_id.

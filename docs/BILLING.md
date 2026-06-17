@@ -85,6 +85,7 @@ from the Root Logic account. Keep bookkeeping clean from day one.
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
+   - `customer.subscription.trial_will_end` (fires ~3 days before trial converts; captures the timestamp so the UI banner can switch to "trial ends in N days")
    - `invoice.payment_failed`
 4. Copy the signing secret (`whsec_…`) → into Railway env as
    `STRIPE_WEBHOOK_SECRET`.
