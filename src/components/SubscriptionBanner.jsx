@@ -110,12 +110,17 @@ export default function SubscriptionBanner({ enabled = true }) {
   }
 
   if (variant === 'trial-ending') {
+    // CTA opens Checkout, not Portal. During the no-card-upfront
+    // trial the user has no Stripe customer yet — Portal would 400
+    // with "No subscription on file". Checkout creates the
+    // customer + subscription in one go and Stripe handles the
+    // remaining trial days automatically before billing kicks in.
     return (
       <Strip tone="warning" testId="subscription-banner-trial-ending">
         <Body>
           <strong>Your free trial ends in {dayCopy(status.daysOfTrialRemaining)}.</strong> Add a payment method to keep using FastQuote when it does.
         </Body>
-        <Cta onClick={openPortal} disabled={busy}>Add payment method</Cta>
+        <Cta onClick={openCheckout} disabled={busy}>Add payment method</Cta>
       </Strip>
     );
   }
