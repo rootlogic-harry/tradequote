@@ -77,10 +77,19 @@ export function isLiveKey(key) {
  */
 export function stripeClient() {
   if (_client) return _client;
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
+  const raw = process.env.STRIPE_SECRET_KEY;
+  if (!raw) {
     throw new Error('STRIPE_SECRET_KEY is not set — billing routes are unavailable');
   }
+  // Strip any whitespace (newlines, spaces, tabs) the key may have
+  // picked up during a paste. On 2026-06-17 a multi-line paste into
+  // Railway introduced `\n  ` into the middle of the key, which
+  // Node's HTTP header validator rejects with ERR_INVALID_CHAR —
+  // surfaced server-side only as the opaque StripeConnectionError
+  // "An error occurred with our connection to Stripe", killing the
+  // checkout flow with no client-side signal. Stripe keys are
+  // alphanumeric + `_`, so stripping all whitespace is safe.
+  const key = raw.replace(/\s+/g, '');
   if (isLiveKey(key) && process.env.STRIPE_ALLOW_LIVE !== '1') {
     throw new Error(
       'Refusing to construct a Stripe client with a live key (sk_live_…) ' +

@@ -1,5 +1,5 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { safeError } from '../../safeError.js';
+import { safeError, formatErrorContext } from '../../safeError.js';
 
 describe('safeError', () => {
   let res;
@@ -119,6 +119,110 @@ describe('safeError', () => {
       const body = res.json.mock.calls[0][0];
       expect(body.error).not.toContain('postgres-8dej.railway.internal');
       expect(body.error).not.toContain('EAI_AGAIN');
+    });
+  });
+
+  describe('formatErrorContext — surfaces diagnostic fields by error shape', () => {
+    test('Stripe errors get their detail / code / type extracted', () => {
+      // Reproduces the 2026-06-17 incident: a Stripe SDK
+      // StripeConnectionError where the underlying ERR_INVALID_CHAR
+      // was hidden inside err.detail. Without this extraction,
+      // logs only show "An error occurred with our connection to
+      // Stripe" with no clue what caused it.
+      const detail = new TypeError(
+        'Invalid character in header content ["Authorization"]'
+      );
+      detail.code = 'ERR_INVALID_CHAR';
+      const err = Object.assign(
+        new Error('An error occurred with our connection to Stripe.'),
+        { type: 'StripeConnectionError', code: undefined, detail }
+      );
+      const ctx = formatErrorContext(err);
+      expect(ctx).toEqual({
+        stripe: {
+          type: 'StripeConnectionError',
+          code: undefined,
+          statusCode: undefined,
+          requestId: undefined,
+          detail: 'Invalid character in header content ["Authorization"]',
+        },
+      });
+    });
+
+    test('Stripe API errors include statusCode + requestId', () => {
+      // Typical shape of a Stripe API-side error (4xx with a code).
+      const err = Object.assign(new Error('No such price: price_bogus'), {
+        type: 'StripeInvalidRequestError',
+        code: 'resource_missing',
+        statusCode: 404,
+        requestId: 'req_abc123',
+      });
+      const ctx = formatErrorContext(err);
+      expect(ctx.stripe).toEqual({
+        type: 'StripeInvalidRequestError',
+        code: 'resource_missing',
+        statusCode: 404,
+        requestId: 'req_abc123',
+        detail: undefined,
+      });
+    });
+
+    test('Node fs/net errors get code + errno + syscall', () => {
+      const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+        code: 'ECONNREFUSED', errno: -61, syscall: 'connect',
+      });
+      const ctx = formatErrorContext(err);
+      expect(ctx).toEqual({
+        node: { code: 'ECONNREFUSED', errno: -61, syscall: 'connect' },
+      });
+    });
+
+    test('Errors with a .cause drill one level deep', () => {
+      const cause = new Error('downstream timeout');
+      const err = new Error('aggregate failed');
+      err.cause = cause;
+      const ctx = formatErrorContext(err);
+      expect(ctx).toEqual({ cause: 'downstream timeout' });
+    });
+
+    test('Plain Error with nothing to extract returns null (no noise in log)', () => {
+      const err = new Error('something went wrong');
+      expect(formatErrorContext(err)).toBeNull();
+    });
+
+    test('null / non-object input is safe (no crash)', () => {
+      expect(formatErrorContext(null)).toBeNull();
+      expect(formatErrorContext(undefined)).toBeNull();
+      expect(formatErrorContext('a string')).toBeNull();
+      expect(formatErrorContext(42)).toBeNull();
+    });
+  });
+
+  describe('safeError — logs the diagnostic context line', () => {
+    test('Stripe error log includes the structured context object', () => {
+      const detail = new TypeError('Invalid character');
+      const err = Object.assign(
+        new Error('An error occurred with our connection to Stripe.'),
+        { type: 'StripeConnectionError', detail }
+      );
+      safeError(res, err, 'POST /api/billing/checkout');
+      // First arg is the bracketed context, then message, then ctx object.
+      const calls = consoleErrorSpy.mock.calls;
+      expect(calls).toHaveLength(1);
+      const [tag, message, ctxObj] = calls[0];
+      expect(tag).toBe('[POST /api/billing/checkout]');
+      expect(message).toMatch(/connection to Stripe/);
+      expect(ctxObj).toHaveProperty('stripe');
+      expect(ctxObj.stripe.detail).toMatch(/Invalid character/);
+    });
+
+    test('Plain error log keeps the existing 2-arg shape (back-compat)', () => {
+      const err = new Error('boring failure');
+      safeError(res, err, 'GET /api/test');
+      expect(consoleErrorSpy.mock.calls[0]).toEqual([
+        '[GET /api/test]',
+        'boring failure',
+      ]);
     });
   });
 });
