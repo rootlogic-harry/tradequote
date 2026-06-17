@@ -418,6 +418,16 @@ describe('TRQ-150 — billing.js safety properties', () => {
     expect(billingJs).toMatch(/Refusing to construct a Stripe client/);
   });
 
+  test('strips whitespace from STRIPE_SECRET_KEY before constructing the SDK (2026-06-17 paste bug)', () => {
+    // A multi-line paste introduced \n and spaces into the middle of
+    // the key, which Node's HTTP header validator rejected with
+    // ERR_INVALID_CHAR — surfaced only as StripeConnectionError "An
+    // error occurred with our connection to Stripe", killing the
+    // checkout flow with no client-side signal. Defensive trim
+    // prevents the whole class of issue.
+    expect(billingJs).toMatch(/raw\.replace\(\/\\s\+\/g,\s*['"]{2}\)/);
+  });
+
   test('parseWebhookEvent requires STRIPE_WEBHOOK_SECRET (no bypass)', () => {
     expect(billingJs).toMatch(/STRIPE_WEBHOOK_SECRET[\s\S]{0,200}is not set/);
   });

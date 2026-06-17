@@ -20,9 +20,48 @@ export function setSystemErrorLogger(fn) {
   systemErrorLogger = typeof fn === 'function' ? fn : null;
 }
 
+// Pull useful diagnostic fields off the error without dumping
+// everything (PII, stack traces, etc.). Stripe errors in particular
+// hide the actual cause inside `err.detail` — bare `err.message`
+// for those gives you "An error occurred with our connection to
+// Stripe" with no clue why, which is what bit us on 2026-06-17
+// when a pasted key had whitespace and the underlying
+// ERR_INVALID_CHAR was hidden behind that generic wrapper.
+export function formatErrorContext(err) {
+  if (!err || typeof err !== 'object') return null;
+  // Stripe errors: surface type, code, statusCode, requestId, and
+  // detail. Detail is itself an Error in connection-failure cases
+  // (the underlying Node error); stringify it explicitly.
+  if (err.type && String(err.type).startsWith('Stripe')) {
+    return {
+      stripe: {
+        type: err.type,
+        code: err.code,
+        statusCode: err.statusCode,
+        requestId: err.requestId,
+        detail: err.detail?.message || err.detail?.toString?.() || err.detail,
+      },
+    };
+  }
+  // Node fs / net errors: code + syscall + errno are the useful bits.
+  if (err.code || err.errno || err.syscall) {
+    return { node: { code: err.code, errno: err.errno, syscall: err.syscall } };
+  }
+  // Anything with a .cause (Node 16+ AggregateError pattern): drill one level.
+  if (err.cause && err.cause !== err) {
+    return { cause: err.cause?.message || String(err.cause) };
+  }
+  return null;
+}
+
 export function safeError(res, err, context, statusCode = 500) {
   const message = err?.message || 'Unknown error';
-  console.error(`[${context}]`, message);
+  const ctx = formatErrorContext(err);
+  if (ctx) {
+    console.error(`[${context}]`, message, ctx);
+  } else {
+    console.error(`[${context}]`, message);
+  }
 
   // Persist to system_errors for the analytics dashboard. Only for
   // genuine 5xx (not transient infra blips, not 4xx user errors).
