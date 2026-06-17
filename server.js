@@ -319,6 +319,11 @@ async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT FALSE;
+      -- TRQ-150: Stripe's customer.subscription.trial_will_end fires
+      -- ~3 days before the trial ends. We capture the timestamp so the
+      -- in-app banner can switch from "trial in progress" to "ends soon"
+      -- without round-tripping to Stripe.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_will_end_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'basic';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT false;
@@ -4053,7 +4058,8 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
     const userId = req.user?.id;
     const { rows } = await pool.query(
       `SELECT id, plan, trial_ends_at, subscription_status,
-              stripe_customer_id, current_period_end, cancel_at_period_end
+              stripe_customer_id, current_period_end, cancel_at_period_end,
+              trial_will_end_at
        FROM users WHERE id = $1`,
       [userId]
     );
@@ -4063,6 +4069,11 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
       state: currentSubscriptionState(user),
       daysOfTrialRemaining: daysOfTrialRemaining(user),
       trialEndsAt: user.trial_ends_at,
+      // TRQ-150 trial_will_end webhook: when Stripe has flagged that the
+      // trial converts soon, the UI switches its banner. The bare
+      // timestamp is enough — the client formats "ends in N days" from
+      // it. NULL when no such signal is in-flight.
+      trialWillEndAt: user.trial_will_end_at,
       currentPeriodEnd: user.current_period_end,
       cancelAtPeriodEnd: user.cancel_at_period_end || false,
       hasStripeCustomer: Boolean(user.stripe_customer_id),

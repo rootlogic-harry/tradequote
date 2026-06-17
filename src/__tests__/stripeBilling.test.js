@@ -217,6 +217,60 @@ describe('TRQ-150 — applySubscriptionEventToDb', () => {
     expect(pool.calls[0].params).toEqual(['cus_xyz']);
   });
 
+  test('customer.subscription.trial_will_end → captures trial_end timestamp', async () => {
+    // Stripe fires this ~3 days before the trial converts. The UI uses
+    // it to switch the banner from "trial in progress" to "ends in N
+    // days — add a card". We just store the timestamp; no email is
+    // sent yet (own follow-up ticket once email infra exists).
+    const pool = mockPool();
+    const trialEndUnix = 1735689600; // 2025-01-01T00:00:00Z (arbitrary)
+    const result = await applySubscriptionEventToDb(pool, {
+      type: 'customer.subscription.trial_will_end',
+      data: {
+        object: {
+          id: 'sub_xyz',
+          trial_end: trialEndUnix,
+          metadata: { fastquote_user_id: 'user_abc' },
+        },
+      },
+    });
+    expect(result.applied).toBe(true);
+    expect(result.userId).toBe('user_abc');
+    expect(pool.calls[0].sql).toMatch(/SET trial_will_end_at = \$1/);
+    // Param order: [trial_will_end_at, userId]
+    expect(pool.calls[0].params[0]).toBeInstanceOf(Date);
+    expect(pool.calls[0].params[0].getTime()).toBe(trialEndUnix * 1000);
+    expect(pool.calls[0].params[1]).toBe('user_abc');
+  });
+
+  test('trial_will_end without fastquote_user_id metadata is skipped (not 500)', async () => {
+    // Same pattern as the other subscription handlers — if our metadata
+    // marker is missing, we can't safely attribute the event.
+    const pool = mockPool();
+    const result = await applySubscriptionEventToDb(pool, {
+      type: 'customer.subscription.trial_will_end',
+      data: { object: { id: 'sub_xyz', trial_end: 1735689600 } },
+    });
+    expect(result.applied).toBe(false);
+    expect(result.reason).toMatch(/no fastquote_user_id/);
+    expect(pool.calls).toHaveLength(0);
+  });
+
+  test('trial_will_end without trial_end timestamp writes NULL (best-effort capture)', async () => {
+    const pool = mockPool();
+    const result = await applySubscriptionEventToDb(pool, {
+      type: 'customer.subscription.trial_will_end',
+      data: {
+        object: {
+          id: 'sub_xyz',
+          metadata: { fastquote_user_id: 'user_abc' },
+        },
+      },
+    });
+    expect(result.applied).toBe(true);
+    expect(pool.calls[0].params[0]).toBeNull();
+  });
+
   test('unhandled event types pass through (no DB write, no throw)', async () => {
     const pool = mockPool();
     const result = await applySubscriptionEventToDb(pool, {
@@ -230,7 +284,7 @@ describe('TRQ-150 — applySubscriptionEventToDb', () => {
 });
 
 describe('TRQ-150 — server.js wiring', () => {
-  test('schema gains the six subscription columns (all nullable)', () => {
+  test('schema gains the seven subscription columns (all nullable)', () => {
     for (const col of [
       'stripe_customer_id',
       'stripe_subscription_id',
@@ -238,9 +292,18 @@ describe('TRQ-150 — server.js wiring', () => {
       'trial_ends_at',
       'current_period_end',
       'cancel_at_period_end',
+      'trial_will_end_at',
     ]) {
       expect(serverJs).toMatch(new RegExp(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col}`));
     }
+  });
+
+  test('/api/billing/status returns trialWillEndAt in the payload', () => {
+    // The new field has to reach the client or the UI banner can't
+    // switch from "in trial" to "ends soon". The SELECT must include
+    // the column and the response JSON must surface it.
+    expect(serverJs).toMatch(/SELECT[\s\S]{0,300}trial_will_end_at[\s\S]{0,300}FROM users WHERE id = \$1/);
+    expect(serverJs).toMatch(/trialWillEndAt: user\.trial_will_end_at/);
   });
 
   test('stripe_customer_id has a UNIQUE constraint (one customer per user)', () => {
