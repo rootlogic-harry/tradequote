@@ -18,10 +18,13 @@ const scriptSrc = readFileSync(join(repoRoot, 'scripts/restore-test.js'), 'utf8'
 const runbook = readFileSync(join(repoRoot, 'docs/RESTORE.md'), 'utf8');
 
 describe('TRQ-148 — restore-test script safety rails', () => {
-  test('uses the official postgres:15 image for the scratch container', () => {
+  test('uses the official postgres:18 image for the scratch container', () => {
     // Image lock matters: a custom image with weird extensions could
     // fail the restore for reasons unrelated to the backup itself.
-    expect(scriptSrc).toMatch(/const PG_IMAGE = 'postgres:15'/);
+    // Bumped to 18 in TRQ-162 to match the production major (was 15,
+    // which would fail with the same pg_dump version-mismatch the
+    // backup hit before TRQ-147 sub-issue #2).
+    expect(scriptSrc).toMatch(/const PG_IMAGE = 'postgres:18'/);
   });
 
   test('container name is randomised (no collision across concurrent runs)', () => {
@@ -52,21 +55,27 @@ describe('TRQ-148 — restore-test script safety rails', () => {
 
 describe('TRQ-148 — failure handling', () => {
   test('tears down the container on failure unless --keep', () => {
-    expect(scriptSrc).toMatch(/if \(!args\.keep\) tearDown\(containerName\)/);
+    // Both branches handled — Docker via tearDown(handle.name),
+    // no-Docker via tearDownNoDocker(handle).
+    expect(scriptSrc).toMatch(/if \(!args\.keep && handle\)/);
+    expect(scriptSrc).toMatch(/handle\.noDocker\s*\)\s*tearDownNoDocker\(handle\)/);
+    expect(scriptSrc).toMatch(/else tearDown\(handle\.name\)/);
   });
 
   test('tearDown is a no-op when container name is null (early failures)', () => {
     expect(scriptSrc).toMatch(/function tearDown\(name\)\s*\{[\s\S]{0,150}if \(!name\) return/);
   });
 
-  test('exit code 2 for setup errors (Docker missing, env missing)', () => {
+  test('exit code 2 for setup errors (Docker missing, env missing, brew missing)', () => {
     // Distinguishes "this run failed" (1) from "we couldn't even try" (2).
-    // The Docker-missing message is thrown from spawnScratchPostgres()
-    // and the env-missing message from downloadFromR2(); both are
-    // caught by the outer try and routed to exit 2.
+    // Setup errors: Docker-missing from spawnScratchPostgres(),
+    // env-missing from downloadFromR2(), postgresql@18-missing from
+    // spawnScratchPostgresNoDocker(). All three caught by the outer
+    // try and routed to exit 2 via the setupErr predicate.
     expect(scriptSrc).toMatch(/Docker is not available/);
     expect(scriptSrc).toMatch(/Missing R2 env/);
-    expect(scriptSrc).toMatch(/err\.message\.includes\('Missing'\)[\s\S]{0,150}'Docker is not'[\s\S]{0,80}\?\s*2\s*:\s*1/);
+    expect(scriptSrc).toMatch(/postgresql@18 binaries not found/);
+    expect(scriptSrc).toMatch(/const setupErr =[\s\S]{0,400}process\.exit\(setupErr \? 2 : 1\)/);
   });
 
   test('psql runs with -v ON_ERROR_STOP=1 (fail fast, no half-restore)', () => {
@@ -98,6 +107,64 @@ describe('TRQ-148 — backup source selection', () => {
     expect(scriptSrc).toMatch(/R2_BUCKET/);
     expect(scriptSrc).toMatch(/R2_ACCESS_KEY_ID/);
     expect(scriptSrc).toMatch(/R2_SECRET_ACCESS_KEY/);
+  });
+});
+
+describe('TRQ-162 — no-Docker fallback path', () => {
+  test('--no-docker is parseable as an arg', () => {
+    expect(scriptSrc).toMatch(/a === '--no-docker'/);
+  });
+
+  test('parseArgs default is Docker (noDocker: false)', () => {
+    expect(scriptSrc).toMatch(/noDocker:\s*false/);
+  });
+
+  test('PG_BIN env can override the default brew path', () => {
+    expect(scriptSrc).toMatch(/process\.env\.PG_BIN\s*\|\|\s*DEFAULT_PG_BIN/);
+    expect(scriptSrc).toMatch(/DEFAULT_PG_BIN\s*=\s*'\/opt\/homebrew\/opt\/postgresql@18\/bin'/);
+  });
+
+  test('no-Docker spawner is named spawnScratchPostgresNoDocker', () => {
+    expect(scriptSrc).toMatch(/async function spawnScratchPostgresNoDocker/);
+  });
+
+  test('no-Docker path uses initdb + pg_ctl (not docker run)', () => {
+    const fn = scriptSrc.split('async function spawnScratchPostgresNoDocker')[1] || '';
+    expect(fn).toMatch(/initdb/);
+    expect(fn).toMatch(/pg_ctl/);
+  });
+
+  test('no-Docker path uses trust auth (no password in the URL)', () => {
+    // initdb --auth=trust → no password needed. The DATABASE_URL for
+    // this path therefore omits the password.
+    expect(scriptSrc).toMatch(/--auth=trust/);
+    // The URL pattern in runMoatCheck is conditional on handle.noDocker
+    // and uses the userless form when true.
+    expect(scriptSrc).toMatch(/handle\.noDocker\s*\?[\s\S]{0,200}postgres:\/\/\$\{SCRATCH_USER\}@localhost/);
+  });
+
+  test('hard rule (localhost-only) still applies on the no-Docker path', () => {
+    // Same guard string — both branches feed into runMoatCheck.
+    // If a future edit splits the function, this test catches the
+    // split's safety-rail regression.
+    expect(scriptSrc).toMatch(/!databaseUrl\.includes\('@localhost:'\)/);
+  });
+
+  test('no-Docker tearDown removes the data dir', () => {
+    expect(scriptSrc).toMatch(/function tearDownNoDocker/);
+    expect(scriptSrc).toMatch(/rmSync\(handle\.dataDir/);
+  });
+
+  test('setup error: missing postgresql@18 binaries is exit code 2', () => {
+    // Parallel to the Docker-missing path. The outer try/catch routes
+    // setup errors to exit 2.
+    expect(scriptSrc).toMatch(/postgresql@18 binaries not found/);
+    expect(scriptSrc).toMatch(/err\.message\.includes\('postgresql@18 binaries not found'\)/);
+  });
+
+  test('--keep on no-Docker prints the manual teardown commands', () => {
+    expect(scriptSrc).toMatch(/cluster left running at \$\{handle\.dataDir\}:\$\{handle\.port\}/);
+    expect(scriptSrc).toMatch(/pg_ctl[\s\S]{0,80}-m immediate stop/);
   });
 });
 
