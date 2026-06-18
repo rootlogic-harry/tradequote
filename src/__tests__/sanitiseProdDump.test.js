@@ -289,3 +289,120 @@ describe('TRQ-153 — schema-tracking: all CREATE TABLEs are accounted for', () 
     }
   });
 });
+
+describe('TRQ-153 — 2026-06-18 staging-seed regressions (quoted COPY + JSONB whitespace + free-text)', () => {
+  // These tests pin the four bugs that surfaced when the sanitiser
+  // was first run against a real pg_dump v18 backup. Each one let
+  // real customer PII through.
+
+  function runSanitiserOn(input, salt = 'test-salt-xyz') {
+    const proc = spawnSync(
+      'node',
+      [join(repoRoot, 'scripts/sanitise-prod-dump.js')],
+      { input, env: { ...process.env, SANITISER_SALT: salt }, encoding: 'utf8', timeout: 5000 }
+    );
+    return { stdout: proc.stdout, stderr: proc.stderr, status: proc.status };
+  }
+
+  test('Regression 1: pg_dump v18-style quoted COPY identifiers are detected', () => {
+    // pg_dump (v17+ default) emits:
+    //   COPY "public"."users" ("id", "name", "email", ...) FROM stdin;
+    // pg_dump (earlier default) emitted:
+    //   COPY public.users (id, name, email, ...) FROM stdin;
+    // The original regex only matched the unquoted form, so the
+    // sanitiser silently passed quoted blocks through unchanged.
+    const quoted = [
+      'COPY "public"."users" ("id", "name", "email", "avatar_url", "auth_provider_id") FROM stdin;',
+      'realuser\tJane Real\tjane@real.example\t\\N\t\\N',
+      '\\.',
+    ].join('\n');
+    const { stdout, status } = runSanitiserOn(quoted);
+    expect(status).toBe(0);
+    expect(stdout).not.toContain('Jane Real');
+    expect(stdout).not.toContain('jane@real.example');
+    expect(stdout).toMatch(/Demo Trader \d+/);
+  });
+
+  test('Regression 2: JSONB scrub matches keys with whitespace around the colon', () => {
+    // Postgres-stored JSONB usually has `"k":"v"` (no space), but
+    // JSON inserted via pretty-printed JSON.stringify has `"k": "v"`.
+    // The original regexes only matched the no-space form.
+    const withSpace = [
+      'COPY "public"."profiles" ("user_id", "data") FROM stdin;',
+      'u1\t{"email": "leaky@real.com", "phone": "07986 123456", "fullName": "Real Person"}',
+      '\\.',
+    ].join('\n');
+    const { stdout } = runSanitiserOn(withSpace);
+    expect(stdout).not.toContain('leaky@real.com');
+    expect(stdout).not.toContain('Real Person');
+    // Phone field has a space — the structured replacer should zero
+    // it (we don't expect the literal "07986 123456" to survive).
+    expect(stdout).not.toContain('07986 123456');
+  });
+
+  test('Regression 3: RAMS / nested-profile fields are scrubbed (company, contactName, foreman, fullName, contactNumber, supervisor)', () => {
+    // jobs.rams_snapshot uses different JSON keys than the quote
+    // snapshot — company / contactName / foreman / contactNumber —
+    // and the previous version of the sanitiser missed all of them.
+    // fullName showed up via drafts.data too because drafts used
+    // scrubJsonbPii (no fullName) instead of scrubProfileJsonb.
+    const rams = [
+      'COPY "public"."jobs" ("id", "user_id", "client_name", "site_address", "client_ip", "client_user_agent", "client_decline_reason", "quote_snapshot", "rams_snapshot", "client_snapshot", "client_snapshot_profile") FROM stdin;',
+      'j1\tu1\treal client\treal addr\t\\N\t\\N\t\\N\t{"profile":{"fullName":"Mark Real"}}\t{"company":"Real Walling Co","contactName":"Mark Real","foreman":"Mark Real","supervisor":"Mark Real","contactNumber":"07700900111"}\t\\N\t\\N',
+      '\\.',
+    ].join('\n');
+    const { stdout } = runSanitiserOn(rams);
+    expect(stdout).not.toContain('Mark Real');
+    expect(stdout).not.toContain('Real Walling Co');
+    expect(stdout).not.toContain('07700900111');
+  });
+
+  test('Regression 4a: free-text email leak is redacted anywhere in JSONB', () => {
+    // Users sometimes type their full contact card into notes /
+    // quotePayload fields that aren\'t keyed off a known JSON
+    // property. A catch-all regex sweep is the only way to catch
+    // these.
+    const freeText = [
+      'COPY "public"."jobs" ("id", "user_id", "client_name", "site_address", "client_ip", "client_user_agent", "client_decline_reason", "quote_snapshot", "rams_snapshot", "client_snapshot", "client_snapshot_profile") FROM stdin;',
+      'j1\tu1\treal\treal\t\\N\t\\N\t\\N\t{"notes":"call me at MARK@DRYSTONEWALLING.NET or 07986 661828 for the deposit"}\t\\N\t\\N\t\\N',
+      '\\.',
+    ].join('\n');
+    const { stdout } = runSanitiserOn(freeText);
+    expect(stdout).not.toContain('MARK@DRYSTONEWALLING.NET');
+    expect(stdout).not.toContain('07986 661828');
+    expect(stdout).toMatch(/\[redacted-email\]/);
+    expect(stdout).toMatch(/\[redacted-phone\]/);
+  });
+
+  test('Regression 4b: phone redaction does NOT bite into long float values', () => {
+    // The first version of the catch-all matched 07XXX_XXXXXX
+    // anywhere — which included digit substrings inside floats like
+    // `"editMagnitude": -0.8076923076923077`. That broke the JSONB
+    // ("Expected , or } but found [") and dropped 59 jobs on the
+    // first staging seed. The (?<!\d) ... (?!\d) lookarounds fix it.
+    const withFloats = [
+      'COPY "public"."quote_diffs" ("id", "user_id", "job_id", "ai_value", "confirmed_value", "metadata") FROM stdin;',
+      'd1\tu1\tj1\t13.5\t12.0\t{"wallHeightMm": 1500, "wallLengthMm": 1, "editMagnitude": -0.8076923076923077, "confirmedValue": 25}',
+      '\\.',
+    ].join('\n');
+    const { stdout } = runSanitiserOn(withFloats);
+    // The full float survives intact.
+    expect(stdout).toContain('-0.8076923076923077');
+    expect(stdout).not.toContain('[redacted-phone]');
+  });
+
+  test('Regression 4c: emails inside word-like contexts are still redacted (boundary too tight is also bad)', () => {
+    // The (?<!\w) and (?!\w) guards must not be so tight that real
+    // emails get missed. Surrounding whitespace / quotes / pipes are
+    // the common cases.
+    const variants = [
+      'COPY "public"."jobs" ("id", "user_id", "client_name", "site_address", "client_ip", "client_user_agent", "client_decline_reason", "quote_snapshot", "rams_snapshot", "client_snapshot", "client_snapshot_profile") FROM stdin;',
+      'j1\tu1\treal\treal\t\\N\t\\N\t\\N\t{"a":"x foo@bar.com y","b":"|baz@qux.co.uk|","c":"\\"name@example.com\\""}\t\\N\t\\N\t\\N',
+      '\\.',
+    ].join('\n');
+    const { stdout } = runSanitiserOn(variants);
+    expect(stdout).not.toContain('foo@bar.com');
+    expect(stdout).not.toContain('baz@qux.co.uk');
+    expect(stdout).not.toContain('name@example.com');
+  });
+});
