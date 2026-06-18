@@ -237,23 +237,64 @@ function scrubJsonbPii(jsonbText) {
   // known PII keys at the JSON-string level. This is safe because
   // the JSON structure is well-defined (quote_snapshot keys come
   // from SAVE_ALLOWLIST in stripBlobs.js).
+  //
+  // Whitespace tolerance: Postgres serialises JSONB without spaces
+  // between key and value (`"k":"v"`), but JSON inserted via
+  // pretty-printed JSON.stringify keeps spaces (`"k": "v"`). All
+  // patterns below use `\s*` after the colon so both flavours match.
+  // This is the 2026-06-18 fix — without it, the regex silently
+  // missed values that had been stored with spaces, and real
+  // customer emails landed in staging during the seed.
   return jsonbText
-    .replace(/"clientName":"[^"]*"/g, () => `"clientName":"${pickFake(FAKE_CLIENT_NAMES, jsonbText.slice(0, 100))}"`)
-    .replace(/"siteAddress":"[^"]*"/g, () => `"siteAddress":"${pickFake(FAKE_SITE_ADDRESSES, jsonbText.slice(0, 100))}"`)
-    .replace(/"clientEmail":"[^"]*"/g, '"clientEmail":""')
-    .replace(/"clientPhone":"[^"]*"/g, '"clientPhone":""')
-    .replace(/"companyName":"[^"]*"/g, () => `"companyName":"${pickFake(FAKE_COMPANIES, jsonbText.slice(0, 100))}"`)
-    .replace(/"phone":"[^"]*"/g, '"phone":""')
-    .replace(/"email":"[^"]*"/g, '"email":""')
-    .replace(/"vatNumber":"[^"]*"/g, () => `"vatNumber":"${pickFake(FAKE_VAT_NUMBERS, jsonbText.slice(0, 100))}"`)
-    .replace(/"tradingAddress":"[^"]*"/g, '"tradingAddress":"Demo Office, Stagingshire"')
-    .replace(/"address":"[^"]*"/g, '"address":"Demo Office, Stagingshire"')
-    .replace(/"logo":"data:image[^"]*"/g, '"logo":""');
+    .replace(/"clientName":\s*"[^"]*"/g, () => `"clientName":"${pickFake(FAKE_CLIENT_NAMES, jsonbText.slice(0, 100))}"`)
+    .replace(/"siteAddress":\s*"[^"]*"/g, () => `"siteAddress":"${pickFake(FAKE_SITE_ADDRESSES, jsonbText.slice(0, 100))}"`)
+    .replace(/"clientEmail":\s*"[^"]*"/g, '"clientEmail":""')
+    .replace(/"clientPhone":\s*"[^"]*"/g, '"clientPhone":""')
+    .replace(/"companyName":\s*"[^"]*"/g, () => `"companyName":"${pickFake(FAKE_COMPANIES, jsonbText.slice(0, 100))}"`)
+    // RAMS snapshots use different JSON keys for the same identifiers
+    // — `company`, `contactName`, `foreman`. Without these, the
+    // tradesperson's name and company leak via jobs.rams_snapshot
+    // even after every other field is scrubbed. (Surfaced in the
+    // 2026-06-18 staging-seed audit.)
+    .replace(/"company":\s*"[^"]*"/g, () => `"company":"${pickFake(FAKE_COMPANIES, jsonbText.slice(0, 100))}"`)
+    .replace(/"contactName":\s*"[^"]*"/g, () => `"contactName":"${pickFake(FAKE_USER_NAMES, jsonbText.slice(0, 100))}"`)
+    .replace(/"foreman":\s*"[^"]*"/g, () => `"foreman":"${pickFake(FAKE_USER_NAMES, jsonbText.slice(0, 100))}"`)
+    .replace(/"supervisor":\s*"[^"]*"/g, () => `"supervisor":"${pickFake(FAKE_USER_NAMES, jsonbText.slice(0, 100))}"`)
+    .replace(/"contactNumber":\s*"[^"]*"/g, '"contactNumber":""')
+    // fullName is also nested inside JSONB profile snapshots that live
+    // in jobs.quote_snapshot / drafts.data / jobs.client_snapshot_profile.
+    // Without it here the user's real name leaks via those tables. The
+    // standalone scrubProfileJsonb below now just delegates here.
+    .replace(/"fullName":\s*"[^"]*"/g, () => `"fullName":"${pickFake(FAKE_USER_NAMES, jsonbText.slice(0, 100))}"`)
+    .replace(/"phone":\s*"[^"]*"/g, '"phone":""')
+    .replace(/"email":\s*"[^"]*"/g, '"email":""')
+    .replace(/"vatNumber":\s*"[^"]*"/g, () => `"vatNumber":"${pickFake(FAKE_VAT_NUMBERS, jsonbText.slice(0, 100))}"`)
+    .replace(/"tradingAddress":\s*"[^"]*"/g, '"tradingAddress":"Demo Office, Stagingshire"')
+    .replace(/"address":\s*"[^"]*"/g, '"address":"Demo Office, Stagingshire"')
+    .replace(/"logo":\s*"data:image[^"]*"/g, '"logo":""')
+    // Free-text leaks: users sometimes type their full contact card
+    // (e.g. "MARK@DRYSTONEWALLING.NET | 07986 661828") into free-form
+    // notes fields that aren't keyed off a specific JSON property.
+    // The structured-field regexes above can't catch these. Two
+    // catch-all sweeps redact anything email-shaped or UK-mobile-shaped
+    // anywhere in the JSONB blob.
+    //
+    // Critically: both patterns use lookarounds to require a non-word
+    // boundary on each side. Without that, the phone pattern matches
+    // digit sequences inside long float values (e.g. `editMagnitude:
+    // -0.8076923076923077` contains `076923076923` which fits the
+    // 07XXX-XXXXXX shape) and breaks the surrounding JSON. The
+    // (?<!\w) and (?!\w) guards prevent the regex from biting into
+    // longer alphanumeric runs.
+    .replace(/(?<!\w)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?!\w)/g, '[redacted-email]')
+    .replace(/(?<!\d)(?:\+44\s?|0)7\d{3}\s?\d{6}(?!\d)/g, '[redacted-phone]');
 }
 
+// Kept as a separate export so the existing rule wiring doesn't shift,
+// but the fullName replacement is now inside scrubJsonbPii so every
+// JSONB column gets it (drafts, jobs, profiles, client_snapshot_profile).
 function scrubProfileJsonb(jsonbText) {
-  return scrubJsonbPii(jsonbText)
-    .replace(/"fullName":"[^"]*"/g, () => `"fullName":"${pickFake(FAKE_USER_NAMES, jsonbText.slice(0, 100))}"`);
+  return scrubJsonbPii(jsonbText);
 }
 
 // 1x1 transparent PNG, base64 — minimal placeholder so the UI has
@@ -280,11 +321,21 @@ let rowsTransformed = 0;
 let rowsPassed = 0;
 
 rl.on('line', (line) => {
-  // Detect start of a COPY block. Match both `COPY public.foo` and `COPY foo`.
-  const copyMatch = line.match(/^COPY (?:public\.)?(\w+) \(([^)]+)\) FROM stdin;$/);
+  // Detect start of a COPY block. pg_dump emits two flavours of this
+  // line, and we MUST handle both — the sanitiser silently passing
+  // rows through (because the COPY detect regex didn't match) is the
+  // 2026-06-18 incident that put real PII into staging.
+  //
+  //   pg_dump (≤v15-ish default): `COPY public.users (id, name) FROM stdin;`
+  //   pg_dump (v17/v18 default):  `COPY "public"."users" ("id", "name") FROM stdin;`
+  //
+  // The regex below accepts optional double-quotes around schema, table,
+  // and column names. Column names are then unquoted explicitly so the
+  // colIndex map matches the row's raw values.
+  const copyMatch = line.match(/^COPY (?:"?public"?\.)?"?(\w+)"? \(([^)]+)\) FROM stdin;$/);
   if (copyMatch) {
     const table = copyMatch[1];
-    const columns = copyMatch[2].split(',').map((c) => c.trim());
+    const columns = copyMatch[2].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
     const colIndex = {};
     columns.forEach((c, i) => { colIndex[c] = i; });
     inCopy = SANITISE_RULES[table] ? { table, columns, colIndex, rule: SANITISE_RULES[table] } : { table, pass: true };
