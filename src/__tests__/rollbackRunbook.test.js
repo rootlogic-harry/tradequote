@@ -84,17 +84,27 @@ describe('TRQ-154 — DB rollback safety', () => {
   });
 });
 
-describe('TRQ-154 — rehearsal status (honest)', () => {
-  test('says the procedure has NOT been rehearsed yet', () => {
-    expect(runbook).toMatch(/has NOT been rehearsed yet/i);
+describe('TRQ-154 — rehearsal status (proven on 2026-06-19)', () => {
+  test('records the rehearsal happened with a concrete date', () => {
+    expect(runbook).toMatch(/rehearsed on staging — 2026-06-19/i);
   });
 
-  test('rehearsal is gated on TRQ-153 (staging)', () => {
-    expect(runbook).toMatch(/TRQ-153/);
+  test('reports a recovery time well under the 5-minute target', () => {
+    // The 17-second figure is from the actual rehearsal. If the
+    // runbook ever drops or fudges the number, this test fails.
+    expect(runbook).toMatch(/17\s*s/);
+    expect(runbook).toMatch(/Total operator-perspective recovery time/);
   });
 
-  test('flags this runbook as provisional until rehearsed', () => {
-    expect(runbook).toMatch(/provisional/i);
+  test('lists a next-rehearsal date so this doesn\'t decay silently', () => {
+    expect(runbook).toMatch(/Next scheduled rehearsal:\s*2026-\d{2}-\d{2}/);
+  });
+
+  test('cross-references TRQ-148 for the DB-rollback mechanism', () => {
+    // DB rollback inherits from the TRQ-148 restore drill rather than
+    // having a separately-rehearsed procedure.
+    expect(runbook).toMatch(/TRQ-148/);
+    expect(runbook).toMatch(/docs\/RESTORE\.md/);
   });
 });
 

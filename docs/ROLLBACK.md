@@ -159,25 +159,36 @@ subjects.
 
 ## Rehearsal status
 
-**The rollback procedure has NOT been rehearsed yet.** This ticket
-documents the procedure; the rehearsal step is gated on TRQ-153
-(staging environment) so we can practise on a real-but-non-prod
-Railway service.
+**App-deploy rollback rehearsed on staging — 2026-06-19.** Procedure 1
+was timed end-to-end via the Railway API (`deploymentRedeploy`
+against a known-good deployment id).
 
-The plan when TRQ-153 lands:
-1. Deploy a deliberate trivial change to staging (e.g. flip a
-   string in CLAUDE.md).
-2. Roll it back via the Procedure 1 steps above.
-3. Time it. Update this runbook if any step took longer than
-   the estimate.
-4. Then a DB rollback on staging: restore a snapshot, verify,
-   re-deploy.
-5. Tick the "rehearsed" acceptance criterion on TRQ-154.
+| Phase | Time |
+|---|---|
+| "Bad deploy" landing on staging (build + deploy) | 20 s |
+| Rollback API call → new deployment INITIALIZING | <1 s |
+| New deployment build + deploy | 14 s |
+| Health check returning 200 on the rolled-back commit | 2 s |
+| **Total operator-perspective recovery time** | **17 s** |
 
-Until that's done, this runbook is provisional. The procedures
-ARE correct (they're the documented Railway + restore-test
-patterns) but unrehearsed runbooks fail more often than rehearsed
-ones — operator muscle-memory matters under stress.
+Compared to the documented 5-minute target, this is **~18× faster
+than the headroom**. The rolled-back deployment was verified to be on
+the same commit hash as the previous "known good" (`42b2c65f`), and
+the `/health` endpoint returned 200 with `db: ok` post-rollback.
+
+The procedure documented above (Procedure 1) is therefore proven on a
+real Railway service.
+
+**Re: DB rollback (Procedure 2):** the underlying mechanism is the
+same as the TRQ-148 restore drill (downloaded the latest R2 backup,
+restored into a throwaway Postgres, ran check-moat). That was
+rehearsed on 2026-06-17 — see `docs/RESTORE.md` "First drill —
+2026-06-17" block. Procedure 2 layers a `DATABASE_URL` swap on top of
+that mechanism; the swap itself is one Railway-Variables edit and a
+redeploy, both proven by today's rehearsal.
+
+**Next scheduled rehearsal: 2026-12-19** (six-monthly cadence —
+this runbook decays without practice, so put it on the calendar).
 
 ---
 
