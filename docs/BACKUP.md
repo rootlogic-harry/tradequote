@@ -47,9 +47,15 @@ Nothing is written to disk on the backup container.
    - `R2_BUCKET` — `fastquote-backups`
    - `R2_ACCESS_KEY_ID` — from step 2
    - `R2_SECRET_ACCESS_KEY` — from step 2
-   - `BACKUP_ALERT_WEBHOOK` — optional; a Slack incoming webhook URL
-     for failure alerts. If unset, failures are still visible in
-     Railway's logs but won't push-notify Harry.
+   - `BACKUP_ALERT_WEBHOOK` — set in Railway to an
+     [ntfy.sh](https://ntfy.sh/) topic URL (e.g.
+     `https://ntfy.sh/<random-topic>`). Harry's phone is subscribed
+     to that topic in the ntfy iOS/Android app. Picking a long random
+     topic is the auth — ntfy.sh is public, but a 20-char random
+     topic is effectively unguessable.
+     If unset (don't), failures are still visible in Railway's logs
+     but won't push-notify Harry — silent backup failures are the
+     specific failure mode TRQ-147 / TRQ-161 protect against.
 5. **Schedule the cron.** Service → Settings → Cron Schedule:
    `0 3 * * *` (03:00 UTC daily; quiet hour both UK and US).
 6. **Verify the first run.** Deploy → Run Now. Check Railway logs
@@ -102,6 +108,26 @@ covers the prod-cutover variant.
 | Dump size is suddenly tiny | pg_dump errored mid-stream | Check Railway logs for the stderr capture. Usually a DB password rotation or schema break. |
 | Webhook alert fired but Railway log says ok | Should not happen | Check the alert URL; the webhook config may have rotted. |
 | All dumps say `-sun.sql.gz` | Clock drift inside the container | Confirm Railway's container timezone; the script uses UTC. |
+
+### Testing the alert end-to-end
+
+The failure-alert path is fully untested until you've seen it fire
+once. Quick synthetic test (~30 sec):
+
+1. Railway → `fastquote-backup-service` → Variables → temporarily set
+   `R2_BUCKET=does-not-exist-bucket` (any nonexistent name)
+2. Trigger a run: Deployments → Redeploy. The script will fail at the
+   upload step.
+3. The ntfy alert lands on Harry's phone within ~5 seconds —
+   `backup-to-r2: FAILED — …` with the underlying error.
+4. Revert `R2_BUCKET` back to `fastquote-backups`.
+5. Trigger another run to confirm the next backup succeeds.
+
+If the alert does NOT arrive on the phone: check (a) `BACKUP_ALERT_WEBHOOK`
+is actually set on the service, (b) the ntfy app on the phone is
+subscribed to the same topic that's in the env var, and (c) the phone
+has notifications enabled for the ntfy app (iOS in particular often
+silently blocks new apps).
 
 ## Why this isn't in the main app
 
