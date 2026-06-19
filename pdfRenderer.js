@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import sanitizeHtml from 'sanitize-html';
+import { normalisePdfMetadata } from './src/utils/normalisePdfMetadata.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -271,6 +272,21 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, f
 
     // networkidle0 waits for Tailwind + fonts to load
     await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 30000 });
+    // TRQ-168: wait for the FontFaceSet to actually finish loading +
+    // applying. `networkidle0` reports the woff2 file downloaded, but
+    // Chromium still has work to do (parse the font, build the glyph
+    // tables, swap it into laid-out text runs). If we call page.pdf()
+    // before that swap completes, layout uses fallback-font metrics
+    // (Barlow Condensed → sans-serif is dramatically wider) and a
+    // section that should fit on page N spills onto page N+1 — visible
+    // as a half-empty trailing page or a vertical white gap. The bug
+    // shows up most reliably on cold-start Railway boots, where the
+    // first request after a deploy races the font load.
+    //
+    // page.evaluate() bypasses setJavaScriptEnabled(false) (it runs via
+    // the DevTools Runtime.evaluate channel, not the page's own JS
+    // context), so the security posture is unchanged.
+    await page.evaluate(() => document.fonts.ready);
     // Force print CSS to apply inside Chromium's PDF engine
     await page.emulateMediaType('print');
     // TRQ-169: repeat the trader's header (date · email · phone) and
@@ -289,7 +305,7 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, f
       || '<div style="font-size:1px"></div>'; // Puppeteer needs *some* template even when empty
     const footerTemplate = footerHtml
       || '<div style="font-size:1px"></div>';
-    const pdf = await page.pdf({
+    const rawPdf = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
@@ -300,6 +316,14 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, f
         ? { top: '25mm', right: '22mm', bottom: '22mm', left: '22mm' }
         : { top: '18mm', right: '18mm', bottom: '22mm', left: '18mm' },
     });
+    // TRQ-168: strip the two non-deterministic metadata fields Chromium
+    // bakes into every PDF (/CreationDate, /ModDate, and the trailer /ID
+    // when present). The substitution is byte-length-preserving so the
+    // PDF xref offsets remain valid. Without this the same quote
+    // produces a different byte sequence on every render — visible to
+    // any system that hashes attachments (Mark's email anti-spam,
+    // accounting reconciliation, "is this the version I sent?" check).
+    const pdf = normalisePdfMetadata(Buffer.from(rawPdf));
     console.log(`[PDF] rendered ${pdf.length} bytes in ${Date.now() - renderStart}ms`);
     return pdf;
   } finally {
