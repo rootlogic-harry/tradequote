@@ -944,13 +944,7 @@ app.get('/login', (req, res) => {
 // a one-off re-acceptance flow. The schema supports both — this PR
 // just lays the audit trail.
 const LEGAL_VERSIONS = Object.freeze({
-  // Bumped on 2026-06-19 when the EU migration completed and the
-  // privacy policy switched from "migration in progress" to "hosted
-  // in EU West". A version bump on signup terms re-prompts users
-  // for acceptance on next sign-in; for a privacy-policy refinement
-  // that doesn't change processing or rights, we don't strictly
-  // need to re-prompt — but recording the version + change date is
-  // part of the GDPR audit story.
+  // privacy bumped 2026-06-19 — EU migration completed (TRQ-149)
   privacy: '2026-06-19',
   terms: '2026-06-15',
   dpa: '2026-06-15',
