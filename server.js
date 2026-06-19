@@ -27,6 +27,10 @@ import { pickAllowedKeys } from './serverSaveAllowlist.js';
 import multer from 'multer';
 import { transcribe } from './src/utils/whisperClient.js';
 import { processVideo } from './src/utils/videoProcessor.js';
+import {
+  isVideoAnalysisEnabledFromProcessEnv,
+  VIDEO_DISABLED_MESSAGE,
+} from './src/utils/videoAnalysisEnabled.js';
 import { buildTradesmanProfileBlock } from './src/utils/tradesmanProfileBlock.js';
 import {
   parseAIResponse,
@@ -754,6 +758,14 @@ app.get('/auth/logout', (req, res, next) => {
 });
 
 app.get('/auth/me', async (req, res) => {
+  // Server-driven feature flags. The video walkthrough pipeline is
+  // gated by VIDEO_ANALYSIS_ENABLED (fail-closed in production,
+  // default-open in staging/dev). The client uses this to hide the
+  // video CaptureChoice card and skip the upload UI entirely so
+  // disabled video isn't a dead button.
+  const features = {
+    videoAnalysisEnabled: isVideoAnalysisEnabledFromProcessEnv(),
+  };
   // Google OAuth session
   if (req.user) {
     return res.json({
@@ -765,6 +777,7 @@ app.get('/auth/me', async (req, res) => {
         plan: req.user.plan || 'basic',
         profileComplete: !!req.user.profile_complete,
       },
+      features,
       legacy: false,
     });
   }
@@ -773,7 +786,7 @@ app.get('/auth/me', async (req, res) => {
     try {
       const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.legacyUserId]);
       const u = r.rows[0];
-      if (!u) return res.json({ user: null });
+      if (!u) return res.json({ user: null, features });
       return res.json({
         user: {
           id: u.id,
@@ -783,13 +796,14 @@ app.get('/auth/me', async (req, res) => {
           plan: u.plan || 'basic',
           profileComplete: !!u.profile_complete,
         },
+        features,
         legacy: true,
       });
     } catch {
-      return res.json({ user: null });
+      return res.json({ user: null, features });
     }
   }
-  res.json({ user: null });
+  res.json({ user: null, features });
 });
 
 // Temporary legacy-session endpoint for Mark and Harry transition
@@ -2971,6 +2985,13 @@ const videoProgress = new VideoProgressEmitter();
 app.get('/api/users/:id/jobs/:jobId/video/progress', requireAuth, (req, res) => {
   const { jobId } = req.params;
 
+  // Video analysis kill-switch: if disabled, refuse the SSE upgrade
+  // before any keep-alive write so the client falls back cleanly to
+  // its time-based estimator instead of stranding on "Processing...".
+  if (!isVideoAnalysisEnabledFromProcessEnv()) {
+    return res.status(503).json({ error: VIDEO_DISABLED_MESSAGE });
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -3002,8 +3023,20 @@ app.get('/api/users/:id/jobs/:jobId/video/progress', requireAuth, (req, res) => 
   });
 });
 
+// Video analysis kill-switch: refuse the upload BEFORE multer streams
+// the body to disk. This stops wasted bandwidth and disk pressure
+// while the rebuild lands. Mounted as middleware so the disabled-state
+// reply path doesn't depend on req.files being populated.
+function requireVideoAnalysisEnabled(req, res, next) {
+  if (!isVideoAnalysisEnabledFromProcessEnv()) {
+    return res.status(503).json({ error: VIDEO_DISABLED_MESSAGE });
+  }
+  return next();
+}
+
 app.post('/api/users/:id/jobs/:jobId/video',
   requireAuth,
+  requireVideoAnalysisEnabled,
   videoRateLimit,
   videoUpload.fields([
     { name: 'video', maxCount: 1 },

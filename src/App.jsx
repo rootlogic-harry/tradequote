@@ -60,6 +60,11 @@ export default function App() {
 
   // Feature flag: voice dictation (per-user setting, not coupled to plan)
   const [voiceDictationEnabled, setVoiceDictationEnabled] = useState(true);
+  // Feature flag: video analysis (server-driven via /auth/me → features
+  // payload). Defaults to false so that if /auth/me fails to return the
+  // flag the client keeps the safer state and basic users don't see a
+  // dead video upload button. See docs/VIDEO_FLAG.md.
+  const [videoAnalysisEnabled, setVideoAnalysisEnabled] = useState(false);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -84,6 +89,11 @@ export default function App() {
       try {
         const res = await fetch('/auth/me');
         const data = await res.json();
+        // Apply server-driven feature flags before the auth gate so the
+        // disabled-state UI is correct even on an authed bounce-out.
+        if (data?.features) {
+          setVideoAnalysisEnabled(!!data.features.videoAnalysisEnabled);
+        }
         if (!data?.user) {
           window.location.href = '/login';
           return;
@@ -765,7 +775,7 @@ export default function App() {
           />
         );
       case 2:
-        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} />;
+        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} videoAnalysisEnabled={videoAnalysisEnabled} />;
       case 3:
         return <AIAnalysis state={state} dispatch={dispatch} cancelAnalysis={cancelAnalysis} />;
       case 4:
