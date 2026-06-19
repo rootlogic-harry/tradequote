@@ -944,7 +944,14 @@ app.get('/login', (req, res) => {
 // a one-off re-acceptance flow. The schema supports both — this PR
 // just lays the audit trail.
 const LEGAL_VERSIONS = Object.freeze({
-  privacy: '2026-06-15',
+  // Bumped on 2026-06-19 when the EU migration completed and the
+  // privacy policy switched from "migration in progress" to "hosted
+  // in EU West". A version bump on signup terms re-prompts users
+  // for acceptance on next sign-in; for a privacy-policy refinement
+  // that doesn't change processing or rights, we don't strictly
+  // need to re-prompt — but recording the version + change date is
+  // part of the GDPR audit story.
+  privacy: '2026-06-19',
   terms: '2026-06-15',
   dpa: '2026-06-15',
 });
@@ -1015,7 +1022,7 @@ app.get('/privacy', (req, res) => {
   </ul>
 
   <h2>Data storage and international transfers</h2>
-  <p>Your account database currently lives in Railway's US West region. <strong>Migration to Railway's EU region is in progress.</strong> Backups (Cloudflare R2) follow the database. This policy will be updated when the migration completes; we are not waiting on this to be lawful — the US transfers are covered by the SCCs and UK Addendum, but EU residency is the path we are committing to.</p>
+  <p>Your account database is hosted in Railway's EU West region (Amsterdam, Netherlands), and the Cloudflare R2 backup bucket is also in the EU jurisdiction. No personal data is routinely held outside the EU/UK. Cross-border transfers to the United States are limited to the sub-processors named above (Anthropic, OpenAI, Google sign-in, Stripe) and are covered by the relevant Standard Contractual Clauses and UK Addendum.</p>
 
   <h2>Retention</h2>
   <ul>
