@@ -301,6 +301,46 @@ node scripts/eu-migration-dryrun.js --no-docker
 
 Expected output: `✓ EU-migration dry-run passed.`
 
+### Latest dry-run result — 2026-06-19
+
+| Step | Time |
+|---|---|
+| Local Postgres spin-up (initdb + pg_ctl) | ~2 s |
+| Streaming gunzip → psql restore of 287 MB dump | ~3 s |
+| check-moat against the restored DB | <1 s |
+| Tear-down | <1 s |
+| **Total wall-clock** | **6.5 s** |
+
+Real-world cutover (Harry's laptop → Railway EU Postgres over the
+internet) will add:
+
+- R2 → local download (~30 s on a typical broadband connection)
+- psql restore over network (~30-60 s vs ~3 s local)
+
+So plan **~1-2 minutes** for the dump+restore step on cutover day,
+not 6 seconds. Maintenance-mode window total is probably 5-10
+minutes including verification.
+
+## Readiness status — 2026-06-19
+
+Every pre-cutover prerequisite is green:
+
+- ✅ Backup runs nightly (TRQ-147) — latest at
+  `daily/fastquote-2026-06-19T0302Z-thu.sql.gz`
+- ✅ Restore proven on real-but-throwaway Postgres (TRQ-148)
+- ✅ Dry-run passes against today's backup (this section)
+- ✅ Rollback rehearsed on staging — 17 s recovery (TRQ-154)
+- ✅ Staging env exists + seeded — `tradequote-staging.up.railway.app`
+  is alive, useful as a dress-rehearsal target if you want one
+- ✅ Sanitiser hardened against pg_dump v18 quirks (PR #30)
+
+**The agent's prep is complete.** When ready, follow this runbook's
+Path B steps 1-7 in order. Steps 1-4 are reversible (delete the new
+EU service if anything looks wrong). Step 5 — the `DATABASE_URL`
+repoint on `tradequote` + `fastquote-backup-service` — is the only
+irreversible part, and it's deliberately Harry-only per the
+constitution.
+
 ## Acceptance criteria (TRQ-149)
 
 - [x] Migration path confirmed and documented (Path B recommended over A)
