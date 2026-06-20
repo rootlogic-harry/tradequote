@@ -46,3 +46,10 @@ regression/pdf-fixtures/*/private/
 # QuoteDocument.jsx via esbuild. Removed on success but a crashed
 # render can leave one behind — never commit them.
 .pdf-fixture-cache-*/
+
+# Regression suite reports are timestamp-named and regenerated every
+# run. The latest is uploaded as a CI artifact on each PR — we don't
+# need them in git. Baselines (regression/baselines/*.json) ARE
+# committed: they're the audit trail of "what passing looked like
+# when we accepted it".
+regression/reports/*.md
