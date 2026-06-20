@@ -334,7 +334,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~2,250 tests across ~110 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~2,830 tests across ~135 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -388,6 +388,10 @@ Test files live in `src/__tests__/`. Key test suites:
 - `uploadRetry.test.js` — retry logic with exponential backoff
 - `videoPreview.test.js` — video playback preview with native controls
 - `pdfDeterministic.test.js` — same input must produce byte-identical PDF (font race + metadata normalisation)
+- `regressionCompare.test.js` — regression-harness comparator (numeric tolerance, word-boundary material match)
+- `regressionReporter.test.js` — markdown reporter (per-field pass rate, raw-on-failure, baseline deltas, prompt-version stamp)
+- `regressionBaseline.test.js` — baseline payload shape, load/write/overwrite, delta computation
+- `regressionRun.test.js` — CLI flag parsing + exit-code rules (`--strict`, `--require-min-fixtures`, `--bless`)
 
 ---
 
