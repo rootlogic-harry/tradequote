@@ -51,10 +51,40 @@ function compareNumericField(fieldPath, expectedSpec, actualValue) {
 
 // ────── material composition ──────
 
+// Token-ise a description: lowercase, split on any non-word character.
+// "walling stone" → ['walling', 'stone']
+// "Limestone dust 25kg" → ['limestone', 'dust', '25kg']
+// "Walling-stone supply, 1 tonne" → ['walling', 'stone', 'supply', '1', 'tonne']
+//
+// Non-word characters (\W) act as boundaries — hyphens, slashes, commas,
+// whitespace all split. This is intentionally aggressive: it stops the
+// matcher from treating "limestone" and "stone" as the same word, which
+// the previous substring matcher did.
+function tokenise(s) {
+  return String(s || '').toLowerCase().split(/\W+/).filter(Boolean);
+}
+
+// A material description "matches" a spec when every token of the spec
+// appears as a standalone token in the description. Multi-word specs
+// ("walling stone") require ALL of their tokens in the actual.
+//
+// Tradeoff vs the previous includes() match: tighter matching means
+// future fixtures must write expected substrings more carefully (a
+// fixture asking for "stone" will no longer match "limestone"). The
+// upside is forbidden specs ("mortar", "scaffold") no longer fire on
+// unrelated compounds like "mortarboard" or "scaffolding-grade timber"
+// — false-forbidden-matches were the larger CI-noise risk because
+// they fail the run for the wrong reason.
+function descriptionMatchesSpec(actualDescription, specDescription) {
+  const wantTokens = tokenise(specDescription);
+  if (wantTokens.length === 0) return false;
+  const haveTokens = new Set(tokenise(actualDescription));
+  return wantTokens.every((t) => haveTokens.has(t));
+}
+
 function compareMaterialField(materialSpec, actualMaterials) {
-  const want = String(materialSpec.description || '').toLowerCase();
   const found = (actualMaterials || []).some((m) =>
-    String(m?.description || '').toLowerCase().includes(want)
+    descriptionMatchesSpec(m?.description, materialSpec.description)
   );
   if (materialSpec.forbidden) {
     return {

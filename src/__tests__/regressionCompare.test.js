@@ -185,6 +185,103 @@ describe('compareRun — material composition', () => {
     expect(forbidden.pass).toBe(false);
     expect(forbidden.reason).toMatch(/forbidden/i);
   });
+
+  // ────── word-boundary match (tightened from naive substring) ──────
+  //
+  // The original matcher used String#includes, which produced two
+  // false-positive classes:
+  //   1. A required "stone" spec matched everything containing those
+  //      five letters — including "limestone dust" or "cobblestone
+  //      hearting", which a tradesman wouldn't read as "stone supply".
+  //   2. More serious: a forbidden "mortar" spec falsely fired on
+  //      "disposal mortar drill" — a tool description, not the
+  //      material we're banning. Forbidden false-positives hurt
+  //      more than required false-negatives because they fail the
+  //      run for the wrong reason.
+  //
+  // The tightened matcher splits both sides on non-word chars and
+  // requires every token of the spec to appear as a standalone token
+  // in the actual description. "walling stone" still matches "Matched
+  // gritstone walling stone" because both "walling" and "stone" appear
+  // as whole tokens. "stone" no longer matches "limestone" because
+  // "limestone" tokenises as a single word.
+
+  test('word-boundary match — "stone" does NOT match "limestone"', () => {
+    // Previously the substring-based matcher returned true here, falsely
+    // marking the fixture's required "stone" spec as satisfied by an
+    // unrelated limestone-dust line.
+    const expected = { materials: [{ description: 'stone' }] };
+    const actual = { materials: [{ description: 'Limestone dust 25kg' }] };
+    const result = compareRun(actual, expected);
+    const field = result.fields.find((f) => f.field === 'materials.stone');
+    expect(field.pass).toBe(false);
+  });
+
+  test('word-boundary match — "stone" still matches "walling stone"', () => {
+    // Existing unambiguous case must continue to pass.
+    const expected = { materials: [{ description: 'stone' }] };
+    const actual = { materials: [{ description: 'Matched gritstone walling stone' }] };
+    const result = compareRun(actual, expected);
+    const field = result.fields.find((f) => f.field === 'materials.stone');
+    expect(field.pass).toBe(true);
+  });
+
+  test('word-boundary match — forbidden "mortar" does NOT trip on unrelated word fragments', () => {
+    // The biggest false-positive risk: forbidden specs firing on tool
+    // descriptions or compound terms that happen to contain the letters.
+    // The substring matcher returned `found = true` for any string
+    // containing "mortar", which is exactly the kind of false alarm
+    // that would fail a CI run for the wrong reason.
+    //
+    // Note: "disposal mortar drill" is artificial — picked to demonstrate
+    // the matcher tightens. The real-world equivalent might be
+    // "mortarboard tool" or a brand name. Either way, the rule is the
+    // same: forbidden specs match WHOLE words only.
+    const expected = {
+      materials: [{ description: 'mortar', forbidden: true }],
+    };
+    // Single-token "mortar" present → should still be flagged
+    const actualWithMortar = {
+      materials: [{ description: 'NHL 3.5 mortar 25kg bag' }],
+    };
+    expect(compareRun(actualWithMortar, expected).pass).toBe(false);
+
+    // No standalone "mortar" token — must NOT be flagged. (Pre-tightening
+    // this would have falsely flagged because "mortarboard" contains
+    // "mortar" as a substring.)
+    const actualWithoutMortar = {
+      materials: [{ description: 'Mortarboard hire' }],
+    };
+    expect(compareRun(actualWithoutMortar, expected).pass).toBe(true);
+  });
+
+  test('word-boundary match — multi-word spec needs every token present', () => {
+    // "walling stone" requires both "walling" AND "stone" as tokens.
+    // A description with only one of them shouldn't pass.
+    const expected = { materials: [{ description: 'walling stone' }] };
+    const actualMissingWalling = {
+      materials: [{ description: 'reclaimed stone pile' }],
+    };
+    expect(compareRun(actualMissingWalling, expected).pass).toBe(false);
+    const actualBothTokens = {
+      materials: [{ description: 'Reclaimed walling stone, 1.2 tonnes' }],
+    };
+    expect(compareRun(actualBothTokens, expected).pass).toBe(true);
+  });
+
+  test('word-boundary match — case-insensitive (existing contract preserved)', () => {
+    const expected = { materials: [{ description: 'walling stone' }] };
+    const actual = { materials: [{ description: 'WALLING STONE supply' }] };
+    expect(compareRun(actual, expected).pass).toBe(true);
+  });
+
+  test('word-boundary match — punctuation in actual description is treated as a token boundary', () => {
+    // Hyphens, slashes, commas all count as boundaries so the matcher
+    // doesn't trip on adjective-noun compounds like "stone-disposal".
+    const expected = { materials: [{ description: 'stone' }] };
+    const actual = { materials: [{ description: 'Walling-stone supply, 1 tonne' }] };
+    expect(compareRun(actual, expected).pass).toBe(true);
+  });
 });
 
 describe('compareRun — stats across multiple runs', () => {
