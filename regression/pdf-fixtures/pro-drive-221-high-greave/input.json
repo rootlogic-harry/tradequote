@@ -1,0 +1,93 @@
+{
+  "_meta": {
+    "id": "pro-drive-221-high-greave",
+    "name": "TRQ-178 regression fixture — gritstone boundary wall, 6 measurements, 7 schedule items, 4 photos",
+    "description": "PDF-output regression fixture seeded from a real customer quote (June 2026). The original PDF rendered at 9 pages with structural blank-space and a per-page header strip that duplicated the page-1 hero. After TRQ-178 (drop per-page header, let sections flow, remove forced break-before:page on photos) the same input renders in ~5-6 pages with photos following on naturally from totals. All PII below is sanitised; the directory name encodes the human-readable site reference so this fixture is locatable on disk.",
+    "source": "Mark's live render, 2026-06-20",
+    "linear": "TRQ-178",
+    "sanitised": true,
+    "sanitisedFields": [
+      "profile.companyName",
+      "profile.fullName",
+      "profile.phone",
+      "profile.email",
+      "profile.address",
+      "profile.tradingAddress",
+      "profile.vatNumber",
+      "profile.logo",
+      "jobDetails.clientName",
+      "jobDetails.siteAddress",
+      "jobDetails.clientPhone",
+      "jobDetails.quoteReference"
+    ]
+  },
+  "profile": {
+    "companyName": "[redacted-company]",
+    "fullName": "[redacted-fullname]",
+    "phone": "[redacted-phone]",
+    "email": "[redacted-email]",
+    "address": "[redacted-address]",
+    "tradingAddress": "[redacted-address] · [redacted-postcode]",
+    "logo": null,
+    "vatRegistered": true,
+    "vatNumber": "GB 000 0000 00",
+    "dayRate": 400,
+    "accreditations": "DSWA Certified Craftsman",
+    "showNotesOnQuote": true,
+    "hideLabourDays": false,
+    "region": "West Yorkshire",
+    "preferredStoneTypes": ["gritstone"],
+    "mortarUsage": "sometimes",
+    "accent": "amber",
+    "documentType": "quote"
+  },
+  "jobDetails": {
+    "clientName": "[redacted-client-name]",
+    "siteAddress": "[redacted-site-address], [redacted-postcode]",
+    "clientPhone": "[redacted-phone]",
+    "quoteReference": "REDACTED-01 | 0000000000",
+    "quoteDate": "2026-06-20",
+    "briefNotes": "Roadside boundary wall, central section collapsed. Mortared gritstone construction.",
+    "scaleReferences": ""
+  },
+  "reviewData": {
+    "damageDescription": "1 — Gritstone Boundary Wall\n\nThe gritstone boundary wall, running approximately 6,000mm along the roadside boundary at the site, has suffered structural failure over a central section measuring approximately 3,500mm in length. The wall stands approximately 1000mm in height where intact, constructed in coursed gritstone with visible mortar pointing between stones. The collapsed section shows complete loss of structural integrity, with stones displaced into the garden area below the wall line. Photographic evidence shows substantial rubble accumulation at the base of the breach, indicating full-depth collapse through both faces and hearting material.\n\nThe left-hand abutment to the collapsed section exhibits pronounced outward lean of approximately 50-75mm from vertical over the 900mm height, indicating possible failure of the adjacent 750mm section. This leaning section shows visible separation of courses and loss of bond, requiring controlled dismantling before rebuild commences. The right-hand abutment appears structurally sound but will require taking back approximately 300mm to achieve a stable tie-in for the rebuild.\n\nThe wall construction is mortared throughout, with visible cement-based pointing between gritstone blocks. The original construction shows regular coursing with blocks approximately 200-250mm in depth. The cope stones along the intact sections are bedded in mortar.",
+    "measurements": [
+      { "id": "m1", "item": "Total wall length (roadside boundary)", "aiValue": "10000mm", "value": "10,000mm", "confirmed": true },
+      { "id": "m2", "item": "Collapsed section length", "aiValue": "3500mm", "value": "3,500mm", "confirmed": true },
+      { "id": "m3", "item": "Leaning section length (left abutment)", "aiValue": "750mm", "value": "750mm", "confirmed": true },
+      { "id": "m4", "item": "Original wall height", "aiValue": "900mm", "value": "900mm", "confirmed": true },
+      { "id": "m5", "item": "Wall thickness at base", "aiValue": "450mm", "value": "450mm", "confirmed": true },
+      { "id": "m6", "item": "Retaining height (garden level above pavement)", "aiValue": "700mm", "value": "700mm", "confirmed": true }
+    ],
+    "scheduleOfWorks": [
+      { "id": "s1", "title": "Site setup and pedestrian management", "description": "Establish pedestrian management measures along the roadside pavement adjacent to the works. Install temporary barriers, warning signage, and pedestrian diversion as required to maintain safe passage during dismantling and rebuild operations. The wall is directly adjacent to a public footpath with active pedestrian use." },
+      { "id": "s2", "title": "Controlled dismantling of leaning section", "description": "Carefully dismantle the leaning section of gritstone boundary wall on the left-hand abutment, measuring approximately 750mm in length. The section exhibits pronounced outward lean and loss of bond. Setting aside sound gritstone blocks for reclamation. Estimated area: 1.35 m² of wall face." },
+      { "id": "s3", "title": "Clearance and sorting of collapsed material", "description": "Clear the collapsed gritstone rubble from the breach area and garden below, measuring approximately 2,500mm in length. Sort reclaimed gritstone blocks suitable for rebuild, setting aside damaged or fractured stone for disposal. Estimated clearance area: 2.25 m² of wall face equivalent." },
+      { "id": "s4", "title": "Take back right-hand abutment", "description": "Take back the right-hand abutment of the intact wall section by approximately 300mm to achieve a stable tie-in point for the rebuild. Reclaim sound gritstone blocks from this section." },
+      { "id": "s5", "title": "Rebuild gritstone boundary wall", "description": "Rebuild the gritstone boundary wall to original height of 900mm over a length of approximately 3,500mm. Construct in coursed gritstone using reclaimed stone from the existing wall supplemented with approximately 0.9 tonnes of matched gritstone walling stone to make up shortfall from damaged material. Bed and point all stones in 1:1:6 cement-lime-sand mortar to match the original mortared construction visible in the intact sections. Rebuild as a double-faced retaining wall with hearting material packed tightly to each course. Total rebuild area: approximately 3.6 m² of wall face." },
+      { "id": "s6", "title": "Waste disposal and site clearance", "description": "Load and dispose of damaged gritstone, soil, and rubble unsuitable for reclamation. Estimated waste volume: approximately 0.5 tonnes. Clear site of all debris, remove pedestrian management measures, and leave the works area clean and tidy." },
+      { "id": "s7", "title": "Final inspection and photographic record", "description": "Conduct final inspection of the completed rebuild to verify structural integrity, coursing, pointing finish, and tie-in to existing wall sections. Provide photographic record of completed works." }
+    ],
+    "materials": [
+      { "id": "mat1", "description": "Matched gritstone walling stone (supplementary supply to reclaimed stone)", "quantity": 0.9, "unit": "t", "unitCost": 180, "totalCost": 162 },
+      { "id": "mat2", "description": "Cement, lime, and sand for mortar (1:1:6 mix for bedding and pointing)", "quantity": 1, "unit": "Item", "unitCost": 132, "totalCost": 132 },
+      { "id": "mat3", "description": "Pedestrian management (barriers, signage, and diversion measures)", "quantity": 1, "unit": "Item", "unitCost": 120, "totalCost": 120 },
+      { "id": "mat4", "description": "Waste disposal and tipping fees", "quantity": 1, "unit": "Item", "unitCost": 75, "totalCost": 75 },
+      { "id": "mat5", "description": "Travel and fuel expenses", "quantity": 1, "unit": "Item", "unitCost": 260, "totalCost": 260 }
+    ],
+    "labourEstimate": {
+      "estimatedDays": 4,
+      "numberOfWorkers": 1,
+      "dayRate": 400
+    },
+    "additionalCosts": [],
+    "notes": []
+  },
+  "extraPhotos": [
+    { "label": "Site photo 1", "aspect": "portrait" },
+    { "label": "Site photo 2", "aspect": "portrait" },
+    { "label": "Site photo 3", "aspect": "portrait" },
+    { "label": "Site photo 4", "aspect": "landscape" }
+  ]
+}

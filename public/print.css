@@ -78,15 +78,23 @@
     font-size: 11pt;
   }
 
-  /* Sections must not split across pages — orphans/widows as backup */
+  /* TRQ-178: sections FLOW across pages. The previous rule pinned
+     `break-inside: avoid` on every [data-print-section], which forced
+     any section that wouldn't fit on the current page's remaining
+     space to bump entirely to the next page — leaving big blank
+     bands above the section heading. Mark's Pro-Drive quote (June
+     2026) ended up at 9 pages because Description-of-Damage,
+     Measurements, Schedule, and Cost-Breakdown each bumped this way.
+     Orphans/widows still discourage a heading from being stranded
+     alone at the bottom of a page. */
   [data-print-section] {
-    break-inside: avoid;
-    page-break-inside: avoid;
     orphans: 3;
     widows: 3;
   }
 
-  /* Cost breakdown table: keep header with at least one body row */
+  /* Cost breakdown table: keep header with at least one body row.
+     Individual rows still don't split (a row with mid-line break
+     looks broken), but the table as a whole may flow across pages. */
   [data-print-section="cost-breakdown"] thead {
     display: table-header-group;
   }
@@ -95,22 +103,25 @@
     page-break-inside: avoid;
   }
 
-  /* Totals block must stay together on one page */
+  /* Totals block stays together — splitting the subtotal / VAT /
+     TOTAL lines across pages would be unreadable. This is the one
+     section that still earns `break-inside: avoid`. */
   [data-print-section="totals"] {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  /* Photo appendix. The first data-print-pair contains the "Site
-     Photographs" header AND the first 2 photos — by applying break-before:
-     page to that pair (rather than the outer section) the header always
-     rides onto the new page WITH its photos, never orphaned. Subsequent
-     pairs just break naturally. */
-  [data-print-section="photos"] > [data-print-pair]:first-child {
-    break-before: page;
-    page-break-before: always;
-  }
-  [data-print-pair] {
+  /* TRQ-178: Photo appendix flows. The previous rule forced a hard
+     `break-before: page` on the first photo pair, which pushed the
+     SITE PHOTOGRAPHS heading onto its own page regardless of how
+     much room was left after totals. Now the heading + first pair
+     follow on naturally from whatever ends the cost section.
+     Individual photos still avoid mid-image splits (the rasterised
+     image wouldn't render with a horizontal break anyway), but
+     pairs of two photos may now flow across pages so a 5-photo
+     appendix doesn't strand the 5th photo alone on its own page
+     with 70% whitespace below it (Mark's headline complaint). */
+  [data-print-section="photos"] .print-photo {
     break-inside: avoid;
     page-break-inside: avoid;
   }
