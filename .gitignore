@@ -34,3 +34,15 @@ npm-debug.log*
 
 # Local Claude Code agent config (per-machine, never committed)
 .claude/
+
+# PDF-fixture private/ subdirs hold the original bug-evidence PDFs for
+# each regression fixture (TRQ-178). Those are usually real customer
+# renders with PII — kept locally so reviewers can re-open the source
+# of the bug, but never committed. Sanitised inputs + post-fix renders
+# live alongside and ARE committed; see fixture README files.
+regression/pdf-fixtures/*/private/
+
+# Local cache dirs the renderFixture.js script creates while bundling
+# QuoteDocument.jsx via esbuild. Removed on success but a crashed
+# render can leave one behind — never commit them.
+.pdf-fixture-cache-*/

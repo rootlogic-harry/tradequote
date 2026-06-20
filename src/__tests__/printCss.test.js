@@ -21,10 +21,26 @@ describe('Print CSS in public/print.css', () => {
     expect(printCss).toMatch(/@media print/);
   });
 
-  it('applies break-inside: avoid to every data-print-section', () => {
+  it('keeps totals block unbreakable (the one section that must not split)', () => {
+    // TRQ-178: the previous rule pinned `break-inside: avoid` on every
+    // [data-print-section], which forced any section that didn't fit
+    // on the current page to bump and leave a blank band above its
+    // heading. Sections now flow. Totals is the one exception: the
+    // Subtotal / VAT / TOTAL trio is meaningless if split across pages.
     // Both standard + legacy property for older Chrome/Safari.
-    expect(printCss).toMatch(/\[data-print-section\][\s\S]*break-inside:\s*avoid/);
-    expect(printCss).toMatch(/\[data-print-section\][\s\S]*page-break-inside:\s*avoid/);
+    expect(printCss).toMatch(/\[data-print-section="totals"\][\s\S]*break-inside:\s*avoid/);
+    expect(printCss).toMatch(/\[data-print-section="totals"\][\s\S]*page-break-inside:\s*avoid/);
+  });
+
+  it('lets non-totals sections flow (TRQ-178 — kill structural blank-space)', () => {
+    // Regression guard: nothing else in the file should pin
+    // break-inside on a bare [data-print-section] selector. If a
+    // future change re-adds it we want a loud failure pointing at
+    // this comment so the author thinks about page bumps before
+    // shipping. We scan for the bare selector followed (in any rule
+    // body, anywhere in the file) by `break-inside: avoid`.
+    const bareSection = /\[data-print-section\]\s*\{[^}]*break-inside:\s*avoid/;
+    expect(printCss).not.toMatch(bareSection);
   });
 
   it('prints coloured backgrounds with print-color-adjust: exact', () => {
@@ -59,8 +75,14 @@ describe('Print CSS in public/print.css', () => {
     expect(printCss).toMatch(/data-html2canvas-ignore="true"[\s\S]*display:\s*none/);
   });
 
-  it('breaks photo appendix onto a fresh page', () => {
-    expect(printCss).toMatch(/\[data-print-section="photos"\][\s\S]*break-before:\s*page/);
+  it('lets the photo appendix flow naturally from the cost section (TRQ-178)', () => {
+    // Previously: `break-before: page` on the first photo pair forced
+    // SITE PHOTOGRAPHS onto a fresh page even when half a page sat
+    // empty after totals. Now the photos heading + first pair follow
+    // directly. Individual photos still avoid mid-image splits.
+    expect(printCss).toMatch(/\[data-print-section="photos"\]\s+\.print-photo[\s\S]*break-inside:\s*avoid/);
+    // Negative: no hard page break before the photos section.
+    expect(printCss).not.toMatch(/\[data-print-section="photos"\][^}]*break-before:\s*page/);
   });
 
   // index.html must reference the stylesheet so the browser loads it for
