@@ -86,14 +86,6 @@ describe('QuoteOutput.jsx — gate raised at every customer-facing action', () =
     expect(block).toMatch(/if\s*\(\s*!requireProfile\(\)\s*\)\s*return/);
   });
 
-  test('handleDownloadPDF (legacy html2canvas path) calls requireProfile()', () => {
-    const start = quoteOutputSrc.indexOf('const handleDownloadPDF');
-    const next = quoteOutputSrc.indexOf('const handleDownloadDocx', start);
-    expect(start).toBeGreaterThan(-1);
-    const block = quoteOutputSrc.slice(start, next);
-    expect(block).toMatch(/if\s*\(\s*!requireProfile\(\)\s*\)\s*return/);
-  });
-
   test('handleDownloadDocx calls requireProfile()', () => {
     const start = quoteOutputSrc.indexOf('const handleDownloadDocx');
     const next = quoteOutputSrc.indexOf('const handleEmail', start);

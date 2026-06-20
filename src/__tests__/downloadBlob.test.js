@@ -178,10 +178,7 @@ describe('downloadBlob — wiring in QuoteOutput export paths', () => {
     expect(slice).toMatch(/downloadBlob\s*\(/);
   });
 
-  test('legacy jsPDF handler calls downloadBlob', () => {
-    const idx = src.indexOf('handleDownloadPDF = async');
-    expect(idx).toBeGreaterThan(-1);
-    const slice = src.slice(idx, idx + 10000);
-    expect(slice).toMatch(/downloadBlob\s*\(/);
-  });
+  // The legacy jsPDF handler was deleted in TRQ-180 as dead code; the
+  // only downloadBlob callers in QuoteOutput.jsx are now the server-side
+  // PDF handler and the DOCX handler (covered above).
 });

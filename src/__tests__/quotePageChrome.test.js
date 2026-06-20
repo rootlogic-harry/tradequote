@@ -114,15 +114,13 @@ describe('buildPdfFooterHtml', () => {
 // have to use the new chrome data so a future regression doesn't drop
 // the headers/footers Mark relies on.
 describe('quotePageChrome wiring', () => {
-  // TRQ-118: DOCX/PDF bodies extracted from QuoteOutput.jsx into
-  // exportDocx.js / exportPdf.js. Read all three so the chrome
-  // assertions catch the right code regardless of where it lives.
+  // TRQ-118: DOCX body extracted from QuoteOutput.jsx into exportDocx.js.
+  // TRQ-180: the legacy client-side PDF path (exportPdf.js) was deleted as
+  // dead code, so the source-scan now reads only the remaining two files.
   const quoteOutputSrc =
     readFileSync(join(__dirname, '../components/steps/QuoteOutput.jsx'), 'utf8') +
     '\n' +
-    readFileSync(join(__dirname, '../utils/exportDocx.js'), 'utf8') +
-    '\n' +
-    readFileSync(join(__dirname, '../utils/exportPdf.js'), 'utf8');
+    readFileSync(join(__dirname, '../utils/exportDocx.js'), 'utf8');
   const pdfRendererSrc = readFileSync(
     join(__dirname, '../../pdfRenderer.js'), 'utf8'
   );

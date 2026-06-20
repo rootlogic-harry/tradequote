@@ -40,13 +40,16 @@ always better than an autonomous irreversible action.
   user-scoped table cascades on user delete; `jobs` cascades down to
   `quote_diffs` and `agent_runs.job_id` is `ON DELETE SET NULL`. Restore
   order is therefore simple: `users → jobs → everything else` (TRQ-148).
-- **PDF has TWO paths**, both live in production:
-  - **Primary** — server-side Puppeteer + `@sparticuz/chromium` via
-    `pdfRenderer.js`. Triggered by `handleDownloadPdfServer` →
-    `POST /api/users/:id/jobs/:jobId/pdf`. Selectable text, native pagination.
-  - **Fallback** — client-side `html2canvas` + `jsPDF` via
-    `src/utils/exportPdf.js`. Triggered by `handleDownloadPDF` and by the
-    server path when Chromium fails. Rasterised canvas, slower.
+- **PDF has ONE live path** — server-side Puppeteer + `@sparticuz/chromium`
+  via `pdfRenderer.js`. Triggered by `handleDownloadPdfServer` →
+  `POST /api/users/:id/jobs/:jobId/pdf`. Selectable text, native pagination.
+  If the server `/pdf` endpoint fails for any reason (Chromium didn't
+  start, network blip, rate limit, empty buffer, 45s timeout) the client
+  falls back to `window.print()` which uses the browser's native
+  print-to-PDF dialog — the same `public/print.css` is applied so the
+  document looks the same. There is no `html2canvas` + `jsPDF` fallback
+  anymore (TRQ-180 deleted `src/utils/exportPdf.js` as dead code; nothing
+  in the live flow imported it).
 - **`agent_runs.status` enum**: `'running'` (insert) → `'completed'` (success)
   or `'failed'` (error). **One canonical success string everywhere.** Do not
   invent new values. See TRQ-140 for the historical inconsistency this
@@ -95,7 +98,7 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 | AI | Anthropic Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`, server-side proxy). Sonnet 4 was retired by Anthropic on 2026-06-16; we migrated the same day. |
 | AI Agents | Claude Haiku 4.5 (self-critique, feedback, calibration) |
 | PDF (primary) | Server-side Puppeteer + `@sparticuz/chromium` via `pdfRenderer.js` — selectable text, native pagination |
-| PDF (fallback) | Client-side `html2canvas` + `jsPDF` via `src/utils/exportPdf.js` — used when Chromium fails |
+| PDF (fallback) | Browser-native `window.print()` (print-to-PDF) — used when the server `/pdf` endpoint fails. Same `public/print.css` is applied so the document matches. |
 | DOCX | `docx` library (v9.6.1) |
 | Auth | Google OAuth 2.0 + legacy session switcher |
 | Sessions | connect-pg-simple (PostgreSQL-backed) |
@@ -411,7 +414,7 @@ Test files live in `src/__tests__/`. Key test suites:
 
 ## Known Limitations
 
-- PDF page break issues on long quotes affect the **fallback** client-side `html2canvas` path only. The primary server-side Puppeteer path handles pagination natively.
+- PDF page break issues on long quotes were historically a concern only on the legacy client-side `html2canvas` fallback (deleted in TRQ-180 as dead code). The primary server-side Puppeteer path handles pagination natively, and the current `window.print()` fallback uses the same `public/print.css` so it inherits the same page-break rules.
 - RAMS mobile navigation relies on scroll-to with pill bar — no native anchor support
 - Draft auto-save is per-user in PostgreSQL, but active in-tab reducer state is lost on page refresh if not saved
 - Self-critique agent runs synchronously after analysis — adds ~2s to Step 3 load time

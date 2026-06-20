@@ -17,7 +17,6 @@ import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveJob as saveQuote, updateJob } from '../../utils/userDB.js';
-import { exportQuoteAsPdf } from '../../utils/exportPdf.js';
 import { exportQuoteAsDocx } from '../../utils/exportDocx.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 
@@ -94,7 +93,6 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     }
   }
 
-  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
 
   // Small inline spinner for loading button states. Uses `border-current`
@@ -219,43 +217,6 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       falLbackToPrint(err.message || err);
     } finally {
       setGeneratingServerPdf(false);
-    }
-  };
-
-  // PDF body now lives in src/utils/exportPdf.js (TRQ-118). This handler
-  // is the thin wrapper that owns the side-effects: spinner flag, file
-  // delivery (downloadBlob picks the iPad share sheet when available),
-  // and toast feedback. The pure builder returns a Blob.
-  const handleDownloadPDF = async () => {
-    const element = quoteRef.current;
-    if (!element) return;
-    if (!requireProfile()) return; // TRQ-94 gate
-
-    setGeneratingPDF(true);
-    try {
-      const pdfBlob = await exportQuoteAsPdf({
-        element,
-        jobDetails,
-        profile,
-        filteredPhotos,
-      });
-      // TRQ-122: matching filename format used by the Puppeteer path
-      const filename = buildQuoteFilename({
-        clientName: jobDetails.clientName,
-        siteAddress: jobDetails.siteAddress,
-        fallbackLabel: term.title,
-      });
-      // TRQ-140: route through downloadBlob so iPad Safari gets the
-      // share sheet instead of the silently-failing <a download>.
-      const result = await downloadBlob(pdfBlob, `${filename}.pdf`, { mimeType: 'application/pdf' });
-      if (!result?.cancelled) {
-        showToast?.(result?.shared ? 'PDF ready to share' : 'PDF downloaded', 'success');
-      }
-    } catch (err) {
-      console.error('PDF generation failed:', err);
-      showToast?.('PDF generation failed. Please try again.', 'error');
-    } finally {
-      setGeneratingPDF(false);
     }
   };
 
