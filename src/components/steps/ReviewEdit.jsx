@@ -178,6 +178,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
           dispatch({ type: 'UPDATE_DAMAGE_DESCRIPTION', value: e.target.value })
         }
         minHeight={160}
+        maxHeight={240}
         className="nq-field w-full"
       />
     </div>

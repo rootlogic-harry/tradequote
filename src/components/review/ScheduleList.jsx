@@ -64,6 +64,7 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
                 onBlur={(e) => updateStep(i, 'description', e.target.value)}
                 rows={6}
                 minHeight={140}
+                maxHeight={200}
                 className="w-full bg-transparent text-tq-text text-sm border border-tq-border/40 hover:border-tq-border focus:border-tq-accent outline-none leading-relaxed p-2 rounded"
                 placeholder="Description"
               />
