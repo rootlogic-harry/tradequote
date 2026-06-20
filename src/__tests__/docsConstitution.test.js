@@ -52,10 +52,14 @@ describe('TRQ-145 — safety constitution at top of CLAUDE.md', () => {
     // FK graph correction
     expect(claudeMd).toMatch(/tree rooted at `users`/);
     expect(claudeMd).not.toMatch(/Circular FKs exist between/);
-    // PDF dual-path note (TRQ-142)
-    expect(claudeMd).toMatch(/PDF has TWO paths/);
+    // PDF path note. Originally TRQ-142 documented two paths (primary
+    // Puppeteer + legacy html2canvas fallback); TRQ-180 deleted the
+    // legacy fallback as dead code, so the constitution now describes
+    // one live path with window.print() as the runtime fallback.
+    expect(claudeMd).toMatch(/PDF has ONE live path/);
     expect(claudeMd).toMatch(/Puppeteer/);
     expect(claudeMd).toMatch(/@sparticuz\/chromium/);
+    expect(claudeMd).toMatch(/window\.print\(\)/);
     // Status enum lock (TRQ-140 land area)
     expect(claudeMd).toMatch(/agent_runs\.status` enum/);
     expect(claudeMd).toMatch(/One canonical success string/);
@@ -103,11 +107,15 @@ describe('TRQ-141 — CLAUDE.md tech-stack table is current', () => {
     expect(claudeMd).toMatch(/~\d{1,2},\d{3} tests across ~\d{2,3} suites/);
   });
 
-  test('Known-limitations page-break note attributes to fallback path', () => {
+  test('Known-limitations page-break note attributes pagination to the server-side Puppeteer path', () => {
     // Was: "(html2canvas limitation)" as if it applied to all PDF output.
-    // Reality: server-side Puppeteer paginates fine; the limit is the
-    // client-side fallback only.
-    expect(claudeMd).toMatch(/fallback.*html2canvas/i);
+    // Reality: server-side Puppeteer paginates fine. TRQ-180 deleted the
+    // legacy client-side html2canvas+jsPDF fallback (it was dead code);
+    // the current fallback when the /pdf endpoint fails is window.print()
+    // which uses the same public/print.css and inherits the same page
+    // breaks. The constitution note now describes that explicitly.
+    expect(claudeMd).toMatch(/server-side Puppeteer/);
+    expect(claudeMd).toMatch(/window\.print\(\)/);
   });
 });
 

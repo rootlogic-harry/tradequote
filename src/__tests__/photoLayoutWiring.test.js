@@ -17,12 +17,12 @@ const quoteDocSrc = readFileSync(join(__dirname, '../components/QuoteDocument.js
 // TRQ-118 split QuoteOutput.jsx — DOCX body lives in exportDocx.js. Tests
 // that source-scan for DOCX builder behaviour read both files now so the
 // assertions stay valid regardless of which file the code lives in.
+// TRQ-180: the legacy client-side PDF path (exportPdf.js) was deleted as
+// dead code; nothing in the live flow imports it anymore.
 const quoteOutputSrc =
   readFileSync(join(__dirname, '../components/steps/QuoteOutput.jsx'), 'utf8') +
   '\n' +
-  readFileSync(join(__dirname, '../utils/exportDocx.js'), 'utf8') +
-  '\n' +
-  readFileSync(join(__dirname, '../utils/exportPdf.js'), 'utf8');
+  readFileSync(join(__dirname, '../utils/exportDocx.js'), 'utf8');
 
 describe('print.css carries the per-orientation height caps', () => {
   test('default photo cap is 115mm (landscape — Mark reference minus 3mm)', () => {

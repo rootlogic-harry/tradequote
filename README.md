@@ -22,7 +22,7 @@ Production: [fastquote.uk](https://fastquote.uk) · Team: [FastQuote on Linear](
 - **Photo slots** — 5 structured slots (overview, closeup, side profile, reference card, access) plus up to 10 extra labelled photos.
 
 ### Document output
-- **PDF** via `html2canvas` + `jsPDF` (CDN).
+- **PDF** via server-side Puppeteer + `@sparticuz/chromium` (`pdfRenderer.js`); browser-native `window.print()` is the fallback if the server endpoint fails.
 - **DOCX** via the `docx` library — fixed-layout cost-breakdown table with right-positioned totals and brand-accent TOTAL.
 - **Photo appendix** — 2 per page, page-break-safe.
 - **RAMS generator** — Risk Assessment & Method Statement, linked to the originating quote.
@@ -87,7 +87,7 @@ VideoUpload ──XHR──→ multer ──→   │       │           │
 | Audio | OpenAI Whisper |
 | Video | ffmpeg (via `fluent-ffmpeg`) |
 | PDF (primary) | Server-side Puppeteer (`puppeteer-core`) + `@sparticuz/chromium` via `pdfRenderer.js` |
-| PDF (fallback) | Client-side `html2canvas` + `jsPDF` (CDN) — used when the server path fails |
+| PDF (fallback) | Browser-native `window.print()` (print-to-PDF) — used when the server path fails. Shares `public/print.css` with the primary path so the document matches. |
 | DOCX | `docx` (bundled) |
 | Auth | Google OAuth 2.0 (`passport`) + `connect-pg-simple` sessions |
 | Uploads | `multer` |
