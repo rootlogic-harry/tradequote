@@ -384,6 +384,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - `uploadProgressUI.test.js` — upload progress wiring (reducer, JobDetails, AIAnalysis)
 - `uploadRetry.test.js` — retry logic with exponential backoff
 - `videoPreview.test.js` — video playback preview with native controls
+- `pdfDeterministic.test.js` — same input must produce byte-identical PDF (font race + metadata normalisation)
 
 ---
 
@@ -754,6 +755,16 @@ Claude sets per-measurement `confidence` itself, but tends to be optimistic. `ap
 Both the photo (`analyseJob.js`) and video (`server.js` video route) paths call it after `normalizeAIResponse`. The function only touches `confidence` — `aiValue` remains immutable.
 
 **Self-check:** If a new analysis path is added, it must call `applyMeasurementPlausibilityBounds` too.
+
+### 16. Server-side PDFs must be deterministic — fonts AND metadata (TRQ-168)
+
+The Puppeteer PDF path (`pdfRenderer.js`) has two sources of run-to-run non-determinism that both have to be plugged:
+
+1. **Font race.** `page.setContent(..., { waitUntil: 'networkidle0' })` waits for the woff2 download but NOT for Chromium to finish applying the FontFaceSet. If `page.pdf()` runs before the swap completes, layout uses fallback-font metrics — Barlow Condensed renders as Helvetica/sans-serif, sections shift, pagination decisions race, and the visible output is a half-empty trailing page or a vertical white gap. Fixed by awaiting `document.fonts.ready` inside `page.evaluate()` between `setContent()` and `emulateMediaType('print')`. `page.evaluate()` runs via the DevTools Runtime channel, so `setJavaScriptEnabled(false)` (SSRF defence) is unaffected.
+
+2. **Chromium metadata.** Every PDF gets a fresh `/CreationDate`, `/ModDate`, and (sometimes) a random trailer `/ID`. Even when the layout is pixel-identical, the bytes differ second-to-second. `src/utils/normalisePdfMetadata.js` substitutes all three with byte-length-preserving placeholders before the buffer leaves the renderer. The substitution preserves xref offsets exactly, so the resulting PDF is valid.
+
+**Self-check:** Any new code path that returns a Puppeteer-generated PDF buffer must run it through `normalisePdfMetadata()` before sending it to the client. Asserted in `pdfDeterministic.test.js`.
 
 ---
 
