@@ -52,13 +52,54 @@ fix that — we baseline the noise on known jobs, then watch for shifts.
    N times each. Writes a report to `regression/reports/YYYY-MM-DD-HH-MM.md`.
 2. Make your prompt change.
 3. `npm run regression` again. Same report path with a new timestamp.
-4. Diff the two reports. Look for:
+4. The report shows per-fixture and per-field `was X / now Y` deltas
+   against the saved baseline (if any). Look for:
    - Mean shifted toward ground truth → **improvement**
    - Mean shifted away → **regression**
    - Std widened → noise increased; the change made the model
      less stable, even if the mean is still in range
-   - A fixture that was passing now fails → hard regression
-5. Decide: accept (rebaseline) or reject (revert the change).
+   - Pass rate dropped on any field → hard regression
+5. Decide: accept (`npm run regression -- --bless` to update baselines)
+   or reject (revert the change).
+
+## Flags
+
+| Flag | Effect |
+|------|--------|
+| `--iterations N` | Iterations per fixture (default 3) |
+| `--base-url URL` | FastQuote endpoint (default `http://localhost:3000`) |
+| `--user-id ID`   | User to impersonate via `x-test-user-id` (default `markdoyle`) |
+| `--fixture ID`   | Run only the named fixture |
+| `--no-write`     | Don't write a report or baseline file (stdout only) |
+| `--strict`       | Treat skipped fixtures as failures. Also via env `REGRESSION_STRICT=1`. CI flips this on once at least one real fixture is committed — see "When to enable strict in CI" below. |
+| `--require-min-fixtures N` | Exit non-zero if fewer than N runnable fixtures exist (default 0). Use once fixtures land to guard against "someone moved the photos dir and we didn't notice". |
+| `--bless`        | Write per-fixture baselines to `regression/baselines/<id>.json`. A baseline change is a conscious accept-the-new-normal decision — never silent. Combine with `--no-write` for a dry-run. |
+
+## Baselines
+
+`regression/baselines/<fixture-id>.json` captures the mean, std dev,
+and per-field pass rate of a blessed run, plus the `promptVersion`
+hash. Subsequent runs load the baseline (if any) and show `was X / now
+Y` deltas in the report.
+
+Baseline files **are** committed to git — they're the audit trail of
+"what passing looked like at the point we accepted it". The diff on a
+baseline file is itself meaningful: a PR that changes a baseline is
+saying "the new mean is the new normal, please review".
+
+If a baseline was blessed under a different prompt version than the
+current run, the report shows a warning line: "baseline was prompt vX,
+this run is prompt vY — deltas may not be comparable". Re-bless after
+prompt changes to keep deltas trustworthy.
+
+## When to enable strict in CI
+
+Today the GitHub Actions workflow does NOT pass `--strict`. That's
+deliberate: with no real fixtures committed, every run skips and
+strict mode would fail every PR. Once the first real fixture lands
+(see TRQ-173), update `.github/workflows/regression.yml` to pass
+`--strict` so a fixture that fails to load (missing photo, JSON
+typo) becomes a CI failure instead of a silent skip.
 
 ## Cost
 
@@ -72,14 +113,26 @@ prompt/model changes.
 regression/
   README.md            this file
   fixtures/            one .json + photos/ per fixture
-  baselines/           saved noise band per fixture
-  reports/             markdown output of each run
+  baselines/           saved noise band per fixture (committed to git)
+  reports/             markdown output of each run (NOT committed)
   lib/
-    compare.js         pure comparator (numeric, set, composition)
-    runner.js          loads fixture, posts to /analyse, captures output
-    reporter.js        markdown renderer
+    compare.js         pure comparator (numeric, word-boundary material match)
+    runner.js          loads fixture, posts to /analyse, captures output + raw
+    reporter.js        markdown renderer (per-field pass rate, raw-on-fail, deltas)
+    baseline.js        baseline payload builder, loader, writer, delta computer
+    cli.js             arg parser + exit-code decision (strict, min-fixtures, bless)
+    fixtureLoader.js   fixture validation
   run.js               CLI entry point — `npm run regression`
 ```
+
+## What's committed
+
+| Path | Committed? | Why |
+|------|-----------|-----|
+| `regression/baselines/*.json` | YES | Audit trail of "what we accepted as passing". The diff on a baseline file is itself meaningful — a PR that bumps a baseline is the explicit accept-the-new-normal moment. |
+| `regression/reports/*.md`     | NO  | Timestamp-named, regenerated every run. The latest is uploaded as a CI artifact on each PR. See `.gitignore`. |
+| `regression/fixtures/*.json`  | YES | Fixture definitions. |
+| `regression/fixtures/*/photos/` | varies — see TRQ-173 | Customer photos are PII-sensitive. Real fixtures may keep photos out of git and rely on CI to fetch them from object storage (decision pending). |
 
 ## What this suite does NOT do
 
