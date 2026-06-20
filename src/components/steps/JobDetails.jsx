@@ -73,7 +73,18 @@ function resizeImage(file, maxSize = 2048) {
   });
 }
 
-export default function JobDetails({ state, dispatch, abortRef, showToast, voiceDictationEnabled = false }) {
+export default function JobDetails({
+  state,
+  dispatch,
+  abortRef,
+  showToast,
+  voiceDictationEnabled = false,
+  // Video analysis feature flag — when false, the capture mode choice
+  // collapses to photos-only and the video upload card never renders.
+  // See docs/VIDEO_FLAG.md. Default true so component-only test fixtures
+  // and isolated unit tests still exercise the full surface.
+  videoAnalysisEnabled = true,
+}) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
   const fileInputRefs = useRef({});
@@ -85,6 +96,18 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
   const term = documentTerm(profile);
   const [videoFile, setVideoFile] = useState(null);
   const [videoExtraPhotos, setVideoExtraPhotos] = useState([]);
+
+  // Reset captureMode if the flag flips off while a video-mode draft is
+  // open. Without this the conditional render below would simply hide
+  // the video panel, leaving the user staring at an empty step with no
+  // path forward. Snap them back to the CaptureChoice (photos-only).
+  React.useEffect(() => {
+    if (!videoAnalysisEnabled && captureMode === 'video') {
+      dispatch({ type: 'SET_CAPTURE_MODE', payload: null });
+      setVideoFile(null);
+      setVideoExtraPhotos([]);
+    }
+  }, [videoAnalysisEnabled, captureMode, dispatch]);
 
   const updateJob = (field, value) => {
     dispatch({ type: 'UPDATE_JOB_DETAILS', updates: { [field]: value } });
@@ -460,15 +483,24 @@ export default function JobDetails({ state, dispatch, abortRef, showToast, voice
         </div>
       </div>
 
-      {/* Capture mode choice */}
+      {/* Capture mode choice. When video analysis is disabled the choice
+          screen collapses to photos-only — we still render the
+          CaptureChoice so the "How would you like to capture this job?"
+          message stays visible, but pass videoEnabled=false so the video
+          card is hidden. If the user previously chose video and the flag
+          flipped off mid-workflow, the reducer's captureMode stays — we
+          override the gate below so the broken video UI never renders. */}
       {!captureMode && (
         <CaptureChoice
           onSelectMode={(mode) => dispatch({ type: 'SET_CAPTURE_MODE', payload: mode })}
+          videoEnabled={videoAnalysisEnabled}
         />
       )}
 
-      {/* Video upload mode */}
-      {captureMode === 'video' && (
+      {/* Video upload mode — also gated on the flag so a draft restored
+          with captureMode='video' can't drag a basic user into a broken
+          flow. They'll see the CaptureChoice (photos-only) instead. */}
+      {captureMode === 'video' && videoAnalysisEnabled && (
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-heading font-bold text-tq-text">
