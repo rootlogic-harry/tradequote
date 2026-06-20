@@ -36,24 +36,31 @@ export function buildPageChromeText({ profile = {}, jobDetails = {} } = {}) {
 }
 
 /**
- * Build the Puppeteer headerTemplate string. Renders three columns
- * (date · email · phone) justified across the page. Inline styles
- * because Puppeteer header templates do not inherit page CSS.
+ * Build the Puppeteer headerTemplate string.
+ *
+ * TRQ-178: Mark's June-2026 feedback — the per-page header
+ * (date · email · phone) duplicates the trader card already rendered
+ * in QuoteDocument's hero (top-right of page 1, see lines 169-173 of
+ * components/QuoteDocument.jsx). Repeating the same three fields on
+ * every page made the document feel "templatey" rather than
+ * professional, especially on multi-page quotes with photo
+ * appendices. The footer (trading address + VAT) is the only
+ * page chrome that earns its place — it carries a different fact
+ * (the registered office + VAT registration) on every page so a
+ * client reading any single page can verify the trader is real.
+ *
+ * Returning an empty string here means renderQuotePdf's
+ * `enableHeaderFooter` check (in pdfRenderer.js) only flips on when
+ * the FOOTER has content — Puppeteer's headerTemplate is then
+ * effectively suppressed via the empty fallback.
+ *
+ * Parameters are accepted-and-ignored so existing call sites stay
+ * unchanged. If a future caller wants the page header back, restore
+ * the previous three-column template — but talk to Mark first.
  */
-export function buildPdfHeaderHtml(parts) {
-  const { dateText, email, phone } = parts || {};
-  if (!dateText && !email && !phone) return '';
-  const cell = (text) =>
-    `<span style="flex:1;text-align:center;">${escapeHtml(text || '')}</span>`;
-  return (
-    `<div style="width:100%;padding:0 18mm;font-family:Inter,Arial,sans-serif;` +
-    `font-size:9pt;color:#444;display:flex;justify-content:space-between;` +
-    `align-items:center;">` +
-    `<span style="flex:1;text-align:left;">${escapeHtml(dateText || '')}</span>` +
-    cell(email) +
-    `<span style="flex:1;text-align:right;">${escapeHtml(phone || '')}</span>` +
-    `</div>`
-  );
+// eslint-disable-next-line no-unused-vars
+export function buildPdfHeaderHtml(_parts) {
+  return '';
 }
 
 /**

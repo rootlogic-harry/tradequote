@@ -82,19 +82,25 @@ describe('Site Photographs print layout', () => {
     expect(block).not.toBeNull();
   });
 
-  it('break-before: page is scoped to the FIRST pair, not the section wrapper', () => {
-    // If the section wrapper carries break-before:page the header lands on
-    // a new page alone when the first pair doesn't fit in remaining space.
-    // Scoping to :first-child keeps the header WITH its photos.
-    expect(printCss).toMatch(/\[data-print-section="photos"\]\s*>\s*\[data-print-pair\]:first-child\s*\{[\s\S]*break-before:\s*page/);
+  it('TRQ-178 — no forced page break before the photo section', () => {
+    // Pre-TRQ-178 we forced `break-before: page` on the first photo
+    // pair so the section header always rode onto a new page WITH its
+    // photos. But that forced the photo section to start on a fresh
+    // page even when half a page sat blank below totals — Mark's
+    // June-2026 complaint. Now the section flows; individual photos
+    // still avoid mid-image splits via `.print-photo { break-inside }`.
+    expect(printCss).not.toMatch(/\[data-print-section="photos"\][^}]*break-before:\s*page/);
   });
 
   it('printed photos are height-capped so 2 + header fit on one page', () => {
     expect(printCss).toMatch(/\.print-photo img[\s\S]*max-height:\s*\d+mm/);
   });
 
-  it('each data-print-pair has break-inside: avoid', () => {
-    expect(printCss).toMatch(/\[data-print-pair\][\s\S]*break-inside:\s*avoid/);
+  it('TRQ-178 — individual photos avoid mid-image splits', () => {
+    // The unit of unbreakability is now the photo, not the pair. A
+    // pair may flow across pages so a 5-photo appendix doesn't strand
+    // the 5th photo alone with 70% blank space below it.
+    expect(printCss).toMatch(/\.print-photo\s*\{[\s\S]*break-inside:\s*avoid/);
   });
 });
 

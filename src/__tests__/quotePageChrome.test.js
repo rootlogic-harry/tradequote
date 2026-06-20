@@ -52,38 +52,37 @@ describe('buildPageChromeText', () => {
   });
 });
 
-describe('buildPdfHeaderHtml', () => {
-  test('renders three columns (date / email / phone) flex-justified', () => {
-    const html = buildPdfHeaderHtml({
+describe('buildPdfHeaderHtml (TRQ-178: per-page header retired)', () => {
+  // Mark (June 2026): the per-page header strip (date · email · phone)
+  // duplicated the trader card already in QuoteDocument's hero on page 1
+  // and felt "templatey" on multi-page quotes. The footer (address +
+  // VAT) is the only page chrome that earns its place. buildPdfHeaderHtml
+  // now ALWAYS returns '' — the function is kept so legacy call sites
+  // don't break, but Puppeteer's headerTemplate stays effectively empty.
+  test('returns empty string regardless of inputs', () => {
+    expect(buildPdfHeaderHtml({
       dateText: '29th April 2026',
       email: 'mark@x.com',
       phone: '07986 661828',
-    });
-    expect(html).toMatch(/29th April 2026/);
-    expect(html).toMatch(/mark@x\.com/);
-    expect(html).toMatch(/07986 661828/);
-    // Three flex columns + space-between justification
-    expect(html).toMatch(/justify-content:space-between/);
-    expect(html).toMatch(/flex:1/);
-    // Inline styling — Puppeteer header templates do NOT inherit page CSS.
-    expect(html).toMatch(/font-size:9pt/);
+    })).toBe('');
   });
 
-  test('returns empty string when nothing to render', () => {
+  test('returns empty string for blank inputs', () => {
     expect(buildPdfHeaderHtml({})).toBe('');
     expect(buildPdfHeaderHtml({ dateText: '', email: '', phone: '' })).toBe('');
+    expect(buildPdfHeaderHtml()).toBe('');
   });
 
-  test('escapes HTML in user-supplied fields', () => {
-    const html = buildPdfHeaderHtml({
+  test('cannot leak HTML — empty string regardless of payload', () => {
+    // The XSS / sanitisation defence is moot now (empty output) but
+    // the assertion is preserved to lock the behaviour in: if a
+    // future change brings the header back, this test will catch it
+    // and the author will be reminded to re-apply escapeHtml.
+    expect(buildPdfHeaderHtml({
       email: '<script>alert(1)</script>',
       phone: 'a&b',
       dateText: '"foo"',
-    });
-    expect(html).not.toMatch(/<script>/);
-    expect(html).toMatch(/&lt;script&gt;/);
-    expect(html).toMatch(/a&amp;b/);
-    expect(html).toMatch(/&quot;foo&quot;/);
+    })).toBe('');
   });
 });
 
