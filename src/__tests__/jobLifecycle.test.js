@@ -71,8 +71,10 @@ describe('isActiveJob', () => {
     expect(isActiveJob({ status: 'sent', expiresAt: FUTURE }, NOW)).toBe(true);
   });
 
-  test('sent + past expiry → NOT active (archive)', () => {
-    expect(isActiveJob({ status: 'sent', expiresAt: PAST }, NOW)).toBe(false);
+  // Mark's 2026-06-21 feedback: expired sends stay active because
+  // customers regularly authorise walling jobs months after expiry.
+  test('sent + past expiry → STILL active (Mark: late-authorisation use case)', () => {
+    expect(isActiveJob({ status: 'sent', expiresAt: PAST }, NOW)).toBe(true);
   });
 
   test('sent + no expiry → active', () => {
@@ -112,8 +114,10 @@ describe('isArchivedJob', () => {
     expect(isArchivedJob({ status }, NOW)).toBe(expected);
   });
 
-  test('sent + past expiry → archived', () => {
-    expect(isArchivedJob({ status: 'sent', expiresAt: PAST }, NOW)).toBe(true);
+  // Mark's 2026-06-21 feedback: expired sends are NOT archived —
+  // they stay active for the late-authorisation case.
+  test('sent + past expiry → NOT archived (Mark: late-authorisation)', () => {
+    expect(isArchivedJob({ status: 'sent', expiresAt: PAST }, NOW)).toBe(false);
   });
 
   test('sent + future expiry → NOT archived', () => {
@@ -124,7 +128,7 @@ describe('isArchivedJob', () => {
     expect(isArchivedJob({ status: 'sent' }, NOW)).toBe(false);
   });
 
-  test('declined + past expiry → archived (declined dominates)', () => {
+  test('declined + past expiry → archived (declined is the only trigger)', () => {
     expect(isArchivedJob({ status: 'declined', expiresAt: PAST }, NOW)).toBe(true);
   });
 
@@ -170,11 +174,11 @@ describe('now defaults to current time', () => {
     expect(isExpired({ status: 'sent', expiresAt: '2020-01-01T00:00:00Z' })).toBe(true);
   });
 
-  test('isActiveJob uses current time when not provided', () => {
-    expect(isActiveJob({ status: 'sent', expiresAt: '2020-01-01T00:00:00Z' })).toBe(false);
+  test('isActiveJob uses current time when not provided (sent past-expiry still active)', () => {
+    expect(isActiveJob({ status: 'sent', expiresAt: '2020-01-01T00:00:00Z' })).toBe(true);
   });
 
-  test('isArchivedJob uses current time when not provided', () => {
-    expect(isArchivedJob({ status: 'sent', expiresAt: '2020-01-01T00:00:00Z' })).toBe(true);
+  test('isArchivedJob uses current time when not provided (sent past-expiry NOT archived)', () => {
+    expect(isArchivedJob({ status: 'sent', expiresAt: '2020-01-01T00:00:00Z' })).toBe(false);
   });
 });

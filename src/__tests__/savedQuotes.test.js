@@ -66,12 +66,16 @@ describe('SavedQuotes active/archive tab UI', () => {
 
   it('has an archive-specific empty-state copy', () => {
     expect(src).toMatch(/No archived/i);
-    expect(src).toMatch(/declined and expired/i);
+    expect(src).toMatch(/declined/i);
+    // Mark's 2026-06-21 feedback: expired sends stay in active,
+    // so the archive copy must NOT promise to show them.
+    expect(src).not.toMatch(/declined and expired/i);
+    expect(src).not.toMatch(/expired .+ will show here/i);
   });
 
-  it('keeps the Delete button available so old archived jobs can be pruned', () => {
+  it('keeps the Delete button available so declined jobs can be pruned', () => {
     // Delete is NOT gated on !isArchiveView — Mark may want to actually
-    // remove very old declined/expired entries from the database.
+    // remove old declined entries from the database.
     const deleteBlockStart = src.indexOf('Delete');
     expect(deleteBlockStart).toBeGreaterThan(-1);
     // The 200 chars around Delete must not contain `!isArchiveView`

@@ -59,9 +59,11 @@ describe('Dashboard currentDraft prop guards empty content', () => {
 });
 
 // Mark's ask (2026-06-21 WhatsApp): "What about an archive option?"
-// Decline + expired sends move out of the main jobs list so the
-// pipeline view stays clean. Source-level checks — full DOM rendering
-// of Dashboard isn't part of the test stack (node env, no JSDOM).
+// Only declined quotes move out of the main jobs list — Mark's
+// follow-up feedback was that expired sends must stay active because
+// customers regularly authorise walling jobs months after expiry.
+// Source-level checks — full DOM rendering of Dashboard isn't part
+// of the test stack (node env, no JSDOM).
 describe('Dashboard active/archive tab UI', () => {
   const src = readFileSync(
     join(__dirname, '../components/Dashboard.jsx'), 'utf8'

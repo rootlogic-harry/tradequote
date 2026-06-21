@@ -165,9 +165,11 @@ export default function Dashboard({
   const [showMonthly, setShowMonthly] = useState(false);
   const currentYear = new Date().getFullYear();
 
-  // Active vs Archive split — declined + expired sends move off the main
-  // list so Paul/Mark's "what do I need to do" view stays clean as the
-  // pipeline grows. Bucket logic lives in src/utils/jobLifecycle.js.
+  // Active vs Archive split — only declined quotes move off the main
+  // list. Per Mark's 2026-06-21 feedback, expired sends stay active
+  // because customers regularly authorise walling jobs months after
+  // the quote technically expires. Bucket logic lives in
+  // src/utils/jobLifecycle.js.
   const now = new Date();
   const activeJobs = useMemo(() => jobs.filter(j => isActiveJob(j, now)), [jobs]);
   const archivedJobs = useMemo(() => jobs.filter(j => isArchivedJob(j, now)), [jobs]);
@@ -382,7 +384,7 @@ export default function Dashboard({
             <div className="text-3xl mb-3 opacity-20">&#128221;</div>
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
               {isArchiveView
-                ? `No archived ${term.lower}s yet — declined and expired ${term.lower}s will show here once you have any.`
+                ? `No archived ${term.lower}s yet — declined ${term.lower}s will show here once you have any.`
                 : `No jobs yet. Create your first ${term.lower} to get started.`}
             </p>
             {!isArchiveView && (
