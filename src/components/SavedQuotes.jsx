@@ -67,8 +67,11 @@ export default function SavedQuotes({
 
   const getStatus = (job) => (job.status || 'draft').toUpperCase();
 
-  // Active vs Archive split — declined + expired sends move off the main
-  // list. Bucket logic lives in src/utils/jobLifecycle.js.
+  // Active vs Archive split — only declined quotes move off the main
+  // list. Per Mark's 2026-06-21 feedback, expired sends stay active
+  // because customers regularly authorise walling jobs months after
+  // the quote technically expires. Bucket logic lives in
+  // src/utils/jobLifecycle.js.
   const now = useMemo(() => new Date(), []);
   const isArchiveView = viewMode === 'archive';
   const bucketedQuotes = useMemo(
@@ -183,7 +186,7 @@ export default function SavedQuotes({
       </div>
 
       {/* Search and filter row. Status pills only render in active view —
-          archive jobs are already constrained to declined + expired. */}
+          archive jobs are already constrained to declined. */}
       <div className="flex flex-col fq:flex-row gap-3 mb-6">
         <div className="relative flex-1 fq:max-w-xs">
           <input
@@ -233,7 +236,7 @@ export default function SavedQuotes({
       {isArchiveView && bucketedQuotes.length === 0 && !searchTerm.trim() && (
         <div className="text-center py-12">
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            No archived {term.lower}s yet — declined and expired {term.lower}s will show here once you have any.
+            No archived {term.lower}s yet — declined {term.lower}s will show here once you have any.
           </p>
         </div>
       )}
@@ -326,8 +329,8 @@ export default function SavedQuotes({
                   Accepted / Declined / Complete) are hidden \u2014 archive
                   rows are read-only-ish, the user opens the row to view
                   the quote and can change status from there if needed.
-                  Delete stays visible so old expired/declined jobs can
-                  still be pruned. */}
+                  Delete stays visible so declined jobs can still be
+                  pruned. */}
               <div className="flex flex-col fq:flex-row gap-2 shrink-0 fq:flex-wrap w-full fq:w-auto" onClick={e => e.stopPropagation()}>
                 {!isArchiveView && status === 'DRAFT' && (
                   <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="row-action-btn" style={{ background: 'var(--tq-accent)', color: '#fff', borderColor: 'var(--tq-accent)' }}>
