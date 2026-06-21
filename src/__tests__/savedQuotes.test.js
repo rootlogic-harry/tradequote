@@ -85,6 +85,35 @@ describe('SavedQuotes active/archive tab UI', () => {
   });
 });
 
+// Mark's ask (2026-06-21, after archive went live): add a manual
+// Decline button to DRAFT + ACCEPTED. SavedQuotes mirrors Dashboard
+// so the user gets the same affordance from either surface.
+describe('SavedQuotes decline-from-other-statuses', () => {
+  it('DRAFT block now exposes a Decline button', () => {
+    const draftStart = src.indexOf("status === 'DRAFT'");
+    const sentStart = src.indexOf("status === 'SENT'", draftStart + 1);
+    expect(draftStart).toBeGreaterThan(-1);
+    expect(sentStart).toBeGreaterThan(draftStart);
+    const draftBlock = src.slice(draftStart, sentStart);
+    expect(draftBlock).toMatch(/openStatusModal\([^)]*,\s*quote\.id,\s*['"]declined['"]/);
+  });
+
+  it('ACCEPTED block now exposes a Decline button', () => {
+    // Anchor on the ACTION block (there are also earlier `status ===
+    // 'ACCEPTED'` matches for border-colour + badge guards).
+    const acceptedStart = src.indexOf("status === 'ACCEPTED' && (");
+    expect(acceptedStart).toBeGreaterThan(-1);
+    const acceptedBlock = src.slice(acceptedStart, acceptedStart + 3000);
+    expect(acceptedBlock).toMatch(/openStatusModal\([^)]*,\s*quote\.id,\s*['"]declined['"]/);
+    expect(acceptedBlock).toMatch(/Complete/);
+  });
+
+  it('decline buttons share the error-border styling across all statuses', () => {
+    const declineMatches = src.match(/borderColor:\s*['"]var\(--tq-error-bd\)['"]/g) || [];
+    expect(declineMatches.length).toBeGreaterThanOrEqual(3); // DRAFT + SENT + ACCEPTED
+  });
+});
+
 describe('SavedQuotes archive view copy passes the visibility-rules check', () => {
   it('does not introduce AI/agent/confidence vocabulary in archive copy', () => {
     // Find the archive-empty-state and tab labels block

@@ -333,9 +333,18 @@ export default function SavedQuotes({
                   pruned. */}
               <div className="flex flex-col fq:flex-row gap-2 shrink-0 fq:flex-wrap w-full fq:w-auto" onClick={e => e.stopPropagation()}>
                 {!isArchiveView && status === 'DRAFT' && (
-                  <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="row-action-btn" style={{ background: 'var(--tq-accent)', color: '#fff', borderColor: 'var(--tq-accent)' }}>
-                    Mark Sent
-                  </button>
+                  <>
+                    <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="row-action-btn" style={{ background: 'var(--tq-accent)', color: '#fff', borderColor: 'var(--tq-accent)' }}>
+                      Mark Sent
+                    </button>
+                    <button
+                      onClick={(e) => openStatusModal(e, quote.id, 'declined')}
+                      className="row-action-btn"
+                      style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                    >
+                      {'✗'} Declined
+                    </button>
+                  </>
                 )}
 
                 {!isArchiveView && status === 'SENT' && (
@@ -378,6 +387,16 @@ export default function SavedQuotes({
                       style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                     >
                       Complete
+                    </button>
+                    {/* Manual decline from accepted — customer pulled out
+                        after acceptance. Mirrors the same button on
+                        Dashboard.jsx. */}
+                    <button
+                      onClick={(e) => openStatusModal(e, quote.id, 'declined')}
+                      className="row-action-btn"
+                      style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                    >
+                      {'✗'} Declined
                     </button>
                   </>
                 )}
