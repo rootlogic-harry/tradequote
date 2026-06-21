@@ -704,6 +704,7 @@ export default function App() {
           onViewJob={handleViewQuote}
           onViewRams={handleViewRams}
           isAdminPlan={isAdmin}
+          viewMode={state.viewMode}
         />
       );
     }
@@ -756,6 +757,7 @@ export default function App() {
           dispatch={dispatch}
           isAdminPlan={isAdmin}
           showToast={showToast}
+          viewMode={state.viewMode}
         />
       );
     }

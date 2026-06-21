@@ -709,6 +709,59 @@ describe('Session persistence', () => {
 });
 
 // ======================================================================
+//  15a. SET_VIEW_MODE — active vs archive list toggle (Mark's ask)
+// ======================================================================
+
+describe('SET_VIEW_MODE', () => {
+  test('initial state defaults viewMode to "active"', () => {
+    expect(initialState.viewMode).toBe('active');
+  });
+
+  test('toggles viewMode to "archive"', () => {
+    const result = reducer(initialState, { type: 'SET_VIEW_MODE', mode: 'archive' });
+    expect(result.viewMode).toBe('archive');
+  });
+
+  test('toggles viewMode back to "active"', () => {
+    let state = reducer(initialState, { type: 'SET_VIEW_MODE', mode: 'archive' });
+    state = reducer(state, { type: 'SET_VIEW_MODE', mode: 'active' });
+    expect(state.viewMode).toBe('active');
+  });
+
+  test('does not mutate recentJobs when toggling', () => {
+    const jobs = [{ id: 'j1', status: 'sent' }, { id: 'j2', status: 'declined' }];
+    const state = { ...initialState, recentJobs: jobs };
+    const result = reducer(state, { type: 'SET_VIEW_MODE', mode: 'archive' });
+    expect(result.recentJobs).toBe(jobs);
+    expect(result.recentJobs).toHaveLength(2);
+  });
+
+  test('ignores unknown mode values (returns state unchanged)', () => {
+    const result = reducer(initialState, { type: 'SET_VIEW_MODE', mode: 'unknown' });
+    expect(result.viewMode).toBe('active');
+  });
+
+  test('ignores missing mode (does not crash, leaves state)', () => {
+    const result = reducer(initialState, { type: 'SET_VIEW_MODE' });
+    expect(result.viewMode).toBe('active');
+  });
+
+  test('viewMode is NOT persisted via SAVE_ALLOWLIST', async () => {
+    // viewMode is per-session UI state — like `step` and `isAnalysing`.
+    // If it ends up in SAVE_ALLOWLIST it bloats every job snapshot AND
+    // ties the trader's list view to whichever quote they last saved.
+    const { SAVE_ALLOWLIST } = await import('../utils/stripBlobs.js');
+    expect(SAVE_ALLOWLIST).not.toContain('viewMode');
+  });
+
+  test('SWITCH_USER resets viewMode to "active" (fresh session)', () => {
+    const state = { ...initialState, viewMode: 'archive' };
+    const result = reducer(state, { type: 'SWITCH_USER', userId: 'new', name: 'New' });
+    expect(result.viewMode).toBe('active');
+  });
+});
+
+// ======================================================================
 //  16. RESTORE_DRAFT does not inherit auth-critical fields from draft
 // ======================================================================
 

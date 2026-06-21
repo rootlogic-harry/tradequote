@@ -4,6 +4,7 @@ import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
 import { documentTerm } from '../utils/documentType.js';
 import { isThisMonth, isThisYear, buildMonthlyTotals } from '../utils/monthlyTotals.js';
+import { isActiveJob, isArchivedJob } from '../utils/jobLifecycle.js';
 import {
   needsFollowUp,
   relativeViewedLabel,
@@ -142,12 +143,15 @@ export default function Dashboard({
   onViewJob,
   onViewRams,
   isAdminPlan = false,
+  viewMode = 'active',
 }) {
   const term = documentTerm(profile);
   // Use recentJobs (from reducer) if available, fallback to savedJobs
   const jobs = recentJobs.length > 0 ? recentJobs : savedJobs;
 
-  // Stat calculations
+  // Stat calculations — stats are intentionally based on the full job list,
+  // not the active/archive view. Mark wants this-month / this-year revenue
+  // to include accepted jobs whether or not they're archived later.
   const thisMonthJobs = jobs.filter(j => isThisMonth(j.savedAt));
   const thisMonthTotal = thisMonthJobs.reduce((s, j) => s + (j.totalAmount ?? 0), 0);
   const thisYearTotal = jobs
@@ -161,7 +165,17 @@ export default function Dashboard({
   const [showMonthly, setShowMonthly] = useState(false);
   const currentYear = new Date().getFullYear();
 
-  const displayJobs = jobs.slice(0, 5);
+  // Active vs Archive split — declined + expired sends move off the main
+  // list so Paul/Mark's "what do I need to do" view stays clean as the
+  // pipeline grows. Bucket logic lives in src/utils/jobLifecycle.js.
+  const now = new Date();
+  const activeJobs = useMemo(() => jobs.filter(j => isActiveJob(j, now)), [jobs]);
+  const archivedJobs = useMemo(() => jobs.filter(j => isArchivedJob(j, now)), [jobs]);
+  const isArchiveView = viewMode === 'archive';
+  const visibleJobs = isArchiveView ? archivedJobs : activeJobs;
+  const archiveCount = archivedJobs.length;
+
+  const displayJobs = visibleJobs.slice(0, 5);
 
   const getStatus = (job) => (job.status || 'draft').toUpperCase();
 
@@ -326,13 +340,37 @@ export default function Dashboard({
       {/* Recent jobs */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <div className="eyebrow">RECENT JOBS</div>
+          <div className="eyebrow">{isArchiveView ? 'ARCHIVED JOBS' : 'RECENT JOBS'}</div>
           <button
             onClick={onViewJobs}
             className="text-sm"
             style={{ color: 'var(--tq-accent)', fontWeight: 500 }}
           >
             View all &rarr;
+          </button>
+        </div>
+
+        {/* Active / Archive tabs. Reuses the existing .pill class so the
+            look matches the SavedQuotes filter chips. Archive shows a
+            count badge unless empty (avoid "(0)"). */}
+        <div className="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Job list view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isArchiveView}
+            onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'active' })}
+            className={`pill ${!isArchiveView ? 'active' : ''}`}
+          >
+            Active
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isArchiveView}
+            onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'archive' })}
+            className={`pill ${isArchiveView ? 'active' : ''}`}
+          >
+            Archive{archiveCount > 0 ? ` (${archiveCount})` : ''}
           </button>
         </div>
 
@@ -343,11 +381,15 @@ export default function Dashboard({
           >
             <div className="text-3xl mb-3 opacity-20">&#128221;</div>
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
-              No jobs yet. Create your first {term.lower} to get started.
+              {isArchiveView
+                ? `No archived ${term.lower}s yet — declined and expired ${term.lower}s will show here once you have any.`
+                : `No jobs yet. Create your first ${term.lower} to get started.`}
             </p>
-            <button onClick={onStartNewQuote} className="btn-primary">
-              + New {term.title}
-            </button>
+            {!isArchiveView && (
+              <button onClick={onStartNewQuote} className="btn-primary">
+                + New {term.title}
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -383,64 +425,69 @@ export default function Dashboard({
                     {formatCurrency(job.totalAmount || 0)}
                   </div>
 
-                  {/* Contextual action buttons */}
-                  <div className="flex flex-wrap gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                    {status === 'DRAFT' && (
-                      <button
-                        onClick={(e) => openStatusModal(e, job.id, 'sent')}
-                        className="btn-primary text-xs"
-                        style={{ height: 36, padding: '0 16px' }}
-                      >
-                        Mark Sent
-                      </button>
-                    )}
-                    {status === 'SENT' && (
-                      <>
+                  {/* Contextual action buttons. Hidden in archive view \u2014
+                      archived rows are read-only-ish; user can still open
+                      the row to view the quote and change status from
+                      there if they want to restore. */}
+                  {!isArchiveView && (
+                    <div className="flex flex-wrap gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                      {status === 'DRAFT' && (
                         <button
-                          onClick={(e) => openStatusModal(e, job.id, 'accepted')}
-                          className="btn-ghost text-xs"
-                          style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                          onClick={(e) => openStatusModal(e, job.id, 'sent')}
+                          className="btn-primary text-xs"
+                          style={{ height: 36, padding: '0 16px' }}
                         >
-                          {'\u2713'} Accepted
+                          Mark Sent
                         </button>
-                        <button
-                          onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                          className="btn-ghost text-xs"
-                          style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                        >
-                          {'\u2717'} Declined
-                        </button>
-                      </>
-                    )}
-                    {status === 'ACCEPTED' && (
-                      <>
-                        {isAdminPlan && hasRams ? (
+                      )}
+                      {status === 'SENT' && (
+                        <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
+                            onClick={(e) => openStatusModal(e, job.id, 'accepted')}
                             className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px' }}
+                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                           >
-                            View RAMS
+                            {'\u2713'} Accepted
                           </button>
-                        ) : isAdminPlan ? (
                           <button
-                            onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
+                            onClick={(e) => openStatusModal(e, job.id, 'declined')}
                             className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
+                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                           >
-                            Create RAMS
+                            {'\u2717'} Declined
                           </button>
-                        ) : null}
-                        <button
-                          onClick={(e) => openStatusModal(e, job.id, 'completed')}
-                          className="btn-ghost text-xs"
-                          style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
-                        >
-                          Complete
-                        </button>
-                      </>
-                    )}
-                  </div>
+                        </>
+                      )}
+                      {status === 'ACCEPTED' && (
+                        <>
+                          {isAdminPlan && hasRams ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
+                              className="btn-ghost text-xs"
+                              style={{ height: 36, padding: '0 16px' }}
+                            >
+                              View RAMS
+                            </button>
+                          ) : isAdminPlan ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
+                              className="btn-ghost text-xs"
+                              style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
+                            >
+                              Create RAMS
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={(e) => openStatusModal(e, job.id, 'completed')}
+                            className="btn-ghost text-xs"
+                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                          >
+                            Complete
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
