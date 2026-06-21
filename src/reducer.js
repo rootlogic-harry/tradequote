@@ -123,6 +123,11 @@ export const initialState = {
   // the step header instead of typing into a tab whose persistence
   // has silently broken (TRQ-166).
   autosave: { status: 'idle', lastSavedAt: null, error: null },
+  // Active vs Archive split on the dashboard + saved-jobs lists
+  // (Mark's ask, 2026-06-21). Per-session UI state — intentionally NOT
+  // in SAVE_ALLOWLIST. Defaults to 'active' on every session because
+  // the active list is where the next action lives; archive is opt-in.
+  viewMode: 'active',
 };
 
 function buildDiffContext(reviewData) {
@@ -633,6 +638,14 @@ function reducerCore(state, action) {
 
     case 'DELETE_JOB':
       return { ...state, recentJobs: state.recentJobs.filter(j => j.id !== action.id) };
+
+    case 'SET_VIEW_MODE': {
+      // Per-session UI toggle between 'active' and 'archive'. Unknown
+      // values are ignored so a stray dispatch can't put the dashboard
+      // in a phantom mode that renders nothing.
+      if (action.mode !== 'active' && action.mode !== 'archive') return state;
+      return { ...state, viewMode: action.mode };
+    }
 
     case 'INIT_COMPLETE': {
       // Post-OAuth init: the server has told us who the current user is.

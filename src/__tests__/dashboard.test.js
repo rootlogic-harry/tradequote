@@ -57,3 +57,71 @@ describe('Dashboard currentDraft prop guards empty content', () => {
     expect(block).toMatch(/jobDetails\?\.\s*siteAddress\?\.\s*trim\(\)/);
   });
 });
+
+// Mark's ask (2026-06-21 WhatsApp): "What about an archive option?"
+// Decline + expired sends move out of the main jobs list so the
+// pipeline view stays clean. Source-level checks — full DOM rendering
+// of Dashboard isn't part of the test stack (node env, no JSDOM).
+describe('Dashboard active/archive tab UI', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/Dashboard.jsx'), 'utf8'
+  );
+
+  it('imports the jobLifecycle helpers', () => {
+    expect(src).toMatch(/from\s+['"]\.\.\/utils\/jobLifecycle\.js['"]/);
+    expect(src).toContain('isActiveJob');
+    expect(src).toContain('isArchivedJob');
+  });
+
+  it('accepts a viewMode prop with a fail-safe default of "active"', () => {
+    // Default must be 'active' so a parent that forgets the prop still
+    // renders the main list, not an empty archive view.
+    expect(src).toMatch(/viewMode\s*=\s*['"]active['"]/);
+  });
+
+  it('renders both Active and Archive tab buttons', () => {
+    // Tab labels exist as literal JSX text
+    expect(src).toMatch(/>\s*Active\s*</);
+    expect(src).toMatch(/>\s*Archive/);
+  });
+
+  it('dispatches SET_VIEW_MODE on tab click', () => {
+    expect(src).toMatch(/SET_VIEW_MODE.*active/);
+    expect(src).toMatch(/SET_VIEW_MODE.*archive/);
+  });
+
+  it('hides per-status action buttons in archive view', () => {
+    // The action-button block is wrapped in `!isArchiveView && (...)`
+    // so archive rows are read-only-ish.
+    expect(src).toMatch(/!isArchiveView\s*&&\s*\(/);
+  });
+
+  it('count badge is omitted when archive is empty (no "(0)")', () => {
+    // Guard pattern: only render the parenthesised count when > 0
+    expect(src).toMatch(/archiveCount\s*>\s*0/);
+  });
+
+  it('row layout is unchanged in archive view (no new row component)', () => {
+    // The same job-row markup renders both buckets — we only filter the
+    // list and hide the action buttons. No second renderer.
+    const rowMatches = src.match(/className="job-row[^"]*"/g) || [];
+    // Dashboard has a follow-up row + the recent-jobs row. Adding a
+    // separate archive row would push this above 3.
+    expect(rowMatches.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('Dashboard archive view copy passes the visibility-rules check', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/Dashboard.jsx'), 'utf8'
+  );
+
+  // Sanity check on the new strings — banned vocabulary list lives in
+  // CLAUDE.md / aiTextRemoval.test.js but those don't fire on plain words
+  // like "decline" / "expire" so we eyeball-check our own additions.
+  it('does not introduce AI/agent/confidence vocabulary', () => {
+    // Extract only the new bits we added (rough but useful)
+    const archiveBlock = src.slice(src.indexOf('ARCHIVED JOBS'));
+    expect(archiveBlock).not.toMatch(/\b(AI|agent|confidence|calibration|model|prompt)\b/i);
+  });
+});

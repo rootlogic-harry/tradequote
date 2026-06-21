@@ -1,12 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { listJobs, deleteJob, deletePhotos } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import { documentTerm } from '../utils/documentType.js';
+import { isActiveJob, isArchivedJob } from '../utils/jobLifecycle.js';
 
-const FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed', 'Declined'];
+// Active-view filters drop Declined because declined jobs live in the
+// archive bucket. The "All" pill within Active still excludes declined.
+const ACTIVE_FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed'];
 
-export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, currentUserId, profile, recentJobs = [], dispatch, isAdminPlan = false, showToast }) {
+export default function SavedQuotes({
+  onViewQuote,
+  onCreateRams,
+  onViewRams,
+  currentUserId,
+  profile,
+  recentJobs = [],
+  dispatch,
+  isAdminPlan = false,
+  showToast,
+  viewMode = 'active',
+}) {
   const term = documentTerm(profile);
   const [localQuotes, setLocalQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,9 +67,21 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
 
   const getStatus = (job) => (job.status || 'draft').toUpperCase();
 
-  const statusFiltered = activeFilter === 'All'
-    ? quotes
-    : quotes.filter(q => getStatus(q) === activeFilter.toUpperCase());
+  // Active vs Archive split — declined + expired sends move off the main
+  // list. Bucket logic lives in src/utils/jobLifecycle.js.
+  const now = useMemo(() => new Date(), []);
+  const isArchiveView = viewMode === 'archive';
+  const bucketedQuotes = useMemo(
+    () => quotes.filter(q => (isArchiveView ? isArchivedJob(q, now) : isActiveJob(q, now))),
+    [quotes, isArchiveView, now]
+  );
+  const archiveCount = useMemo(() => quotes.filter(q => isArchivedJob(q, now)).length, [quotes, now]);
+
+  // In archive view the status-filter pills don't apply — both buckets
+  // already constrain the list, and adding another axis is just noise.
+  const statusFiltered = (isArchiveView || activeFilter === 'All')
+    ? bucketedQuotes
+    : bucketedQuotes.filter(q => getStatus(q) === activeFilter.toUpperCase());
 
   const filteredQuotes = searchTerm.trim()
     ? statusFiltered.filter(q => {
@@ -128,11 +154,36 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
           Saved jobs
         </h2>
         <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-          {quotes.length} saved job{quotes.length !== 1 ? 's' : ''}
+          {bucketedQuotes.length} {isArchiveView ? 'archived' : 'active'} job{bucketedQuotes.length !== 1 ? 's' : ''}
         </p>
       </div>
 
-      {/* Search and filter row */}
+      {/* Active / Archive tabs. Default 'Active' on every session — the
+          archive view is opt-in. Count badge hidden when zero so the
+          tab doesn't read "(0)". */}
+      <div className="flex flex-wrap gap-2 mb-4" role="tablist" aria-label="Job list view">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isArchiveView}
+          onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'active' })}
+          className={`pill ${!isArchiveView ? 'active' : ''}`}
+        >
+          Active
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isArchiveView}
+          onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'archive' })}
+          className={`pill ${isArchiveView ? 'active' : ''}`}
+        >
+          Archive{archiveCount > 0 ? ` (${archiveCount})` : ''}
+        </button>
+      </div>
+
+      {/* Search and filter row. Status pills only render in active view —
+          archive jobs are already constrained to declined + expired. */}
       <div className="flex flex-col fq:flex-row gap-3 mb-6">
         <div className="relative flex-1 fq:max-w-xs">
           <input
@@ -162,22 +213,33 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
           )}
         </div>
 
-        {/* Filter pills */}
-        <div className="flex flex-wrap gap-2 self-start">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setActiveFilter(f)}
-              className={`pill ${activeFilter === f ? 'active' : ''}`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        {/* Filter pills — active view only */}
+        {!isArchiveView && (
+          <div className="flex flex-wrap gap-2 self-start">
+            {ACTIVE_FILTERS.map((f) => (
+              <button
+                key={f}
+                onClick={() => setActiveFilter(f)}
+                className={`pill ${activeFilter === f ? 'active' : ''}`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Empty filter/search state */}
-      {filteredQuotes.length === 0 && (activeFilter !== 'All' || searchTerm.trim()) && (
+      {/* Empty bucket — archive has no jobs at all */}
+      {isArchiveView && bucketedQuotes.length === 0 && !searchTerm.trim() && (
+        <div className="text-center py-12">
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            No archived {term.lower}s yet — declined and expired {term.lower}s will show here once you have any.
+          </p>
+        </div>
+      )}
+
+      {/* Empty filter/search state — active view only */}
+      {!isArchiveView && filteredQuotes.length === 0 && (activeFilter !== 'All' || searchTerm.trim()) && (
         <div className="text-center py-12">
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
             {searchTerm.trim()
@@ -190,6 +252,22 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
             style={{ color: 'var(--tq-accent)' }}
           >
             Clear filters
+          </button>
+        </div>
+      )}
+
+      {/* Search-with-no-results inside archive view */}
+      {isArchiveView && filteredQuotes.length === 0 && searchTerm.trim() && (
+        <div className="text-center py-12">
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            No archived jobs matching "{searchTerm.trim()}"
+          </p>
+          <button
+            onClick={() => setSearchTerm('')}
+            className="mt-2 text-xs"
+            style={{ color: 'var(--tq-accent)' }}
+          >
+            Clear search
           </button>
         </div>
       )}
@@ -242,15 +320,22 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
               {/* Action buttons. `.row-action-btn` is compact 36px on
                   desktop, full-width 44px on mobile so each tap target
                   is unambiguous. Wrapper goes flex-col on mobile so the
-                  buttons stack vertically. */}
+                  buttons stack vertically.
+
+                  In archive view, per-status action buttons (Mark Sent /
+                  Accepted / Declined / Complete) are hidden \u2014 archive
+                  rows are read-only-ish, the user opens the row to view
+                  the quote and can change status from there if needed.
+                  Delete stays visible so old expired/declined jobs can
+                  still be pruned. */}
               <div className="flex flex-col fq:flex-row gap-2 shrink-0 fq:flex-wrap w-full fq:w-auto" onClick={e => e.stopPropagation()}>
-                {status === 'DRAFT' && (
+                {!isArchiveView && status === 'DRAFT' && (
                   <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="row-action-btn" style={{ background: 'var(--tq-accent)', color: '#fff', borderColor: 'var(--tq-accent)' }}>
                     Mark Sent
                   </button>
                 )}
 
-                {status === 'SENT' && (
+                {!isArchiveView && status === 'SENT' && (
                   <>
                     <button
                       onClick={(e) => openStatusModal(e, quote.id, 'accepted')}
@@ -269,7 +354,7 @@ export default function SavedQuotes({ onViewQuote, onCreateRams, onViewRams, cur
                   </>
                 )}
 
-                {status === 'ACCEPTED' && (
+                {!isArchiveView && status === 'ACCEPTED' && (
                   <>
                     {isAdminPlan && hasRams && onViewRams ? (
                       <button onClick={() => onViewRams(quote)} className="row-action-btn">
