@@ -1,4 +1,10 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const calibrationAgentSrc = readFileSync(join(__dirname, '../../agents/calibrationAgent.js'), 'utf8');
 
 // Mock runAgent before importing calibrationAgent
 const mockRunAgent = jest.fn();
@@ -166,6 +172,7 @@ describe('runCalibrationAgent', () => {
       { rows: [], rowCount: 0 }, // approved notes
       { rows: [], rowCount: 1 }, // insert 1
       { rows: [], rowCount: 1 }, // insert 2
+      { rows: [], rowCount: 1 }, // enrichment UPDATE (2026-06-22 fix)
     ]);
     mockRunAgent.mockResolvedValue({
       runId: 'run-cal-1',
@@ -180,8 +187,8 @@ describe('runCalibrationAgent', () => {
 
     const result = await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    // 3 initial queries + 2 inserts
-    expect(pool._calls.length).toBe(5);
+    // 3 initial queries + 2 inserts + 1 enrichment UPDATE
+    expect(pool._calls.length).toBe(6);
 
     const insert1 = pool._calls[3];
     expect(insert1.sql).toContain('INSERT INTO calibration_notes');
@@ -193,6 +200,10 @@ describe('runCalibrationAgent', () => {
 
     const insert2 = pool._calls[4];
     expect(insert2.params[0]).toBe('labour_days');
+
+    // The 6th call is the enrichment UPDATE stamping lessons count.
+    const updateCall = pool._calls[5];
+    expect(updateCall.sql).toContain('UPDATE agent_runs');
 
     expect(result.proposals.summary).toBe('Two adjustments recommended');
   });
@@ -216,6 +227,7 @@ describe('runCalibrationAgent', () => {
       { rows: [], rowCount: 0 },
       { rows: [], rowCount: 0 },
       { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 1 }, // enrichment UPDATE (2026-06-22 fix)
     ]);
     mockRunAgent.mockResolvedValue({
       runId: 'run-cal-1',
@@ -224,8 +236,9 @@ describe('runCalibrationAgent', () => {
 
     await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    // Only the 3 initial queries — no inserts
-    expect(pool._calls.length).toBe(3);
+    // 3 initial queries + 1 enrichment UPDATE (no proposal inserts).
+    expect(pool._calls.length).toBe(4);
+    expect(pool._calls[3].sql).toContain('UPDATE agent_runs');
   });
 
   test('defaults fieldType and fieldLabel when proposal omits them', async () => {
@@ -271,6 +284,124 @@ describe('runCalibrationAgent', () => {
     // Should not throw
     const result = await runCalibrationAgent({ pool, userId: 'admin1' });
     expect(result.runId).toBe('run-cal-1');
+  });
+
+  // 2026-06-22 calibration investigation: every calibration run logged
+  // `lessons: 0` because there was no `lessons` field on output_summary.
+  // The agent now stamps `lessons` + feedback/bias counts onto
+  // output_summary via a post-run UPDATE so observability can see
+  // whether calibration was actually informed by feedback.
+  test('stamps lessons count on output_summary when feedback runs exist', async () => {
+    const pool = mockPool([
+      { rows: [], rowCount: 0 }, // field bias
+      {
+        rows: [
+          { output_summary: { overallAssessment: 'Stone underpriced', severity: 'high' }, created_at: '2026-04-01' },
+          { output_summary: { overallAssessment: 'Days low', severity: 'medium' }, created_at: '2026-04-15' },
+        ],
+        rowCount: 2,
+      },
+      { rows: [], rowCount: 0 }, // approved notes
+      { rows: [], rowCount: 1 }, // enrichment UPDATE
+    ]);
+    mockRunAgent.mockResolvedValue({
+      runId: 'run-cal-1',
+      output: { proposed: [], summary: 'OK' },
+    });
+
+    const result = await runCalibrationAgent({ pool, userId: 'admin1' });
+
+    // The 4th call is the enrichment UPDATE
+    const updateCall = pool._calls[3];
+    expect(updateCall.sql).toContain('UPDATE agent_runs');
+    expect(updateCall.sql).toContain('output_summary');
+    // JSONB merge keeps the AI output AND adds the lessons counters
+    expect(updateCall.sql).toContain("||");
+    const stamped = JSON.parse(updateCall.params[0]);
+    expect(stamped.lessons).toBe(2);
+    expect(updateCall.params[1]).toBe('run-cal-1');
+
+    // The return value also surfaces lessons for in-process consumers
+    expect(result.lessons).toBe(2);
+  });
+
+  test('stamps lessons: 0 when there are no feedback runs', async () => {
+    const pool = mockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 1 }, // enrichment UPDATE still fires
+    ]);
+    mockRunAgent.mockResolvedValue({
+      runId: 'run-cal-1',
+      output: { proposed: [], summary: 'Insufficient data' },
+    });
+
+    const result = await runCalibrationAgent({ pool, userId: 'admin1' });
+
+    const updateCall = pool._calls[3];
+    const stamped = JSON.parse(updateCall.params[0]);
+    expect(stamped.lessons).toBe(0);
+    expect(stamped.fieldsAboveThreshold).toBe(0);
+    expect(stamped.approvedNotesCount).toBe(0);
+    expect(result.lessons).toBe(0);
+  });
+
+  test('output_summary stamp also includes fieldsAboveThreshold and approvedNotesCount', async () => {
+    // Belt-and-braces observability — the stamp captures all three
+    // inputs to the calibration agent so reviewers can tell which
+    // signal drove (or didn't drive) the run.
+    const pool = mockPool([
+      { rows: [{ a: 1 }, { a: 2 }, { a: 3 }], rowCount: 3 }, // 3 fields
+      { rows: [{ output_summary: { overallAssessment: 'A', severity: 'low' } }], rowCount: 1 }, // 1 feedback
+      { rows: [{ a: 1 }, { a: 2 }], rowCount: 2 }, // 2 approved
+      { rows: [], rowCount: 1 }, // enrichment
+    ]);
+    mockRunAgent.mockResolvedValue({
+      runId: 'run-cal-1',
+      output: { proposed: [], summary: 'OK' },
+    });
+
+    await runCalibrationAgent({ pool, userId: 'admin1' });
+
+    const updateCall = pool._calls[3];
+    const stamped = JSON.parse(updateCall.params[0]);
+    expect(stamped.lessons).toBe(1);
+    expect(stamped.fieldsAboveThreshold).toBe(3);
+    expect(stamped.approvedNotesCount).toBe(2);
+  });
+
+  test('enrichment UPDATE uses JSONB merge (preserves AI-output keys)', () => {
+    // The `||` JSONB operator preserves `proposed` / `summary` from
+    // the AI and just adds the lessons counters — it does NOT
+    // overwrite the AI output.
+    expect(calibrationAgentSrc).toContain('UPDATE agent_runs');
+    expect(calibrationAgentSrc).toContain("COALESCE(output_summary, '{}'::jsonb) || $1::jsonb");
+  });
+
+  test('enrichment UPDATE failure does not break the calibration run', async () => {
+    // Stamping is best-effort. If the UPDATE fails (e.g. row already
+    // gone), the run still returns with its proposals intact.
+    let callIndex = 0;
+    const pool = {
+      query: async (sql) => {
+        callIndex++;
+        if (callIndex <= 3) return { rows: [], rowCount: 0 };
+        if (callIndex === 4 && sql.includes('UPDATE agent_runs')) {
+          throw new Error('agent_runs row vanished');
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    mockRunAgent.mockResolvedValue({
+      runId: 'run-cal-1',
+      output: { proposed: [], summary: 'OK' },
+    });
+
+    // Should not throw despite the enrichment UPDATE failing.
+    const result = await runCalibrationAgent({ pool, userId: 'admin1' });
+    expect(result.runId).toBe('run-cal-1');
+    expect(result.proposals.summary).toBe('OK');
   });
 });
 
