@@ -169,6 +169,8 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `dictation_runs` | Voice-to-text telemetry (user, success, latency, audio size, transcript chars) |
 | `session` | Express session store (connect-pg-simple) |
 | `jobs.client_*` (TRQ-124) | Client Portal columns — token, expiry, frozen `client_snapshot` + `client_snapshot_profile`, viewed/response audit trail. Accessed by `/q/:token` routes; the snapshot columns are immutable after write (Do-Not-Touch). |
+| `users.free_quotes_used`, `users.comp_until` (2026-06-22) | Quota-based free tier — `free_quotes_used` is the 3-quote counter; `comp_until` is the trusted-user bypass (Paul). Both nullable / default-zero so the migration is non-destructive. |
+| `free_quote_grants` (2026-06-22) | Per-(user_id, quote_token) dedupe table. `quote_token` is either a per-draft UUID (photo path) or `job:${jobId}` (video path). ON CONFLICT DO NOTHING ensures a single draft only burns one free quote regardless of retries. No PII. |
 
 ### JSONB Snapshot Contract
 
@@ -240,6 +242,19 @@ Two plans only: `admin` and `basic`. No `standard` plan (legacy references were 
 - **`requireAdminPlan`** middleware in `server.js` gates admin API routes.
 - Component prop defaults are `isAdminPlan = false` (fail-safe: new components default to basic user view).
 - No raw `plan === 'admin'` checks outside these two locations.
+
+---
+
+## Free Tier — Quota Model (2026-06-22)
+
+Replaced the 1-month no-card trial (`users.trial_ends_at`) with a 3-free-quote allowance. Aligns the free tier with the unit of value tradesmen perceive (per-quote, not per-month).
+
+- **`src/utils/quotaGate.js`** is the sole decision primitive. Three callers: the `/api/users/:id/analyse` middleware (the 402 lockout), `/auth/me` (so the SPA banner renders correctly on first paint), and `/api/billing/status` (legacy callers).
+- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < 3` → deny with `quota_exhausted`.
+- **`users.comp_until`** is the trusted-user bypass. Paul gets a 6-month comp at deploy via a one-line `UPDATE users SET comp_until = '2026-12-22'::timestamptz WHERE id = '<paul-id>'`. Comping is private — the customer-facing UI never says "comped".
+- **`free_quote_grants(user_id, quote_token)`** is the per-draft dedupe. Photo path uses the SPA's `state.quoteToken` (UUID, regenerated on `NEW_QUOTE`); video path uses `job:${jobId}`. `ON CONFLICT DO NOTHING` makes retries idempotent — a single draft burns exactly one free quote no matter how many times it's analysed.
+- **`trial_ends_at` is deprecated** but stays in the schema for one release window in case we need to roll back. The analyse gate no longer reads it.
+- **402 lockout copy** is exact and load-bearing — both the server's 402 body and the SubscriptionBanner's "exhausted" variant say `You've used your 3 free quotes. Subscribe to continue.`. If you change one, change the other.
 
 ---
 
@@ -334,7 +349,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~2,830 tests across ~135 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,030 tests across ~141 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 

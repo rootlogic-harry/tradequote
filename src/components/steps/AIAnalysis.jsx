@@ -69,6 +69,43 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
     dispatch({ type: 'ANALYSIS_CANCEL' });
   };
 
+  // Quota-exhausted lockout (2026-06-22). Dedicated screen rather than
+  // reusing the generic Try-Again error because retrying without
+  // subscribing will hit the same 402 — the only forward path is to
+  // open Stripe Checkout. The SubscriptionBanner above will already
+  // be in its "exhausted" variant; this is the inline blocker for
+  // anyone who got past it via a stale /auth/me payload.
+  if (state.quotaLockout) {
+    const openCheckout = async () => {
+      try {
+        const r = await fetch('/api/billing/checkout', { method: 'POST' });
+        if (!r.ok) return;
+        const { url } = await r.json();
+        if (url) window.location.href = url;
+      } catch { /* best-effort */ }
+    };
+    return (
+      <div className="max-w-xl mx-auto text-center py-20" data-testid="quota-lockout-screen">
+        <div className="p-6" style={{ backgroundColor: 'var(--tq-error-bg)', border: '1.5px solid var(--tq-error-bd)', borderRadius: 2 }}>
+          <p className="font-heading font-bold text-lg mb-2" style={{ color: 'var(--tq-error-txt)' }}>
+            You've used your 3 free quotes
+          </p>
+          <p className="text-sm mb-6" style={{ color: 'var(--tq-text)' }}>
+            Subscribe to continue creating quotes.
+          </p>
+          <div className="flex gap-3 justify-center flex-wrap">
+            <button onClick={() => { dispatch({ type: 'CLEAR_QUOTA_LOCKOUT' }); dispatch({ type: 'SET_STEP', step: 1 }); }} className="btn-ghost text-sm">
+              Back to dashboard
+            </button>
+            <button onClick={openCheckout} className="btn-primary text-sm">
+              Subscribe
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (state.analysisError) {
     return (
       <div className="max-w-xl mx-auto text-center py-20">
