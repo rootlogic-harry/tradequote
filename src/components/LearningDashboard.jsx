@@ -32,7 +32,35 @@ export default function LearningDashboard({ currentUserId }) {
     );
   }
 
-  const { fieldBias = [], weeklyTrend = [], refCardImpact = [], userAccuracy = [] } = data || {};
+  const {
+    fieldBias = [],
+    weeklyTrend = [],
+    weightedWeeklyTrend = [],
+    weightedSummary = null,
+    refCardImpact = [],
+    userAccuracy = [],
+  } = data || {};
+
+  // Merge edit-presence + weighted into one week-keyed table so both
+  // metrics sit side-by-side and the trajectory is easy to compare.
+  // Edit-presence is the canonical historical metric; weighted is the
+  // 2026-06-22 follow-up.
+  const weeklyByKey = new Map();
+  for (const row of weeklyTrend) {
+    const key = new Date(row.week).toISOString();
+    weeklyByKey.set(key, { week: row.week, avgAccuracy: row.avgAccuracy, quoteCount: row.quoteCount });
+  }
+  for (const row of weightedWeeklyTrend) {
+    const key = new Date(row.week).toISOString();
+    const existing = weeklyByKey.get(key) || { week: row.week, avgAccuracy: null, quoteCount: row.count };
+    existing.weightedMean = row.mean;
+    existing.weightedP50 = row.p50;
+    existing.weightedP90 = row.p90;
+    weeklyByKey.set(key, existing);
+  }
+  const mergedWeekly = [...weeklyByKey.values()].sort(
+    (a, b) => new Date(b.week) - new Date(a.week)
+  );
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -43,29 +71,68 @@ export default function LearningDashboard({ currentUserId }) {
         How the AI's estimates compare to confirmed values. Use this data to update calibration notes in the system prompt.
       </p>
 
-      {/* Weekly Accuracy Trend */}
+      {/* Weighted accuracy headline — 2026-06-22 follow-up */}
+      <Section title="Weighted Accuracy (Last 90 Days)">
+        {!weightedSummary || weightedSummary.count === 0 ? (
+          <EmptyState>No scoreable numeric fields in the last 90 days.</EmptyState>
+        ) : (
+          <div>
+            <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+              % closeness — rewards near-misses. The unweighted metric below counts any edit as a full miss.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <Stat
+                label="Mean"
+                value={(weightedSummary.mean * 100).toFixed(1) + '%'}
+              />
+              <Stat
+                label="Median (p50)"
+                value={(weightedSummary.p50 * 100).toFixed(1) + '%'}
+              />
+              <Stat
+                label="p90"
+                value={(weightedSummary.p90 * 100).toFixed(1) + '%'}
+              />
+            </div>
+            <p className="text-xs mt-3" style={{ color: 'var(--tq-muted)' }}>
+              {weightedSummary.count} quote{weightedSummary.count === 1 ? '' : 's'} contributed.
+            </p>
+          </div>
+        )}
+      </Section>
+
+      {/* Weekly Accuracy Trend — both metrics, side by side */}
       <Section title="Accuracy Trend (Last 12 Weeks)">
-        {weeklyTrend.length === 0 ? (
+        {mergedWeekly.length === 0 ? (
           <EmptyState>No data yet. Generate and save quotes to build accuracy history.</EmptyState>
         ) : (
-          <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
-            <thead>
-              <Row header>
-                <Th>Week</Th>
-                <Th align="right">Avg Accuracy</Th>
-                <Th align="right">Quotes</Th>
-              </Row>
-            </thead>
-            <tbody>
-              {weeklyTrend.map((row, i) => (
-                <Row key={i}>
-                  <Td>{new Date(row.week).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</Td>
-                  <Td align="right">{(row.avgAccuracy * 100).toFixed(1)}%</Td>
-                  <Td align="right">{row.quoteCount}</Td>
+          <>
+            <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+              Unweighted = % of numeric fields the tradesman did not edit. Weighted = % closeness per field, averaged.
+            </p>
+            <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <Row header>
+                  <Th>Week</Th>
+                  <Th align="right">Unweighted</Th>
+                  <Th align="right">Weighted (mean)</Th>
+                  <Th align="right">Weighted (p50)</Th>
+                  <Th align="right">Quotes</Th>
                 </Row>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {mergedWeekly.map((row, i) => (
+                  <Row key={i}>
+                    <Td>{new Date(row.week).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</Td>
+                    <Td align="right">{row.avgAccuracy != null ? (row.avgAccuracy * 100).toFixed(1) + '%' : '—'}</Td>
+                    <Td align="right">{row.weightedMean != null ? (row.weightedMean * 100).toFixed(1) + '%' : '—'}</Td>
+                    <Td align="right">{row.weightedP50 != null ? (row.weightedP50 * 100).toFixed(1) + '%' : '—'}</Td>
+                    <Td align="right">{row.quoteCount ?? '—'}</Td>
+                  </Row>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </Section>
 
@@ -198,6 +265,35 @@ function Section({ title, children }) {
 
 function EmptyState({ children }) {
   return <p className="text-sm py-4 text-center" style={{ color: 'var(--tq-muted)' }}>{children}</p>;
+}
+
+function Stat({ label, value }) {
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--tq-surface)',
+        border: '1px solid var(--tq-border)',
+        padding: '12px',
+        borderRadius: 2,
+      }}
+    >
+      <div
+        className="text-xs uppercase tracking-wide mb-1"
+        style={{ color: 'var(--tq-muted)', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700 }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 22,
+          color: 'var(--tq-text)',
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
 }
 
 function Row({ header, children }) {
