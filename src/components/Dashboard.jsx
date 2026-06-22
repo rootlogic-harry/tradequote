@@ -434,13 +434,22 @@ export default function Dashboard({
                   {!isArchiveView && (
                     <div className="flex flex-wrap gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                       {status === 'DRAFT' && (
-                        <button
-                          onClick={(e) => openStatusModal(e, job.id, 'sent')}
-                          className="btn-primary text-xs"
-                          style={{ height: 36, padding: '0 16px' }}
-                        >
-                          Mark Sent
-                        </button>
+                        <>
+                          <button
+                            onClick={(e) => openStatusModal(e, job.id, 'sent')}
+                            className="btn-primary text-xs"
+                            style={{ height: 36, padding: '0 16px' }}
+                          >
+                            Mark Sent
+                          </button>
+                          <button
+                            onClick={(e) => openStatusModal(e, job.id, 'declined')}
+                            className="btn-ghost text-xs"
+                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                          >
+                            {'✗'} Declined
+                          </button>
+                        </>
                       )}
                       {status === 'SENT' && (
                         <>
@@ -485,6 +494,17 @@ export default function Dashboard({
                             style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                           >
                             Complete
+                          </button>
+                          {/* Manual decline from accepted — customer pulled
+                              out after acceptance (deposit refund, change of
+                              mind, etc.). Reuses the same status modal as
+                              the SENT decline path so note-capture works. */}
+                          <button
+                            onClick={(e) => openStatusModal(e, job.id, 'declined')}
+                            className="btn-ghost text-xs"
+                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                          >
+                            {'✗'} Declined
                           </button>
                         </>
                       )}

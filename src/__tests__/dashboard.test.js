@@ -113,6 +113,43 @@ describe('Dashboard active/archive tab UI', () => {
   });
 });
 
+// Mark's ask (2026-06-21, after archive went live): add a manual
+// Decline button to DRAFT + ACCEPTED so the user can move quotes
+// to archive without sending or with a post-acceptance pullout.
+// SENT already had one — this widens the surface to two more statuses.
+describe('Dashboard decline-from-other-statuses', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/Dashboard.jsx'), 'utf8'
+  );
+
+  it('DRAFT block now exposes a Decline button (was Mark-Sent only)', () => {
+    const draftStart = src.indexOf("status === 'DRAFT'");
+    const sentStart = src.indexOf("status === 'SENT'", draftStart + 1);
+    expect(draftStart).toBeGreaterThan(-1);
+    expect(sentStart).toBeGreaterThan(draftStart);
+    const draftBlock = src.slice(draftStart, sentStart);
+    expect(draftBlock).toMatch(/openStatusModal\([^)]*,\s*job\.id,\s*['"]declined['"]/);
+  });
+
+  it('ACCEPTED block now exposes a Decline button (was Complete/RAMS only)', () => {
+    // Anchor on the ACTION block specifically (there are also `status ===
+    // 'ACCEPTED'` matches earlier in the file for badge guards).
+    const acceptedStart = src.indexOf("status === 'ACCEPTED' && (");
+    expect(acceptedStart).toBeGreaterThan(-1);
+    const acceptedBlock = src.slice(acceptedStart, acceptedStart + 3000);
+    expect(acceptedBlock).toMatch(/openStatusModal\([^)]*,\s*job\.id,\s*['"]declined['"]/);
+    // Sanity: Complete button must still be there (don't accidentally remove it)
+    expect(acceptedBlock).toMatch(/Complete/);
+  });
+
+  it('decline button uses the same error-border styling as the SENT decline', () => {
+    // All three decline buttons should share the visual convention so the
+    // user reads them as the same action regardless of starting status.
+    const declineMatches = src.match(/borderColor:\s*['"]var\(--tq-error-bd\)['"][^}]*color:\s*['"]var\(--tq-error-txt\)['"]/g) || [];
+    expect(declineMatches.length).toBeGreaterThanOrEqual(3); // DRAFT + SENT + ACCEPTED
+  });
+});
+
 describe('Dashboard archive view copy passes the visibility-rules check', () => {
   const src = readFileSync(
     join(__dirname, '../components/Dashboard.jsx'), 'utf8'
