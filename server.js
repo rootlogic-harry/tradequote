@@ -38,6 +38,7 @@ import {
   normalizeAIResponse,
   applyMeasurementPlausibilityBounds,
 } from './src/utils/aiParser.js';
+import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf, sanitiseQuoteHtml } from './pdfRenderer.js';
 import { buildQuickbooksCSV } from './src/utils/quickbooksExport.js';
@@ -1596,6 +1597,36 @@ function requireAdminPlan(req, res, next) {
   next();
 }
 
+// Compute the current prompt version (SYSTEM_PROMPT + approved
+// calibration notes) from the live calibration_notes table. Used at
+// /analyse time AND at job-save time so every `jobs.prompt_version`
+// row is non-NULL — otherwise calibration's effect on accuracy is
+// unmeasurable per the 2026-06-22 calibration investigation.
+//
+// The format here MUST match the photo-path /analyse augmentation
+// (server.js: see the `/api/users/:id/analyse` route) so analyse-time
+// and save-time hashes line up. Returns null on DB failure so save
+// continues — promptVersion is observability data, not load-bearing
+// for the user's quote.
+async function computeCurrentPromptVersion() {
+  try {
+    const { rows: calNotes } = await pool.query(
+      `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
+    );
+    let augmentedPrompt = SYSTEM_PROMPT;
+    if (calNotes.length > 0) {
+      const dynamicSection = calNotes.map((n, i) =>
+        `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
+      ).join('\n');
+      augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES (auto-generated from completed job data):\n${dynamicSection}`;
+    }
+    return computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
+  } catch (err) {
+    console.warn(`[PromptVersion] Failed to compute prompt version: ${err.message}`);
+    return null;
+  }
+}
+
 // sec-audit I-2 — fire-and-forget admin audit write. Never throws —
 // audit failure must not break the underlying admin action.
 async function logAdminAction(req, action, targetId = null, details = null) {
@@ -1891,7 +1922,14 @@ app.post('/api/users/:id/jobs', async (req, res) => {
 
     const quoteSnapshot = allowed;
 
-    const promptVersion = req.body.promptVersion || null;
+    // Stamp prompt_version server-side. The client used to be expected
+    // to send `req.body.promptVersion`, but it never did — every job
+    // row ended up with prompt_version = NULL, making calibration
+    // attribution impossible (2026-06-22 investigation). Trust the
+    // client value if present (forward-compat); otherwise recompute
+    // from the live calibration_notes table so the column is never NULL.
+    const promptVersion = req.body.promptVersion
+      || await computeCurrentPromptVersion();
 
     await pool.query(
       `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
@@ -4196,7 +4234,6 @@ import { runSelfCritique } from './agents/selfCritique.js';
 import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
 import { callAnthropicRaw, withTimeout } from './agents/agentUtils.js';
-import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { shouldAutoCalibrate } from './autoCalibration.js';
 import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 
