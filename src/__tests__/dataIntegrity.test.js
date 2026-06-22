@@ -613,9 +613,13 @@ describe('Server job metadata extraction', () => {
   const serverSrc = readFileSync(join(__dirname, '../../server.js'), 'utf8');
 
   test('POST /api/users/:id/jobs extracts clientName from jobDetails', () => {
+    // Widen the slice — the route grew when we added server-side
+    // prompt_version stamping (2026-06-22 calibration fix). The
+    // INSERT statement and value list are now further from the
+    // route declaration.
     const postBlock = serverSrc.slice(
       serverSrc.indexOf("app.post('/api/users/:id/jobs'"),
-      serverSrc.indexOf("app.post('/api/users/:id/jobs'") + 2000
+      serverSrc.indexOf("app.post('/api/users/:id/jobs'") + 2800
     );
     expect(postBlock).toContain("jobDetails?.clientName || ''");
     expect(postBlock).toContain("jobDetails?.siteAddress || ''");
