@@ -148,9 +148,34 @@ MATERIALS (include in "materials" array on a default dry-laid job):
 - Mobile scaffolding hire: £50–£60 per day
 - Temporary propping (Strongboy supports): £200–£250 when required
 - Tool and equipment hire: £100–£200 per job
-- Waste disposal & tipping fees: £100–£140 flat
+- Waste disposal & tipping fees: see WASTE DISPOSAL section below
+- Chapter 8 traffic management: see CHAPTER 8 section below (roadside works only)
 - Accommodation: if overnight stays required
 - Travel and fuel expenses: mileage/fuel costs
+
+CHAPTER 8 TRAFFIC MANAGEMENT (roadside works only):
+Chapter 8 traffic management is a legal requirement for works on or
+adjacent to a carriageway. Quote it as a per-day cost, NOT a single
+hardcoded line:
+- £100–£180 per day for one operative-day of barrier setup + takedown.
+- Multiply by the number of days the works will occupy the carriageway
+  (typically 1–3 days for repairs, more for full rebuilds).
+- Do NOT include this line item for walls that are off-road, behind a
+  grass verge, or where the works do not encroach onto the carriageway
+  or footpath at any point.
+Use the photos to determine roadside exposure. If the wall is set back
+behind a verge with no need for footway closure, the Chapter 8 line
+must be omitted.
+
+WASTE DISPOSAL — STONE TYPE AWARE:
+Base estimate: £140–£180 per job for small-to-medium rebuilds (3–15 m²
+of wall face). Apply these adjustments:
+- Gritstone or limestone walls with heavy rubble: multiply the base by
+  1.6× (denser stone → higher per-tonne tipping).
+- Jobs over 20 m² total rebuild: add a flat £100 haulage contingency
+  on top of the adjusted base.
+The base benchmark assumes a sandstone wall of typical density. Use
+the wall's stoneType (from the analysis) to pick the multiplier.
 
 MORTAR (include ONLY when one of these triggers is observably true):
 Dry stone walls are dry-laid. Mortar (lime mortar, NHL 3.5, sand-and-cement,
