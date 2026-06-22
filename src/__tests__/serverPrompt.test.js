@@ -173,6 +173,49 @@ describe('Server-side SYSTEM_PROMPT', () => {
       expect(SYSTEM_PROMPT).toMatch(/voice notes\s+alone are not sufficient/i);
     });
 
+    // Calibration investigation 2026-06-22 — three system-prompt edits
+    // derived from the diff corpus. Each pins a behavioural constraint
+    // the calibration loop could not fix via per-field notes.
+    test('POST-CALCULATION ADJUSTMENT enforces asymmetric labour-days rule', () => {
+      // The model must not apply a flat percentage factor to labour days.
+      // The investigation found that three successive 0.X factors (0.90,
+      // 0.85, 0.82) couldn't fix the asymmetric small-job bias.
+      expect(SYSTEM_PROMPT).toMatch(/POST-CALCULATION ADJUSTMENT/);
+      // Hard floor of 1.5 days for small jobs
+      expect(SYSTEM_PROMPT).toMatch(/minimum of 1\.5 days/i);
+      // Stepwise rule by area
+      expect(SYSTEM_PROMPT).toMatch(/under 6 m²/);
+      expect(SYSTEM_PROMPT).toMatch(/6.{1,3}20 m²/);
+      expect(SYSTEM_PROMPT).toMatch(/over 20 m²/);
+      // Explicit instruction to ignore factor calibration notes — without
+      // this the model will keep chasing whatever the calibration loop
+      // writes in. This guard MUST stay.
+      expect(SYSTEM_PROMPT).toMatch(/IGNORE that note|ignore .{1,40}calibration note/i);
+    });
+
+    test('CHAPTER 8 traffic management is per-day, not a fixed line item', () => {
+      expect(SYSTEM_PROMPT).toMatch(/CHAPTER 8 TRAFFIC MANAGEMENT/);
+      // Empirical range from the investigation
+      expect(SYSTEM_PROMPT).toMatch(/£100.{1,3}£180 per day/);
+      // Multiply by occupation-days — the key behaviour change
+      expect(SYSTEM_PROMPT).toMatch(/[Mm]ultiply by the number of days/);
+      // Explicit omission rule for off-road walls — without this the
+      // model adds the line to every quote regardless of context
+      expect(SYSTEM_PROMPT).toMatch(/off-road|grass verge|do not include|must be omitted/i);
+    });
+
+    test('WASTE DISPOSAL is stone-type-aware (gritstone/limestone multiplier)', () => {
+      expect(SYSTEM_PROMPT).toMatch(/WASTE DISPOSAL/);
+      // Base estimate range
+      expect(SYSTEM_PROMPT).toMatch(/£140.{1,3}£180/);
+      // The 1.6× multiplier for denser stone types — Mark vs Paul
+      // divergence on this field was the cleanest evidence
+      expect(SYSTEM_PROMPT).toMatch(/1\.6×|1\.6x|1\.6 ?times/i);
+      expect(SYSTEM_PROMPT).toMatch(/[Gg]ritstone.{1,40}[Ll]imestone|[Ll]imestone.{1,40}[Gg]ritstone/);
+      // Haulage contingency for large jobs
+      expect(SYSTEM_PROMPT).toMatch(/over 20 m².{1,200}£100/s);
+    });
+
     test('SCHEDULE OF WORKS examples do not bias toward mortar', () => {
       // The previous prompt used "NHL 3.5 hydraulic lime mortar" as the ONLY
       // material-spec example, and "bedded and set plumb on a cement and lime
