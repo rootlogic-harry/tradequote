@@ -39,6 +39,7 @@ import {
   applyMeasurementPlausibilityBounds,
 } from './src/utils/aiParser.js';
 import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
+import { computeFieldBiasFromRows } from './src/utils/computeFieldBias.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf, sanitiseQuoteHtml } from './pdfRenderer.js';
 import { buildQuickbooksCSV } from './src/utils/quickbooksExport.js';
@@ -2478,19 +2479,23 @@ app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
 
 app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) => {
   try {
-    // Field bias
-    const fieldBias = await pool.query(`
-      SELECT field_type, field_label,
-        COUNT(*) AS total,
-        ROUND(AVG(CASE WHEN was_edited THEN 1.0 ELSE 0.0 END) * 100, 1) AS edit_rate_pct,
-        ROUND(AVG(edit_magnitude) * 100, 1) AS avg_bias_pct,
-        ROUND(AVG(ABS(edit_magnitude)) * 100, 1) AS avg_error_pct
+    // Field bias — was previously aggregated entirely in SQL via
+    // AVG(edit_magnitude), but `edit_magnitude` was computed at
+    // insert time using parseFloat() on display-formatted ai_value
+    // strings like "2,000mm". parseFloat truncates at the comma so a
+    // 55% real delta showed up as 154,900% in the chart (2026-06-22
+    // calibration investigation, "data-quality landmine"). The fix:
+    // pull the raw ai_value + confirmed_value strings and recompute
+    // bias in JS using parseAiValue, which strips currency, commas,
+    // and unit suffixes before Number()-ing. Edit-rate / total
+    // counts stay in SQL — they don't depend on numeric parsing.
+    const fieldBiasRaw = await pool.query(`
+      SELECT field_type, field_label, ai_value, confirmed_value, was_edited
       FROM quote_diffs
       WHERE field_type IN ('measurement','material_unit_cost','labour_days')
-        AND edit_magnitude IS NOT NULL
-      GROUP BY field_type, field_label
-      ORDER BY edit_rate_pct DESC
     `);
+
+    const fieldBias = computeFieldBiasFromRows(fieldBiasRaw.rows);
 
     // Weekly accuracy trend
     const weeklyTrend = await pool.query(`
@@ -2523,11 +2528,7 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
     `);
 
     res.json({
-      fieldBias: fieldBias.rows.map(r => ({
-        ...r, total: Number(r.total),
-        editRatePct: Number(r.edit_rate_pct), avgBiasPct: Number(r.avg_bias_pct),
-        avgErrorPct: Number(r.avg_error_pct),
-      })),
+      fieldBias,
       weeklyTrend: weeklyTrend.rows.map(r => ({
         week: r.week, avgAccuracy: Number(r.avg_accuracy), quoteCount: Number(r.quote_count),
       })),
