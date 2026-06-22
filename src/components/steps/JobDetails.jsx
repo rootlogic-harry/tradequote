@@ -209,6 +209,8 @@ export default function JobDetails({
       abortRef,
       dispatch,
       userId: state.currentUserId,
+      // Free-quota dedupe token (2026-06-22).
+      quoteToken: state.quoteToken,
     });
   };
 

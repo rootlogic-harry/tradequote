@@ -49,6 +49,7 @@ a "we deleted you" promise that's untrue.
 | `session` | session JSON contains the user's serialized id; expires naturally; safe to DELETE on cancellation |
 | `system_errors` | optional user_id (NULL for anonymous errors), route, stack, user_agent | DELETE rows where user_id matches |
 | `pageviews` | optional user_id (anonymous by default), path, referrer, ua_hash | DELETE rows where user_id matches; rest is anonymous already |
+| `free_quote_grants` | user_id, quote_token (opaque UUID / job:id), counted_at — quota accounting only | CASCADE — no PII, but cascading keeps the table consistent |
 
 **CASCADE summary** — most child tables have
 `user_id TEXT REFERENCES users(id) ON DELETE CASCADE`, so a single

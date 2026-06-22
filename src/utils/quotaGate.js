@@ -1,0 +1,122 @@
+/**
+ * Quota-based free tier (2026-06-22).
+ *
+ * FastQuote used to ship a 1-month no-card trial: signup set
+ * `users.trial_ends_at = NOW() + 30 days` and the analyse endpoint
+ * was wide open until that timestamp passed. The problem with that
+ * model: tradesmen value FastQuote per-quote, not per-month. A
+ * customer who only does two jobs in a month feels they're paying
+ * for time they didn't use. Switching to "3 free quotes, then pay"
+ * aligns the free tier with the unit of value.
+ *
+ * This file is the single source of truth for the gate decision.
+ * Three callers depend on it:
+ *
+ *   1. The /api/users/:id/analyse middleware (the 402 lockout).
+ *   2. The /auth/me billing payload (so the SPA renders the right
+ *      banner without a second round trip).
+ *   3. Any future admin "is this user eligible?" query.
+ *
+ * Order of evaluation is load-bearing — change it and you change
+ * who pays. Test coverage is in src/__tests__/quotaGate.test.js.
+ *
+ *   1. Active Stripe subscription → ALLOW (paid customer; never read
+ *      the comp clock or the free-quote counter).
+ *   2. Active comp (comp_until > now) → ALLOW (trusted users — Paul
+ *      and any future comped account).
+ *   3. free_quotes_used < FREE_QUOTES_LIMIT → ALLOW.
+ *   4. Otherwise → DENY with reason='quota_exhausted'.
+ */
+
+export const FREE_QUOTES_LIMIT = 3;
+
+/**
+ * Decide whether a user is allowed to consume an AI analysis right
+ * now. Pure function — no I/O, no Date.now() unless `now` is omitted.
+ *
+ * @param {{ free_quotes_used?: number, comp_until?: string|Date|null }|null|undefined} user
+ *        The user row (raw DB shape — snake_case from the `users`
+ *        table). Null / undefined → denied (defensive — better to
+ *        block a stranger than silently allow one).
+ * @param {{ hasActiveSubscription: boolean, now?: Date }} ctx
+ *        - `hasActiveSubscription` — caller has already decided this
+ *          from Stripe state. We accept it as a boolean so the gate
+ *          doesn't itself import billing.js (keeps the dep graph
+ *          one-way and makes the helper trivially mockable).
+ *        - `now` — injectable clock for tests. Defaults to new Date().
+ *
+ * @returns {{ allowed: boolean, reason: string }}
+ *          `reason` is one of:
+ *            - 'subscribed'      — active Stripe subscription
+ *            - 'comped'          — comp_until > now
+ *            - 'free-remaining'  — within the 3-free-quote allowance
+ *            - 'quota_exhausted' — denied; UI shows hard subscribe CTA
+ */
+export function quotaGate(user, ctx) {
+  const hasActiveSubscription = Boolean(ctx?.hasActiveSubscription);
+  const now = ctx?.now ?? new Date();
+
+  if (hasActiveSubscription) {
+    return { allowed: true, reason: 'subscribed' };
+  }
+
+  if (!user) {
+    return { allowed: false, reason: 'quota_exhausted' };
+  }
+
+  // Comp window — strict greater-than so a comp expiring "right now"
+  // doesn't grant one final analysis at the boundary.
+  if (user.comp_until) {
+    const compUntil = new Date(user.comp_until).getTime();
+    if (Number.isFinite(compUntil) && compUntil > now.getTime()) {
+      return { allowed: true, reason: 'comped' };
+    }
+  }
+
+  const used = Number(user.free_quotes_used) || 0;
+  if (used < FREE_QUOTES_LIMIT) {
+    return { allowed: true, reason: 'free-remaining' };
+  }
+
+  return { allowed: false, reason: 'quota_exhausted' };
+}
+
+/**
+ * Build the `billing` block we attach to /auth/me. Mirrors the
+ * quotaGate decision but in the shape the SPA wants. Centralised so
+ * the server route stays a thin pass-through and the client banner
+ * doesn't have to re-derive `quotaState` from raw fields.
+ *
+ * `freeQuotesUsed` is clamped at FREE_QUOTES_LIMIT for display — a
+ * defensive measure in case the DB value got past the limit (e.g.
+ * a comp expired mid-flight). The UI never shows "4 of 3 used".
+ */
+export function resolveQuotaState(user, ctx) {
+  const decision = quotaGate(user, ctx);
+  const hasActiveSubscription = Boolean(ctx?.hasActiveSubscription);
+  const compUntil = user?.comp_until ? new Date(user.comp_until).getTime() : null;
+  const now = (ctx?.now ?? new Date()).getTime();
+  const isComped = Boolean(
+    !hasActiveSubscription
+      && compUntil !== null
+      && Number.isFinite(compUntil)
+      && compUntil > now
+  );
+
+  let quotaState;
+  if (hasActiveSubscription) quotaState = 'subscribed';
+  else if (isComped) quotaState = 'comped';
+  else if (decision.allowed) quotaState = 'free-remaining';
+  else quotaState = 'exhausted';
+
+  const rawUsed = Number(user?.free_quotes_used) || 0;
+  const freeQuotesUsed = Math.min(Math.max(0, rawUsed), FREE_QUOTES_LIMIT);
+
+  return {
+    quotaState,
+    hasActiveSubscription,
+    isComped,
+    freeQuotesUsed,
+    freeQuotesLimit: FREE_QUOTES_LIMIT,
+  };
+}

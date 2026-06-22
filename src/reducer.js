@@ -9,6 +9,28 @@ function storageKey(userId) {
   return userId ? 'tq_session_' + userId : 'tq_state';
 }
 
+/**
+ * Per-draft quote token (2026-06-22, quota-based free tier).
+ *
+ * The server uses this to dedupe "is this the same quote being
+ * re-analysed?" — retries after error and any future re-analyse path
+ * keep the same token, so the same draft only burns ONE free quote
+ * out of the three the user gets before paywall.
+ *
+ * Reset on NEW_QUOTE (start of a fresh draft). Crypto-random where
+ * available, fallback for older runtimes — the value never leaves
+ * the user's session, so a weaker PRNG is acceptable here (unlike
+ * the client-portal token which is a security credential).
+ */
+function newQuoteToken() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch { /* fall through */ }
+  return 'qt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+}
+
 function saveState(state) {
   try {
     const toSave = { ...state, isAnalysing: false, analysisError: null, videoProgress: null, uploadProgress: null };
@@ -99,6 +121,11 @@ export const initialState = {
   extraPhotos: [],
   isAnalysing: false,
   analysisError: null,
+  // Server-side 402 lockout payload (2026-06-22). Non-null = the user
+  // has exhausted their 3 free quotes and tried to start a fourth.
+  // The UI uses this to block "Start New Quote" entry rather than
+  // letting them upload photos only to be blocked at submission.
+  quotaLockout: null,
   aiRawResponse: null,
   reviewData: null,
   diffs: [],
@@ -108,6 +135,10 @@ export const initialState = {
   uploadProgress: null,    // XHR upload: { percent, loaded, total, speed, eta }
   quoteMode: 'standard',  // 'standard' | 'quick'
   quoteSequence: 1,
+  // Per-draft token (2026-06-22) used by the server's free-quotes
+  // quota gate to dedupe retries/re-analyses on the same draft so
+  // they don't double-charge against the 3-free-quote allowance.
+  quoteToken: newQuoteToken(),
   savedJobId: null,
   quoteSaveError: null,
   critiqueNotes: null,
@@ -271,6 +302,27 @@ function reducerCore(state, action) {
         videoProgress: null,
         uploadProgress: null,
       };
+
+    case 'ANALYSIS_QUOTA_EXHAUSTED':
+      // The server's 402 lockout (2026-06-22). Different from a generic
+      // ANALYSIS_ERROR because the UI shows the hard Subscribe CTA, not
+      // the "Try Again" button — retrying without subscribing will hit
+      // the same 402.
+      return {
+        ...state,
+        isAnalysing: false,
+        analysisError: null,
+        quotaLockout: {
+          message: action.message,
+          freeQuotesUsed: action.freeQuotesUsed,
+          freeQuotesLimit: action.freeQuotesLimit,
+        },
+        videoProgress: null,
+        uploadProgress: null,
+      };
+
+    case 'CLEAR_QUOTA_LOCKOUT':
+      return { ...state, quotaLockout: null };
 
     case 'CONFIRM_MEASUREMENT': {
       if (!state.reviewData) return state;
@@ -469,6 +521,10 @@ function reducerCore(state, action) {
         diffs: [],
         quotePayload: null,
         quoteSequence: nextSeq,
+        // Fresh per-draft token (2026-06-22) — starting a new quote is
+        // the only point where the server should count another free
+        // quote against the 3-allowance.
+        quoteToken: newQuoteToken(),
         savedJobId: null,
         quoteSaveError: null,
         critiqueNotes: null,

@@ -7,7 +7,7 @@ import {
 } from './aiParser.js';
 import { buildTradesmanProfileBlock } from './tradesmanProfileBlock.js';
 
-export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId }) {
+export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId, quoteToken }) {
   try {
     // Multi-tenant prompt assembly:
     //   1. TRADESMAN PROFILE — who the user is + their working preferences
@@ -93,6 +93,10 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
           },
         ],
         briefNotes: jobDetails.briefNotes || '',
+        // Per-draft token (2026-06-22) — server dedupes free-quota
+        // grants by (user_id, quote_token) so a retry-after-error
+        // doesn't burn a second free quote on the same draft.
+        quoteToken: quoteToken || null,
       }),
     });
 
@@ -100,6 +104,24 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
 
     if (!response.ok) {
       const errText = await response.text();
+      // Quota-exhausted lockout (2026-06-22). 402 carries the friendly
+      // copy already; dispatch a structured action so the UI can show
+      // the hard Subscribe CTA rather than the generic "try again"
+      // banner. /auth/me's billing block has the same state, but this
+      // path catches the race where /auth/me was stale at click time.
+      if (response.status === 402) {
+        let payload = null;
+        try { payload = JSON.parse(errText); } catch { /* ignore */ }
+        if (payload?.error === 'quota_exhausted') {
+          dispatch({
+            type: 'ANALYSIS_QUOTA_EXHAUSTED',
+            freeQuotesUsed: payload.freeQuotesUsed,
+            freeQuotesLimit: payload.freeQuotesLimit,
+            message: payload.message,
+          });
+          return;
+        }
+      }
       let friendlyMessage;
       try {
         const errJson = JSON.parse(errText);
