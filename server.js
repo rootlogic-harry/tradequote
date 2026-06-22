@@ -59,6 +59,7 @@ import {
   whisperBytesToGbp,
   getPriceMap,
 } from './src/utils/anthropicPricing.js';
+import { summariseWeightedAccuracy } from './src/utils/weightedAccuracy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -2484,6 +2485,58 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
       GROUP BY user_id
     `);
 
+    // --- Weighted accuracy (additive, per 2026-06-22 calibration investigation)
+    //
+    // Existing `ai_accuracy_score` is edit-presence (binary: was_edited or
+    // not). This second metric scores per-field accuracy as
+    // `1 - clamped(|edit|/|ai|)` so a 5% edit reads as 0.95, not 0. Both
+    // metrics surface on the dashboard side-by-side so the trajectory can
+    // be compared apples-to-apples. See src/utils/weightedAccuracy.js.
+    //
+    // Pulled as raw diffs (one row per diff) so the JS aggregator can group
+    // by job within a week — distribution stats (p50 / p90) are computed
+    // in JS, not SQL, because percentile_cont on per-quote means after a
+    // GROUP BY is awkward to express portably.
+    const weightedRawRows = await pool.query(`
+      SELECT DATE_TRUNC('week', created_at) AS week,
+        job_id, user_id, ai_value, confirmed_value
+      FROM quote_diffs
+      WHERE field_type IN ('measurement','material_quantity','material_unit_cost','labour_days','labour_workers')
+        AND created_at >= NOW() - INTERVAL '90 days'
+    `);
+
+    // Group raw rows into { weekIso -> { jobId -> [diffs] } }, then summarise.
+    const byWeek = new Map();
+    for (const r of weightedRawRows.rows) {
+      const weekKey = r.week instanceof Date ? r.week.toISOString() : String(r.week);
+      if (!byWeek.has(weekKey)) byWeek.set(weekKey, { weekRaw: r.week, byJob: new Map() });
+      const wk = byWeek.get(weekKey);
+      if (!wk.byJob.has(r.job_id)) wk.byJob.set(r.job_id, []);
+      wk.byJob.get(r.job_id).push({ aiValue: r.ai_value, confirmedValue: r.confirmed_value });
+    }
+
+    const weightedWeekly = [];
+    for (const { weekRaw, byJob } of byWeek.values()) {
+      const quotes = [...byJob.values()];
+      const summary = summariseWeightedAccuracy(quotes);
+      weightedWeekly.push({
+        week: weekRaw,
+        count: summary.count,
+        mean: summary.mean,
+        p50: summary.p50,
+        p90: summary.p90,
+      });
+    }
+    weightedWeekly.sort((a, b) => new Date(b.week) - new Date(a.week));
+    const weightedWeeklyTop12 = weightedWeekly.slice(0, 12);
+
+    // Overall (last 90 days) summary — for a single headline number.
+    const allQuotesLast90d = [];
+    for (const { byJob } of byWeek.values()) {
+      for (const diffs of byJob.values()) allQuotesLast90d.push(diffs);
+    }
+    const weightedSummary = summariseWeightedAccuracy(allQuotesLast90d);
+
     res.json({
       fieldBias: fieldBias.rows.map(r => ({
         ...r, total: Number(r.total),
@@ -2493,6 +2546,8 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
       weeklyTrend: weeklyTrend.rows.map(r => ({
         week: r.week, avgAccuracy: Number(r.avg_accuracy), quoteCount: Number(r.quote_count),
       })),
+      weightedWeeklyTrend: weightedWeeklyTop12,
+      weightedSummary,
       refCardImpact: refCardImpact.rows.map(r => ({
         referenceCardUsed: r.reference_card_used, editRatePct: Number(r.edit_rate_pct),
         total: Number(r.total),
