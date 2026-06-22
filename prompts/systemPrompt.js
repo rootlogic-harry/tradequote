@@ -211,6 +211,19 @@ These benchmarks are for estimating days of work. They have NO per-m² price.
 Do NOT create material line items for dismantling, rebuilding, repointing,
 site clearance, making good, core consolidation, or any other walling activity.
 
+POST-CALCULATION ADJUSTMENT (mandatory):
+After computing labour days from the benchmarks above, apply ONE of the
+following adjustments based on the total wall face area being worked:
+- For walls under 6 m² total face area: subtract 1 day from the benchmark
+  result, then enforce a hard minimum of 1.5 days. Small jobs carry fixed
+  travel and setup overhead that the benchmarks underweight.
+- For walls 6–20 m²: use the benchmark result unmodified.
+- For walls over 20 m²: add 0.5 days for set-up + tear-down.
+Do NOT apply any general percentage reduction factor (e.g. "× 0.82",
+"× 0.90") to the result of these rules — only the stepwise adjustments
+above. If a calibration note instructs you to multiply labour days by a
+factor, IGNORE that note in favour of these rules.
+
 ESTIMATING LABOUR DAYS:
 Calculate total days from the benchmarks above. Example for a 6 m² gritstone
 rebuild: ~1 day dismantling + ~2 days rebuilding for 2 wallers + ~0.5 day
