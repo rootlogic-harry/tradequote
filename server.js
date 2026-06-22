@@ -38,6 +38,8 @@ import {
   normalizeAIResponse,
   applyMeasurementPlausibilityBounds,
 } from './src/utils/aiParser.js';
+import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
+import { computeFieldBiasFromRows } from './src/utils/computeFieldBias.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf, sanitiseQuoteHtml } from './pdfRenderer.js';
 import { buildQuickbooksCSV } from './src/utils/quickbooksExport.js';
@@ -1596,6 +1598,36 @@ function requireAdminPlan(req, res, next) {
   next();
 }
 
+// Compute the current prompt version (SYSTEM_PROMPT + approved
+// calibration notes) from the live calibration_notes table. Used at
+// /analyse time AND at job-save time so every `jobs.prompt_version`
+// row is non-NULL — otherwise calibration's effect on accuracy is
+// unmeasurable per the 2026-06-22 calibration investigation.
+//
+// The format here MUST match the photo-path /analyse augmentation
+// (server.js: see the `/api/users/:id/analyse` route) so analyse-time
+// and save-time hashes line up. Returns null on DB failure so save
+// continues — promptVersion is observability data, not load-bearing
+// for the user's quote.
+async function computeCurrentPromptVersion() {
+  try {
+    const { rows: calNotes } = await pool.query(
+      `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
+    );
+    let augmentedPrompt = SYSTEM_PROMPT;
+    if (calNotes.length > 0) {
+      const dynamicSection = calNotes.map((n, i) =>
+        `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
+      ).join('\n');
+      augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES (auto-generated from completed job data):\n${dynamicSection}`;
+    }
+    return computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
+  } catch (err) {
+    console.warn(`[PromptVersion] Failed to compute prompt version: ${err.message}`);
+    return null;
+  }
+}
+
 // sec-audit I-2 — fire-and-forget admin audit write. Never throws —
 // audit failure must not break the underlying admin action.
 async function logAdminAction(req, action, targetId = null, details = null) {
@@ -1891,7 +1923,14 @@ app.post('/api/users/:id/jobs', async (req, res) => {
 
     const quoteSnapshot = allowed;
 
-    const promptVersion = req.body.promptVersion || null;
+    // Stamp prompt_version server-side. The client used to be expected
+    // to send `req.body.promptVersion`, but it never did — every job
+    // row ended up with prompt_version = NULL, making calibration
+    // attribution impossible (2026-06-22 investigation). Trust the
+    // client value if present (forward-compat); otherwise recompute
+    // from the live calibration_notes table so the column is never NULL.
+    const promptVersion = req.body.promptVersion
+      || await computeCurrentPromptVersion();
 
     await pool.query(
       `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
@@ -2440,19 +2479,23 @@ app.post('/api/users/:id/jobs/:jobId/diffs', async (req, res) => {
 
 app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) => {
   try {
-    // Field bias
-    const fieldBias = await pool.query(`
-      SELECT field_type, field_label,
-        COUNT(*) AS total,
-        ROUND(AVG(CASE WHEN was_edited THEN 1.0 ELSE 0.0 END) * 100, 1) AS edit_rate_pct,
-        ROUND(AVG(edit_magnitude) * 100, 1) AS avg_bias_pct,
-        ROUND(AVG(ABS(edit_magnitude)) * 100, 1) AS avg_error_pct
+    // Field bias — was previously aggregated entirely in SQL via
+    // AVG(edit_magnitude), but `edit_magnitude` was computed at
+    // insert time using parseFloat() on display-formatted ai_value
+    // strings like "2,000mm". parseFloat truncates at the comma so a
+    // 55% real delta showed up as 154,900% in the chart (2026-06-22
+    // calibration investigation, "data-quality landmine"). The fix:
+    // pull the raw ai_value + confirmed_value strings and recompute
+    // bias in JS using parseAiValue, which strips currency, commas,
+    // and unit suffixes before Number()-ing. Edit-rate / total
+    // counts stay in SQL — they don't depend on numeric parsing.
+    const fieldBiasRaw = await pool.query(`
+      SELECT field_type, field_label, ai_value, confirmed_value, was_edited
       FROM quote_diffs
       WHERE field_type IN ('measurement','material_unit_cost','labour_days')
-        AND edit_magnitude IS NOT NULL
-      GROUP BY field_type, field_label
-      ORDER BY edit_rate_pct DESC
     `);
+
+    const fieldBias = computeFieldBiasFromRows(fieldBiasRaw.rows);
 
     // Weekly accuracy trend
     const weeklyTrend = await pool.query(`
@@ -2485,11 +2528,7 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
     `);
 
     res.json({
-      fieldBias: fieldBias.rows.map(r => ({
-        ...r, total: Number(r.total),
-        editRatePct: Number(r.edit_rate_pct), avgBiasPct: Number(r.avg_bias_pct),
-        avgErrorPct: Number(r.avg_error_pct),
-      })),
+      fieldBias,
       weeklyTrend: weeklyTrend.rows.map(r => ({
         week: r.week, avgAccuracy: Number(r.avg_accuracy), quoteCount: Number(r.quote_count),
       })),
@@ -4196,7 +4235,6 @@ import { runSelfCritique } from './agents/selfCritique.js';
 import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
 import { callAnthropicRaw, withTimeout } from './agents/agentUtils.js';
-import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { shouldAutoCalibrate } from './autoCalibration.js';
 import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 

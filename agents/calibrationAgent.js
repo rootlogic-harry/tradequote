@@ -141,7 +141,36 @@ Do NOT re-propose notes that are already approved (listed above).`;
     }
   }
 
-  return { runId, proposals };
+  // Stamp the count of feedback lessons + field-bias buckets this run
+  // actually consumed onto output_summary. The 2026-06-22 calibration
+  // investigation found every calibration run reported `lessons: 0`
+  // because there was no `lessons` field on output_summary to inspect;
+  // observability had to guess. This makes the wiring explicit:
+  //
+  //   output_summary.lessons              — count of feedback runs read
+  //   output_summary.fieldsAboveThreshold — count of bias rows considered
+  //   output_summary.approvedNotesCount   — count of currently-approved notes
+  //
+  // The `||` JSONB operator merges; original AI-output keys (`proposed`,
+  // `summary`) are preserved. Best-effort — a stamping failure must not
+  // break a successful calibration run.
+  const enrichment = {
+    lessons: feedbackRuns.length,
+    fieldsAboveThreshold: fieldBias.length,
+    approvedNotesCount: approvedNotes.length,
+  };
+  try {
+    await pool.query(
+      `UPDATE agent_runs
+         SET output_summary = COALESCE(output_summary, '{}'::jsonb) || $1::jsonb
+       WHERE id = $2`,
+      [JSON.stringify(enrichment), runId]
+    );
+  } catch (err) {
+    console.warn('[CalibrationAgent] Failed to stamp lessons count on output_summary:', err.message);
+  }
+
+  return { runId, proposals, lessons: feedbackRuns.length };
 }
 
 export { runCalibrationAgent, CALIBRATION_SYSTEM_PROMPT };
