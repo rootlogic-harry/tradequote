@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { isTrialEndingSoon, dayCopy, pickBannerVariant } from '../utils/trialState.js';
+import { isTrialEndingSoon, dayCopy, pickBannerVariant, freeQuotesCopy } from '../utils/trialState.js';
 
 /**
  * Subscription banner — surfaces the trial / billing state to the
@@ -105,6 +105,34 @@ export default function SubscriptionBanner({ enabled = true }) {
           <strong>Your free trial has ended.</strong> Add a payment method to keep using FastQuote.
         </Body>
         <Cta onClick={openCheckout} disabled={busy}>Subscribe — £{status.pricing?.gbpPerMonth?.toFixed(2) || '19.99'}/month</Cta>
+      </Strip>
+    );
+  }
+
+  if (variant === 'exhausted') {
+    // Hard lockout (2026-06-22). Server's /analyse 402s on the next
+    // attempt. CTA opens Stripe Checkout — no portal because the user
+    // doesn't have a Stripe customer yet (they never started a paid
+    // subscription, just used the 3 free quotes).
+    return (
+      <Strip tone="urgent" testId="subscription-banner-exhausted">
+        <Body>
+          <strong>You've used your 3 free quotes. Subscribe to continue.</strong>
+        </Body>
+        <Cta onClick={openCheckout} disabled={busy}>Subscribe — £{status.pricing?.gbpPerMonth?.toFixed(2) || '19.99'}/month</Cta>
+      </Strip>
+    );
+  }
+
+  if (variant === 'free-remaining') {
+    // Soft CTA (2026-06-22). User is still inside the 3 free quotes
+    // — banner reminds them quietly without blocking anything.
+    return (
+      <Strip tone="muted" testId="subscription-banner-free-remaining">
+        <Body>
+          {freeQuotesCopy(status.freeQuotesUsed ?? 0, status.freeQuotesLimit ?? 3)}.
+        </Body>
+        <Cta onClick={openCheckout} disabled={busy}>Subscribe</Cta>
       </Strip>
     );
   }

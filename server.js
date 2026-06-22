@@ -59,6 +59,11 @@ import {
   whisperBytesToGbp,
   getPriceMap,
 } from './src/utils/anthropicPricing.js';
+import {
+  quotaGate,
+  resolveQuotaState,
+  FREE_QUOTES_LIMIT,
+} from './src/utils/quotaGate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -331,6 +336,43 @@ async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'basic';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_complete BOOLEAN DEFAULT false;
+      -- Quota-based free tier (2026-06-22): replaces the time-based
+      -- trial above with a 3-free-quote allowance. trial_ends_at stays
+      -- in the schema for the next release window in case we need to
+      -- roll back, but it is no longer read by the analyse gate.
+      --   free_quotes_used: incremented atomically on a successful
+      --     analyse call, keyed on a per-draft quote_token so retries
+      --     and re-analyses don't double-charge. See free_quote_grants.
+      --   comp_until: trusted-user override (Paul gets 6 months at
+      --     deploy via a one-line UPDATE — see the PR body). Bypasses
+      --     both the quota AND the subscription requirement.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS free_quotes_used INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS comp_until TIMESTAMPTZ;
+    `);
+
+    // free_quote_grants: per-(user, quote_token) record of which
+    // analyse calls counted against the 3-free-quote allowance. The
+    // SPA generates a UUID quoteToken when starting a new quote
+    // (NEW_QUOTE / initial state); retries and re-analyses on the
+    // same draft reuse it, so the unique key naturally collapses
+    // double-counts. The video route uses `job:${jobId}` as a stable
+    // token — same effect, no schema dependency on the draft.
+    //
+    // Why a dedicated table rather than reusing agent_runs:
+    //   • agent_runs is on the do-not-touch moat list. Stashing a
+    //     quoteToken in input_summary would technically mutate it,
+    //     and the analytics queries don't expect that key.
+    //   • This table is conceptually about billing/quota, not about
+    //     agent execution. Separating concerns keeps the moat clean.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS free_quote_grants (
+        user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        quote_token TEXT NOT NULL,
+        counted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, quote_token)
+      );
+      CREATE INDEX IF NOT EXISTS idx_free_quote_grants_user
+        ON free_quote_grants (user_id, counted_at DESC);
     `);
 
     await client.query(`
@@ -766,8 +808,35 @@ app.get('/auth/me', async (req, res) => {
   const features = {
     videoAnalysisEnabled: isVideoAnalysisEnabledFromProcessEnv(),
   };
+
+  // Quota state (2026-06-22). The SubscriptionBanner reads this to
+  // decide between "X of 3 free quotes used" / hard-lockout CTA / no
+  // banner. Failure to load the row is silent — banner falls back to
+  // its default empty state rather than crashing the whole /auth/me
+  // call. Both branches below (Google OAuth + legacy switcher) need
+  // the same shape, so we share this helper.
+  const loadBilling = async (userId) => {
+    if (!userId) return null;
+    try {
+      const r = await pool.query(
+        `SELECT free_quotes_used, comp_until, subscription_status
+         FROM users WHERE id = $1`,
+        [userId]
+      );
+      const u = r.rows[0];
+      if (!u) return null;
+      return resolveQuotaState(u, {
+        hasActiveSubscription: u.subscription_status === 'active',
+      });
+    } catch (err) {
+      console.warn('[/auth/me] billing lookup failed:', err.message);
+      return null;
+    }
+  };
+
   // Google OAuth session
   if (req.user) {
+    const billing = await loadBilling(req.user.id);
     return res.json({
       user: {
         id: req.user.id,
@@ -778,6 +847,7 @@ app.get('/auth/me', async (req, res) => {
         profileComplete: !!req.user.profile_complete,
       },
       features,
+      billing,
       legacy: false,
     });
   }
@@ -787,6 +857,9 @@ app.get('/auth/me', async (req, res) => {
       const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.legacyUserId]);
       const u = r.rows[0];
       if (!u) return res.json({ user: null, features });
+      const billing = resolveQuotaState(u, {
+        hasActiveSubscription: u.subscription_status === 'active',
+      });
       return res.json({
         user: {
           id: u.id,
@@ -797,6 +870,7 @@ app.get('/auth/me', async (req, res) => {
           profileComplete: !!u.profile_complete,
         },
         features,
+        billing,
         legacy: true,
       });
     } catch {
@@ -3096,6 +3170,41 @@ app.post('/api/users/:id/jobs/:jobId/video',
 
     console.log(`[Video] user=${userId} job=${jobId} mime=${videoFile.mimetype} size=${videoFile.size} extraPhotos=${extraPhotoFiles.length}`);
 
+    // Free-quotes quota gate (2026-06-22). Same contract as the photo
+    // /analyse route — active subscription or comp_until bypasses,
+    // otherwise the 3-free allowance applies. We do this AFTER the
+    // multer upload because we need a valid req.user.id, but BEFORE
+    // any ffmpeg / Whisper / Claude work (the bandwidth was already
+    // burned by the time we got here; the compute is the bigger cost
+    // we still avoid). The upload's temp video file is unlinked to
+    // keep disk pressure off.
+    {
+      let quotaUser = null;
+      try {
+        const { rows } = await pool.query(
+          `SELECT free_quotes_used, comp_until, subscription_status
+           FROM users WHERE id = $1`,
+          [userId]
+        );
+        quotaUser = rows[0] || null;
+      } catch (err) {
+        console.warn('[Video] quota lookup failed:', err.message);
+      }
+      const hasActiveSubscription = quotaUser?.subscription_status === 'active';
+      const decision = quotaGate(quotaUser, { hasActiveSubscription });
+      if (!decision.allowed) {
+        try { fs.unlinkSync(videoFile.path); } catch {}
+        for (const f of extraPhotoFiles) { try { fs.unlinkSync(f.path); } catch {} }
+        const used = Number(quotaUser?.free_quotes_used) || 0;
+        return res.status(402).json({
+          error: 'quota_exhausted',
+          message: `You've used your ${FREE_QUOTES_LIMIT} free quotes. Subscribe to continue.`,
+          freeQuotesUsed: Math.min(used, FREE_QUOTES_LIMIT),
+          freeQuotesLimit: FREE_QUOTES_LIMIT,
+        });
+      }
+    }
+
     videoProgress.create(jobId);
     try {
       // Parse form fields — frontend sends briefNotes (#3) and profile JSON (#5)
@@ -3315,6 +3424,39 @@ app.post('/api/users/:id/jobs/:jobId/video',
         promptVersion,
         transcript: result.transcript,
       });
+
+      // Free-quota accounting (2026-06-22). For the video path the
+      // jobId already exists (the SPA creates the job row before
+      // upload), so we key the grant on `job:${jobId}` — stable across
+      // retries of the same upload. ON CONFLICT DO NOTHING dedupes.
+      // Subscribed users skip this branch (no need to track grants
+      // we'll never enforce against).
+      try {
+        const { rows: subRows } = await pool.query(
+          `SELECT subscription_status FROM users WHERE id = $1`,
+          [userId]
+        );
+        const stillActive = subRows[0]?.subscription_status === 'active';
+        if (!stillActive) {
+          pool.query(
+            `WITH inserted AS (
+               INSERT INTO free_quote_grants (user_id, quote_token)
+               VALUES ($1, $2)
+               ON CONFLICT (user_id, quote_token) DO NOTHING
+               RETURNING user_id
+             )
+             UPDATE users
+                SET free_quotes_used = free_quotes_used + 1
+              WHERE id = $1
+                AND EXISTS (SELECT 1 FROM inserted)`,
+            [userId, `job:${jobId}`]
+          ).catch((err) =>
+            console.warn('[Video] free_quotes increment failed:', err.message)
+          );
+        }
+      } catch (err) {
+        console.warn('[Video] free_quotes sub-check failed:', err.message);
+      }
     } catch (err) {
       console.error(`[Video] FAIL user=${userId} job=${jobId} error=${err.message}`);
       videoProgress.error(jobId, err.message);
@@ -4093,12 +4235,21 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, plan, trial_ends_at, subscription_status,
               stripe_customer_id, current_period_end, cancel_at_period_end,
-              trial_will_end_at
+              trial_will_end_at, free_quotes_used, comp_until
        FROM users WHERE id = $1`,
       [userId]
     );
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'user not found' });
+    // Quota model (2026-06-22). The legacy time-trial fields below are
+    // still emitted for compatibility with older client builds, but
+    // the SubscriptionBanner now drives off `quotaState`. The two are
+    // independent: `state` could read "trialing" from old data while
+    // `quotaState` correctly reads "free-remaining" — this is fine,
+    // the banner uses quotaState first.
+    const quota = resolveQuotaState(user, {
+      hasActiveSubscription: user.subscription_status === 'active',
+    });
     res.json({
       state: currentSubscriptionState(user),
       daysOfTrialRemaining: daysOfTrialRemaining(user),
@@ -4114,6 +4265,12 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
       // Display copy for the trial banner — keeps the client thin.
       pricing: { gbpPerMonth: PRICE_GBP, trialDays: TRIAL_DAYS },
       configured: hasStripeKey(),
+      // Quota fields (2026-06-22). Banner reads these first.
+      quotaState: quota.quotaState,
+      isComped: quota.isComped,
+      freeQuotesUsed: quota.freeQuotesUsed,
+      freeQuotesLimit: quota.freeQuotesLimit,
+      hasActiveSubscription: quota.hasActiveSubscription,
     });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
@@ -4217,6 +4374,49 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   if (!messages) {
     return res.status(400).json({ error: 'messages is required' });
   }
+
+  // Quota gate (2026-06-22): 3 free quotes per user, then subscribe.
+  // Active subscription OR comp_until in the future bypasses the
+  // counter. The decision is centralised in src/utils/quotaGate.js —
+  // /auth/me uses the same helper so the SPA banner and this server
+  // gate can never disagree. Failure to load the user row is a hard
+  // deny (defensive: a missing user shouldn't burn free quotes).
+  const userIdParam = req.params.id;
+  let quotaUser = null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, free_quotes_used, comp_until, subscription_status, trial_ends_at
+       FROM users WHERE id = $1`,
+      [userIdParam]
+    );
+    quotaUser = rows[0] || null;
+  } catch (err) {
+    console.warn('[Analyse] quota lookup failed:', err.message);
+  }
+  const hasActiveSubscription = quotaUser?.subscription_status === 'active';
+  const gateDecision = quotaGate(quotaUser, { hasActiveSubscription });
+  if (!gateDecision.allowed) {
+    const used = Number(quotaUser?.free_quotes_used) || 0;
+    return res.status(402).json({
+      error: 'quota_exhausted',
+      message: `You've used your ${FREE_QUOTES_LIMIT} free quotes. Subscribe to continue.`,
+      freeQuotesUsed: Math.min(used, FREE_QUOTES_LIMIT),
+      freeQuotesLimit: FREE_QUOTES_LIMIT,
+    });
+  }
+
+  // The client passes a `quoteToken` (UUID) generated when the user
+  // started this draft (NEW_QUOTE in the reducer). Re-analyses on the
+  // same draft (retry-after-error, edit-then-re-analyse) reuse it, so
+  // a single ON CONFLICT DO NOTHING in free_quote_grants below keeps
+  // each draft counting as exactly one free quote. Falls back to a
+  // synthesised per-call token when missing — older client builds
+  // don't send it; they'll burn one free quote per analyse call,
+  // which is the same behaviour as the new client's first call.
+  const quoteToken =
+    typeof req.body.quoteToken === 'string' && req.body.quoteToken.length > 0
+      ? req.body.quoteToken
+      : `legacy-${crypto.randomUUID()}`;
 
   // TRQ-173: Analytics needs per-user / per-quote token spend. Reuse
   // the agent_runs table with agent_type='analyse' so a single query
@@ -4353,6 +4553,33 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
       critiqueNotes,
       promptVersion,
     });
+
+    // Quota accounting (2026-06-22). Only on full success — the parse-
+    // failure path above returns early before this. The INSERT uses
+    // `ON CONFLICT DO NOTHING` so retrying the same draft (same
+    // quoteToken) is idempotent: counts at most once per draft, no
+    // matter how many times the user retries. The CTE chains the
+    // grant insert and the increment so they're consistent — if the
+    // grant already existed (re-analysis), `inserted` is empty and we
+    // skip the bump. Subscribed users skip this branch entirely so we
+    // don't pollute the table with grants we'll never enforce against.
+    if (!hasActiveSubscription) {
+      pool.query(
+        `WITH inserted AS (
+           INSERT INTO free_quote_grants (user_id, quote_token)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id, quote_token) DO NOTHING
+           RETURNING user_id
+         )
+         UPDATE users
+            SET free_quotes_used = free_quotes_used + 1
+          WHERE id = $1
+            AND EXISTS (SELECT 1 FROM inserted)`,
+        [userIdParam, quoteToken]
+      ).catch((err) =>
+        console.warn('[Analyse] free_quotes increment failed:', err.message)
+      );
+    }
 
     // TRQ-173: success-path agent_runs completion. Best-effort.
     // TRQ-140: success status is 'completed', NOT 'ok'. The single

@@ -65,6 +65,12 @@ export default function App() {
   // flag the client keeps the safer state and basic users don't see a
   // dead video upload button. See docs/VIDEO_FLAG.md.
   const [videoAnalysisEnabled, setVideoAnalysisEnabled] = useState(false);
+  // Quota state (2026-06-22) — populated from /auth/me's billing block.
+  // Drives the "block New Quote button on exhausted" guard below so the
+  // user never enters the flow only to be blocked at /analyse. Null
+  // (initial) means we haven't loaded it yet — treat as permissive so
+  // we don't false-positive block users while /auth/me is in flight.
+  const [billing, setBilling] = useState(null);
 
   // WS6: Toast state
   const [toast, setToast] = useState(null);
@@ -93,6 +99,9 @@ export default function App() {
         // disabled-state UI is correct even on an authed bounce-out.
         if (data?.features) {
           setVideoAnalysisEnabled(!!data.features.videoAnalysisEnabled);
+        }
+        if (data?.billing) {
+          setBilling(data.billing);
         }
         if (!data?.user) {
           window.location.href = '/login';
@@ -412,6 +421,9 @@ export default function App() {
         abortRef,
         dispatch,
         userId: state.currentUserId,
+        // Reusing the same quoteToken on retry keeps this draft as a
+        // single free quote (2026-06-22).
+        quoteToken: state.quoteToken,
       });
     }
   }, [state.retryCount]);
@@ -427,7 +439,24 @@ export default function App() {
     fetchIncompleteJobs(state.currentUserId);
   };
 
+  // 402-lockout guard (2026-06-22). The server will 402 the next
+  // /analyse call anyway, but blocking entry here avoids the awful UX
+  // where the user uploads photos / records video first and only
+  // discovers they're locked out at submission. The check is
+  // permissive while billing is null (initial /auth/me still in
+  // flight) so we don't accidentally block users on a slow boot.
+  const isQuotaExhausted = billing?.quotaState === 'exhausted';
+
   const handleStartNewQuote = () => {
+    if (isQuotaExhausted) {
+      dispatch({
+        type: 'ANALYSIS_QUOTA_EXHAUSTED',
+        message: "You've used your 3 free quotes. Subscribe to continue.",
+        freeQuotesUsed: billing?.freeQuotesUsed ?? 3,
+        freeQuotesLimit: billing?.freeQuotesLimit ?? 3,
+      });
+      return;
+    }
     // Save current work as draft first if in-progress
     if (state.currentUserId && state.step >= 2 && state.step <= 4) {
       autosaveDraft(state.currentUserId, state, dispatch);
@@ -439,6 +468,15 @@ export default function App() {
   };
 
   const handleStartQuickQuote = () => {
+    if (isQuotaExhausted) {
+      dispatch({
+        type: 'ANALYSIS_QUOTA_EXHAUSTED',
+        message: "You've used your 3 free quotes. Subscribe to continue.",
+        freeQuotesUsed: billing?.freeQuotesUsed ?? 3,
+        freeQuotesLimit: billing?.freeQuotesLimit ?? 3,
+      });
+      return;
+    }
     if (state.currentUserId && state.step >= 2 && state.step <= 4) {
       autosaveDraft(state.currentUserId, state, dispatch);
     }
