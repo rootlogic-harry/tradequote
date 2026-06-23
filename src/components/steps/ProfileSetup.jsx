@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
 
-export default function ProfileSetup({ state, dispatch, isModal, onClose, onProfileComplete }) {
+export default function ProfileSetup({ state, dispatch, isModal, onClose, onProfileComplete, onLogout }) {
   const [errors, setErrors] = useState({});
   const { profile } = state;
 
@@ -465,6 +465,27 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
           {isModal ? 'Save Changes' : 'Save Profile & Continue \u2192'}
         </button>
       </div>
+
+      {/* TRQ-170: Sign-out affordance for the mobile profile modal.
+          BottomNav has Home / New / Quotes / Profile; tapping Profile
+          opens this modal. Without this link mobile users have no way
+          to log out (Sidebar's logout is desktop-only \u2265900px).
+          Gated by `isModal && onLogout` so:
+            - the full-page Step 1 onboarding mount (no onLogout) stays
+              clean for first-run users with nothing to log out of yet;
+            - any future modal mount can opt out by omitting the prop. */}
+      {isModal && onLogout && (
+        <div className="mt-6 pt-4 border-t border-tq-border flex justify-center">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="text-sm underline transition-colors"
+            style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }

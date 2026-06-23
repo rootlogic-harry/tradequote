@@ -502,8 +502,13 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       <LivePreview state={state} dispatch={dispatch} />
 
       {/* Generate Quote CTA — sticky bar */}
+      {/*
+        On mobile (<fq), sit above the fixed 64px BottomNav and respect any
+        device safe-area inset (home-indicator / notch). On desktop (>=fq)
+        there is no BottomNav, so bottom returns to 0. See TRQ-172.
+      */}
       <div
-        className="sticky bottom-0 mt-8 py-4 flex items-center justify-end gap-3"
+        className="sticky bottom-[calc(env(safe-area-inset-bottom)+64px)] fq:bottom-0 mt-8 py-4 flex items-center justify-end gap-3"
         style={{ backgroundColor: 'var(--tq-bg)', borderTop: '1px solid var(--tq-border)' }}
       >
         {state.currentUserId && (
