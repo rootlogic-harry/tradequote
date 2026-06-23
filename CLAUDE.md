@@ -159,7 +159,7 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `users` | id, name, email, plan (admin\|basic), profile_complete |
 | `profiles` | user_id → JSONB data (company, rates, accreditations) |
 | `settings` | user_id + key → JSONB value (theme, etc.) |
-| `jobs` | JSONB quote_snapshot + rams_snapshot, status lifecycle, total_amount, prompt_version |
+| `jobs` | JSONB quote_snapshot + rams_snapshot, status lifecycle, total_amount, prompt_version, prompt_chars |
 | `drafts` | Auto-saved work-in-progress (one per user) |
 | `user_photos` | Slot-based photo storage (context: draft or job ID) |
 | `quote_diffs` | Per-field AI vs confirmed value diffs (learning engine) |
