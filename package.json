@@ -17,6 +17,7 @@
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch --testPathIgnorePatterns='(api|securityAudit)\\.test\\.js'",
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage --testPathIgnorePatterns='(api|securityAudit)\\.test\\.js'",
     "regression": "node regression/run.js",
+    "regression:critique": "RUN_CRITIQUE_FIXTURES=1 node --experimental-vm-modules node_modules/.bin/jest --runInBand src/__tests__/selfCritiqueBehavioural.test.js",
     "check:moat": "node scripts/check-moat.js"
   },
   "dependencies": {

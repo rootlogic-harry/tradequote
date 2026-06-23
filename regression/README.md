@@ -215,6 +215,31 @@ regression/
 | `regression/fixtures/*.json`  | YES | Fixture definitions. |
 | `regression/fixtures/*/photos/` | varies — see TRQ-173 | Customer photos are PII-sensitive. Real fixtures may keep photos out of git and rely on CI to fetch them from object storage (decision pending). |
 
+## Behavioural critique fixtures (TRQ-177)
+
+`regression/critique-fixtures/` is a separate, narrower suite that
+exercises **only the Haiku self-critique agent** with pre-baked
+analysis payloads. It does NOT need a running FastQuote server or
+real photographs — each fixture hands an analysis JSON straight to
+`runSelfCritique` and asserts the critique caught the planted issue.
+
+| Aspect | Main `regression/` suite | `regression/critique-fixtures/` |
+|---|---|---|
+| What it tests | Sonnet analysis end-to-end | Haiku critique behaviour |
+| Inputs | Photos + brief notes via `/analyse` | Pre-baked analysis JSON |
+| Needs server? | Yes | No |
+| Per-run cost | ~£0.50 (Sonnet × 3 iters × N fixtures) | ~£0.01 (Haiku × 4 fixtures) |
+| Trigger | `npm run regression` | `npm run regression:critique` |
+| Pass criterion | Noise band against blessed baseline | Each fixture's planted failure caught at severity ≥ medium |
+
+See `regression/critique-fixtures/README.md` for the fixture schema
+and the four canonical fixtures committed today (mortar without
+trigger, 50-day labour, 20t/1sqm tonnage, arithmetic mismatch).
+
+The Jest entry point is `src/__tests__/selfCritiqueBehavioural.test.js`.
+It auto-skips under default `npm test` (no `RUN_CRITIQUE_FIXTURES=1`
+flag) so the suite never burns Haiku tokens on every push.
+
 ## What this suite does NOT do
 
 - It does **not** make the model deterministic.

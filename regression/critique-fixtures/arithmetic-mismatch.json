@@ -1,0 +1,38 @@
+{
+  "id": "arithmetic-mismatch",
+  "name": "Material line with qty × unitCost ≠ totalCost",
+  "description": "Pre-baked Sonnet analysis has a material line where quantity=2, unitCost=£100, but totalCost=£500 — a £300 arithmetic error. The critique prompt's rule #11 (Line-item arithmetic) must catch this. Severity should be high — a £300 silent overcharge per line item is exactly the kind of trust-destroying error the critique exists to catch.",
+  "briefNotes": "Two-metre breach in a gritstone field wall. Stone mostly reclaimable.",
+  "analysis": {
+    "stoneType": "gritstone",
+    "damageDescription": "A 2m breach has opened up in this double-faced gritstone field wall. Standing sections either side are sound.",
+    "referenceCardDetected": true,
+    "measurements": [
+      { "item": "Wall height", "valueMm": 1100, "displayValue": "1,100mm", "confidence": "high" },
+      { "item": "Wall length", "valueMm": 2000, "displayValue": "2,000mm", "confidence": "high" },
+      { "item": "Wall thickness", "valueMm": 600, "displayValue": "600mm", "confidence": "medium" },
+      { "item": "Breach length", "valueMm": 2000, "displayValue": "2,000mm", "confidence": "high" }
+    ],
+    "materials": [
+      { "description": "Replacement walling stone", "quantity": "2.5", "unit": "t", "unitCost": 180, "totalCost": 450 },
+      { "description": "Through stones", "quantity": "2", "unit": "Item", "unitCost": 100, "totalCost": 500 },
+      { "description": "Waste disposal", "quantity": "1", "unit": "load", "unitCost": 120, "totalCost": 120 }
+    ],
+    "labourEstimate": {
+      "estimatedDays": 1.5,
+      "numberOfWorkers": 2,
+      "dayRate": 350,
+      "calculationBasis": "2.4 sqm wall face at ~1 sqm/hour each, 2 wallers"
+    },
+    "additionalCosts": [],
+    "scheduleOfWorks": [
+      { "stepNumber": 1, "title": "Site clearance", "description": "Clear debris and sort reclaimable stone" },
+      { "stepNumber": 2, "title": "Rebuild", "description": "Rebuild the 2m breach double-faced with through stones every 600-900mm of height" },
+      { "stepNumber": 3, "title": "Cope and finish", "description": "Set coping stones and tidy site" }
+    ]
+  },
+  "expected": {
+    "categoryKeywords": ["arithmetic", "total", "through stone"],
+    "minSeverity": "medium"
+  }
+}
