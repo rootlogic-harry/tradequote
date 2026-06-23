@@ -288,4 +288,349 @@ describe('applyCorrectedValues', () => {
     const stoneItem = result.materials.find(m => m.description.toLowerCase().includes('stone'));
     expect(stoneItem.quantity).toBe('3.5');
   });
+
+  // TRQ-175 — Mortar over-inclusion corrections (eval-review verified 2026-06-20)
+  describe('mortar over-inclusion corrections (TRQ-175)', () => {
+    test('removes lime mortar line item when severity is high', () => {
+      const corrections = [
+        { field: 'Mortar over-inclusion', issue: 'No mortared bed described', suggestedFix: 'Remove lime mortar', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(baseAnalysis, corrections);
+      const mortar = result.materials.find(m => m.description.toLowerCase().includes('mortar'));
+      expect(mortar).toBeUndefined();
+      // Stone supply row preserved
+      expect(result.materials.find(m => m.description.toLowerCase().includes('stone'))).toBeTruthy();
+    });
+
+    test('removes mortar line item when severity is medium', () => {
+      const corrections = [
+        { field: 'mortar', issue: 'Dry-laid by default', suggestedFix: 'Remove', severity: 'medium' },
+      ];
+      const result = applyCorrectedValues(baseAnalysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('mortar'))).toBeUndefined();
+    });
+
+    test('removes NHL mortar line item', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'NHL 3.5 hydraulic lime', quantity: '2', unit: 'bag', unitCost: 25, totalCost: 50 },
+        ],
+      };
+      const corrections = [
+        { field: 'Mortar over-inclusion', issue: 'NHL not justified', suggestedFix: 'Remove NHL line', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('nhl'))).toBeUndefined();
+      expect(result.materials).toHaveLength(1);
+    });
+
+    test('removes mortar & sand line item', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Mortar & sand mix', quantity: '1', unit: 'Item', unitCost: 40, totalCost: 40 },
+        ],
+      };
+      const corrections = [
+        { field: 'Mortar over-inclusion', issue: 'No justification', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('mortar'))).toBeUndefined();
+    });
+
+    test('does not remove anything when severity is low', () => {
+      const corrections = [
+        { field: 'Mortar over-inclusion', issue: 'Possibly unneeded', suggestedFix: 'Consider removal', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(baseAnalysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('mortar'))).toBeTruthy();
+    });
+
+    test('does not touch non-mortar materials', () => {
+      const corrections = [
+        { field: 'Mortar over-inclusion', issue: 'No justification', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(baseAnalysis, corrections);
+      const stone = result.materials.find(m => m.description.toLowerCase().includes('stone'));
+      expect(stone).toBeTruthy();
+      expect(stone.quantity).toBe('2');
+      expect(stone.totalCost).toBe(360);
+    });
+
+    test('handles missing materials array safely', () => {
+      const analysis = { ...baseAnalysis, materials: null };
+      const corrections = [
+        { field: 'Mortar over-inclusion', issue: 'No justification', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials).toBeNull();
+    });
+  });
+
+  // TRQ-175 — Materials/labour boundary corrections (eval-review verified 2026-06-20)
+  describe('materials/labour boundary corrections (TRQ-175)', () => {
+    test('removes a "rebuild" row that leaked into materials when severity is high', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Rebuild wall @ £120/sqm', quantity: '6', unit: 'sqm', unitCost: 120, totalCost: 720 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Rebuild is labour not material', suggestedFix: 'Remove rebuild row', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('rebuild'))).toBeUndefined();
+      expect(result.materials).toHaveLength(1);
+    });
+
+    test('removes a "dismantle" row from materials', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Dismantling existing wall', quantity: '6', unit: 'sqm', unitCost: 35, totalCost: 210 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Dismantle belongs in labour', suggestedFix: 'Remove', severity: 'medium' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('dismantl'))).toBeUndefined();
+    });
+
+    test('removes a "repointing" row from materials', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Repointing mortar joints', quantity: '4', unit: 'sqm', unitCost: 45, totalCost: 180 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Repointing is labour', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('repoint'))).toBeUndefined();
+    });
+
+    test('removes a "site clearance" row from materials', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Site clearance', quantity: '1', unit: 'Item', unitCost: 100, totalCost: 100 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Site clearance is labour', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('clearance'))).toBeUndefined();
+    });
+
+    test('removes a "making good" row from materials', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Making good after works', quantity: '1', unit: 'Item', unitCost: 60, totalCost: 60 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Making good is labour', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('making good'))).toBeUndefined();
+    });
+
+    test('removes a "core consolidation" row from materials', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Core consolidation @ £30/sqm', quantity: '6', unit: 'sqm', unitCost: 30, totalCost: 180 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Core consolidation is labour', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('consolidation'))).toBeUndefined();
+    });
+
+    test('does not remove labour-coded rows when severity is low', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Rebuild wall @ £120/sqm', quantity: '6', unit: 'sqm', unitCost: 120, totalCost: 720 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Could be flagged', suggestedFix: 'Consider removal', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials.find(m => m.description.toLowerCase().includes('rebuild'))).toBeTruthy();
+    });
+
+    test('removes multiple labour-coded rows in one pass', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Rebuild wall @ £120/sqm', quantity: '6', unit: 'sqm', unitCost: 120, totalCost: 720 },
+          { description: 'Dismantling existing courses', quantity: '6', unit: 'sqm', unitCost: 35, totalCost: 210 },
+          { description: 'Site clearance', quantity: '1', unit: 'Item', unitCost: 100, totalCost: 100 },
+        ],
+      };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Multiple labour rows in materials', suggestedFix: 'Remove all', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials).toHaveLength(1);
+      expect(result.materials[0].description.toLowerCase()).toContain('stone');
+    });
+
+    test('handles missing materials array safely', () => {
+      const analysis = { ...baseAnalysis, materials: null };
+      const corrections = [
+        { field: 'Materials/labour boundary', issue: 'Whatever', suggestedFix: 'Remove', severity: 'high' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials).toBeNull();
+    });
+  });
+
+  // TRQ-175 — Line-item arithmetic corrections (eval-review verified 2026-06-20)
+  describe('line-item arithmetic corrections (TRQ-175)', () => {
+    test('recomputes totalCost when quantity × unitCost does not match stored totalCost', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 999 },
+        ],
+      };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: '2 × 180 ≠ 999', suggestedFix: 'Recompute to 360', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials[0].totalCost).toBe(360);
+    });
+
+    test('fixes arithmetic at any severity level (low)', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Sundries', quantity: '4', unit: 'Item', unitCost: 25, totalCost: 50 },
+        ],
+      };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: 'Mismatch', suggestedFix: 'Recompute', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials[0].totalCost).toBe(100);
+    });
+
+    test('leaves correct rows unchanged', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+          { description: 'Lime mortar', quantity: '3', unit: 'Item', unitCost: 90, totalCost: 270 },
+        ],
+      };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: 'Check rows', suggestedFix: 'Recompute', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials[0].totalCost).toBe(360);
+      expect(result.materials[1].totalCost).toBe(270);
+    });
+
+    test('recomputes multiple rows in one pass', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Replacement stone supply', quantity: '2', unit: 't', unitCost: 180, totalCost: 100 },
+          { description: 'Lime mortar', quantity: '3', unit: 'Item', unitCost: 90, totalCost: 500 },
+        ],
+      };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: 'Both mismatched', suggestedFix: 'Recompute', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials[0].totalCost).toBe(360);
+      expect(result.materials[1].totalCost).toBe(270);
+    });
+
+    test('tolerates floating-point within £0.01', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Sand', quantity: '0.1', unit: 't', unitCost: 30, totalCost: 3.0 },
+        ],
+      };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: 'Check', suggestedFix: 'Recompute', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      // 0.1 * 30 = 3 (within tolerance) so it should stay 3.0
+      expect(result.materials[0].totalCost).toBe(3.0);
+    });
+
+    test('handles missing materials array safely', () => {
+      const analysis = { ...baseAnalysis, materials: null };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: 'Whatever', suggestedFix: 'Recompute', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      expect(result.materials).toBeNull();
+    });
+
+    test('handles non-numeric quantity or unitCost gracefully', () => {
+      const analysis = {
+        ...baseAnalysis,
+        materials: [
+          { description: 'Weird row', quantity: 'TBC', unit: 'Item', unitCost: 'TBC', totalCost: 999 },
+        ],
+      };
+      const corrections = [
+        { field: 'Line-item arithmetic', issue: 'Mismatch', suggestedFix: 'Recompute', severity: 'low' },
+      ];
+      const result = applyCorrectedValues(analysis, corrections);
+      // Cannot compute, should leave the row alone
+      expect(result.materials[0].totalCost).toBe(999);
+    });
+  });
+
+  // TRQ-175 — aiValue immutability (eval-review verified 2026-06-20)
+  test('does not write to any aiValue field across all correction types', () => {
+    const analysis = {
+      ...baseAnalysis,
+      materials: [
+        { description: 'Replacement stone supply', aiValue: '2', quantity: '2', unit: 't', unitCost: 180, totalCost: 999 },
+        { description: 'Lime mortar', aiValue: '3', quantity: '3', unit: 'Item', unitCost: 90, totalCost: 270 },
+        { description: 'Rebuild wall @ £120/sqm', aiValue: '6', quantity: '6', unit: 'sqm', unitCost: 120, totalCost: 720 },
+      ],
+      labourEstimate: { estimatedDays: 5, aiValue: 5 },
+    };
+    const corrections = [
+      { field: 'Labour days', issue: 'High', suggestedFix: '3', severity: 'high' },
+      { field: 'Tonnage', issue: 'Low', suggestedFix: '4', severity: 'high' },
+      { field: 'Mortar over-inclusion', issue: 'No justification', suggestedFix: 'Remove', severity: 'high' },
+      { field: 'Materials/labour boundary', issue: 'Labour in materials', suggestedFix: 'Remove', severity: 'high' },
+      { field: 'Line-item arithmetic', issue: 'Mismatch', suggestedFix: 'Recompute', severity: 'low' },
+    ];
+    const result = applyCorrectedValues(analysis, corrections);
+    // labourEstimate.aiValue must remain
+    expect(result.labourEstimate.aiValue).toBe(5);
+    // Surviving rows must retain aiValue
+    const stone = result.materials.find(m => m.description.toLowerCase().includes('stone'));
+    expect(stone.aiValue).toBe('2');
+  });
 });

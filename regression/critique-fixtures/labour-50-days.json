@@ -1,0 +1,37 @@
+{
+  "id": "labour-50-days",
+  "name": "Absurd labour days (50) for a small breach",
+  "description": "Pre-baked Sonnet analysis claims 50 labour days for a 6sqm rebuild — wildly outside the realistic range (~3 days for 2 wallers on this scope). The critique prompt's rule #2 (labour days unrealistic for the scope) must flag this. Severity should be high — a 50-day labour bill on a 6sqm wall is a £17,500 mistake.",
+  "briefNotes": "Six-metre stretch of double-faced gritstone field wall has collapsed. Reclaimable stone on site. Quick repair — no scaffold, no abnormal access.",
+  "analysis": {
+    "stoneType": "gritstone",
+    "damageDescription": "A 6m breach in a double-faced gritstone field wall. Standing sections either side are sound. Reclaimable stone on site.",
+    "referenceCardDetected": true,
+    "measurements": [
+      { "item": "Wall height", "valueMm": 1200, "displayValue": "1,200mm", "confidence": "high" },
+      { "item": "Wall length", "valueMm": 6000, "displayValue": "6,000mm", "confidence": "high" },
+      { "item": "Wall thickness", "valueMm": 600, "displayValue": "600mm", "confidence": "medium" },
+      { "item": "Breach length", "valueMm": 6000, "displayValue": "6,000mm", "confidence": "high" }
+    ],
+    "materials": [
+      { "description": "Replacement walling stone", "quantity": "7.5", "unit": "t", "unitCost": 180, "totalCost": 1350 },
+      { "description": "Waste disposal", "quantity": "1", "unit": "load", "unitCost": 120, "totalCost": 120 }
+    ],
+    "labourEstimate": {
+      "estimatedDays": 50,
+      "numberOfWorkers": 2,
+      "dayRate": 350,
+      "calculationBasis": "Conservative estimate accounting for weather and finishing detail"
+    },
+    "additionalCosts": [],
+    "scheduleOfWorks": [
+      { "stepNumber": 1, "title": "Site clearance", "description": "Clear debris and sort reclaimable stone" },
+      { "stepNumber": 2, "title": "Rebuild", "description": "Rebuild the 6m breach double-faced with through stones every 600-900mm of height" },
+      { "stepNumber": 3, "title": "Cope and finish", "description": "Set coping stones and tidy site" }
+    ]
+  },
+  "expected": {
+    "categoryKeywords": ["labour", "day"],
+    "minSeverity": "medium"
+  }
+}

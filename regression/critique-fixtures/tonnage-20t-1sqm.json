@@ -1,0 +1,37 @@
+{
+  "id": "tonnage-20t-1sqm",
+  "name": "Wildly off stone tonnage (20t for ~1sqm)",
+  "description": "Pre-baked Sonnet analysis quotes 20 tonnes of replacement stone for what the measurements imply is roughly a 1sqm wall face. The critique prompt's rule #10 (Stone tonnage range, 0.8–1.2 t/sqm) must catch this — 20 t/sqm is ~20× over. Severity should be high — at £180/t this is a £3,420 over-spec on the materials line alone.",
+  "briefNotes": "Small one-metre breach in a gritstone field wall. Mostly cosmetic — single course gap.",
+  "analysis": {
+    "stoneType": "gritstone",
+    "damageDescription": "A 1m breach has opened up in this double-faced gritstone field wall. Standing sections either side are sound and need only minor taking-back.",
+    "referenceCardDetected": true,
+    "measurements": [
+      { "item": "Wall height", "valueMm": 1000, "displayValue": "1,000mm", "confidence": "high" },
+      { "item": "Wall length", "valueMm": 1000, "displayValue": "1,000mm", "confidence": "high" },
+      { "item": "Wall thickness", "valueMm": 600, "displayValue": "600mm", "confidence": "medium" },
+      { "item": "Breach length", "valueMm": 1000, "displayValue": "1,000mm", "confidence": "high" }
+    ],
+    "materials": [
+      { "description": "Replacement walling stone", "quantity": "20", "unit": "t", "unitCost": 180, "totalCost": 3600 },
+      { "description": "Waste disposal", "quantity": "1", "unit": "load", "unitCost": 120, "totalCost": 120 }
+    ],
+    "labourEstimate": {
+      "estimatedDays": 1,
+      "numberOfWorkers": 2,
+      "dayRate": 350,
+      "calculationBasis": "1 sqm wall face at ~1 sqm/hour each, 2 wallers, 0.5 days rounded to 1"
+    },
+    "additionalCosts": [],
+    "scheduleOfWorks": [
+      { "stepNumber": 1, "title": "Site clearance", "description": "Clear debris and sort reclaimable stone" },
+      { "stepNumber": 2, "title": "Rebuild", "description": "Rebuild the 1m breach double-faced with through stones" },
+      { "stepNumber": 3, "title": "Cope and finish", "description": "Set coping stones and tidy site" }
+    ]
+  },
+  "expected": {
+    "categoryKeywords": ["tonnage", "stone", "ton"],
+    "minSeverity": "medium"
+  }
+}

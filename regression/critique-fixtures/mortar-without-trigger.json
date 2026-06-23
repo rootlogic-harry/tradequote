@@ -1,0 +1,39 @@
+{
+  "id": "mortar-without-trigger",
+  "name": "Mortar material with no trigger in damage/schedule",
+  "description": "Pre-baked Sonnet analysis contains a 'lime mortar' material line but neither damageDescription nor scheduleOfWorks mentions mortar joints, mortared bed/cope, or repointing. The critique prompt's rule #12 requires this to be flagged with a recommendation to remove — dry stone walling is dry-laid by default, so the customer should not be charged for material the job does not need.",
+  "briefNotes": "Six-metre stretch of double-faced gritstone field wall has collapsed after heavy rain. Stone is scattered at the base, mostly reclaimable. Access via field gate, no scaffold needed.",
+  "analysis": {
+    "stoneType": "gritstone",
+    "damageDescription": "A 6m breach has opened up in this double-faced gritstone field wall, with stones scattered at the base. The standing sections either side appear sound but will need taking back 300mm to provide a stable rebuild abutment. No through stones are visible in the collapsed material.",
+    "referenceCardDetected": true,
+    "measurements": [
+      { "item": "Wall height", "valueMm": 1200, "displayValue": "1,200mm", "confidence": "high" },
+      { "item": "Wall length", "valueMm": 6000, "displayValue": "6,000mm", "confidence": "high" },
+      { "item": "Wall thickness", "valueMm": 600, "displayValue": "600mm", "confidence": "medium" },
+      { "item": "Breach length", "valueMm": 6000, "displayValue": "6,000mm", "confidence": "high" }
+    ],
+    "materials": [
+      { "description": "Replacement walling stone", "quantity": "7.5", "unit": "t", "unitCost": 180, "totalCost": 1350 },
+      { "description": "Lime mortar", "quantity": "10", "unit": "bag", "unitCost": 14, "totalCost": 140 },
+      { "description": "Waste disposal", "quantity": "1", "unit": "load", "unitCost": 120, "totalCost": 120 }
+    ],
+    "labourEstimate": {
+      "estimatedDays": 3,
+      "numberOfWorkers": 2,
+      "dayRate": 350,
+      "calculationBasis": "6 sqm wall face at ~1 sqm/hour each, 2 wallers, 3 days"
+    },
+    "additionalCosts": [],
+    "scheduleOfWorks": [
+      { "stepNumber": 1, "title": "Site clearance", "description": "Clear debris and sort reclaimable stone" },
+      { "stepNumber": 2, "title": "Take back abutments", "description": "Take standing sections back 300mm to provide stable rebuild edges" },
+      { "stepNumber": 3, "title": "Rebuild", "description": "Rebuild the 6m breach double-faced with through stones every 600-900mm of height" },
+      { "stepNumber": 4, "title": "Cope and finish", "description": "Set coping stones and tidy site" }
+    ]
+  },
+  "expected": {
+    "categoryKeywords": ["mortar"],
+    "minSeverity": "medium"
+  }
+}
