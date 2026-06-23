@@ -31,7 +31,7 @@ export default function CaptureChoice({ onSelectMode, defaultMode = null, videoE
         margin: '0 0 8px',
         fontSize: '18px',
         fontWeight: 600,
-        color: 'var(--text-primary, #1a1a1a)',
+        color: 'var(--tq-text)',
       }}>
         How would you like to capture this job?
       </h3>
@@ -46,12 +46,12 @@ export default function CaptureChoice({ onSelectMode, defaultMode = null, videoE
             padding: '20px 24px',
             minHeight: '80px',
             border: defaultMode === 'video'
-              ? '2px solid var(--accent, #2563eb)'
-              : '2px solid var(--border, #e0e0e0)',
+              ? '2px solid var(--tq-accent)'
+              : '2px solid var(--tq-border)',
             borderRadius: '12px',
             background: defaultMode === 'video'
-              ? 'var(--accent-bg, #eff6ff)'
-              : 'var(--card-bg, #fff)',
+              ? 'var(--tq-accent-bg)'
+              : 'var(--tq-card)',
             cursor: 'pointer',
             textAlign: 'left',
             width: '100%',
@@ -63,14 +63,14 @@ export default function CaptureChoice({ onSelectMode, defaultMode = null, videoE
             <div style={{
               fontWeight: 600,
               fontSize: '16px',
-              color: 'var(--text-primary, #1a1a1a)',
+              color: 'var(--tq-text)',
               marginBottom: '4px',
             }}>
               Walk me through it
             </div>
             <div style={{
               fontSize: '13px',
-              color: 'var(--text-secondary, #666)',
+              color: 'var(--tq-muted)',
             }}>
               Upload a video walkthrough of the wall
             </div>
@@ -87,12 +87,12 @@ export default function CaptureChoice({ onSelectMode, defaultMode = null, videoE
           padding: '20px 24px',
           minHeight: '80px',
           border: defaultMode === 'photos'
-            ? '2px solid var(--accent, #2563eb)'
-            : '2px solid var(--border, #e0e0e0)',
+            ? '2px solid var(--tq-accent)'
+            : '2px solid var(--tq-border)',
           borderRadius: '12px',
           background: defaultMode === 'photos'
-            ? 'var(--accent-bg, #eff6ff)'
-            : 'var(--card-bg, #fff)',
+            ? 'var(--tq-accent-bg)'
+            : 'var(--tq-card)',
           cursor: 'pointer',
           textAlign: 'left',
           width: '100%',
@@ -104,14 +104,14 @@ export default function CaptureChoice({ onSelectMode, defaultMode = null, videoE
           <div style={{
             fontWeight: 600,
             fontSize: '16px',
-            color: 'var(--text-primary, #1a1a1a)',
+            color: 'var(--tq-text)',
             marginBottom: '4px',
           }}>
             Show me the photos
           </div>
           <div style={{
             fontSize: '13px',
-            color: 'var(--text-secondary, #666)',
+            color: 'var(--tq-muted)',
           }}>
             Upload photos of the wall from different angles
           </div>
