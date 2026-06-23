@@ -138,7 +138,7 @@ same name embedded in a `quote_snapshot` JSONB.
 | `pageviews` | referrer NULLed; ua_hash already anonymous |
 | `admin_audit` | details JSONB NULLed |
 | `drafts` | data JSONB scrubbed |
-| Other tables | Pass through unchanged — no PII (quote_diffs, agent_runs, calibration_notes, dictation_runs, agent_retry_queue, session, settings, free_quote_grants) |
+| Other tables | Pass through unchanged — no PII (quote_diffs, agent_runs, calibration_notes, dictation_runs, agent_retry_queue, session, settings, free_quote_grants, referral_codes, referrals) |
 
 **Hard rule, mechanically enforced:** the script never connects to
 any database. It only reads stdin and writes stdout. If you give it

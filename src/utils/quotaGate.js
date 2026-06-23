@@ -24,7 +24,10 @@
  *      the comp clock or the free-quote counter).
  *   2. Active comp (comp_until > now) → ALLOW (trusted users — Paul
  *      and any future comped account).
- *   3. free_quotes_used < FREE_QUOTES_LIMIT → ALLOW.
+ *   3. free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes → ALLOW.
+ *      Bonus quotes come from referrals (Phase 1, 2026-06-23):
+ *      referees get +2 at signup, referrers get +2 per referral whose
+ *      referee completes their first analysis.
  *   4. Otherwise → DENY with reason='quota_exhausted'.
  */
 
@@ -34,10 +37,15 @@ export const FREE_QUOTES_LIMIT = 3;
  * Decide whether a user is allowed to consume an AI analysis right
  * now. Pure function — no I/O, no Date.now() unless `now` is omitted.
  *
- * @param {{ free_quotes_used?: number, comp_until?: string|Date|null }|null|undefined} user
+ * @param {{ free_quotes_used?: number, bonus_free_quotes?: number, comp_until?: string|Date|null }|null|undefined} user
  *        The user row (raw DB shape — snake_case from the `users`
  *        table). Null / undefined → denied (defensive — better to
  *        block a stranger than silently allow one).
+ *        `bonus_free_quotes` (referrals Phase 1, 2026-06-23) is added
+ *        on top of FREE_QUOTES_LIMIT for the effective allowance.
+ *        Subscribed > comped > counter gating order means bonus quotes
+ *        are invisible during a comp — they accumulate and become
+ *        spendable when the comp ends.
  * @param {{ hasActiveSubscription: boolean, now?: Date }} ctx
  *        - `hasActiveSubscription` — caller has already decided this
  *          from Stripe state. We accept it as a boolean so the gate
@@ -49,7 +57,7 @@ export const FREE_QUOTES_LIMIT = 3;
  *          `reason` is one of:
  *            - 'subscribed'      — active Stripe subscription
  *            - 'comped'          — comp_until > now
- *            - 'free-remaining'  — within the 3-free-quote allowance
+ *            - 'free-remaining'  — within the effective free-quote allowance
  *            - 'quota_exhausted' — denied; UI shows hard subscribe CTA
  */
 export function quotaGate(user, ctx) {
@@ -74,7 +82,9 @@ export function quotaGate(user, ctx) {
   }
 
   const used = Number(user.free_quotes_used) || 0;
-  if (used < FREE_QUOTES_LIMIT) {
+  const bonus = Number(user.bonus_free_quotes) || 0;
+  const effectiveLimit = FREE_QUOTES_LIMIT + Math.max(0, bonus);
+  if (used < effectiveLimit) {
     return { allowed: true, reason: 'free-remaining' };
   }
 
@@ -109,14 +119,21 @@ export function resolveQuotaState(user, ctx) {
   else if (decision.allowed) quotaState = 'free-remaining';
   else quotaState = 'exhausted';
 
+  // Referrals Phase 1 (2026-06-23): the effective limit is the baseline
+  // 3 free quotes plus any bonus quotes earned via referrals. The banner
+  // reads `freeQuotesLimit` to render "X of N used", so it must reflect
+  // the bonus or a referred user would see "5 of 3" on a fresh signup.
+  const bonus = Math.max(0, Number(user?.bonus_free_quotes) || 0);
+  const effectiveLimit = FREE_QUOTES_LIMIT + bonus;
   const rawUsed = Number(user?.free_quotes_used) || 0;
-  const freeQuotesUsed = Math.min(Math.max(0, rawUsed), FREE_QUOTES_LIMIT);
+  const freeQuotesUsed = Math.min(Math.max(0, rawUsed), effectiveLimit);
 
   return {
     quotaState,
     hasActiveSubscription,
     isComped,
     freeQuotesUsed,
-    freeQuotesLimit: FREE_QUOTES_LIMIT,
+    freeQuotesLimit: effectiveLimit,
+    bonusFreeQuotes: bonus,
   };
 }

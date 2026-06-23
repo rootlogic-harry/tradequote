@@ -28,13 +28,23 @@ describe('resolveQuotaState — shape contract for /auth/me billing block', () =
     expect(result).toHaveProperty('freeQuotesLimit');
   });
 
-  test('freeQuotesLimit pinned at FREE_QUOTES_LIMIT (=3)', () => {
+  test('freeQuotesLimit pinned at FREE_QUOTES_LIMIT (=3) for cold users', () => {
     const result = resolveQuotaState(
       { free_quotes_used: 1 },
       { hasActiveSubscription: false, now: NOW }
     );
     expect(result.freeQuotesLimit).toBe(FREE_QUOTES_LIMIT);
     expect(result.freeQuotesLimit).toBe(3);
+  });
+
+  test('freeQuotesLimit grows for referred users (referrals Phase 1)', () => {
+    // Referee at signup: +2 bonus → effective limit is 5.
+    const result = resolveQuotaState(
+      { free_quotes_used: 0, bonus_free_quotes: 2 },
+      { hasActiveSubscription: false, now: NOW }
+    );
+    expect(result.freeQuotesLimit).toBe(5);
+    expect(result.bonusFreeQuotes).toBe(2);
   });
 });
 

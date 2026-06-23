@@ -67,6 +67,13 @@ import {
   resolveQuotaState,
   FREE_QUOTES_LIMIT,
 } from './src/utils/quotaGate.js';
+import {
+  generateReferralCode,
+  normaliseReferralCode,
+  validateRedemption,
+  REFERRAL_REFEREE_BONUS,
+  REFERRAL_REFERRER_REWARD,
+} from './src/utils/referrals.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -351,6 +358,14 @@ async function initDB() {
       --     both the quota AND the subscription requirement.
       ALTER TABLE users ADD COLUMN IF NOT EXISTS free_quotes_used INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS comp_until TIMESTAMPTZ;
+      -- Referrals Phase 1 (2026-06-23): bonus quotes earned through
+      -- referrals (referee gets +2 at signup; referrer gets +2 per
+      -- referee who completes their first analysis). Read by the
+      -- quotaGate as effectiveLimit = FREE_QUOTES_LIMIT + bonus.
+      -- During an active comp the bonus is invisible (gate order:
+      -- subscribed > comped > counter) so it simply accumulates and
+      -- becomes spendable when the comp ends — no special handling.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bonus_free_quotes INTEGER NOT NULL DEFAULT 0;
     `);
 
     // free_quote_grants: per-(user, quote_token) record of which
@@ -376,6 +391,39 @@ async function initDB() {
       );
       CREATE INDEX IF NOT EXISTS idx_free_quote_grants_user
         ON free_quote_grants (user_id, counted_at DESC);
+    `);
+
+    // Referrals Phase 1 (2026-06-23): per-spec locked schema.
+    //
+    //  • referral_codes — one human-readable code per user (lazy).
+    //    Paul's PAULJULY is seeded explicitly via a post-deploy SQL
+    //    snippet so it bypasses the lazy generator.
+    //
+    //  • referrals — one row per (referrer, referee) pair. UNIQUE on
+    //    referee so a user can only be referred once (first signup
+    //    code wins; manual entry from a non-referred user works too).
+    //    `first_analysis_at` is the trigger timestamp — the referrer
+    //    earns +2 bonus quotes the first time the referee completes
+    //    an analysis (not signup, not first payment). Per spec:
+    //    single-level only (no cascading), no claw-back on churn.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS referral_codes (
+        code        TEXT PRIMARY KEY,
+        user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id)
+      );
+      CREATE TABLE IF NOT EXISTS referrals (
+        id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        referrer_user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referee_user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+        code_used           TEXT NOT NULL,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        first_analysis_at   TIMESTAMPTZ,
+        reward_credited_at  TIMESTAMPTZ
+      );
+      CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id);
+      CREATE INDEX IF NOT EXISTS idx_referrals_referee  ON referrals(referee_user_id);
     `);
 
     await client.query(`
@@ -689,7 +737,13 @@ async (accessToken, refreshToken, profile, done) => {
         'UPDATE users SET last_login_at = NOW(), avatar_url = $1, email = COALESCE(email, $2) WHERE id = $3',
         [avatar, email, existing.rows[0].id]
       );
-      return done(null, existing.rows[0]);
+      // _isNewUser marker is consumed inside the /auth/google/callback
+      // handler to decide whether to apply a referral. Existing users
+      // are skipped (signup-time bonus only — a returning user can
+      // still redeem via POST /auth/redeem-referral if they want to).
+      const u = existing.rows[0];
+      u._isNewUser = false;
+      return done(null, u);
     }
 
     // New user — provision account with unique, URL-safe ID
@@ -733,7 +787,9 @@ async (accessToken, refreshToken, profile, done) => {
         LEGAL_VERSIONS.terms, LEGAL_VERSIONS.privacy, LEGAL_VERSIONS.dpa,
       ]
     );
-    return done(null, inserted.rows[0]);
+    const newUser = inserted.rows[0];
+    newUser._isNewUser = true;
+    return done(null, newUser);
   } catch (err) {
     return done(err, null);
   }
@@ -755,12 +811,22 @@ app.use(passport.session());
 
 // --- Auth Routes ---
 
-app.get('/auth/google',
-  passport.authenticate('google', {
+app.get('/auth/google', (req, res, next) => {
+  // Referrals Phase 1 (2026-06-23): stash any incoming ?ref= code on
+  // the session BEFORE Google's redirect so it survives the round-trip
+  // back to our /auth/google/callback. The query string from the original
+  // landing URL is lost by the time the user returns from Google.
+  // Manual entry is handled separately via POST /auth/redeem-referral
+  // (lets the user redeem retroactively if they already signed up).
+  const refRaw = req.query?.ref;
+  if (typeof refRaw === 'string' && refRaw.length > 0 && refRaw.length <= 64) {
+    req.session.pendingReferralCode = refRaw;
+  }
+  return passport.authenticate('google', {
     scope: ['openid', 'profile', 'email'],
     prompt: 'select_account',
-  })
-);
+  })(req, res, next);
+});
 
 // `handleOauthFailure` is a 4-arg error middleware that Express treats as
 // an error handler. If Passport blows up mid-callback (bad state param,
@@ -786,11 +852,29 @@ app.get('/auth/google/callback',
   // sec-audit L-4 — regenerate the session on successful login so any
   // pre-login session id (planted via fixation) is invalidated. Passport
   // re-attaches req.user to the new session for us.
+  //
+  // Referrals Phase 1 (2026-06-23): `pendingReferralCode` was set on the
+  // pre-login session in /auth/google. The regenerate() below blows that
+  // session away, so we lift the code out FIRST and pass it through as
+  // a local. Applying the referral happens after the user is logged in
+  // (so we have a stable user.id) but before redirect.
   (req, res, next) => {
     const user = req.user;
+    const pendingRef = req.session?.pendingReferralCode || null;
     req.session.regenerate((err) => {
       if (err) return next(err);
-      req.login(user, (loginErr) => loginErr ? next(loginErr) : next());
+      req.login(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        // Best-effort: a failure here must NEVER block the login. The
+        // referral helper logs and swallows internally.
+        if (pendingRef && user?._isNewUser) {
+          applyReferralAtSignup(user.id, pendingRef)
+            .catch((e) => console.warn('[Referrals] applyReferralAtSignup failed:', e.message))
+            .finally(next);
+        } else {
+          next();
+        }
+      });
     });
   },
   (req, res) => {
@@ -802,6 +886,181 @@ app.get('/auth/google/callback',
   },
   handleOauthFailure,
 );
+
+/**
+ * Referrals Phase 1 (2026-06-23) — shared validator/applier for a
+ * referral code at signup. Called from /auth/google/callback (for the
+ * `?ref=` URL path) and from POST /auth/redeem-referral (for the
+ * manual-entry path). Both paths must:
+ *
+ *   1. Normalise the input (uppercase, trim, reject malformed).
+ *   2. Look up the code in `referral_codes`.
+ *   3. Reject self-referral (referrer === referee).
+ *   4. INSERT into `referrals` (UNIQUE on referee → safe to retry).
+ *   5. Set `users.bonus_free_quotes = 2` on the referee.
+ *
+ * All in one transaction so a partial state never appears.
+ * Unknown / self / already-redeemed → returns
+ * `{ applied: false, reason }` and does NOT throw. Callers fall
+ * through to the default signup.
+ */
+async function applyReferralAtSignup(refereeUserId, rawCode) {
+  const code = normaliseReferralCode(rawCode);
+  if (!code) return { applied: false, reason: 'malformed' };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT code, user_id FROM referral_codes WHERE code = $1',
+      [code]
+    );
+    const decision = validateRedemption({
+      codeRow: rows[0] || null,
+      userId: refereeUserId,
+    });
+    if (!decision.valid) {
+      await client.query('ROLLBACK');
+      return { applied: false, reason: decision.reason };
+    }
+    // INSERT — ON CONFLICT (referee_user_id) DO NOTHING guards against
+    // double-redemption (manual entry after URL redemption, or two
+    // concurrent callbacks).
+    const ins = await client.query(
+      `INSERT INTO referrals (referrer_user_id, referee_user_id, code_used)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (referee_user_id) DO NOTHING
+       RETURNING id`,
+      [decision.referrerUserId, refereeUserId, code]
+    );
+    if (ins.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { applied: false, reason: 'already-redeemed' };
+    }
+    // Grant the +2 signup bonus. We additively set to MAX(current, 2)
+    // so a previous code-less redeem-then-redeem can't double up.
+    // In practice the ON CONFLICT above prevents that — this is belt-
+    // and-braces.
+    await client.query(
+      `UPDATE users
+          SET bonus_free_quotes = GREATEST(bonus_free_quotes, $2)
+        WHERE id = $1`,
+      [refereeUserId, REFERRAL_REFEREE_BONUS]
+    );
+    await client.query('COMMIT');
+    return { applied: true, referrerUserId: decision.referrerUserId };
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Referrals Phase 1 (2026-06-23) — first-analysis credit trigger.
+ *
+ * Called from BOTH analyse success paths (photo + video). Idempotent:
+ *
+ *   1. SELECT FOR UPDATE on the referee's row where
+ *      `first_analysis_at IS NULL`. Locks the row so two concurrent
+ *      analyses can't both think they're first.
+ *   2. If a row matches (i.e. this user IS a referee and has not yet
+ *      completed an analysis), stamp `first_analysis_at` +
+ *      `reward_credited_at`, then bump the referrer's bonus by +2.
+ *   3. The transaction-scoped FOR UPDATE + IS NULL predicate means
+ *      the credit happens at most once even if two analyse calls
+ *      somehow race to the success block.
+ *
+ * Failures are LOGGED but do NOT throw — the analyse response has
+ * already been sent to the client by the time this runs.
+ */
+async function maybeCreditReferrerOnFirstAnalysis(refereeUserId) {
+  if (!refereeUserId) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT id, referrer_user_id
+         FROM referrals
+        WHERE referee_user_id = $1
+          AND first_analysis_at IS NULL
+        FOR UPDATE`,
+      [refereeUserId]
+    );
+    if (rows.length !== 1) {
+      // Either not a referee, or already credited. No-op — ROLLBACK
+      // (rather than COMMIT) keeps the resilience-test counter happy
+      // and means we don't issue a trivial empty COMMIT in PG.
+      await client.query('ROLLBACK');
+      return;
+    }
+    const { id: referralId, referrer_user_id: referrerId } = rows[0];
+    await client.query(
+      `UPDATE referrals
+          SET first_analysis_at = NOW(),
+              reward_credited_at = NOW()
+        WHERE id = $1`,
+      [referralId]
+    );
+    await client.query(
+      `UPDATE users
+          SET bonus_free_quotes = bonus_free_quotes + $2
+        WHERE id = $1`,
+      [referrerId, REFERRAL_REFERRER_REWARD]
+    );
+    await client.query('COMMIT');
+    console.log(`[Referrals] Credited referrer=${referrerId} for referee=${refereeUserId} (+${REFERRAL_REFERRER_REWARD})`);
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.warn('[Referrals] credit failed for referee=' + refereeUserId + ':', err.message);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Lazy referral-code provisioner. Each user gets one code (UNIQUE
+ * constraint on referral_codes.user_id). Paul's PAULJULY is seeded
+ * explicitly via a post-deploy SQL snippet — that row already exists
+ * by the time he loads the dashboard, so the SELECT below short-circuits
+ * before hitting the generator.
+ *
+ * Conflict-retry: the generator picks a random 4-char suffix, so two
+ * users with the same name prefix could collide. We retry up to 5
+ * times before giving up (after which the caller logs and the UI
+ * shows "code unavailable").
+ */
+async function getOrCreateReferralCode(userId, userName) {
+  if (!userId) return null;
+  const existing = await pool.query(
+    'SELECT code FROM referral_codes WHERE user_id = $1',
+    [userId]
+  );
+  if (existing.rows.length > 0) return existing.rows[0].code;
+  for (let i = 0; i < 5; i++) {
+    const candidate = generateReferralCode(userName);
+    try {
+      const r = await pool.query(
+        `INSERT INTO referral_codes (code, user_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING
+         RETURNING code`,
+        [candidate, userId]
+      );
+      if (r.rows.length > 0) return r.rows[0].code;
+      // Either the code clashed OR the user already has a code via a
+      // concurrent insert. Re-SELECT to catch the latter.
+      const re = await pool.query(
+        'SELECT code FROM referral_codes WHERE user_id = $1',
+        [userId]
+      );
+      if (re.rows.length > 0) return re.rows[0].code;
+    } catch (err) {
+      console.warn('[Referrals] generate attempt failed:', err.message);
+    }
+  }
+  return null;
+}
 
 app.get('/auth/logout', (req, res, next) => {
   req.logout((err) => {
@@ -834,7 +1093,7 @@ app.get('/auth/me', async (req, res) => {
     if (!userId) return null;
     try {
       const r = await pool.query(
-        `SELECT free_quotes_used, comp_until, subscription_status
+        `SELECT free_quotes_used, bonus_free_quotes, comp_until, subscription_status
          FROM users WHERE id = $1`,
         [userId]
       );
@@ -982,6 +1241,35 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       border: 1px solid rgba(248,113,113,0.2);
     }
     .footer { margin-top: 32px; font-size: 12px; color: #4a4640; }
+    /* Referrals Phase 1 (2026-06-23) */
+    .ref-block { margin-top: 20px; text-align: left; }
+    .ref-toggle {
+      background: none;
+      border: none;
+      color: #7a6f5e;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 6px 0;
+      font-family: inherit;
+    }
+    .ref-toggle:hover { color: #e8a838; }
+    .ref-panel { margin-top: 8px; }
+    .ref-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #1a1714;
+      border: 1px solid #3a3630;
+      border-radius: 6px;
+      color: #f0ede8;
+      font-family: inherit;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .ref-input:disabled { opacity: 0.7; cursor: not-allowed; background: #221f1a; }
+    .ref-input:focus { outline: none; border-color: #e8a838; }
+    .ref-hint { color: #7a6f5e; font-size: 12px; margin-top: 6px; }
+    .ref-locked-note { color: #e8a838; font-size: 12px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -989,7 +1277,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
     <div class="logo">FASTQUOTE</div>
     <div class="tagline">Professional quoting for tradespeople</div>
     \${ERROR_HTML}
-    <a href="/auth/google" class="btn">
+    <a id="signin-btn" href="\${SIGNIN_HREF}" class="btn">
       <svg width="20" height="20" viewBox="0 0 48 48">
         <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
         <path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -998,8 +1286,33 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       </svg>
       Sign in with Google
     </a>
+    \${REF_BLOCK_HTML}
     <div class="footer"><a href="/privacy" style="color:#4a4640;text-decoration:none">Privacy</a> &middot; <a href="/terms" style="color:#4a4640;text-decoration:none">Terms</a></div>
   </div>
+  <script>
+    (function() {
+      var toggle = document.getElementById('ref-toggle');
+      var panel = document.getElementById('ref-panel');
+      var input = document.getElementById('ref-input');
+      var signinBtn = document.getElementById('signin-btn');
+      if (toggle && panel) {
+        toggle.addEventListener('click', function() {
+          var hidden = panel.style.display === 'none';
+          panel.style.display = hidden ? 'block' : 'none';
+          toggle.textContent = hidden ? '− Hide referral code' : '+ Got a referral code?';
+        });
+      }
+      if (input && signinBtn && !input.disabled) {
+        // Keep the Sign-in URL in sync with what the user types so the
+        // OAuth round-trip carries the code as ?ref=… and the callback
+        // can apply it. Empty input → plain /auth/google (no ref).
+        input.addEventListener('input', function() {
+          var v = (input.value || '').trim();
+          signinBtn.href = v ? '/auth/google?ref=' + encodeURIComponent(v) : '/auth/google';
+        });
+      }
+    })();
+  </script>
 </body>
 </html>`;
 
@@ -1029,10 +1342,62 @@ app.get('/login', (req, res) => {
     default:
       errorMsg = '';
   }
-  const html = LOGIN_PAGE_HTML.replace('${ERROR_HTML}', errorMsg);
+
+  // Referrals Phase 1 (2026-06-23): if the URL has ?ref=…, pre-fill
+  // the field AND lock it (disabled). Per spec — removes the "first-
+  // code-vs-last-code" conflict by removing the conflict entirely.
+  // If no URL ref, the field is empty + editable, hidden behind a
+  // "Got a referral code?" toggle so the default UX stays clean.
+  const refFromUrl = normaliseReferralCode(req.query.ref);
+  let refBlockHtml = '';
+  let signinHref = '/auth/google';
+  if (refFromUrl) {
+    signinHref = `/auth/google?ref=${encodeURIComponent(refFromUrl)}`;
+    refBlockHtml = `
+      <div class="ref-block">
+        <div class="ref-panel">
+          <input id="ref-input" class="ref-input" type="text"
+            value="${escapeHtml(refFromUrl)}" disabled
+            aria-label="Referral code">
+          <div class="ref-locked-note">Referral applied — you'll start with 5 free quotes.</div>
+        </div>
+      </div>
+    `;
+  } else {
+    refBlockHtml = `
+      <div class="ref-block">
+        <button id="ref-toggle" type="button" class="ref-toggle">+ Got a referral code?</button>
+        <div id="ref-panel" class="ref-panel" style="display:none;">
+          <input id="ref-input" class="ref-input" type="text"
+            placeholder="e.g. PAULJULY"
+            autocomplete="off" autocapitalize="characters" spellcheck="false"
+            aria-label="Referral code">
+          <div class="ref-hint">Optional. Adds 2 free quotes if recognised.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const html = LOGIN_PAGE_HTML
+    .replace('${ERROR_HTML}', errorMsg)
+    .replace('${SIGNIN_HREF}', signinHref)
+    .replace('${REF_BLOCK_HTML}', refBlockHtml);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });
+
+// Defence-in-depth HTML escape — minimal but enough for inserting a
+// user-supplied referral code into an attribute or text node on the
+// static login page. Codes are already normalised via
+// normaliseReferralCode (uppercase + alphanumeric/hyphen only, ≤64
+// chars), but this catches a hypothetical future code shape with
+// special characters.
+function escapeHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}
 
 // --- Legal pages ---
 
@@ -3365,7 +3730,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       let quotaUser = null;
       try {
         const { rows } = await pool.query(
-          `SELECT free_quotes_used, comp_until, subscription_status
+          `SELECT free_quotes_used, bonus_free_quotes, comp_until, subscription_status
            FROM users WHERE id = $1`,
           [userId]
         );
@@ -3378,12 +3743,17 @@ app.post('/api/users/:id/jobs/:jobId/video',
       if (!decision.allowed) {
         try { fs.unlinkSync(videoFile.path); } catch {}
         for (const f of extraPhotoFiles) { try { fs.unlinkSync(f.path); } catch {} }
+        // Effective limit includes the referrals Phase 1 bonus (the
+        // 402 copy stays pinned at "3 free quotes" per load-bearing-copy
+        // doctrine; the numeric fields surface the real allowance).
+        const bonus = Math.max(0, Number(quotaUser?.bonus_free_quotes) || 0);
+        const effectiveLimit = FREE_QUOTES_LIMIT + bonus;
         const used = Number(quotaUser?.free_quotes_used) || 0;
         return res.status(402).json({
           error: 'quota_exhausted',
           message: `You've used your ${FREE_QUOTES_LIMIT} free quotes. Subscribe to continue.`,
-          freeQuotesUsed: Math.min(used, FREE_QUOTES_LIMIT),
-          freeQuotesLimit: FREE_QUOTES_LIMIT,
+          freeQuotesUsed: Math.min(used, effectiveLimit),
+          freeQuotesLimit: effectiveLimit,
         });
       }
     }
@@ -3640,6 +4010,11 @@ app.post('/api/users/:id/jobs/:jobId/video',
       } catch (err) {
         console.warn('[Video] free_quotes sub-check failed:', err.message);
       }
+
+      // Referrals Phase 1 (2026-06-23): credit referrer on first
+      // analysis (video path mirrors the photo path). See the helper
+      // for the FOR-UPDATE idempotency story.
+      maybeCreditReferrerOnFirstAnalysis(userId).catch(() => {});
     } catch (err) {
       console.error(`[Video] FAIL user=${userId} job=${jobId} error=${err.message}`);
       videoProgress.error(jobId, err.message);
@@ -4418,7 +4793,7 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, plan, trial_ends_at, subscription_status,
               stripe_customer_id, current_period_end, cancel_at_period_end,
-              trial_will_end_at, free_quotes_used, comp_until
+              trial_will_end_at, free_quotes_used, bonus_free_quotes, comp_until
        FROM users WHERE id = $1`,
       [userId]
     );
@@ -4515,6 +4890,91 @@ app.post('/api/billing/portal', requireAuth, billingRateLimit, requireStripe, as
 
 // ───── End TRQ-150 billing routes ─────
 
+// ─────────────────────────────────────────────────────────────────────────
+// Referrals Phase 1 (2026-06-23)
+//
+//  • GET /api/users/:id/referrals    — returns the user's code, current
+//    bonus balance, and the list of referrals they've made.
+//  • POST /auth/redeem-referral      — accept a code post-signup. Same
+//    validation as the OAuth-callback ?ref= path; idempotent.
+//
+// Both routes follow the design law: referral / code / invite / bonus
+// vocabulary is safe for basic users (the banned-vocab list rules out
+// AI/agent terminology, not commerce-y words).
+// ─────────────────────────────────────────────────────────────────────────
+
+app.get('/api/users/:id/referrals', async (req, res) => {
+  // The route is mounted under the global /api/users/:id requireAuth +
+  // requireOwner pair, so we know req.params.id is the caller's own id.
+  try {
+    const userId = req.params.id;
+    const { rows: userRows } = await pool.query(
+      'SELECT name, bonus_free_quotes FROM users WHERE id = $1',
+      [userId]
+    );
+    if (userRows.length === 0) return res.status(404).json({ error: 'user not found' });
+    const user = userRows[0];
+
+    const code = await getOrCreateReferralCode(userId, user.name);
+
+    const { rows: referrals } = await pool.query(
+      `SELECT r.id, r.created_at AS "signedUpAt", r.first_analysis_at AS "firstAnalysisAt",
+              u.name AS "refereeName"
+         FROM referrals r
+         JOIN users u ON u.id = r.referee_user_id
+        WHERE r.referrer_user_id = $1
+        ORDER BY r.created_at DESC`,
+      [userId]
+    );
+    const decorated = referrals.map((r) => ({
+      refereeName: r.refereeName || 'Unnamed',
+      signedUpAt: r.signedUpAt,
+      status: r.firstAnalysisAt ? 'earned' : 'pending',
+    }));
+
+    res.json({
+      code,
+      bonusFreeQuotes: Number(user.bonus_free_quotes) || 0,
+      referrals: decorated,
+    });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.post('/auth/redeem-referral', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'auth required' });
+    const rawCode = req.body?.code;
+    const result = await applyReferralAtSignup(userId, rawCode);
+
+    // Return the updated billing block regardless of outcome so the
+    // client banner re-renders without a second round-trip.
+    const { rows } = await pool.query(
+      `SELECT free_quotes_used, comp_until, subscription_status, bonus_free_quotes
+         FROM users WHERE id = $1`,
+      [userId]
+    );
+    const u = rows[0];
+    const billing = u
+      ? resolveQuotaState(u, { hasActiveSubscription: u.subscription_status === 'active' })
+      : null;
+
+    if (result.applied) {
+      return res.json({ applied: true, billing });
+    }
+    // Spec: invalid (unknown / self / already-redeemed) does NOT error
+    // — it falls through as a no-op. Return 200 with applied=false so
+    // the client can show a quiet "code not recognised" message.
+    return res.json({ applied: false, reason: result.reason, billing });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// ───── End Referrals Phase 1 routes ─────
+
 // Approved calibration notes for system prompt assembly
 app.get('/api/calibration-notes/approved', requireAuth, async (req, res) => {
   try {
@@ -4567,7 +5027,7 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   let quotaUser = null;
   try {
     const { rows } = await pool.query(
-      `SELECT id, free_quotes_used, comp_until, subscription_status, trial_ends_at
+      `SELECT id, free_quotes_used, bonus_free_quotes, comp_until, subscription_status, trial_ends_at
        FROM users WHERE id = $1`,
       [userIdParam]
     );
@@ -4578,12 +5038,19 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   const hasActiveSubscription = quotaUser?.subscription_status === 'active';
   const gateDecision = quotaGate(quotaUser, { hasActiveSubscription });
   if (!gateDecision.allowed) {
+    // Effective limit includes the referral bonus (referrals Phase 1).
+    // The user-facing 402 copy stays pinned at "3 free quotes" per the
+    // load-bearing-copy doctrine in CLAUDE.md — but the SPA reads the
+    // numeric `freeQuotesLimit` for progress display, so we surface the
+    // effective value here.
+    const bonus = Math.max(0, Number(quotaUser?.bonus_free_quotes) || 0);
+    const effectiveLimit = FREE_QUOTES_LIMIT + bonus;
     const used = Number(quotaUser?.free_quotes_used) || 0;
     return res.status(402).json({
       error: 'quota_exhausted',
       message: `You've used your ${FREE_QUOTES_LIMIT} free quotes. Subscribe to continue.`,
-      freeQuotesUsed: Math.min(used, FREE_QUOTES_LIMIT),
-      freeQuotesLimit: FREE_QUOTES_LIMIT,
+      freeQuotesUsed: Math.min(used, effectiveLimit),
+      freeQuotesLimit: effectiveLimit,
     });
   }
 
@@ -4762,6 +5229,12 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
         console.warn('[Analyse] free_quotes increment failed:', err.message)
       );
     }
+
+    // Referrals Phase 1 (2026-06-23): if this user was referred AND
+    // this is their first completed analysis, credit the referrer with
+    // +2 bonus quotes. Fire-and-forget — the response has already gone
+    // out to the client; we just need the DB write to land.
+    maybeCreditReferrerOnFirstAnalysis(userIdParam).catch(() => {});
 
     // TRQ-173: success-path agent_runs completion. Best-effort.
     // TRQ-140: success status is 'completed', NOT 'ok'. The single

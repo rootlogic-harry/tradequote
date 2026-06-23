@@ -50,6 +50,8 @@ a "we deleted you" promise that's untrue.
 | `system_errors` | optional user_id (NULL for anonymous errors), route, stack, user_agent | DELETE rows where user_id matches |
 | `pageviews` | optional user_id (anonymous by default), path, referrer, ua_hash | DELETE rows where user_id matches; rest is anonymous already |
 | `free_quote_grants` | user_id, quote_token (opaque UUID / job:id), counted_at — quota accounting only | CASCADE — no PII, but cascading keeps the table consistent |
+| `referral_codes` | user_id, code (human-readable string), created_at — no end-client PII | CASCADE — the code is tied to the user; deleting the user removes the code |
+| `referrals` | referrer_user_id, referee_user_id, code_used, timestamps — no end-client PII (waller↔waller relationship only) | CASCADE on either side — deleting either party CASCADE-removes the referral row |
 
 **CASCADE summary** — most child tables have
 `user_id TEXT REFERENCES users(id) ON DELETE CASCADE`, so a single

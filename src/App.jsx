@@ -22,6 +22,7 @@ import Analytics from './components/Analytics.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import SubscriptionBanner from './components/SubscriptionBanner.jsx';
+import ReferralWelcome from './components/ReferralWelcome.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
@@ -743,6 +744,8 @@ export default function App() {
           onViewRams={handleViewRams}
           isAdminPlan={isAdmin}
           viewMode={state.viewMode}
+          currentUserId={state.currentUserId}
+          showToast={showToast}
         />
       );
     }
@@ -886,6 +889,10 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-3 fq:px-4 py-4 fq:py-6">
           <OfflineBanner />
           <SubscriptionBanner />
+          {/* Referrals Phase 1 (2026-06-23) — referee welcome. Self-
+              hides unless the user has bonus quotes AND has not yet
+              used any (signals a fresh referred signup). */}
+          <ReferralWelcome billing={billing} currentUserId={state.currentUserId} />
           <SaveErrorBanner
             error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}
             onDismiss={() => setDismissedSaveErrorKey(state.quoteSaveErrorKey || 0)}
