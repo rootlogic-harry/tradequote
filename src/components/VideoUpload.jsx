@@ -215,11 +215,11 @@ export default function VideoUpload({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         style={{
-          border: `2px dashed ${dragOver ? 'var(--accent, #2563eb)' : 'var(--border, #ccc)'}`,
+          border: `2px dashed ${dragOver ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
           borderRadius: '12px',
           padding: '36px 24px',
           textAlign: 'center',
-          background: dragOver ? 'var(--accent-bg, #eff6ff)' : 'transparent',
+          background: dragOver ? 'var(--tq-accent-bg)' : 'transparent',
           transition: 'border-color 0.15s, background 0.15s',
         }}
       >
@@ -227,7 +227,7 @@ export default function VideoUpload({
         <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
           Add a video of the job
         </div>
-        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '13px', marginBottom: '16px' }}>
+        <div style={{ color: 'var(--tq-muted)', fontSize: '13px', marginBottom: '16px' }}>
           Up to 3 minutes, under 500MB.
         </div>
 
@@ -246,7 +246,7 @@ export default function VideoUpload({
               minHeight: '44px',
               borderRadius: '8px',
               border: 'none',
-              background: 'var(--accent, #2563eb)',
+              background: 'var(--tq-accent)',
               color: '#fff',
               cursor: 'pointer',
               fontSize: '14px',
@@ -262,8 +262,8 @@ export default function VideoUpload({
               padding: '12px 22px',
               minHeight: '44px',
               borderRadius: '8px',
-              border: '1px solid var(--border, #ccc)',
-              background: 'var(--card-bg, #fff)',
+              border: '1px solid var(--tq-border)',
+              background: 'var(--tq-card)',
               cursor: 'pointer',
               fontSize: '14px',
               fontWeight: 500,
@@ -273,7 +273,7 @@ export default function VideoUpload({
           </button>
         </div>
 
-        <div style={{ color: 'var(--text-secondary, #666)', fontSize: '12px', fontStyle: 'italic', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+        <div style={{ color: 'var(--tq-muted)', fontSize: '12px', fontStyle: 'italic', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
           Tip: hold the camera steady on your reference card (or a tape measure)
           for 2–3 seconds so a clean frame can be captured.
         </div>
@@ -305,9 +305,9 @@ export default function VideoUpload({
       {/* Video playback preview */}
       <div style={{
         padding: '16px',
-        border: '1px solid var(--border, #e0e0e0)',
+        border: '1px solid var(--tq-border)',
         borderRadius: '12px',
-        background: 'var(--card-bg, #fff)',
+        background: 'var(--tq-card)',
       }}>
         {videoUrl && (
           <video
@@ -336,7 +336,7 @@ export default function VideoUpload({
             }}>
               {video.name}
             </div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary, #666)', marginTop: '4px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--tq-muted)', marginTop: '4px' }}>
               {duration ? formatDuration(duration) : 'Loading...'}
               {video.size ? ` · ${(video.size / (1024 * 1024)).toFixed(1)}MB` : ''}
             </div>
@@ -348,7 +348,7 @@ export default function VideoUpload({
               padding: '8px 16px',
               minHeight: '44px',
               borderRadius: '8px',
-              border: '1px solid var(--border, #ccc)',
+              border: '1px solid var(--tq-border)',
               background: 'transparent',
               cursor: 'pointer',
               fontSize: '13px',
@@ -371,10 +371,10 @@ export default function VideoUpload({
           onClick={() => setShowPhotoUpload(true)}
           style={{
             padding: '12px 16px',
-            border: '1.5px dashed var(--border, #d0d0d0)',
+            border: '1.5px dashed var(--tq-border)',
             borderRadius: '12px',
             background: 'transparent',
-            color: 'var(--text, #222)',
+            color: 'var(--tq-text)',
             cursor: 'pointer',
             fontSize: '14px',
             fontWeight: 600,
@@ -384,7 +384,7 @@ export default function VideoUpload({
           }}
         >
           + Add site photos for the quote
-          <span style={{ display: 'block', fontWeight: 400, fontSize: '12px', color: 'var(--text-secondary, #888)', marginTop: '2px' }}>
+          <span style={{ display: 'block', fontWeight: 400, fontSize: '12px', color: 'var(--tq-muted)', marginTop: '2px' }}>
             Optional &middot; up to {maxExtraPhotos} &middot; appear on the customer's quote
           </span>
         </button>
@@ -394,13 +394,13 @@ export default function VideoUpload({
       {(showPhotoUpload || extraPhotos.length > 0) && (
         <div style={{
           padding: '16px',
-          border: '1px solid var(--border, #e0e0e0)',
+          border: '1px solid var(--tq-border)',
           borderRadius: '12px',
         }}>
           <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px' }}>
             Site photos for the quote ({extraPhotos.length}/{maxExtraPhotos})
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary, #888)', marginBottom: '10px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--tq-muted)', marginBottom: '10px' }}>
             These appear on your customer's quote and improve measurement accuracy. Optional.
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -447,12 +447,12 @@ export default function VideoUpload({
                 style={{
                   width: '80px',
                   height: '80px',
-                  border: '2px dashed var(--border, #ccc)',
+                  border: '2px dashed var(--tq-border)',
                   borderRadius: '8px',
                   background: 'transparent',
                   cursor: 'pointer',
                   fontSize: '24px',
-                  color: 'var(--text-secondary, #666)',
+                  color: 'var(--tq-muted)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
