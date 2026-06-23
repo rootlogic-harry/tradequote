@@ -41,4 +41,14 @@ describe('ReviewEdit desktop layout', () => {
   it('mobile accordion still renders schedule section (not lost by layout change)', () => {
     expect(source).toMatch(/title="Schedule of Works"/);
   });
+
+  // TRQ-172: the sticky Generate Quote bar must sit above the 64px fixed
+  // BottomNav on mobile. Otherwise the Save Progress button disappears
+  // behind the nav and Generate is only half-tappable. Desktop (>=fq) has
+  // no BottomNav, so bottom returns to 0.
+  it('sticky CTA bar clears the mobile BottomNav with a safe-area-aware offset', () => {
+    expect(source).toMatch(
+      /sticky\s+bottom-\[calc\(env\(safe-area-inset-bottom\)\+64px\)\]\s+fq:bottom-0/
+    );
+  });
 });
