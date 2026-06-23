@@ -922,6 +922,7 @@ export default function App() {
               state={state}
               dispatch={dispatch}
               isModal
+              onLogout={handleLogout}
               onClose={async () => {
                 setShowProfileModal(false);
                 if (state.currentUserId) {

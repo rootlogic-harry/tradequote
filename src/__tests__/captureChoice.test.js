@@ -85,4 +85,38 @@ describe('CaptureChoice component', () => {
       expect(source).toMatch(/onClick|button|role/);
     });
   });
+
+  describe('TRQ-168 — uses --tq-* CSS variables, not unscoped vars', () => {
+    // The app defines --tq-accent / --tq-text / --tq-muted / --tq-card /
+    // --tq-border in index.html. Unscoped vars like --accent, --border,
+    // --card-bg do NOT exist anywhere, so their fallback colours (bright
+    // blue #2563eb, white card on a beige page) bleed through and the
+    // capture cards render off-theme. Guard against the regression at
+    // source level so visual review can't slip past CI.
+    const UNSCOPED_PATTERNS = [
+      /var\(\s*--accent\b/,
+      /var\(\s*--accent-bg\b/,
+      /var\(\s*--text-primary\b/,
+      /var\(\s*--text-secondary\b/,
+      /var\(\s*--card-bg\b/,
+      /var\(\s*--border\b/,
+      /var\(\s*--text\b(?!-)/, // bare --text, not --text-primary/-secondary
+    ];
+
+    it.each(UNSCOPED_PATTERNS)('contains no unscoped %s reference', (pattern) => {
+      expect(source).not.toMatch(pattern);
+    });
+
+    it('references --tq-accent for accent colour', () => {
+      expect(source).toMatch(/var\(\s*--tq-accent\b/);
+    });
+
+    it('references --tq-border for borders', () => {
+      expect(source).toMatch(/var\(\s*--tq-border\b/);
+    });
+
+    it('references --tq-card for card background', () => {
+      expect(source).toMatch(/var\(\s*--tq-card\b/);
+    });
+  });
 });
