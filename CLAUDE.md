@@ -171,6 +171,8 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `jobs.client_*` (TRQ-124) | Client Portal columns — token, expiry, frozen `client_snapshot` + `client_snapshot_profile`, viewed/response audit trail. Accessed by `/q/:token` routes; the snapshot columns are immutable after write (Do-Not-Touch). |
 | `users.free_quotes_used`, `users.comp_until` (2026-06-22) | Quota-based free tier — `free_quotes_used` is the 3-quote counter; `comp_until` is the trusted-user bypass (Paul). Both nullable / default-zero so the migration is non-destructive. |
 | `free_quote_grants` (2026-06-22) | Per-(user_id, quote_token) dedupe table. `quote_token` is either a per-draft UUID (photo path) or `job:${jobId}` (video path). ON CONFLICT DO NOTHING ensures a single draft only burns one free quote regardless of retries. No PII. |
+| `users.bonus_free_quotes` (2026-06-23, referrals Phase 1) | Additive bonus quotes earned via referrals — referee gets +2 at signup, referrer gets +2 per successful referral. Read by quotaGate as `effectiveLimit = FREE_QUOTES_LIMIT + bonus`. |
+| `referral_codes`, `referrals` (2026-06-23) | One code per user (lazy-generated, except Paul's seeded `PAULJULY`). `referrals` tracks each referrer↔referee pair with `first_analysis_at` as the reward trigger. Single-level only, no claw-back. |
 
 ### JSONB Snapshot Contract
 
@@ -250,11 +252,44 @@ Two plans only: `admin` and `basic`. No `standard` plan (legacy references were 
 Replaced the 1-month no-card trial (`users.trial_ends_at`) with a 3-free-quote allowance. Aligns the free tier with the unit of value tradesmen perceive (per-quote, not per-month).
 
 - **`src/utils/quotaGate.js`** is the sole decision primitive. Three callers: the `/api/users/:id/analyse` middleware (the 402 lockout), `/auth/me` (so the SPA banner renders correctly on first paint), and `/api/billing/status` (legacy callers).
-- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < 3` → deny with `quota_exhausted`.
-- **`users.comp_until`** is the trusted-user bypass. Paul gets a 6-month comp at deploy via a one-line `UPDATE users SET comp_until = '2026-12-22'::timestamptz WHERE id = '<paul-id>'`. Comping is private — the customer-facing UI never says "comped".
+- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes` → deny with `quota_exhausted`. The bonus comes from referrals (Phase 1, 2026-06-23) — referees get +2 at signup; referrers get +2 per successful referral.
+- **`users.comp_until`** is the trusted-user bypass. Paul's beta-referrer comp runs through 2026-07-31 (set via the referrals Phase 1 deploy SQL). Comping is private — the customer-facing UI never says "comped".
 - **`free_quote_grants(user_id, quote_token)`** is the per-draft dedupe. Photo path uses the SPA's `state.quoteToken` (UUID, regenerated on `NEW_QUOTE`); video path uses `job:${jobId}`. `ON CONFLICT DO NOTHING` makes retries idempotent — a single draft burns exactly one free quote no matter how many times it's analysed.
 - **`trial_ends_at` is deprecated** but stays in the schema for one release window in case we need to roll back. The analyse gate no longer reads it.
-- **402 lockout copy** is exact and load-bearing — both the server's 402 body and the SubscriptionBanner's "exhausted" variant say `You've used your 3 free quotes. Subscribe to continue.`. If you change one, change the other.
+- **402 lockout copy template** is exact and load-bearing — both the server's 402 body and the SubscriptionBanner's "exhausted" variant say `You've used your N free quotes. Subscribe to continue.` where N is the effective limit (`FREE_QUOTES_LIMIT + bonus_free_quotes`). Referred users see "5", cold signups see "3". If you change the template, change both call sites and the banner together.
+
+---
+
+## Referrals Phase 1 (2026-06-23)
+
+Builds on the quota model above. Three moving parts; locked-spec values:
+
+- **Referee bonus at signup**: +2 quotes (3 baseline → 5 effective for referred users). Applied either via `?ref=CODE` on the OAuth landing URL or via the manual "Got a referral code?" field on the login page (locked + pre-filled if URL had a ref).
+- **Referrer reward**: +2 quotes when the referee completes their FIRST analysis (not signup, not first payment). The trigger lives in `maybeCreditReferrerOnFirstAnalysis` and runs on the success path of both the photo `/analyse` and the video routes. `FOR UPDATE` + `WHERE first_analysis_at IS NULL` make it idempotent under concurrent retries.
+- **Single-level only**: no cascading. If A refers B and B refers C, A earns from B only.
+
+Data model:
+- `referral_codes (code, user_id, created_at)` — one human-readable code per user, lazy-created on first GET /api/users/:id/referrals. UNIQUE (user_id) guarantees one code per user. Paul's `PAULJULY` is seeded explicitly (bypasses the lazy generator).
+- `referrals (id, referrer_user_id, referee_user_id UNIQUE, code_used, created_at, first_analysis_at, reward_credited_at)` — one row per referral. UNIQUE on referee makes double-redemption impossible.
+- `users.bonus_free_quotes INT NOT NULL DEFAULT 0` — additive to `FREE_QUOTES_LIMIT` in `quotaGate.js`. The gate computes `effectiveLimit = FREE_QUOTES_LIMIT + bonus_free_quotes`. During an active comp the bonus is invisible (gate order: subscribed > comped > counter) — it accumulates and becomes spendable when the comp ends.
+
+Pure helpers in `src/utils/referrals.js`:
+- `generateReferralCode(seed)` — `<USERFIRST6>-<RAND4>`, safe alphabet (no 0/O, 1/I, L confusables).
+- `normaliseReferralCode(raw)` — uppercase, trim, ≤64 chars, A-Z0-9 + hyphen only.
+- `validateRedemption({ codeRow, userId })` — pure decision; rejects unknown / self.
+- `REFERRAL_REFEREE_BONUS` (=2), `REFERRAL_REFERRER_REWARD` (=2).
+
+Routes:
+- `GET /api/users/:id/referrals` — returns `{ code, bonusFreeQuotes, referrals: [...] }`. Code is lazy-created if missing.
+- `POST /auth/redeem-referral` — manual entry post-signup. Body `{ code }`. Idempotent; falls through quietly on unknown / self / already-redeemed (never errors).
+- `/auth/google` stashes any incoming `?ref=` on the pre-login session; `/auth/google/callback` lifts it across `session.regenerate()` and calls `applyReferralAtSignup` after `req.login`.
+
+UI:
+- `src/components/ReferralPanel.jsx` — Dashboard surface (code + bonus balance + copy/share buttons). Web Share API on mobile (Paul→WhatsApp), clipboard fallback on desktop.
+- `src/components/ReferralWelcome.jsx` — referee-side welcome banner on first dashboard load. Detects via `bonusFreeQuotes > 0 && freeQuotesUsed === 0`; sessionStorage-persisted dismissal.
+- Login page (`LOGIN_PAGE_HTML` in server.js) gets a "Got a referral code?" expandable field. Locked + pre-filled when URL has `?ref=…` — removes the "first-code-vs-last-code" conflict.
+
+**Safe vocabulary** (allow-listed by the locked spec): referral, code, invite, share, earn, bonus, free quote, credit. **Avoid** "pyramid", "MLM", "downline", "your network", "your team".
 
 ---
 
@@ -349,7 +384,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,030 tests across ~141 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,260 tests across ~153 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 

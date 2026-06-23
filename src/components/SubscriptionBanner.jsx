@@ -110,14 +110,20 @@ export default function SubscriptionBanner({ enabled = true }) {
   }
 
   if (variant === 'exhausted') {
-    // Hard lockout (2026-06-22). Server's /analyse 402s on the next
-    // attempt. CTA opens Stripe Checkout — no portal because the user
-    // doesn't have a Stripe customer yet (they never started a paid
-    // subscription, just used the 3 free quotes).
+    // Hard lockout (2026-06-22; copy made dynamic 2026-06-23 for referrals).
+    // The effective limit is `status.freeQuotesLimit` — baseline 3 + any
+    // referral bonus. Falls back to 3 if the field is missing (defensive
+    // for stale clients during a deploy). Server's /analyse 402s on the
+    // next attempt with a matching message. CTA opens Stripe Checkout —
+    // no portal because the user doesn't have a Stripe customer yet (they
+    // never started a paid subscription, just used the free quotes).
+    const lockoutLimit = Number.isFinite(status.freeQuotesLimit) && status.freeQuotesLimit > 0
+      ? status.freeQuotesLimit
+      : 3;
     return (
       <Strip tone="urgent" testId="subscription-banner-exhausted">
         <Body>
-          <strong>You've used your 3 free quotes. Subscribe to continue.</strong>
+          <strong>You've used your {lockoutLimit} free quotes. Subscribe to continue.</strong>
         </Body>
         <Cta onClick={openCheckout} disabled={busy}>Subscribe — £{status.pricing?.gbpPerMonth?.toFixed(2) || '19.99'}/month</Cta>
       </Strip>
