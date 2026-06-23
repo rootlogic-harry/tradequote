@@ -26,6 +26,7 @@ import React from 'react';
 import esbuild from 'esbuild';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { normalisePdfMetadata } from '../../../src/utils/normalisePdfMetadata.js';
 
 // Local-Chrome override. @sparticuz/chromium ships a Linux-only
 // serverless binary; on macOS it extracts an ELF and spawn ENOEXECs.
@@ -237,11 +238,16 @@ async function renderPdfLocally({ quoteHtml, headerHtml, footerHtml, title }) {
       req.abort('blockedbyclient');
     });
     await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: 30000 });
+    // TRQ-179: mirror pdfRenderer.js' font-race guard. Without this the
+    // fixture renders with fallback-font metrics in cold-start runs and
+    // page counts drift from prod. page.evaluate() bypasses
+    // setJavaScriptEnabled(false) (uses DevTools Runtime.evaluate).
+    await page.evaluate(() => document.fonts.ready);
     await page.emulateMediaType('print');
     const enableHeaderFooter = !!(headerHtml || footerHtml);
     const headerTemplate = headerHtml || '<div style="font-size:1px"></div>';
     const footerTemplate = footerHtml || '<div style="font-size:1px"></div>';
-    const pdf = await page.pdf({
+    const rawPdf = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
@@ -252,7 +258,12 @@ async function renderPdfLocally({ quoteHtml, headerHtml, footerHtml, title }) {
         ? { top: '25mm', right: '22mm', bottom: '22mm', left: '22mm' }
         : { top: '18mm', right: '18mm', bottom: '22mm', left: '18mm' },
     });
-    return pdf;
+    // TRQ-179: mirror pdfRenderer.js' metadata normalisation so fixture
+    // re-baselining produces a byte-stable PDF identical (up to legitimate
+    // rendering differences) to the prod path. Without this, `node
+    // renderFixture.js` writes a PDF with Chromium's bake-time
+    // /CreationDate + /ModDate, so two consecutive baseline runs differ.
+    return normalisePdfMetadata(Buffer.from(rawPdf));
   } finally {
     try { await browser.close(); } catch { /* ignore */ }
   }
