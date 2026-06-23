@@ -63,6 +63,8 @@ function applyCorrectedValues(analysis, corrections) {
 
   for (const correction of corrections) {
     const field = correction.field?.toLowerCase();
+    const severity = correction.severity;
+    const isMediumOrHigh = severity === 'medium' || severity === 'high';
 
     // Labour days correction
     if (field?.includes('labour') && field?.includes('day') && correction.suggestedFix) {
@@ -84,6 +86,66 @@ function applyCorrectedValues(analysis, corrections) {
           if (!isNaN(newQty) && newQty > 0) {
             tonnageItem.quantity = String(newQty);
             tonnageItem.totalCost = newQty * (tonnageItem.unitCost || 0);
+          }
+        }
+      }
+    }
+
+    // TRQ-175 — Mortar over-inclusion: remove matching material line item(s)
+    // when severity is medium or high.
+    if (field?.includes('mortar') && isMediumOrHigh && Array.isArray(result.materials)) {
+      result.materials = result.materials.filter(m => {
+        const desc = m.description?.toLowerCase() || '';
+        const isMortar =
+          desc.includes('mortar') ||
+          desc.includes('nhl') ||
+          desc.includes('hydraulic lime');
+        return !isMortar;
+      });
+    }
+
+    // TRQ-175 — Materials/labour boundary: remove labour-coded rows that
+    // leaked into materials when severity is medium or high.
+    if (
+      field?.includes('material') &&
+      field?.includes('labour') &&
+      isMediumOrHigh &&
+      Array.isArray(result.materials)
+    ) {
+      const LABOUR_KEYWORDS = [
+        'rebuild',
+        'rebuilding',
+        'dismantle',
+        'dismantling',
+        'repoint',
+        'repointing',
+        'site clearance',
+        'making good',
+        'core consolidation',
+        'core/hearting',
+        'hearting consolidation',
+        'preliminaries',
+        'site survey',
+      ];
+      result.materials = result.materials.filter(m => {
+        const desc = m.description?.toLowerCase() || '';
+        const isLabour = LABOUR_KEYWORDS.some(kw => desc.includes(kw));
+        return !isLabour;
+      });
+    }
+
+    // TRQ-175 — Line-item arithmetic: recompute totalCost for any row where
+    // quantity * unitCost mismatches the stored totalCost (within £0.01).
+    // Applies at any severity since it's a pure data-integrity fix.
+    if (field?.includes('arithmetic') && Array.isArray(result.materials)) {
+      for (const item of result.materials) {
+        const qty = parseFloat(item.quantity);
+        const unit = parseFloat(item.unitCost);
+        if (!isNaN(qty) && !isNaN(unit)) {
+          const expected = qty * unit;
+          const stored = parseFloat(item.totalCost);
+          if (isNaN(stored) || Math.abs(expected - stored) > 0.01) {
+            item.totalCost = expected;
           }
         }
       }
