@@ -19,7 +19,6 @@ const DISMISS_KEY = 'fq.ref.welcome.dismissed';
 
 export default function ReferralWelcome({ billing, currentUserId }) {
   const [dismissed, setDismissed] = useState(false);
-  const [referrerName, setReferrerName] = useState(null);
 
   // Read persisted dismissal once on mount. sessionStorage so the user
   // sees it once per browser session but it won't reappear on every
@@ -41,27 +40,6 @@ export default function ReferralWelcome({ billing, currentUserId }) {
       && Number(billing.freeQuotesUsed) === 0
   );
 
-  // Try to fetch the referrer's name for a friendlier message. Falls
-  // back to a generic line if the request fails — the banner still
-  // renders, just without the personalisation.
-  useEffect(() => {
-    if (!eligible || dismissed || !currentUserId) return;
-    let alive = true;
-    (async () => {
-      try {
-        // The /referrals endpoint returns the user's OWN referrals
-        // (people they've invited). We need the inverse — who
-        // invited THEM. The simplest backend-light read is to expose
-        // it via the same payload: this PR keeps the contract narrow.
-        // We just render the generic copy in this phase.
-        if (alive) setReferrerName(null);
-      } catch {
-        if (alive) setReferrerName(null);
-      }
-    })();
-    return () => { alive = false; };
-  }, [eligible, dismissed, currentUserId]);
-
   if (!eligible || dismissed) return null;
 
   const handleDismiss = () => {
@@ -76,7 +54,11 @@ export default function ReferralWelcome({ billing, currentUserId }) {
   };
 
   const total = Number(billing.freeQuotesLimit) || 5;
-  const inviter = referrerName ? referrerName : 'A friend';
+  // Referrer name comes from /auth/me's billing.referredBy block.
+  // Falls back to "A friend" if the JOIN failed or this user is somehow
+  // eligible-by-bonus-but-no-referral-row (edge case from manual bonus
+  // grants, shouldn't happen in normal flow).
+  const inviter = billing?.referredBy?.name || 'A friend';
 
   return (
     <div

@@ -84,11 +84,18 @@ export default function AIAnalysis({ state, dispatch, cancelAnalysis }) {
         if (url) window.location.href = url;
       } catch { /* best-effort */ }
     };
+    // Effective limit (referrals Phase 1, 2026-06-23) — referees see 5,
+    // cold signups see 3. Pulled from the 402 response shape set up by
+    // the reducer's ANALYSIS_QUOTA_EXHAUSTED handler.
+    const lockoutLimit = Number.isFinite(state.quotaLockout?.freeQuotesLimit)
+      && state.quotaLockout.freeQuotesLimit > 0
+      ? state.quotaLockout.freeQuotesLimit
+      : 3;
     return (
       <div className="max-w-xl mx-auto text-center py-20" data-testid="quota-lockout-screen">
         <div className="p-6" style={{ backgroundColor: 'var(--tq-error-bg)', border: '1.5px solid var(--tq-error-bd)', borderRadius: 2 }}>
           <p className="font-heading font-bold text-lg mb-2" style={{ color: 'var(--tq-error-txt)' }}>
-            You've used your 3 free quotes
+            You've used your {lockoutLimit} free quotes
           </p>
           <p className="text-sm mb-6" style={{ color: 'var(--tq-text)' }}>
             Subscribe to continue creating quotes.

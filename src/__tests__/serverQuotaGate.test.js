@@ -83,10 +83,16 @@ describe('/analyse route — gate before doing any Anthropic work', () => {
     expect(analyseBlock).toMatch(/freeQuotesLimit/);
   });
 
-  test('402 body includes the brief\'s exact friendly message', () => {
+  test('402 body uses the effective limit (referrals Phase 1 — dynamic, not hardcoded)', () => {
+    // Referrals Phase 1 (2026-06-23) made the lockout copy dynamic.
+    // The template is `You've used your ${effectiveLimit} free quotes`
+    // where effectiveLimit = FREE_QUOTES_LIMIT + bonus_free_quotes.
+    // Referred users see "5", cold signups see "3". Pin the template +
+    // the source of the interpolated value.
     expect(analyseBlock).toMatch(
-      /You've used your \$\{FREE_QUOTES_LIMIT\} free quotes\. Subscribe to continue\./
+      /You've used your \$\{effectiveLimit\} free quotes\. Subscribe to continue\./
     );
+    expect(analyseBlock).toMatch(/const effectiveLimit = FREE_QUOTES_LIMIT \+ bonus/);
   });
 });
 

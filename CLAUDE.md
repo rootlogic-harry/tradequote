@@ -252,11 +252,11 @@ Two plans only: `admin` and `basic`. No `standard` plan (legacy references were 
 Replaced the 1-month no-card trial (`users.trial_ends_at`) with a 3-free-quote allowance. Aligns the free tier with the unit of value tradesmen perceive (per-quote, not per-month).
 
 - **`src/utils/quotaGate.js`** is the sole decision primitive. Three callers: the `/api/users/:id/analyse` middleware (the 402 lockout), `/auth/me` (so the SPA banner renders correctly on first paint), and `/api/billing/status` (legacy callers).
-- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < 3` → deny with `quota_exhausted`.
-- **`users.comp_until`** is the trusted-user bypass. Paul gets a 6-month comp at deploy via a one-line `UPDATE users SET comp_until = '2026-12-22'::timestamptz WHERE id = '<paul-id>'`. Comping is private — the customer-facing UI never says "comped".
+- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes` → deny with `quota_exhausted`. The bonus comes from referrals (Phase 1, 2026-06-23) — referees get +2 at signup; referrers get +2 per successful referral.
+- **`users.comp_until`** is the trusted-user bypass. Paul's beta-referrer comp runs through 2026-07-31 (set via the referrals Phase 1 deploy SQL). Comping is private — the customer-facing UI never says "comped".
 - **`free_quote_grants(user_id, quote_token)`** is the per-draft dedupe. Photo path uses the SPA's `state.quoteToken` (UUID, regenerated on `NEW_QUOTE`); video path uses `job:${jobId}`. `ON CONFLICT DO NOTHING` makes retries idempotent — a single draft burns exactly one free quote no matter how many times it's analysed.
 - **`trial_ends_at` is deprecated** but stays in the schema for one release window in case we need to roll back. The analyse gate no longer reads it.
-- **402 lockout copy** is exact and load-bearing — both the server's 402 body and the SubscriptionBanner's "exhausted" variant say `You've used your 3 free quotes. Subscribe to continue.`. If you change one, change the other.
+- **402 lockout copy template** is exact and load-bearing — both the server's 402 body and the SubscriptionBanner's "exhausted" variant say `You've used your N free quotes. Subscribe to continue.` where N is the effective limit (`FREE_QUOTES_LIMIT + bonus_free_quotes`). Referred users see "5", cold signups see "3". If you change the template, change both call sites and the banner together.
 
 ---
 

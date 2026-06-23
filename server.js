@@ -1099,9 +1099,30 @@ app.get('/auth/me', async (req, res) => {
       );
       const u = r.rows[0];
       if (!u) return null;
-      return resolveQuotaState(u, {
+      const billing = resolveQuotaState(u, {
         hasActiveSubscription: u.subscription_status === 'active',
       });
+      // Referrals Phase 1 (2026-06-23): include the referrer's name if
+      // this user signed up via a code, so the ReferralWelcome banner
+      // can render "Paul invited you" instead of "A friend invited you".
+      // Single LEFT JOIN, returns NULL if the user was a cold signup.
+      // Failure is silent — banner falls back to "A friend".
+      try {
+        const refRow = await pool.query(
+          `SELECT u.name AS referrer_name
+           FROM referrals r
+           JOIN users u ON u.id = r.referrer_user_id
+           WHERE r.referee_user_id = $1
+           LIMIT 1`,
+          [userId]
+        );
+        billing.referredBy = refRow.rows[0]?.referrer_name
+          ? { name: refRow.rows[0].referrer_name }
+          : null;
+      } catch {
+        billing.referredBy = null;
+      }
+      return billing;
     } catch (err) {
       console.warn('[/auth/me] billing lookup failed:', err.message);
       return null;
@@ -1131,9 +1152,11 @@ app.get('/auth/me', async (req, res) => {
       const r = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.legacyUserId]);
       const u = r.rows[0];
       if (!u) return res.json({ user: null, features });
-      const billing = resolveQuotaState(u, {
-        hasActiveSubscription: u.subscription_status === 'active',
-      });
+      // Use loadBilling so the legacy path also picks up referredBy.
+      // Mark/Harry are admins and unlikely to be referees, but consistency
+      // matters — if a basic user ever ends up on the legacy switcher
+      // they should still see the welcome banner.
+      const billing = await loadBilling(u.id);
       return res.json({
         user: {
           id: u.id,
@@ -1372,7 +1395,7 @@ app.get('/login', (req, res) => {
             placeholder="e.g. PAULJULY"
             autocomplete="off" autocapitalize="characters" spellcheck="false"
             aria-label="Referral code">
-          <div class="ref-hint">Optional. Adds 2 free quotes if recognised.</div>
+          <div class="ref-hint">Optional. Bumps you to 5 free quotes if recognised.</div>
         </div>
       </div>
     `;
@@ -3743,15 +3766,18 @@ app.post('/api/users/:id/jobs/:jobId/video',
       if (!decision.allowed) {
         try { fs.unlinkSync(videoFile.path); } catch {}
         for (const f of extraPhotoFiles) { try { fs.unlinkSync(f.path); } catch {} }
-        // Effective limit includes the referrals Phase 1 bonus (the
-        // 402 copy stays pinned at "3 free quotes" per load-bearing-copy
-        // doctrine; the numeric fields surface the real allowance).
+        // Effective limit includes the referrals Phase 1 bonus — a referee
+        // who signed up with a valid code gets `FREE_QUOTES_LIMIT + 2`, and
+        // a referrer accrues +2 per successful referral. The lockout copy
+        // MUST reflect the effective limit, not the baseline, or referred
+        // users see "you've used your 3 free quotes" when they actually
+        // had 5. CLAUDE.md's "load-bearing copy" doctrine pre-dates this.
         const bonus = Math.max(0, Number(quotaUser?.bonus_free_quotes) || 0);
         const effectiveLimit = FREE_QUOTES_LIMIT + bonus;
         const used = Number(quotaUser?.free_quotes_used) || 0;
         return res.status(402).json({
           error: 'quota_exhausted',
-          message: `You've used your ${FREE_QUOTES_LIMIT} free quotes. Subscribe to continue.`,
+          message: `You've used your ${effectiveLimit} free quotes. Subscribe to continue.`,
           freeQuotesUsed: Math.min(used, effectiveLimit),
           freeQuotesLimit: effectiveLimit,
         });
@@ -5039,16 +5065,15 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   const gateDecision = quotaGate(quotaUser, { hasActiveSubscription });
   if (!gateDecision.allowed) {
     // Effective limit includes the referral bonus (referrals Phase 1).
-    // The user-facing 402 copy stays pinned at "3 free quotes" per the
-    // load-bearing-copy doctrine in CLAUDE.md — but the SPA reads the
-    // numeric `freeQuotesLimit` for progress display, so we surface the
-    // effective value here.
+    // The lockout copy MUST reflect the effective limit, not the baseline:
+    // a referee who signed up with a valid code gets 5 free quotes total,
+    // not 3, and the message at exhaustion must match that allowance.
     const bonus = Math.max(0, Number(quotaUser?.bonus_free_quotes) || 0);
     const effectiveLimit = FREE_QUOTES_LIMIT + bonus;
     const used = Number(quotaUser?.free_quotes_used) || 0;
     return res.status(402).json({
       error: 'quota_exhausted',
-      message: `You've used your ${FREE_QUOTES_LIMIT} free quotes. Subscribe to continue.`,
+      message: `You've used your ${effectiveLimit} free quotes. Subscribe to continue.`,
       freeQuotesUsed: Math.min(used, effectiveLimit),
       freeQuotesLimit: effectiveLimit,
     });

@@ -135,10 +135,15 @@ describe('SubscriptionBanner.jsx — quota variants source contract', () => {
     expect(bannerSrc).toMatch(/testId=["']subscription-banner-free-remaining["']/);
   });
 
-  test('exhausted variant uses the brief\'s exact friendly copy', () => {
-    // The brief specifies this copy verbatim — server's 402 body
-    // carries the same string. Easy to drift; pin it.
-    expect(bannerSrc).toMatch(/You've used your 3 free quotes\. Subscribe to continue\./);
+  test('exhausted variant uses a dynamic limit (matches the effective allowance)', () => {
+    // The copy template is "You've used your N free quotes" where N comes
+    // from `status.freeQuotesLimit` — referrals Phase 1 (2026-06-23) made
+    // the limit dynamic (3 for cold signups, 5 for referees). The server's
+    // 402 body uses the same effective-limit template. Pin both the
+    // template structure AND the interpolated source so the banner can't
+    // silently regress to a hardcoded "3".
+    expect(bannerSrc).toMatch(/You've used your \{lockoutLimit\} free quotes\. Subscribe to continue\./);
+    expect(bannerSrc).toMatch(/lockoutLimit\s*=[\s\S]{0,200}status\.freeQuotesLimit/);
   });
 
   test('free-remaining variant renders the freeQuotesCopy helper with used/limit', () => {

@@ -48,7 +48,12 @@ export default function ReferralPanel({ currentUserId, userName, showToast }) {
 
   const handleShare = useCallback(async () => {
     if (!shareUrl) return;
-    const shareText = `Try FastQuote — quotes in minutes, not hours. Use my code ${data?.code} for 2 free quotes: ${shareUrl}`;
+    // Share text leads with the TOTAL referee allowance (5), not the
+    // +2 bonus above the baseline. Referees who hear "2 free quotes"
+    // hear less generous than "5 free quotes" — same offer, better
+    // framing. Update both values together if FREE_QUOTES_LIMIT or
+    // REFERRAL_REFEREE_BONUS changes.
+    const shareText = `Try FastQuote — quotes in minutes, not hours. Use my code ${data?.code} for 5 free quotes: ${shareUrl}`;
     // Prefer the OS share sheet on mobile (Paul → WhatsApp). Fall
     // back to clipboard on desktop where navigator.share is absent.
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
