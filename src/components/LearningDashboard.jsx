@@ -39,6 +39,7 @@ export default function LearningDashboard({ currentUserId }) {
     weightedSummary = null,
     refCardImpact = [],
     userAccuracy = [],
+    promptSize = null,
   } = data || {};
 
   // Merge edit-presence + weighted into one week-keyed table so both
@@ -70,6 +71,20 @@ export default function LearningDashboard({ currentUserId }) {
       <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
         How the AI's estimates compare to confirmed values. Use this data to update calibration notes in the system prompt.
       </p>
+
+      {/* TRQ-176: prompt-length budget alarm — must render before any
+          other section so admin sees the threshold breach immediately. */}
+      {promptSize && promptSize.alarm && (
+        <PromptBudgetAlarm
+          avg20={promptSize.avg20}
+          threshold={promptSize.threshold}
+        />
+      )}
+
+      {/* TRQ-176: prompt-length budget telemetry */}
+      <Section title="Prompt Size (Last 50 Quotes)">
+        <PromptSizePanel promptSize={promptSize} />
+      </Section>
 
       {/* Weighted accuracy headline — 2026-06-22 follow-up */}
       <Section title="Weighted Accuracy (Last 90 Days)">
@@ -336,6 +351,110 @@ function TypeBadge({ type }) {
     >
       {labels[type] || type}
     </span>
+  );
+}
+
+// TRQ-176: prompt-length budget alarm. Banner-style warning shown only
+// when avg-of-last-20 jobs exceeds the threshold. Admin-only — mounted
+// inside LearningDashboard which is gated by isAdmin in App.jsx.
+// Copy uses "calibration corpus" (admin-only vocabulary).
+function PromptBudgetAlarm({ avg20, threshold }) {
+  return (
+    <div
+      role="alert"
+      className="mb-6"
+      style={{
+        backgroundColor: 'var(--tq-error-bg, #7f1d1d)',
+        color: 'var(--tq-error-txt, #fecaca)',
+        border: '1px solid #f87171',
+        padding: '14px 18px',
+        borderRadius: 2,
+      }}
+    >
+      <div
+        className="text-xs uppercase tracking-wide mb-1"
+        style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700 }}
+      >
+        Prompt Budget Warning
+      </div>
+      <div className="text-sm">
+        Average prompt size over the last 20 quotes is{' '}
+        <strong style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          {avg20.toLocaleString()} chars
+        </strong>{' '}
+        — over the{' '}
+        <strong style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          {threshold.toLocaleString()}
+        </strong>{' '}
+        threshold. Calibration corpus is growing — consider pruning notes.
+      </div>
+    </div>
+  );
+}
+
+// TRQ-176: prompt size sparkline + current value. Renders the last 50
+// jobs' prompt_chars as an inline SVG sparkline plus the current and
+// avg-of-last-20 stats. No external chart library — keeps the bundle
+// lean and the assertion surface stable.
+function PromptSizePanel({ promptSize }) {
+  if (!promptSize || promptSize.current == null || !Array.isArray(promptSize.history) || promptSize.history.length === 0) {
+    return <EmptyState>No prompt-size data yet. Save a quote to populate.</EmptyState>;
+  }
+  // History is newest-first from the server; reverse for left→right time order.
+  const points = [...promptSize.history].reverse().map(h => h.promptChars);
+  return (
+    <div>
+      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+        Character count of the system prompt + appended calibration notes, stamped at save time.
+      </p>
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <Stat label="Current" value={promptSize.current.toLocaleString()} />
+        <Stat
+          label="Avg (Last 20)"
+          value={promptSize.avg20 != null ? promptSize.avg20.toLocaleString() : '—'}
+        />
+        <Stat label="Threshold" value={promptSize.threshold.toLocaleString()} />
+      </div>
+      <Sparkline values={points} threshold={promptSize.threshold} />
+      <p className="text-xs mt-2" style={{ color: 'var(--tq-muted)' }}>
+        {promptSize.history.length} quote{promptSize.history.length === 1 ? '' : 's'} plotted (newest right).
+      </p>
+    </div>
+  );
+}
+
+// Inline SVG sparkline — no chart library. Width is fluid via viewBox.
+function Sparkline({ values, threshold }) {
+  const w = 600;
+  const h = 80;
+  const pad = 4;
+  const min = Math.min(...values, threshold);
+  const max = Math.max(...values, threshold);
+  const range = Math.max(1, max - min);
+  const stepX = values.length > 1 ? (w - pad * 2) / (values.length - 1) : 0;
+  const yFor = (v) => h - pad - ((v - min) / range) * (h - pad * 2);
+  const path = values
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${pad + i * stepX} ${yFor(v)}`)
+    .join(' ');
+  const thresholdY = yFor(threshold);
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      role="img"
+      aria-label="Prompt size sparkline"
+      style={{ width: '100%', height: 80, display: 'block' }}
+    >
+      <line
+        x1={pad}
+        x2={w - pad}
+        y1={thresholdY}
+        y2={thresholdY}
+        stroke="#f87171"
+        strokeDasharray="4 4"
+        strokeWidth="1"
+      />
+      <path d={path} fill="none" stroke="var(--tq-text)" strokeWidth="1.5" />
+    </svg>
   );
 }
 

@@ -489,6 +489,18 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_version TEXT;
     `);
 
+    // TRQ-176: prompt-length budget telemetry. The DYNAMIC CALIBRATION
+    // NOTES section is appended to SYSTEM_PROMPT on every analyse call,
+    // and grows unbounded as the calibration agent approves more notes.
+    // After enough approved notes Sonnet's accuracy can degrade from
+    // instruction overload with no visibility. `prompt_chars` is the
+    // raw character count of the prompt (SYSTEM_PROMPT + appended
+    // calibration section) stamped at save-time alongside prompt_version.
+    // Additive only — never read load-bearingly; pure observability.
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_chars INTEGER;
+    `);
+
     // Agent retry queue — exponential backoff for failed agent runs
     await client.query(`
       CREATE TABLE IF NOT EXISTS agent_retry_queue (
@@ -1703,6 +1715,35 @@ async function computeCurrentPromptVersion() {
   }
 }
 
+// TRQ-176: prompt-length budget telemetry. Recomputes the current
+// augmented prompt size (SYSTEM_PROMPT + DYNAMIC CALIBRATION NOTES) and
+// returns the raw character count. Mirrors computeCurrentPromptVersion
+// so both observability fields agree on the same calibration-notes
+// snapshot. Returns null on DB failure so save never breaks — this is
+// pure observability data, not load-bearing for the quote.
+//
+// The format here MUST match the photo-path /analyse augmentation
+// (server.js: /api/users/:id/analyse route) so save-time char count
+// reflects what's actually sent to Sonnet at analyse time.
+async function computeCurrentPromptChars() {
+  try {
+    const { rows: calNotes } = await pool.query(
+      `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
+    );
+    let augmentedPrompt = SYSTEM_PROMPT;
+    if (calNotes.length > 0) {
+      const dynamicSection = calNotes.map((n, i) =>
+        `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
+      ).join('\n');
+      augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES (auto-generated from completed job data):\n${dynamicSection}`;
+    }
+    return augmentedPrompt.length;
+  } catch (err) {
+    console.warn(`[PromptChars] Failed to compute prompt char count: ${err.message}`);
+    return null;
+  }
+}
+
 // sec-audit I-2 — fire-and-forget admin audit write. Never throws —
 // audit failure must not break the underlying admin action.
 async function logAdminAction(req, action, targetId = null, details = null) {
@@ -2007,10 +2048,18 @@ app.post('/api/users/:id/jobs', async (req, res) => {
     const promptVersion = req.body.promptVersion
       || await computeCurrentPromptVersion();
 
+    // TRQ-176: prompt-length budget telemetry. Stamp the raw char count
+    // of the augmented prompt alongside prompt_version. The /analyse
+    // routes append DYNAMIC CALIBRATION NOTES on every call; without
+    // visibility into the growing size, an over-stuffed prompt could
+    // degrade Sonnet's accuracy without anyone noticing. Best-effort —
+    // null on failure (jobs.prompt_chars is observability-only).
+    const promptChars = await computeCurrentPromptChars();
+
     await pool.query(
       `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
-        quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_version)
-       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9)`,
+        quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_chars, prompt_version)
+       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9, $10)`,
       [
         id,
         req.params.id,
@@ -2020,6 +2069,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         jobDetails?.quoteDate || '',
         totals?.total ?? 0,
         JSON.stringify(quoteSnapshot),
+        promptChars,
         promptVersion,
       ]
     );
@@ -2654,6 +2704,35 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
     }
     const weightedSummary = summariseWeightedAccuracy(allQuotesLast90d);
 
+    // TRQ-176: prompt-length budget telemetry. Pull the last 50 saved
+    // jobs (ordered newest-first) so the dashboard can render a 50-job
+    // sparkline AND compute avg-of-last-20 for the alarm threshold.
+    // Older NULL rows (jobs saved before this column existed) are
+    // filtered out so the sparkline only shows real data points.
+    const promptCharsRows = await pool.query(`
+      SELECT id, prompt_chars, saved_at
+      FROM jobs
+      WHERE prompt_chars IS NOT NULL
+      ORDER BY saved_at DESC
+      LIMIT 50
+    `);
+    const promptCharsHistory = promptCharsRows.rows.map(r => ({
+      jobId: r.id,
+      promptChars: Number(r.prompt_chars),
+      savedAt: r.saved_at,
+    }));
+    // Current value = most recent job's prompt_chars (or null if none).
+    const promptCharsCurrent = promptCharsHistory[0]?.promptChars ?? null;
+    // Avg-of-last-20 — the alarm metric. Above 10,000 chars indicates
+    // the calibration corpus is bloating and admin should consider
+    // pruning notes.
+    const last20 = promptCharsHistory.slice(0, 20);
+    const promptCharsAvg20 = last20.length > 0
+      ? Math.round(last20.reduce((s, r) => s + r.promptChars, 0) / last20.length)
+      : null;
+    const PROMPT_CHARS_ALARM_THRESHOLD = 10000;
+    const promptCharsAlarm = promptCharsAvg20 != null && promptCharsAvg20 > PROMPT_CHARS_ALARM_THRESHOLD;
+
     res.json({
       fieldBias,
       weeklyTrend: weeklyTrend.rows.map(r => ({
@@ -2669,6 +2748,16 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
         userId: r.user_id, avgAccuracy: Number(r.avg_accuracy), quoteCount: Number(r.quote_count),
         isOutlier: Number(r.avg_accuracy) < 0.4 && Number(r.quote_count) >= 3,
       })),
+      // TRQ-176: prompt-length budget. Newest-first sparkline data +
+      // headline current + avg-of-last-20 alarm. Empty arrays / null
+      // values are valid (pre-feature jobs); the dashboard handles them.
+      promptSize: {
+        current: promptCharsCurrent,
+        avg20: promptCharsAvg20,
+        alarm: promptCharsAlarm,
+        threshold: PROMPT_CHARS_ALARM_THRESHOLD,
+        history: promptCharsHistory,
+      },
     });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);

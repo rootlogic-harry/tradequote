@@ -614,13 +614,12 @@ describe('Server job metadata extraction', () => {
 
   test('POST /api/users/:id/jobs extracts clientName from jobDetails', () => {
     // Widen the slice — the route grew when we added server-side
-    // prompt_version stamping (2026-06-22 calibration fix). The
-    // INSERT statement and value list are now further from the
-    // route declaration.
-    const postBlock = serverSrc.slice(
-      serverSrc.indexOf("app.post('/api/users/:id/jobs'"),
-      serverSrc.indexOf("app.post('/api/users/:id/jobs'") + 2800
-    );
+    // prompt_version stamping (2026-06-22 calibration fix) and again
+    // for prompt_chars telemetry (TRQ-176, 2026-06-23). Bound by the
+    // next route declaration so the slice scales with the route body.
+    const postStart = serverSrc.indexOf("app.post('/api/users/:id/jobs'");
+    const postEnd = serverSrc.indexOf("app.put('/api/users/:id/jobs/:jobId',");
+    const postBlock = serverSrc.slice(postStart, postEnd);
     expect(postBlock).toContain("jobDetails?.clientName || ''");
     expect(postBlock).toContain("jobDetails?.siteAddress || ''");
     expect(postBlock).toContain("jobDetails?.quoteDate || ''");
