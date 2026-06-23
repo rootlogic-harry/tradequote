@@ -104,4 +104,40 @@ describe('VideoUpload component', () => {
       expect(violations).toEqual([]);
     });
   });
+
+  describe('TRQ-168 — uses --tq-* CSS variables, not unscoped vars', () => {
+    // Unscoped --accent / --border / --card-bg / --text-* do not exist in
+    // index.html — only their --tq-* equivalents do. The fallback colours
+    // (#2563eb blue, #fff white, #666 grey) render bright-blue against the
+    // amber theme. Guard at source level.
+    const UNSCOPED_PATTERNS = [
+      /var\(\s*--accent\b/,
+      /var\(\s*--accent-bg\b/,
+      /var\(\s*--text-primary\b/,
+      /var\(\s*--text-secondary\b/,
+      /var\(\s*--card-bg\b/,
+      /var\(\s*--border\b/,
+      /var\(\s*--text\b(?!-)/, // bare --text, not --text-primary/-secondary
+    ];
+
+    it.each(UNSCOPED_PATTERNS)('contains no unscoped %s reference', (pattern) => {
+      expect(source).not.toMatch(pattern);
+    });
+
+    it('references --tq-accent for accent colour', () => {
+      expect(source).toMatch(/var\(\s*--tq-accent\b/);
+    });
+
+    it('references --tq-border for borders', () => {
+      expect(source).toMatch(/var\(\s*--tq-border\b/);
+    });
+
+    it('references --tq-card for card background', () => {
+      expect(source).toMatch(/var\(\s*--tq-card\b/);
+    });
+
+    it('references --tq-muted for secondary text', () => {
+      expect(source).toMatch(/var\(\s*--tq-muted\b/);
+    });
+  });
 });
