@@ -13,11 +13,14 @@ import rateLimit from 'express-rate-limit';
 import { safeError, setSystemErrorLogger } from './safeError.js';
 import {
   PRICE_GBP, TRIAL_DAYS,
+  QUOTE_PACK_PRICE_PENCE, QUOTE_PACK_SIZE, QUOTE_PACK_DESCRIPTION,
   hasStripeKey,
   createCheckoutSession,
   createPortalSession,
+  createQuotePackCheckoutSession,
   parseWebhookEvent,
   applySubscriptionEventToDb,
+  applyQuotePackEventToDb,
   currentSubscriptionState,
   daysOfTrialRemaining,
 } from './billing.js';
@@ -166,11 +169,47 @@ app.post('/api/billing/webhook',
       return res.status(400).json({ error: 'invalid signature' });
     }
     try {
-      const result = await applySubscriptionEventToDb(pool, event);
+      // Fan-out (2026-06-24): a single webhook secret handles both
+      // subscription lifecycle (TRQ-150) AND one-time quote-pack
+      // payments. Routing keys are disjoint:
+      //   • applySubscriptionEventToDb cares about
+      //     customer.subscription.* and invoice.payment_failed.
+      //     It treats checkout.session.completed as subscription-mode
+      //     only (sets users.subscription_status = 'active').
+      //   • applyQuotePackEventToDb cares about
+      //     checkout.session.completed (mode=payment +
+      //     metadata.fastquote_product='quote_pack') and
+      //     payment_intent.succeeded. It writes quote_purchases +
+      //     bumps users.purchased_quotes.
+      // The subscription handler ignores payment-mode checkouts
+      // implicitly (no subscription id on the session). The quote-pack
+      // handler ignores subscription events. They can't double-fire
+      // on the same event.
+      //
+      // For a quote-pack checkout.session.completed, BOTH handlers
+      // see the event:
+      //   • applySubscriptionEventToDb will UPDATE users SET
+      //     subscription_status='active' if session.subscription is
+      //     truthy. A payment-mode session has session.subscription =
+      //     null, so the UPDATE is a no-op (COALESCE keeps the existing
+      //     value). Safe.
+      //   • applyQuotePackEventToDb credits the pack.
+      const subResult = await applySubscriptionEventToDb(pool, event);
+      let packResult = { applied: false };
+      try {
+        packResult = await applyQuotePackEventToDb(pool, event);
+      } catch (err) {
+        // Surface as 500 — Stripe will retry. Logging is best-effort.
+        console.error('[stripe webhook] quote pack apply failed:', err?.message || err);
+        return res.status(500).json({ error: 'apply failed' });
+      }
       // 200 ACKs the event; Stripe stops retrying. Even if we couldn't
       // apply the event (e.g. unhandled type), ACK — otherwise Stripe
       // re-delivers the same event endlessly.
-      res.json({ received: true, applied: result.applied });
+      res.json({
+        received: true,
+        applied: subResult.applied || packResult.applied,
+      });
     } catch (err) {
       // Real failure (DB unreachable etc.) — 500 so Stripe retries.
       console.error('[stripe webhook] apply failed:', err?.message || err);
@@ -366,6 +405,15 @@ async function initDB() {
       -- subscribed > comped > counter) so it simply accumulates and
       -- becomes spendable when the comp ends — no special handling.
       ALTER TABLE users ADD COLUMN IF NOT EXISTS bonus_free_quotes INTEGER NOT NULL DEFAULT 0;
+      -- Pay-as-you-go quote pack (2026-06-24): separate bucket from
+      -- free + bonus quotes. Tracked separately for analytics integrity
+      -- (so we can answer "how many quotes were paid for?" with one
+      -- column). quotaGate spends FREE first, then this — never burns a
+      -- paid quote while a free one is available. Decremented atomically
+      -- on a successful analyse call when the gate's reason was
+      -- 'purchased-remaining'. NOT decremented on refund — refund policy
+      -- is manual; see docs/REFUNDS.md.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS purchased_quotes INTEGER NOT NULL DEFAULT 0;
     `);
 
     // free_quote_grants: per-(user, quote_token) record of which
@@ -424,6 +472,29 @@ async function initDB() {
       );
       CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id);
       CREATE INDEX IF NOT EXISTS idx_referrals_referee  ON referrals(referee_user_id);
+    `);
+
+    // Pay-as-you-go quote-pack audit table (2026-06-24).
+    //
+    //  • stripe_payment_id UNIQUE — webhook idempotency. Stripe
+    //    redelivers events; the UNIQUE constraint + INSERT ... ON
+    //    CONFLICT DO NOTHING means a double-fire credits exactly once.
+    //  • amount_paid_pence — captured for audit / reconciliation. We
+    //    DON'T compute the per-quote cost from this; QUOTE_PACK_SIZE
+    //    is the canonical unit.
+    //  • created_at — the source of truth for "when was this pack
+    //    bought". Refund handling is manual (docs/REFUNDS.md) and
+    //    doesn't write back here.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS quote_purchases (
+        id                TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        user_id           TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        stripe_payment_id TEXT NOT NULL UNIQUE,
+        quotes_added      INTEGER NOT NULL,
+        amount_paid_pence INTEGER NOT NULL,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_quote_purchases_user ON quote_purchases(user_id);
     `);
 
     await client.query(`
@@ -1093,7 +1164,8 @@ app.get('/auth/me', async (req, res) => {
     if (!userId) return null;
     try {
       const r = await pool.query(
-        `SELECT free_quotes_used, bonus_free_quotes, comp_until, subscription_status
+        `SELECT free_quotes_used, bonus_free_quotes, purchased_quotes,
+                comp_until, subscription_status
          FROM users WHERE id = $1`,
         [userId]
       );
@@ -3757,11 +3829,17 @@ app.post('/api/users/:id/jobs/:jobId/video',
     // burned by the time we got here; the compute is the bigger cost
     // we still avoid). The upload's temp video file is unlinked to
     // keep disk pressure off.
+    // Captured so the success-path accounting block below knows which
+    // bucket (free vs purchased) to decrement. Subscribed / comped
+    // reasons skip the bucket update entirely. Declared at the route
+    // scope so it survives the gate's IIFE.
+    let videoGateReason = null;
     {
       let quotaUser = null;
       try {
         const { rows } = await pool.query(
-          `SELECT free_quotes_used, bonus_free_quotes, comp_until, subscription_status
+          `SELECT free_quotes_used, bonus_free_quotes, purchased_quotes,
+                  comp_until, subscription_status
            FROM users WHERE id = $1`,
           [userId]
         );
@@ -3771,6 +3849,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       }
       const hasActiveSubscription = quotaUser?.subscription_status === 'active';
       const decision = quotaGate(quotaUser, { hasActiveSubscription });
+      videoGateReason = decision.reason;
       if (!decision.allowed) {
         try { fs.unlinkSync(videoFile.path); } catch {}
         for (const f of extraPhotoFiles) { try { fs.unlinkSync(f.path); } catch {} }
@@ -4012,37 +4091,47 @@ app.post('/api/users/:id/jobs/:jobId/video',
         transcript: result.transcript,
       });
 
-      // Free-quota accounting (2026-06-22). For the video path the
-      // jobId already exists (the SPA creates the job row before
-      // upload), so we key the grant on `job:${jobId}` — stable across
-      // retries of the same upload. ON CONFLICT DO NOTHING dedupes.
-      // Subscribed users skip this branch (no need to track grants
-      // we'll never enforce against).
-      try {
-        const { rows: subRows } = await pool.query(
-          `SELECT subscription_status FROM users WHERE id = $1`,
-          [userId]
+      // Quota accounting (2026-06-22, pay-as-you-go pack 2026-06-24).
+      // For the video path the jobId already exists (the SPA creates the
+      // job row before upload), so we key the grant on `job:${jobId}` —
+      // stable across retries of the same upload. ON CONFLICT DO NOTHING
+      // dedupes so a re-upload of the same job burns at most one quote.
+      //
+      // Which bucket gets decremented is decided by the gate at the
+      // pre-flight check above (videoGateReason). Subscribed and comped
+      // users don't have a bucket to decrement.
+      if (videoGateReason === 'free-remaining') {
+        pool.query(
+          `WITH inserted AS (
+             INSERT INTO free_quote_grants (user_id, quote_token)
+             VALUES ($1, $2)
+             ON CONFLICT (user_id, quote_token) DO NOTHING
+             RETURNING user_id
+           )
+           UPDATE users
+              SET free_quotes_used = free_quotes_used + 1
+            WHERE id = $1
+              AND EXISTS (SELECT 1 FROM inserted)`,
+          [userId, `job:${jobId}`]
+        ).catch((err) =>
+          console.warn('[Video] free_quotes increment failed:', err.message)
         );
-        const stillActive = subRows[0]?.subscription_status === 'active';
-        if (!stillActive) {
-          pool.query(
-            `WITH inserted AS (
-               INSERT INTO free_quote_grants (user_id, quote_token)
-               VALUES ($1, $2)
-               ON CONFLICT (user_id, quote_token) DO NOTHING
-               RETURNING user_id
-             )
-             UPDATE users
-                SET free_quotes_used = free_quotes_used + 1
-              WHERE id = $1
-                AND EXISTS (SELECT 1 FROM inserted)`,
-            [userId, `job:${jobId}`]
-          ).catch((err) =>
-            console.warn('[Video] free_quotes increment failed:', err.message)
-          );
-        }
-      } catch (err) {
-        console.warn('[Video] free_quotes sub-check failed:', err.message);
+      } else if (videoGateReason === 'purchased-remaining') {
+        pool.query(
+          `WITH inserted AS (
+             INSERT INTO free_quote_grants (user_id, quote_token)
+             VALUES ($1, $2)
+             ON CONFLICT (user_id, quote_token) DO NOTHING
+             RETURNING user_id
+           )
+           UPDATE users
+              SET purchased_quotes = GREATEST(0, purchased_quotes - 1)
+            WHERE id = $1
+              AND EXISTS (SELECT 1 FROM inserted)`,
+          [userId, `job:${jobId}`]
+        ).catch((err) =>
+          console.warn('[Video] purchased_quotes decrement failed:', err.message)
+        );
       }
 
       // Referrals Phase 1 (2026-06-23): credit referrer on first
@@ -4827,7 +4916,8 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, plan, trial_ends_at, subscription_status,
               stripe_customer_id, current_period_end, cancel_at_period_end,
-              trial_will_end_at, free_quotes_used, bonus_free_quotes, comp_until
+              trial_will_end_at, free_quotes_used, bonus_free_quotes,
+              purchased_quotes, comp_until
        FROM users WHERE id = $1`,
       [userId]
     );
@@ -4863,6 +4953,15 @@ app.get('/api/billing/status', requireAuth, async (req, res) => {
       freeQuotesUsed: quota.freeQuotesUsed,
       freeQuotesLimit: quota.freeQuotesLimit,
       hasActiveSubscription: quota.hasActiveSubscription,
+      // Pay-as-you-go pack balance (2026-06-24). The persistent
+      // counter uses this to render mixed-state copy.
+      purchasedQuotesRemaining: quota.purchasedQuotesRemaining,
+      // Pack pricing for the buy button.
+      quotePack: {
+        sizeQuotes: QUOTE_PACK_SIZE,
+        pricePence: QUOTE_PACK_PRICE_PENCE,
+        priceGbp: QUOTE_PACK_PRICE_PENCE / 100,
+      },
     });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
@@ -4923,6 +5022,58 @@ app.post('/api/billing/portal', requireAuth, billingRateLimit, requireStripe, as
 });
 
 // ───── End TRQ-150 billing routes ─────
+
+// ───── Pay-as-you-go quote pack (2026-06-24) ─────
+//
+// One-time £9.99 payment, 5 quotes, never expires. Shares the same
+// Stripe account + webhook secret as TRQ-150 — the fan-out in the
+// webhook handler at the top of this file calls both
+// applySubscriptionEventToDb AND applyQuotePackEventToDb, and the
+// two routing rules are disjoint (subscription events vs one-time
+// payment events tagged metadata.fastquote_product='quote_pack').
+//
+// VAT: Harry is NOT VAT-registered. The Checkout session passes
+// `automatic_tax: false` (see billing.js → createQuotePackCheckoutSession)
+// so receipts never imply VAT. Mirror TRQ-157's pattern.
+//
+// Refunds are MANUAL — see docs/REFUNDS.md. No automated claw-back of
+// `users.purchased_quotes` if a refund is issued.
+
+app.post(
+  '/api/billing/buy-quote-pack',
+  requireAuth,
+  billingRateLimit,
+  requireStripe,
+  async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const { rows } = await pool.query(
+        `SELECT id, email, subscription_status FROM users WHERE id = $1`,
+        [userId]
+      );
+      const user = rows[0];
+      if (!user) return res.status(404).json({ error: 'user not found' });
+      // Subscribed users don't need a pack. Block to avoid taking money
+      // for something that gives the user no benefit.
+      if (user.subscription_status === 'active') {
+        return res.status(409).json({ error: 'already subscribed' });
+      }
+      const baseUrl =
+        process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+      const { url } = await createQuotePackCheckoutSession({
+        userId,
+        email: user.email,
+        successUrl: `${baseUrl}/?pack_purchased=1`,
+        cancelUrl: `${baseUrl}/`,
+      });
+      res.json({ url });
+    } catch (err) {
+      safeError(res, err, `${req.method} ${req.path}`);
+    }
+  }
+);
+
+// ───── End pay-as-you-go quote pack routes ─────
 
 // ─────────────────────────────────────────────────────────────────────────
 // Referrals Phase 1 (2026-06-23)
@@ -5061,7 +5212,8 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   let quotaUser = null;
   try {
     const { rows } = await pool.query(
-      `SELECT id, free_quotes_used, bonus_free_quotes, comp_until, subscription_status, trial_ends_at
+      `SELECT id, free_quotes_used, bonus_free_quotes, purchased_quotes,
+              comp_until, subscription_status, trial_ends_at
        FROM users WHERE id = $1`,
       [userIdParam]
     );
@@ -5236,16 +5388,27 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
       promptVersion,
     });
 
-    // Quota accounting (2026-06-22). Only on full success — the parse-
-    // failure path above returns early before this. The INSERT uses
-    // `ON CONFLICT DO NOTHING` so retrying the same draft (same
-    // quoteToken) is idempotent: counts at most once per draft, no
-    // matter how many times the user retries. The CTE chains the
-    // grant insert and the increment so they're consistent — if the
-    // grant already existed (re-analysis), `inserted` is empty and we
-    // skip the bump. Subscribed users skip this branch entirely so we
-    // don't pollute the table with grants we'll never enforce against.
-    if (!hasActiveSubscription) {
+    // Quota accounting (2026-06-22, consume-on-success rule formalised
+    // 2026-06-24). Only on full success — the parse-failure path above
+    // returns early before this, and the catch block never decrements.
+    // The INSERT into free_quote_grants uses `ON CONFLICT DO NOTHING`
+    // so retrying the same draft (same quoteToken) is idempotent: each
+    // draft burns at most one quote, no matter how many times the user
+    // retries.
+    //
+    // Pay-as-you-go pack (2026-06-24): if the gate's reason was
+    // 'purchased-remaining' we decrement users.purchased_quotes
+    // instead of incrementing free_quotes_used. The SAME free_quote_
+    // grants row is the dedupe key for both buckets — re-analysing a
+    // draft never burns a second quote (free OR paid). Per-spec:
+    // "even more critical for paid quotes — someone paying £9.99 must
+    // never lose 3 of 5 from re-running one wall."
+    //
+    // Subscribed users skip this entire branch — no need to track
+    // grants we'll never enforce against. Comped users likewise (gate
+    // reason was 'comped', no consumption).
+    const consumeReason = gateDecision.reason;
+    if (consumeReason === 'free-remaining') {
       pool.query(
         `WITH inserted AS (
            INSERT INTO free_quote_grants (user_id, quote_token)
@@ -5261,7 +5424,24 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
       ).catch((err) =>
         console.warn('[Analyse] free_quotes increment failed:', err.message)
       );
+    } else if (consumeReason === 'purchased-remaining') {
+      pool.query(
+        `WITH inserted AS (
+           INSERT INTO free_quote_grants (user_id, quote_token)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id, quote_token) DO NOTHING
+           RETURNING user_id
+         )
+         UPDATE users
+            SET purchased_quotes = GREATEST(0, purchased_quotes - 1)
+          WHERE id = $1
+            AND EXISTS (SELECT 1 FROM inserted)`,
+        [userIdParam, quoteToken]
+      ).catch((err) =>
+        console.warn('[Analyse] purchased_quotes decrement failed:', err.message)
+      );
     }
+    // 'subscribed' / 'comped' / unknown reason → no bucket change.
 
     // Referrals Phase 1 (2026-06-23): if this user was referred AND
     // this is their first completed analysis, credit the referrer with

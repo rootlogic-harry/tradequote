@@ -44,6 +44,14 @@ import Stripe from 'stripe';
 export const PRICE_GBP = 19.99;
 export const TRIAL_DAYS = 30;
 
+// Pay-as-you-go quote pack (2026-06-24). One-time payment, no expiry.
+// Deliberately a worse per-quote value than the subscription so the
+// pack is a top-up for occasional users, not a substitute for paying.
+// Pence keeps integer maths off floating point.
+export const QUOTE_PACK_PRICE_PENCE = 999;
+export const QUOTE_PACK_SIZE = 5;
+export const QUOTE_PACK_DESCRIPTION = '5 quote pack';
+
 // Stripe's documented subscription.status values. We mirror the
 // `subscription_status` column on `users`.
 export const SUBSCRIPTION_STATUSES = Object.freeze([
@@ -362,4 +370,168 @@ export function daysOfTrialRemaining(user) {
   const ms = new Date(user.trial_ends_at).getTime() - Date.now();
   if (ms <= 0) return 0;
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Pay-as-you-go quote pack (2026-06-24)
+//
+// One-time £9.99 payment for 5 quotes. Shares the FastQuote Stripe
+// account from TRQ-150 — the same key, the same webhook secret, the
+// same statement descriptor. Webhook fan-out is in server.js: every
+// event goes through BOTH applySubscriptionEventToDb (subscription
+// lifecycle) AND applyQuotePackEventToDb (one-time pack purchases).
+// Idempotency keys are disjoint (subscription_status vs the
+// `quote_purchases.stripe_payment_id UNIQUE` constraint) so a stray
+// double-fire is safe.
+//
+// Harry is NOT VAT-registered — `automatic_tax: false` on the
+// Checkout session keeps the receipt free of any VAT line. Same care
+// as TRQ-157.
+// ───────────────────────────────────────────────────────────────────
+
+/**
+ * Create a Stripe Checkout session for the £9.99 quote pack.
+ *
+ * mode='payment' (one-time, NOT a subscription). The pack is credited
+ * by the webhook on `checkout.session.completed` OR `payment_intent.
+ * succeeded` — whichever arrives first.
+ *
+ * @param {Object} opts
+ * @param {string} opts.userId — FastQuote user id (client_reference_id + metadata)
+ * @param {string} opts.email — for prefill + receipt
+ * @param {string} opts.successUrl — full URL to redirect to on success
+ * @param {string} opts.cancelUrl  — full URL to redirect to on cancel
+ * @returns {Promise<{ url: string, sessionId: string }>}
+ */
+export async function createQuotePackCheckoutSession({ userId, email, successUrl, cancelUrl }) {
+  const stripe = stripeClient();
+  if (!userId) throw new Error('createQuotePackCheckoutSession: userId is required');
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    line_items: [{
+      price_data: {
+        currency: 'gbp',
+        product_data: {
+          name: QUOTE_PACK_DESCRIPTION,
+          description: `${QUOTE_PACK_SIZE} AI-generated quotes — never expire.`,
+        },
+        unit_amount: QUOTE_PACK_PRICE_PENCE,
+      },
+      quantity: 1,
+    }],
+    // Harry is not VAT-registered (2026-06-24). Receipt must NOT
+    // imply VAT — same constraint as TRQ-157.
+    automatic_tax: { enabled: false },
+    client_reference_id: userId,
+    customer_email: email,
+    // Tag both the session AND the payment_intent so the webhook can
+    // attribute either event to the FastQuote user without a JOIN.
+    metadata: {
+      fastquote_user_id: userId,
+      fastquote_product: 'quote_pack',
+    },
+    payment_intent_data: {
+      metadata: {
+        fastquote_user_id: userId,
+        fastquote_product: 'quote_pack',
+      },
+    },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+  });
+
+  return { url: session.url, sessionId: session.id };
+}
+
+/**
+ * Apply a one-time-payment webhook event to `quote_purchases` +
+ * `users.purchased_quotes`. Idempotent on the Stripe payment id
+ * (ON CONFLICT DO NOTHING against `quote_purchases.stripe_payment_id`
+ * UNIQUE) — double-firing the same event credits exactly once.
+ *
+ * Both the insert AND the credit happen inside a single transaction:
+ * either both writes land or neither does. No partial state where
+ * the user got credited but the audit row is missing.
+ *
+ * Only acts on events whose metadata.fastquote_product === 'quote_pack'.
+ * Subscription events fall through unchanged — they're handled by
+ * applySubscriptionEventToDb.
+ *
+ * Supported event types:
+ *   - checkout.session.completed (one-time payment mode only)
+ *   - payment_intent.succeeded
+ *
+ * @param {*} pool — pg Pool (or anything with .connect())
+ * @param {*} event — parsed Stripe event
+ * @returns {Promise<{applied: boolean, reason?: string, userId?: string, credited?: number}>}
+ */
+export async function applyQuotePackEventToDb(pool, event) {
+  // Extract (userId, stripePaymentId, amountPaidPence) from whichever
+  // event shape arrived. checkout.session.completed and
+  // payment_intent.succeeded both carry the metadata we set above; we
+  // prefer the payment_intent id as the dedupe key because it's stable
+  // across both event types (one Checkout session → one PaymentIntent).
+  let userId = null;
+  let stripePaymentId = null;
+  let amountPaidPence = null;
+
+  if (event?.type === 'checkout.session.completed') {
+    const s = event.data?.object || {};
+    // Subscription-mode checkouts use the same event type — only act on
+    // one-time payments tagged as a quote pack.
+    if (s.mode !== 'payment') return { applied: false, reason: 'not a payment-mode checkout' };
+    if (s.metadata?.fastquote_product !== 'quote_pack') {
+      return { applied: false, reason: 'not a quote_pack checkout' };
+    }
+    userId = s.metadata?.fastquote_user_id || s.client_reference_id || null;
+    stripePaymentId = s.payment_intent || s.id || null;
+    amountPaidPence = typeof s.amount_total === 'number' ? s.amount_total : QUOTE_PACK_PRICE_PENCE;
+  } else if (event?.type === 'payment_intent.succeeded') {
+    const pi = event.data?.object || {};
+    if (pi.metadata?.fastquote_product !== 'quote_pack') {
+      return { applied: false, reason: 'not a quote_pack payment_intent' };
+    }
+    userId = pi.metadata?.fastquote_user_id || null;
+    stripePaymentId = pi.id || null;
+    amountPaidPence = typeof pi.amount_received === 'number' ? pi.amount_received
+      : (typeof pi.amount === 'number' ? pi.amount : QUOTE_PACK_PRICE_PENCE);
+  } else {
+    return { applied: false, reason: `unhandled event type ${event?.type}` };
+  }
+
+  if (!userId) return { applied: false, reason: 'no fastquote_user_id on event' };
+  if (!stripePaymentId) return { applied: false, reason: 'no stripe payment id on event' };
+
+  // Transaction: insert audit row, then credit the user. ON CONFLICT
+  // DO NOTHING on the audit insert is the dedupe — if we've seen this
+  // payment id before, the credit UPDATE only fires when the audit
+  // row is genuinely new (CTE guards the UPDATE on EXISTS inserted).
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `WITH inserted AS (
+         INSERT INTO quote_purchases (user_id, stripe_payment_id, quotes_added, amount_paid_pence)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (stripe_payment_id) DO NOTHING
+         RETURNING id
+       )
+       UPDATE users
+          SET purchased_quotes = purchased_quotes + $3
+        WHERE id = $1
+          AND EXISTS (SELECT 1 FROM inserted)
+        RETURNING id`,
+      [userId, stripePaymentId, QUOTE_PACK_SIZE, amountPaidPence]
+    );
+    await client.query('COMMIT');
+    const credited = rows.length > 0 ? QUOTE_PACK_SIZE : 0;
+    return { applied: true, userId, credited, stripePaymentId };
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
 }

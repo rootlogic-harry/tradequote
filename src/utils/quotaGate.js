@@ -1,5 +1,5 @@
 /**
- * Quota-based free tier (2026-06-22).
+ * Quota-based free tier (2026-06-22) + pay-as-you-go pack (2026-06-24).
  *
  * FastQuote used to ship a 1-month no-card trial: signup set
  * `users.trial_ends_at = NOW() + 30 days` and the analyse endpoint
@@ -24,11 +24,17 @@
  *      the comp clock or the free-quote counter).
  *   2. Active comp (comp_until > now) → ALLOW (trusted users — Paul
  *      and any future comped account).
- *   3. free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes → ALLOW.
+ *   3. free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes → ALLOW
+ *      with reason='free-remaining'.
  *      Bonus quotes come from referrals (Phase 1, 2026-06-23):
  *      referees get +2 at signup, referrers get +2 per referral whose
  *      referee completes their first analysis.
- *   4. Otherwise → DENY with reason='quota_exhausted'.
+ *   4. purchased_quotes > 0 → ALLOW with reason='purchased-remaining'
+ *      (pay-as-you-go pack, 2026-06-24). The pack costs £9.99 for 5
+ *      quotes; one-time payment, no expiry. Free quotes burn FIRST so
+ *      a user who buys a pack but still has a free quote left spends
+ *      the free one first — friendly AND correct.
+ *   5. Otherwise → DENY with reason='quota_exhausted'.
  */
 
 export const FREE_QUOTES_LIMIT = 3;
@@ -37,15 +43,18 @@ export const FREE_QUOTES_LIMIT = 3;
  * Decide whether a user is allowed to consume an AI analysis right
  * now. Pure function — no I/O, no Date.now() unless `now` is omitted.
  *
- * @param {{ free_quotes_used?: number, bonus_free_quotes?: number, comp_until?: string|Date|null }|null|undefined} user
+ * @param {{ free_quotes_used?: number, bonus_free_quotes?: number, purchased_quotes?: number, comp_until?: string|Date|null }|null|undefined} user
  *        The user row (raw DB shape — snake_case from the `users`
  *        table). Null / undefined → denied (defensive — better to
  *        block a stranger than silently allow one).
  *        `bonus_free_quotes` (referrals Phase 1, 2026-06-23) is added
  *        on top of FREE_QUOTES_LIMIT for the effective allowance.
+ *        `purchased_quotes` (pay-as-you-go pack, 2026-06-24) is a
+ *        separate bucket spent only after free quotes are exhausted —
+ *        never burn a paid quote while a free one is still available.
  *        Subscribed > comped > counter gating order means bonus quotes
  *        are invisible during a comp — they accumulate and become
- *        spendable when the comp ends.
+ *        spendable when the comp ends. Same for purchased.
  * @param {{ hasActiveSubscription: boolean, now?: Date }} ctx
  *        - `hasActiveSubscription` — caller has already decided this
  *          from Stripe state. We accept it as a boolean so the gate
@@ -55,10 +64,11 @@ export const FREE_QUOTES_LIMIT = 3;
  *
  * @returns {{ allowed: boolean, reason: string }}
  *          `reason` is one of:
- *            - 'subscribed'      — active Stripe subscription
- *            - 'comped'          — comp_until > now
- *            - 'free-remaining'  — within the effective free-quote allowance
- *            - 'quota_exhausted' — denied; UI shows hard subscribe CTA
+ *            - 'subscribed'           — active Stripe subscription
+ *            - 'comped'               — comp_until > now
+ *            - 'free-remaining'       — within the effective free-quote allowance
+ *            - 'purchased-remaining'  — free exhausted but pack quotes available
+ *            - 'quota_exhausted'      — denied; UI shows hard subscribe CTA
  */
 export function quotaGate(user, ctx) {
   const hasActiveSubscription = Boolean(ctx?.hasActiveSubscription);
@@ -88,6 +98,16 @@ export function quotaGate(user, ctx) {
     return { allowed: true, reason: 'free-remaining' };
   }
 
+  // Pay-as-you-go pack (2026-06-24). Free quotes burn first — if we're
+  // here the user has used all FREE_QUOTES_LIMIT + bonus. Now check the
+  // separate `purchased_quotes` bucket. Negative values are clamped to 0
+  // (defensive — a buggy refund couldn't accidentally grant negative-
+  // billed quotes).
+  const purchased = Math.max(0, Number(user.purchased_quotes) || 0);
+  if (purchased > 0) {
+    return { allowed: true, reason: 'purchased-remaining' };
+  }
+
   return { allowed: false, reason: 'quota_exhausted' };
 }
 
@@ -113,10 +133,14 @@ export function resolveQuotaState(user, ctx) {
       && compUntil > now
   );
 
+  // The gate's reason already tells us which bucket the user is in.
+  // Map it 1:1 except for 'quota_exhausted' (which downstream banner
+  // code expects as the legacy 'exhausted' string).
   let quotaState;
   if (hasActiveSubscription) quotaState = 'subscribed';
   else if (isComped) quotaState = 'comped';
-  else if (decision.allowed) quotaState = 'free-remaining';
+  else if (decision.reason === 'free-remaining') quotaState = 'free-remaining';
+  else if (decision.reason === 'purchased-remaining') quotaState = 'purchased-remaining';
   else quotaState = 'exhausted';
 
   // Referrals Phase 1 (2026-06-23): the effective limit is the baseline
@@ -128,6 +152,11 @@ export function resolveQuotaState(user, ctx) {
   const rawUsed = Number(user?.free_quotes_used) || 0;
   const freeQuotesUsed = Math.min(Math.max(0, rawUsed), effectiveLimit);
 
+  // Pay-as-you-go pack (2026-06-24). Surface the raw pack balance so
+  // the persistent counter can render mixed-state copy ("{free} free +
+  // {purchased} paid"). Negative values clamped — defensive.
+  const purchasedQuotesRemaining = Math.max(0, Number(user?.purchased_quotes) || 0);
+
   return {
     quotaState,
     hasActiveSubscription,
@@ -135,5 +164,6 @@ export function resolveQuotaState(user, ctx) {
     freeQuotesUsed,
     freeQuotesLimit: effectiveLimit,
     bonusFreeQuotes: bonus,
+    purchasedQuotesRemaining,
   };
 }

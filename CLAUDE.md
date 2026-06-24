@@ -128,6 +128,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 - **Video**: `POST /api/users/:id/jobs/:jobId/video` — multer disk storage (500MB), ffmpeg frame extraction + audio extraction, Whisper transcription, Claude analysis. Rate limited (5/hour). Cleans up temp files. Server-side AI normalisation via aiParser pipeline. Client uploads via XHR with real progress tracking and automatic retry (3 attempts, exponential backoff). **Gated by the `VIDEO_ANALYSIS_ENABLED` env var (see `docs/VIDEO_FLAG.md`):** fail-closed in production (unset = disabled), default-open in staging/dev. When disabled, both the upload route and the SSE progress route return 503 with a "use photos" message; `/auth/me` advertises `features.videoAnalysisEnabled=false` so the SPA hides the CaptureChoice video card. Use `requireVideoAnalysisEnabled` middleware (in `server.js`) on any future video-adjacent route so all video surfaces flip together.
 - **Video Progress**: `GET /api/users/:id/jobs/:jobId/video/progress` — SSE endpoint for real-time progress. Emits stages: processing (10%), analysing (50%), reviewing (80%), complete (100%). Client connects before upload, falls back to time-based estimation if SSE unavailable.
 - **Admin**: Learning dashboard, agent runs, calibration notes (all behind `requireAdminPlan` middleware)
+- **Billing (TRQ-150 + 2026-06-24 pack)**: `GET /api/billing/status` exposes `quotaState`, `freeQuotesUsed/Limit`, `purchasedQuotesRemaining`, and a `quotePack` pricing block. `POST /api/billing/checkout` opens a Stripe Checkout for the £19.99/month subscription. `POST /api/billing/buy-quote-pack` opens a Stripe Checkout for the £9.99 one-time pack (`mode: 'payment'`, `automatic_tax: false`). `POST /api/billing/portal` opens the Stripe billing portal for self-serve subscription management. `POST /api/billing/webhook` (mounted BEFORE `express.json`, raw body for HMAC) fans out to both `applySubscriptionEventToDb` and `applyQuotePackEventToDb` — disjoint routing, idempotent on `quote_purchases.stripe_payment_id` UNIQUE.
 - **Client Portal (TRQ-124 onwards)**: `POST /api/users/:id/jobs/:jobId/client-token` generates a UUID v4 token and freezes both the current `quote_snapshot` and the tradesman's profile into `jobs.client_snapshot` + `jobs.client_snapshot_profile`. `GET /api/users/:id/jobs/:jobId/client-status` returns portal state for the trader UI.
 - **Public Client Portal routes (TRQ-125)**: no-auth, rate-limited `clientPortalRateLimit` (20/hr/IP) mounted on all `/q/*`. Routes: `GET /q/:token` (validates token + expiry, sets noindex/no-store/DENY/CSP headers, renders portal), `POST /q/:token/viewed` (bot-safe beacon using `COALESCE(client_viewed_at, NOW())` so the first view wins), `POST /q/:token/respond` (single-submission guard via `AND client_response IS NULL`, writes both new `client_*` columns and legacy `status`/`accepted_at`/`declined_at`).
 - **Portal renderer (TRQ-126)** — `portalRenderer.js` at repo root. Reads ONLY from `client_snapshot` + `client_snapshot_profile` (frozen-at-send contract). Emits mobile-first HTML using the `.cp-*` namespace defined in `public/client-portal.css`. The root element is `<div class="cp" data-accent="{amber|rust|moss|slate}">` — unknown accents are rejected and fall back to amber. Every interpolated field is HTML-escaped. The inline view beacon fires only after 3s dwell OR scroll-past-cost-breakdown, and only once. Confirmation states replace the response block when `client_response IS NOT NULL` — no resubmission path.
@@ -173,6 +174,7 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 | `free_quote_grants` (2026-06-22) | Per-(user_id, quote_token) dedupe table. `quote_token` is either a per-draft UUID (photo path) or `job:${jobId}` (video path). ON CONFLICT DO NOTHING ensures a single draft only burns one free quote regardless of retries. No PII. |
 | `users.bonus_free_quotes` (2026-06-23, referrals Phase 1) | Additive bonus quotes earned via referrals — referee gets +2 at signup, referrer gets +2 per successful referral. Read by quotaGate as `effectiveLimit = FREE_QUOTES_LIMIT + bonus`. |
 | `referral_codes`, `referrals` (2026-06-23) | One code per user (lazy-generated, except Paul's seeded `PAULJULY`). `referrals` tracks each referrer↔referee pair with `first_analysis_at` as the reward trigger. Single-level only, no claw-back. |
+| `users.purchased_quotes`, `quote_purchases` (2026-06-24) | Pay-as-you-go pack — £9.99 for 5 quotes, no expiry. `purchased_quotes` is the user's current balance (decremented atomically on a successful analyse when the gate's reason was `purchased-remaining`). `quote_purchases` is the audit row per Stripe PaymentIntent — `stripe_payment_id UNIQUE` makes the webhook idempotent on redelivery. Refund handling is manual — see `docs/REFUNDS.md`. |
 
 ### JSONB Snapshot Contract
 
@@ -252,7 +254,7 @@ Two plans only: `admin` and `basic`. No `standard` plan (legacy references were 
 Replaced the 1-month no-card trial (`users.trial_ends_at`) with a 3-free-quote allowance. Aligns the free tier with the unit of value tradesmen perceive (per-quote, not per-month).
 
 - **`src/utils/quotaGate.js`** is the sole decision primitive. Three callers: the `/api/users/:id/analyse` middleware (the 402 lockout), `/auth/me` (so the SPA banner renders correctly on first paint), and `/api/billing/status` (legacy callers).
-- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes` → deny with `quota_exhausted`. The bonus comes from referrals (Phase 1, 2026-06-23) — referees get +2 at signup; referrers get +2 per successful referral.
+- **Evaluation order** (load-bearing): active Stripe subscription → `comp_until > now` → `free_quotes_used < FREE_QUOTES_LIMIT + bonus_free_quotes` → `purchased_quotes > 0` → deny with `quota_exhausted`. The bonus comes from referrals (Phase 1, 2026-06-23) — referees get +2 at signup; referrers get +2 per successful referral. The fourth branch is the £9.99 pay-as-you-go pack (2026-06-24) — see the dedicated section below. Free quotes burn FIRST, then purchased — never burn a paid quote while a free one is still available.
 - **`users.comp_until`** is the trusted-user bypass. Paul's beta-referrer comp runs through 2026-07-31 (set via the referrals Phase 1 deploy SQL). Comping is private — the customer-facing UI never says "comped".
 - **`free_quote_grants(user_id, quote_token)`** is the per-draft dedupe. Photo path uses the SPA's `state.quoteToken` (UUID, regenerated on `NEW_QUOTE`); video path uses `job:${jobId}`. `ON CONFLICT DO NOTHING` makes retries idempotent — a single draft burns exactly one free quote no matter how many times it's analysed.
 - **`trial_ends_at` is deprecated** but stays in the schema for one release window in case we need to roll back. The analyse gate no longer reads it.
@@ -297,14 +299,30 @@ UI:
 
 Small, always-visible companion to `SubscriptionBanner`. Sits above the banner on every authenticated screen — quieter than the banner (~12px, single line) but never hides. Same data source: the `billing` block from `/auth/me`.
 
-- **`src/components/QuotaCounter.jsx`** — JSX wrapper, dumb. Reads `selectCounterState()` + `counterCopy()` from the pure helper to decide what to render.
-- **`src/utils/quotaCounter.js`** — pure helpers. Four states ship in this PR (subscribed / comped / free-remaining / quota_exhausted). A fifth state (`purchased-remaining`) is RESERVED for PR C (the £9.99 buy-pack) — TODO comment marks the extension point.
+- **`src/components/QuotaCounter.jsx`** — JSX wrapper, dumb. Reads `selectCounterState()` + `counterCopy()` + `counterBreakdown()` from the pure helper to decide what to render.
+- **`src/utils/quotaCounter.js`** — pure helpers. **Five states ship**: subscribed / comped / free-remaining / purchased-remaining / quota_exhausted (last added 2026-06-24 with the £9.99 pack). Mixed state (free + purchased both > 0) shows the combined total in the main label with a breakdown line below ("{free} free + {purchased} paid").
 - **Comped copy** is derived from `comp_until` every render via `Intl.DateTimeFormat('en-GB', { month: 'long' })`. "Free during {month}" when comp ends in the current calendar month; "Free through {month}" when it ends later. Don't hardcode month names — Paul's comp could be extended.
-- **server.js `/auth/me` billing block** exposes `compUntil` as an ISO string (or null) alongside the existing `quotaState` / `freeQuotesUsed` / `freeQuotesLimit` fields. `resolveQuotaState()` itself stays locked — the field is attached in `loadBilling()` after the helper runs.
-- **Refresh after analysis**: `runAnalysis()` accepts an optional `onAnalysisSuccess` callback (App.jsx wires it to a `refreshBilling()` helper that re-fetches `/auth/me`). Called ONLY on `ANALYSIS_SUCCESS` — failed analyses don't tick the counter down. JobDetails forwards the prop into `runAnalysis`. The video-upload path doesn't yet call this; it's queued for PR C alongside the consume-on-success behaviour change.
-- **No buy button in this PR** — PR C will add the £9.99 buy-pack CTA.
+- **server.js `/auth/me` billing block** exposes `compUntil` as an ISO string (or null) alongside the existing `quotaState` / `freeQuotesUsed` / `freeQuotesLimit` / `purchasedQuotesRemaining` fields. `resolveQuotaState()` returns `purchasedQuotesRemaining` directly.
+- **Refresh after analysis**: `runAnalysis()` accepts an optional `onAnalysisSuccess` callback (App.jsx wires it to a `refreshBilling()` helper that re-fetches `/auth/me`). Called ONLY on `ANALYSIS_SUCCESS` — failed analyses don't tick the counter down. JobDetails forwards the prop into `runAnalysis` (photo path) AND into `handleVideoAnalyse` (video path, wired 2026-06-24 to close the PR #58 gap).
+- **Buy button** (2026-06-24) — visible in free-remaining / purchased-remaining / quota_exhausted; suppressed for subscribed / comped. POSTs to `/api/billing/buy-quote-pack` → Stripe Checkout (`mode: 'payment'`, `automatic_tax: false`).
 
-**Safe vocabulary**: quote, free quote, quotes left, free during, free through, unlimited, remaining. **Banned**: credit (reserved for PR C), trial.
+**Safe vocabulary**: quote, free quote, quotes left, free during, free through, unlimited, remaining, paid, pack, buy. **Banned**: credit, trial.
+
+---
+
+## Pay-as-you-go quote pack (2026-06-24)
+
+£9.99 for 5 quotes. One-time Stripe payment (NOT a subscription line item). No expiry. Deliberately worse per-quote value than the £19.99/month subscription so the pack stays a top-up for occasional users, not a substitute for paying monthly.
+
+- **Pricing constants** live in `billing.js`: `QUOTE_PACK_PRICE_PENCE = 999`, `QUOTE_PACK_SIZE = 5`, `QUOTE_PACK_DESCRIPTION = '5 quote pack'`.
+- **Checkout** — `createQuotePackCheckoutSession({ userId, email, successUrl, cancelUrl })` in `billing.js`. `mode: 'payment'`, `automatic_tax: { enabled: false }` (Harry is NOT VAT-registered — same care as TRQ-157). Metadata `fastquote_product: 'quote_pack'` is tagged on BOTH the session AND the payment_intent so the webhook can attribute from either event.
+- **Webhook** — fan-out at the existing `/api/billing/webhook` mount calls BOTH `applySubscriptionEventToDb` (TRQ-150) AND `applyQuotePackEventToDb`. Routing is disjoint: subscription events vs `checkout.session.completed` (mode=payment, metadata=quote_pack) / `payment_intent.succeeded` (metadata=quote_pack). Idempotency: `quote_purchases.stripe_payment_id` UNIQUE + `INSERT … ON CONFLICT DO NOTHING` means a redelivered event credits exactly once. The credit + audit insert run in a single transaction (BEGIN/COMMIT).
+- **Consume-on-success** — when the gate's `reason === 'purchased-remaining'` the success path decrements `purchased_quotes` (clamped via `GREATEST(0, … - 1)`). Failures NEVER decrement. Per-draft dedupe uses the SAME `free_quote_grants(user_id, quote_token)` table as free quotes — re-analysing a draft burns ONE quote maximum, free OR paid.
+- **Buy endpoint** — `POST /api/billing/buy-quote-pack` (auth-gated, `billingRateLimit`, `requireStripe`). Returns 409 for active subscribers (no useless top-up). Success URL: `/?pack_purchased=1`.
+- **Refunds** — MANUAL only. See `docs/REFUNDS.md` for the runbook. No automated claw-back of `purchased_quotes`. The `quote_purchases` audit row stays in place after refund.
+- **UI** — Buy button in `QuotaCounter.jsx`, visible in free-remaining / purchased-remaining / quota_exhausted; suppressed for subscribed / comped. Label: "Buy 5 quotes — £9.99".
+
+**Safe vocabulary**: pack, buy, paid, quote, £9.99. **Banned**: credit, trial.
 
 ---
 
@@ -399,7 +417,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,355 tests across ~154 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + persistent quotes counter). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,422 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + persistent quotes counter + pay-as-you-go pack). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
