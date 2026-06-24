@@ -1,0 +1,477 @@
+/**
+ * Persistent quotes-remaining counter (2026-06-23, PR B).
+ *
+ * Tests cover:
+ *   1. Pure helpers — selectCounterState, compedMonthCopy, counterCopy.
+ *   2. Source-level guards on QuotaCounter.jsx (data-testid, no
+ *      banned vocab, no buy button, TODO for PR C).
+ *   3. App-level wiring — refreshBilling callback exists and is wired
+ *      to analyseJob's onAnalysisSuccess; QuotaCounter is mounted
+ *      above SubscriptionBanner.
+ *   4. analyseJob calls onAnalysisSuccess on success but NOT on
+ *      failure paths.
+ *
+ * Jest config uses `transform: {}` so we can't render JSX. The pure
+ * helpers carry the decision logic; the JSX is a thin presentation
+ * layer asserted via source-scan.
+ */
+import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+import {
+  selectCounterState,
+  compedMonthCopy,
+  counterCopy,
+} from '../utils/quotaCounter.js';
+import { runAnalysis } from '../utils/analyseJob.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(__dirname, '../../');
+const counterSrc = readFileSync(
+  join(repoRoot, 'src/components/QuotaCounter.jsx'),
+  'utf8'
+);
+const helperSrc = readFileSync(
+  join(repoRoot, 'src/utils/quotaCounter.js'),
+  'utf8'
+);
+const appSrc = readFileSync(join(repoRoot, 'src/App.jsx'), 'utf8');
+const jobDetailsSrc = readFileSync(
+  join(repoRoot, 'src/components/steps/JobDetails.jsx'),
+  'utf8'
+);
+const serverSrc = readFileSync(join(repoRoot, 'server.js'), 'utf8');
+
+// ─────────────────── pure helpers ───────────────────
+
+describe('selectCounterState — maps /auth/me billing to UI state', () => {
+  test('null / undefined billing → null (render nothing)', () => {
+    expect(selectCounterState(null)).toBe(null);
+    expect(selectCounterState(undefined)).toBe(null);
+  });
+
+  test('subscribed → "subscribed"', () => {
+    expect(selectCounterState({ quotaState: 'subscribed' })).toBe('subscribed');
+  });
+
+  test('comped → "comped"', () => {
+    expect(selectCounterState({ quotaState: 'comped' })).toBe('comped');
+  });
+
+  test('free-remaining → "free-remaining"', () => {
+    expect(
+      selectCounterState({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 3,
+      })
+    ).toBe('free-remaining');
+  });
+
+  test('"exhausted" (from /auth/me) maps to quota_exhausted', () => {
+    expect(selectCounterState({ quotaState: 'exhausted' })).toBe(
+      'quota_exhausted'
+    );
+  });
+
+  test('unknown quotaState → null (defensive)', () => {
+    expect(selectCounterState({ quotaState: 'mystery' })).toBe(null);
+  });
+});
+
+describe('compedMonthCopy — derives "Free during/through {month}" from comp_until', () => {
+  test('comp_until in current month → "Free during {month}"', () => {
+    const now = new Date('2026-07-10T12:00:00Z');
+    const compUntil = '2026-07-31T23:59:59Z';
+    expect(compedMonthCopy(compUntil, now)).toBe('Free during July');
+  });
+
+  test('comp_until in a future month → "Free through {month}" (Paul example)', () => {
+    // Paul's comp 2026-07-31 viewed on 2026-06-24.
+    const now = new Date('2026-06-24T12:00:00Z');
+    const compUntil = '2026-07-31T23:59:59Z';
+    expect(compedMonthCopy(compUntil, now)).toBe('Free through July');
+  });
+
+  test('comp_until in the past → null (caller falls back to "Free")', () => {
+    const now = new Date('2026-08-01T12:00:00Z');
+    const compUntil = '2026-07-31T23:59:59Z';
+    expect(compedMonthCopy(compUntil, now)).toBe(null);
+  });
+
+  test('comp_until invalid string → null', () => {
+    expect(compedMonthCopy('not-a-date')).toBe(null);
+  });
+
+  test('comp_until null → null', () => {
+    expect(compedMonthCopy(null)).toBe(null);
+    expect(compedMonthCopy(undefined)).toBe(null);
+  });
+
+  test('does not hardcode "July" — December still works', () => {
+    const now = new Date('2026-09-01T12:00:00Z');
+    const compUntil = '2026-12-31T23:59:59Z';
+    expect(compedMonthCopy(compUntil, now)).toBe('Free through December');
+  });
+
+  test('month name uses en-GB long form (no "Jul" abbreviation)', () => {
+    const now = new Date('2026-07-01T12:00:00Z');
+    expect(compedMonthCopy('2026-07-20T00:00:00Z', now)).toMatch(/July/);
+    expect(compedMonthCopy('2026-07-20T00:00:00Z', now)).not.toMatch(/Jul\b\s/);
+  });
+});
+
+describe('counterCopy — load-bearing per-state strings', () => {
+  test('subscribed → "Unlimited" (no number, no scarcity)', () => {
+    expect(counterCopy({ quotaState: 'subscribed' })).toBe('Unlimited');
+  });
+
+  test('comped with future compUntil → "Free through July" (Paul on 2026-06-24)', () => {
+    const now = new Date('2026-06-24T12:00:00Z');
+    expect(
+      counterCopy(
+        { quotaState: 'comped', compUntil: '2026-07-31T23:59:59Z' },
+        now
+      )
+    ).toBe('Free through July');
+  });
+
+  test('comped with current-month compUntil → "Free during {month}"', () => {
+    const now = new Date('2026-07-05T12:00:00Z');
+    expect(
+      counterCopy(
+        { quotaState: 'comped', compUntil: '2026-07-30T23:59:59Z' },
+        now
+      )
+    ).toBe('Free during July');
+  });
+
+  test('comped with missing compUntil → "Free" (defensive fallback)', () => {
+    expect(counterCopy({ quotaState: 'comped', compUntil: null })).toBe('Free');
+    expect(counterCopy({ quotaState: 'comped' })).toBe('Free');
+  });
+
+  test('free-remaining — exact "{remaining} of {limit} free quotes left"', () => {
+    expect(
+      counterCopy({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 3,
+      })
+    ).toBe('2 of 3 free quotes left');
+  });
+
+  test('free-remaining respects bonus quotes (referee — 5 limit)', () => {
+    // Referee with +2 bonus, used 1 → 4 of 5 left.
+    expect(
+      counterCopy({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 5,
+        bonusFreeQuotes: 2,
+      })
+    ).toBe('4 of 5 free quotes left');
+  });
+
+  test('free-remaining clamps negative remaining to 0', () => {
+    expect(
+      counterCopy({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 10,
+        freeQuotesLimit: 3,
+      })
+    ).toBe('0 of 3 free quotes left');
+  });
+
+  test('exhausted → "0 quotes left"', () => {
+    expect(counterCopy({ quotaState: 'exhausted' })).toBe('0 quotes left');
+    expect(counterCopy({ quotaState: 'quota_exhausted' })).toBe('0 quotes left');
+  });
+
+  test('null billing → null (render nothing)', () => {
+    expect(counterCopy(null)).toBe(null);
+    expect(counterCopy(undefined)).toBe(null);
+  });
+});
+
+// ─────────────────── source-level component guards ───────────────────
+
+describe('QuotaCounter.jsx — source-level contract', () => {
+  test('exports a default React component', () => {
+    expect(counterSrc).toMatch(/export default function QuotaCounter/);
+  });
+
+  test('imports the pure helpers (selectCounterState + counterCopy)', () => {
+    expect(counterSrc).toMatch(/selectCounterState/);
+    expect(counterSrc).toMatch(/counterCopy/);
+  });
+
+  test('exposes a data-testid="quota-counter" hook for downstream tests', () => {
+    expect(counterSrc).toMatch(/data-testid="quota-counter"/);
+  });
+
+  test('emits a Subscribe link ONLY in the quota_exhausted branch', () => {
+    // Source has exactly one Subscribe affordance, gated by isExhausted.
+    expect(counterSrc).toMatch(/isExhausted\s*&&/);
+    expect(counterSrc).toMatch(/Subscribe/);
+  });
+
+  test('does NOT include a buy button (PR C territory)', () => {
+    // Banned: anything that looks like the £9.99 buy-pack CTA from PR C.
+    // Strip comments first so the TODO referencing "purchased-remaining"
+    // (the PR C state name) doesn't trip the guard.
+    const stripped = counterSrc
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    expect(stripped).not.toMatch(/Buy/i);
+    expect(stripped).not.toMatch(/£9\.99/);
+    expect(stripped).not.toMatch(/quote pack/i);
+    expect(stripped).not.toMatch(/Top.?up/i);
+    expect(stripped).not.toMatch(/purchase/i);
+  });
+
+  test('uses fq: breakpoint classes (mobile + desktop placement)', () => {
+    // Locked spec — mobile + desktop both use the existing fq: prefix.
+    expect(counterSrc).toMatch(/fq:/);
+  });
+
+  test('uses --tq-* CSS vars (no hardcoded fallback colours)', () => {
+    // TRQ-168's lesson: no hardcoded fallbacks for theme colours.
+    expect(counterSrc).toMatch(/var\(--tq-/);
+  });
+
+  test('TODO comment for purchased-remaining (PR C extension point)', () => {
+    // Helper file carries the TODO so PR C knows where to graft in.
+    expect(helperSrc).toMatch(/TODO[\s\S]{0,80}PR C[\s\S]{0,200}purchased/i);
+  });
+});
+
+// ─────────────────── banned-vocab guard ───────────────────
+
+describe('QuotaCounter — banned vocabulary', () => {
+  // The product banishes any language that implies "AI system" or
+  // "trial" — see CLAUDE.md Visibility Rules. Strip comments + import
+  // identifiers, then guard against the load-bearing terms.
+  const stripped = counterSrc
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+
+  // Strings + JSX content (not import statements / identifiers).
+  // Keep this loose — we're catching English-word leaks, not symbols.
+  const userFacing = stripped;
+
+  test('no AI / model / LLM / Claude / prompt leak', () => {
+    expect(userFacing).not.toMatch(/\bAI\b/);
+    expect(userFacing).not.toMatch(/\bClaude\b/);
+    expect(userFacing).not.toMatch(/\bLLM\b/);
+    expect(userFacing).not.toMatch(/\bmodel\b/i);
+    expect(userFacing).not.toMatch(/\bprompt\b/i);
+  });
+
+  test('no confidence / calibration / accuracy / bias / drift', () => {
+    expect(userFacing).not.toMatch(/\bconfidence\b/i);
+    expect(userFacing).not.toMatch(/\bcalibration\b/i);
+    expect(userFacing).not.toMatch(/\baccuracy\b/i);
+    expect(userFacing).not.toMatch(/\bbias\b/i);
+    expect(userFacing).not.toMatch(/\bdrift\b/i);
+  });
+
+  test('no agent / smart / debug', () => {
+    expect(userFacing).not.toMatch(/\bagent\b/i);
+    expect(userFacing).not.toMatch(/\bsmart\b/i);
+    expect(userFacing).not.toMatch(/\bdebug\b/i);
+  });
+
+  test('no "credit" (reserved for PR C) or "trial" (could feel limiting)', () => {
+    // Strip imports + identifiers to avoid catching things like
+    // useCallback or React itself. We're scanning JSX text + strings.
+    const jsxAndStrings = userFacing.replace(/^import[^;]+;/gm, '');
+    expect(jsxAndStrings).not.toMatch(/\bcredit\b/i);
+    expect(jsxAndStrings).not.toMatch(/\btrial\b/i);
+  });
+
+  test('safe vocabulary is present (quote / free / unlimited / remaining)', () => {
+    // counterCopy strings live in the helper — check there too.
+    const combined = counterSrc + helperSrc;
+    expect(combined).toMatch(/quote/i);
+    expect(combined).toMatch(/free/i);
+    expect(combined).toMatch(/unlimited/i);
+    expect(combined).toMatch(/remaining|left/i);
+  });
+});
+
+// ─────────────────── App + JobDetails wiring ───────────────────
+
+describe('QuotaCounter wiring — App.jsx + JobDetails', () => {
+  test('App.jsx imports QuotaCounter', () => {
+    expect(appSrc).toMatch(/import\s+QuotaCounter\s+from\s+['"]\.\/components\/QuotaCounter\.jsx['"]/);
+  });
+
+  test('App.jsx mounts <QuotaCounter billing={billing} />', () => {
+    expect(appSrc).toMatch(/<QuotaCounter\s+billing=\{billing\}\s*\/>/);
+  });
+
+  test('App.jsx mounts QuotaCounter above SubscriptionBanner', () => {
+    const counterIdx = appSrc.indexOf('<QuotaCounter');
+    const bannerIdx = appSrc.indexOf('<SubscriptionBanner');
+    expect(counterIdx).toBeGreaterThan(0);
+    expect(bannerIdx).toBeGreaterThan(0);
+    expect(counterIdx).toBeLessThan(bannerIdx);
+  });
+
+  test('App.jsx defines refreshBilling callback', () => {
+    expect(appSrc).toMatch(/refreshBilling\s*=\s*useCallback/);
+    expect(appSrc).toMatch(/fetch\(['"`]\/auth\/me['"`]\)/);
+  });
+
+  test('App.jsx passes refreshBilling as onAnalysisSuccess to JobDetails', () => {
+    expect(appSrc).toMatch(/<JobDetails[\s\S]+?onAnalysisSuccess=\{refreshBilling\}/);
+  });
+
+  test('App.jsx passes refreshBilling to runAnalysis on retry', () => {
+    expect(appSrc).toMatch(
+      /runAnalysis\(\{[\s\S]+?onAnalysisSuccess:\s*refreshBilling[\s\S]+?\}\)/
+    );
+  });
+
+  test('JobDetails forwards onAnalysisSuccess into runAnalysis', () => {
+    expect(jobDetailsSrc).toMatch(/onAnalysisSuccess/);
+    expect(jobDetailsSrc).toMatch(
+      /runAnalysis\(\{[\s\S]+?onAnalysisSuccess[\s\S]+?\}\)/
+    );
+  });
+});
+
+// ─────────────────── server.js — compUntil in billing block ───────────────────
+
+describe('server.js — /auth/me billing block exposes compUntil', () => {
+  test('loadBilling attaches comp_until as ISO string', () => {
+    expect(serverSrc).toMatch(/billing\.compUntil\s*=\s*u\.comp_until/);
+  });
+
+  test('null comp_until → null (not undefined, not missing key)', () => {
+    expect(serverSrc).toMatch(
+      /billing\.compUntil\s*=\s*u\.comp_until[\s\S]{0,200}null/
+    );
+  });
+});
+
+// ─────────────────── analyseJob refresh contract ───────────────────
+
+describe('runAnalysis — onAnalysisSuccess callback (counter refresh)', () => {
+  let origFetch;
+
+  beforeEach(() => {
+    origFetch = globalThis.fetch;
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    globalThis.fetch = origFetch;
+  });
+
+  const VALID_AI_JSON = {
+    referenceCardDetected: true,
+    stoneType: 'gritstone',
+    damageDescription: '1 — Wall section\nCollapsed.',
+    measurements: [
+      { item: 'Height', valueMm: 1200, displayValue: '1,200mm', confidence: 'high', note: null },
+    ],
+    scheduleOfWorks: [{ stepNumber: 1, title: 'Clear site', description: 'Clear debris.' }],
+    materials: [
+      { description: 'Stone', quantity: '2', unit: 't', unitCost: 180, totalCost: 360 },
+    ],
+    labourEstimate: { description: 'Rebuild', estimatedDays: 3, numberOfWorkers: 2, calculationBasis: '6/3=2' },
+    siteConditions: { accessDifficulty: 'normal', accessNote: null, foundationCondition: 'sound', foundationNote: null, adjacentStructureRisk: false, adjacentStructureNote: null },
+    additionalNotes: 'None',
+  };
+
+  const baseArgs = () => ({
+    photos: { overview: { data: 'data:image/jpeg;base64,FAKE' } },
+    extraPhotos: [],
+    jobDetails: { siteAddress: '10 Main St', briefNotes: '', quoteReference: 'QT-001', quoteDate: '2026-04-01' },
+    profile: { dayRate: 400 },
+    abortRef: { current: null },
+    userId: 'mark',
+    dispatch: () => {},
+  });
+
+  test('calls onAnalysisSuccess once when /analyse succeeds', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: [{ text: JSON.stringify(VALID_AI_JSON) }] }),
+    });
+    const onAnalysisSuccess = jest.fn();
+    await runAnalysis({ ...baseArgs(), onAnalysisSuccess });
+    expect(onAnalysisSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  test('does NOT call onAnalysisSuccess on 5xx server error', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => JSON.stringify({ error: 'server error' }),
+    });
+    const onAnalysisSuccess = jest.fn();
+    await runAnalysis({ ...baseArgs(), onAnalysisSuccess });
+    expect(onAnalysisSuccess).not.toHaveBeenCalled();
+  });
+
+  test('does NOT call onAnalysisSuccess on 402 quota_exhausted', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 402,
+      text: async () => JSON.stringify({
+        error: 'quota_exhausted',
+        freeQuotesUsed: 3,
+        freeQuotesLimit: 3,
+        message: "You've used your 3 free quotes. Subscribe to continue.",
+      }),
+    });
+    const onAnalysisSuccess = jest.fn();
+    await runAnalysis({ ...baseArgs(), onAnalysisSuccess });
+    expect(onAnalysisSuccess).not.toHaveBeenCalled();
+  });
+
+  test('does NOT call onAnalysisSuccess on network error (TypeError)', async () => {
+    globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('NetworkError'));
+    const onAnalysisSuccess = jest.fn();
+    await runAnalysis({ ...baseArgs(), onAnalysisSuccess });
+    expect(onAnalysisSuccess).not.toHaveBeenCalled();
+  });
+
+  test('does NOT call onAnalysisSuccess when AI returns an unparseable response', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: [{ text: 'not-json-not-anything' }] }),
+    });
+    const onAnalysisSuccess = jest.fn();
+    await runAnalysis({ ...baseArgs(), onAnalysisSuccess });
+    expect(onAnalysisSuccess).not.toHaveBeenCalled();
+  });
+
+  test('is backward compatible when callback is omitted', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: [{ text: JSON.stringify(VALID_AI_JSON) }] }),
+    });
+    // No onAnalysisSuccess — should not throw.
+    await expect(runAnalysis(baseArgs())).resolves.not.toThrow();
+  });
+
+  test('swallows callback errors without crashing the analysis flow', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: [{ text: JSON.stringify(VALID_AI_JSON) }] }),
+    });
+    const onAnalysisSuccess = jest.fn(() => {
+      throw new Error('refresh blew up');
+    });
+    await expect(
+      runAnalysis({ ...baseArgs(), onAnalysisSuccess })
+    ).resolves.not.toThrow();
+    expect(onAnalysisSuccess).toHaveBeenCalledTimes(1);
+  });
+});

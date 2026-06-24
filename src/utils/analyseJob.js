@@ -7,7 +7,7 @@ import {
 } from './aiParser.js';
 import { buildTradesmanProfileBlock } from './tradesmanProfileBlock.js';
 
-export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId, quoteToken }) {
+export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId, quoteToken, onAnalysisSuccess }) {
   try {
     // Multi-tenant prompt assembly:
     //   1. TRADESMAN PROFILE — who the user is + their working preferences
@@ -183,6 +183,17 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
       normalised,
       critiqueNotes: data.critiqueNotes || null,
     });
+
+    // Persistent quotes counter (2026-06-23): nudge the parent to
+    // refetch /auth/me's billing block so the counter ticks down
+    // without a page reload. Wired ONLY in the success path so a
+    // failed analysis (network blip, parse failure, 5xx) doesn't
+    // make the counter drift away from the server's free_quotes_used
+    // — the counter MUST reflect server truth, not optimistic UI.
+    // Optional callback (older call sites don't pass it).
+    if (typeof onAnalysisSuccess === 'function') {
+      try { onAnalysisSuccess(); } catch { /* best-effort */ }
+    }
   } catch (err) {
     if (err.name === 'AbortError') {
       dispatch({

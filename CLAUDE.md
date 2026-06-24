@@ -293,6 +293,21 @@ UI:
 
 ---
 
+## Persistent Quotes-Remaining Counter (2026-06-23)
+
+Small, always-visible companion to `SubscriptionBanner`. Sits above the banner on every authenticated screen — quieter than the banner (~12px, single line) but never hides. Same data source: the `billing` block from `/auth/me`.
+
+- **`src/components/QuotaCounter.jsx`** — JSX wrapper, dumb. Reads `selectCounterState()` + `counterCopy()` from the pure helper to decide what to render.
+- **`src/utils/quotaCounter.js`** — pure helpers. Four states ship in this PR (subscribed / comped / free-remaining / quota_exhausted). A fifth state (`purchased-remaining`) is RESERVED for PR C (the £9.99 buy-pack) — TODO comment marks the extension point.
+- **Comped copy** is derived from `comp_until` every render via `Intl.DateTimeFormat('en-GB', { month: 'long' })`. "Free during {month}" when comp ends in the current calendar month; "Free through {month}" when it ends later. Don't hardcode month names — Paul's comp could be extended.
+- **server.js `/auth/me` billing block** exposes `compUntil` as an ISO string (or null) alongside the existing `quotaState` / `freeQuotesUsed` / `freeQuotesLimit` fields. `resolveQuotaState()` itself stays locked — the field is attached in `loadBilling()` after the helper runs.
+- **Refresh after analysis**: `runAnalysis()` accepts an optional `onAnalysisSuccess` callback (App.jsx wires it to a `refreshBilling()` helper that re-fetches `/auth/me`). Called ONLY on `ANALYSIS_SUCCESS` — failed analyses don't tick the counter down. JobDetails forwards the prop into `runAnalysis`. The video-upload path doesn't yet call this; it's queued for PR C alongside the consume-on-success behaviour change.
+- **No buy button in this PR** — PR C will add the £9.99 buy-pack CTA.
+
+**Safe vocabulary**: quote, free quote, quotes left, free during, free through, unlimited, remaining. **Banned**: credit (reserved for PR C), trial.
+
+---
+
 ## Save Snapshot Contract
 
 `SAVE_ALLOWLIST` in `src/utils/stripBlobs.js` defines exactly which state keys are persisted:
@@ -384,7 +399,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,260 tests across ~153 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,355 tests across ~154 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + persistent quotes counter). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 

@@ -22,6 +22,7 @@ import Analytics from './components/Analytics.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import SubscriptionBanner from './components/SubscriptionBanner.jsx';
+import QuotaCounter from './components/QuotaCounter.jsx';
 import ReferralWelcome from './components/ReferralWelcome.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -113,6 +114,23 @@ export default function App() {
         window.location.href = '/login';
       }
     })();
+  }, []);
+
+  // Refresh the billing block from /auth/me. Used by the persistent
+  // QuotaCounter (2026-06-23) to tick down after a successful analysis
+  // without requiring a page reload. Called from the analyseJob
+  // success path (via the `onAnalysisSuccess` callback). Failures
+  // are silent — the counter just stays stale until the next refresh
+  // window; never crashes the app.
+  const refreshBilling = useCallback(async () => {
+    try {
+      const res = await fetch('/auth/me');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.billing) setBilling(data.billing);
+    } catch {
+      // Best-effort.
+    }
   }, []);
 
   // --- After INIT_COMPLETE with auto-selected user, load their data ---
@@ -425,6 +443,10 @@ export default function App() {
         // Reusing the same quoteToken on retry keeps this draft as a
         // single free quote (2026-06-22).
         quoteToken: state.quoteToken,
+        // Persistent quotes counter (2026-06-23): refresh billing on
+        // success so the counter ticks down without a page reload.
+        // Failed retries do not call this — counter stays put.
+        onAnalysisSuccess: refreshBilling,
       });
     }
   }, [state.retryCount]);
@@ -818,7 +840,7 @@ export default function App() {
           />
         );
       case 2:
-        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} videoAnalysisEnabled={videoAnalysisEnabled} />;
+        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} videoAnalysisEnabled={videoAnalysisEnabled} onAnalysisSuccess={refreshBilling} />;
       case 3:
         return <AIAnalysis state={state} dispatch={dispatch} cancelAnalysis={cancelAnalysis} />;
       case 4:
@@ -888,6 +910,10 @@ export default function App() {
         />
         <div className="max-w-5xl mx-auto px-3 fq:px-4 py-4 fq:py-6">
           <OfflineBanner />
+          {/* Persistent quotes-remaining counter (2026-06-23). Above
+              SubscriptionBanner per the locked spec — smaller, always
+              visible. Self-hides if billing isn't loaded yet. */}
+          <QuotaCounter billing={billing} />
           <SubscriptionBanner />
           {/* Referrals Phase 1 (2026-06-23) — referee welcome. Self-
               hides unless the user has bonus quotes AND has not yet
