@@ -1102,6 +1102,14 @@ app.get('/auth/me', async (req, res) => {
       const billing = resolveQuotaState(u, {
         hasActiveSubscription: u.subscription_status === 'active',
       });
+      // Persistent quotes counter (2026-06-23): expose comp_until as
+      // an ISO string so the client-side QuotaCounter can compute
+      // "Free during {month}" / "Free through {month}" without
+      // hardcoding "July". `resolveQuotaState` is locked, so we
+      // attach it directly here. Null when the user isn't comped.
+      billing.compUntil = u.comp_until
+        ? new Date(u.comp_until).toISOString()
+        : null;
       // Referrals Phase 1 (2026-06-23): include the referrer's name if
       // this user signed up via a code, so the ReferralWelcome banner
       // can render "Paul invited you" instead of "A friend invited you".

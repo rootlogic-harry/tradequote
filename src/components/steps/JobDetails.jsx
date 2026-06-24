@@ -84,6 +84,11 @@ export default function JobDetails({
   // See docs/VIDEO_FLAG.md. Default true so component-only test fixtures
   // and isolated unit tests still exercise the full surface.
   videoAnalysisEnabled = true,
+  // Persistent quotes counter (2026-06-23) — called from runAnalysis
+  // on success so the counter ticks down without a page reload. Pure
+  // notification; never called on failure. Defaults to a no-op so
+  // isolated unit tests don't need to inject it.
+  onAnalysisSuccess = () => {},
 }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
@@ -218,6 +223,8 @@ export default function JobDetails({
       userId: state.currentUserId,
       // Free-quota dedupe token (2026-06-22).
       quoteToken: state.quoteToken,
+      // Persistent quotes counter (2026-06-23) — fires on success only.
+      onAnalysisSuccess,
     });
   };
 
