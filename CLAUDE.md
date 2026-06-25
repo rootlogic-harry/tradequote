@@ -866,6 +866,21 @@ The Puppeteer PDF path (`pdfRenderer.js`) has two sources of run-to-run non-dete
 
 **Self-check:** Any new code path that returns a Puppeteer-generated PDF buffer must run it through `normalisePdfMetadata()` before sending it to the client. Asserted in `pdfDeterministic.test.js`.
 
+### 17. `COALESCE($N, column)` with a non-null literal doesn't preserve the column (2026-06-25)
+
+Subtle SQL footgun. `COALESCE` returns the first non-null argument — so if `$N` is bound to a literal like `'active'`, the COALESCE *always* returns it, regardless of the column's current value. The "I want to preserve the existing value if the caller didn't supply one" intent fails silently.
+
+The bug that surfaced this: `applySubscriptionEventToDb` in `billing.js` handled `checkout.session.completed` for BOTH subscription-mode and payment-mode (one-time) sessions, and wrote:
+
+```js
+UPDATE users SET subscription_status = COALESCE($3, subscription_status) WHERE id = $4
+// params: [..., 'active', userId]   ← $3 is the literal 'active', never null
+```
+
+The author thought the COALESCE protected against a no-op when the session didn't carry subscription info. It didn't — the COALESCE protected the `customer` + `subscription` ID columns (which ARE null in payment mode) but not the literal `'active'`. Result: Harry bought a £9.99 quote pack and was implicitly promoted to a full subscriber. The webhook fan-out comment in `server.js` explicitly claimed this was safe; it wasn't.
+
+**Self-check:** When you write `COALESCE($N, ...)`, ask: "Could `$N` ever be a literal non-null value the caller didn't explicitly opt into?" If yes, refactor to an explicit precondition check (`if (session.mode !== 'subscription') return`) before the UPDATE — don't rely on COALESCE to do nothing. Tests in `quotePack.test.js` pin the fix.
+
 ---
 
 ## Code Conventions
