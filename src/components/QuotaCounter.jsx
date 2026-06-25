@@ -6,30 +6,47 @@ import {
 } from '../utils/quotaCounter.js';
 
 /**
- * Persistent quotes-remaining counter (locked spec 2026-06-23,
- * extended 2026-06-24 with the £9.99 pay-as-you-go pack).
+ * Unified quotes-remaining banner — single source of truth for the
+ * quota-driven banner surface.
  *
- * Always-visible companion to SubscriptionBanner. Smaller (~12px),
- * single line, sits above the banner on every authenticated screen.
- * Reads the `billing` block from /auth/me — no new API.
+ * Locked spec 2026-06-23, extended 2026-06-24 with the £9.99
+ * pay-as-you-go pack, and unified 2026-06-25 to absorb the quota
+ * branches of SubscriptionBanner. One strip carries both CTAs (Buy
+ * + Subscribe) so the user reads one count and sees both upgrade
+ * paths together — no more two-component split.
  *
- * Five states ship: subscribed / comped / free-remaining /
- * purchased-remaining / quota_exhausted. Mixed (free + purchased)
- * shows the combined total with a breakdown line underneath.
+ * Per-state visibility (the locked table):
  *
- * Buy button (2026-06-24):
- *   - VISIBLE in free-remaining / purchased-remaining / quota_exhausted
- *   - SUPPRESSED in subscribed / comped
- *   POSTs to /api/billing/buy-quote-pack → redirect to Stripe Checkout.
+ *   subscribed              → render nothing (no nudge needed)
+ *   comped                  → label only ("Free through {month}");
+ *                              no CTAs (Paul shouldn't see Buy/Subscribe
+ *                              during a comp)
+ *   free-remaining          → text + Buy + Subscribe
+ *   purchased-remaining     → text + Buy + Subscribe
+ *   quota_exhausted         → urgent text + Buy + Subscribe
+ *
+ * Mixed state (free + purchased > 0): main label shows the combined
+ * total ("5 quotes left") with a breakdown underneath ("2 free + 3
+ * paid"). Comes from `counterCopy` + `counterBreakdown` in the pure
+ * helper.
+ *
+ * Buttons:
+ *   - BUY 5 QUOTES — £9.99 → POST /api/billing/buy-quote-pack
+ *   - SUBSCRIBE — £19.99/month → POST /api/billing/checkout
+ *
+ * Tone palette:
+ *   - subscribed / comped / purchased-remaining → muted
+ *   - free-remaining low (≤ 1 remaining) → muted (warmer)
+ *   - quota_exhausted → urgent (red)
+ *
+ * Mobile: stack the text + CTAs vertically (text on top, CTAs as two
+ * stacked buttons). Desktop: inline strip with text left, CTAs right.
+ * The `fq:` Tailwind breakpoint mirrors the rest of the app.
  *
  * Refresh: when the parent (App.jsx) re-fetches /auth/me after a
  * successful analysis, the `billing` prop updates and this component
  * re-renders naturally. Failed analyses do NOT trigger a refetch —
  * the count stays put.
- *
- * Mobile + desktop placement is identical (top of the main content
- * column, above SubscriptionBanner). The `fq:` breakpoint is mirrored
- * in the wrapper class so future divergence stays simple.
  */
 export default function QuotaCounter({ billing }) {
   const state = selectCounterState(billing);
@@ -40,89 +57,101 @@ export default function QuotaCounter({ billing }) {
 
   const breakdown = counterBreakdown(billing);
 
-  // Tone hints — keeps the strip visually quiet for healthy states
-  // (subscribed / comped / purchased-remaining) and slightly warmer
-  // when the user is burning down the free allowance. Uses --tq-*
-  // vars only — no hard-coded fallbacks (the TRQ-168 lesson on
-  // cache-buster / default colour drift).
-  const isLow = state === 'free-remaining' && remainingFromBilling(billing) <= 1;
-  const isExhausted = state === 'quota_exhausted';
+  // CTA visibility per locked spec — Buy + Subscribe both visible in
+  // the three quota-spending states; both suppressed for subscribed
+  // (no nudge needed) and comped (Paul shouldn't see them).
   const showBuyButton =
     state === 'free-remaining' ||
     state === 'purchased-remaining' ||
     state === 'quota_exhausted';
+  const showSubscribeButton =
+    state === 'free-remaining' ||
+    state === 'purchased-remaining' ||
+    state === 'quota_exhausted';
 
-  let tint;
-  if (isExhausted) tint = 'rgba(248, 113, 113, 0.12)';
-  else if (isLow) tint = 'rgba(251, 191, 36, 0.10)';
-  else tint = 'transparent';
+  const isExhausted = state === 'quota_exhausted';
+
+  // Tone — muted for healthy / mid states; urgent (red) for
+  // quota_exhausted. Mirrors SubscriptionBanner's tone palette so the
+  // visual language stays consistent across both banners. Uses --tq-*
+  // vars only — no hard-coded fallbacks (the TRQ-168 lesson).
+  const tone = isExhausted ? TONE_STYLES.urgent : TONE_STYLES.muted;
 
   return (
     <div
       data-testid="quota-counter"
       data-state={state}
-      className="fq:text-xs text-[12px] font-body fq:mb-2 mb-2 px-3 py-1.5 rounded flex items-center justify-between gap-2"
+      className="fq:flex-row flex-col fq:items-center items-stretch fq:gap-3 gap-2 rounded px-4 py-3 mb-4 flex justify-between"
       style={{
-        backgroundColor: tint,
-        color: 'var(--tq-muted)',
-        border: tint === 'transparent' ? '1px solid transparent' : '1px solid currentColor',
-        lineHeight: 1.2,
+        backgroundColor: tone.backgroundColor,
+        border: tone.border,
+        color: tone.color,
       }}
     >
-      <span className="flex items-baseline gap-2 min-w-0">
-        <span data-testid="quota-counter-text">{copy}</span>
+      <div className="flex-1 min-w-0">
+        <p
+          data-testid="quota-counter-text"
+          className="text-sm font-body"
+          style={{ margin: 0, color: 'var(--tq-text)' }}
+        >
+          {isExhausted ? <strong>{copy}</strong> : copy}
+        </p>
         {breakdown && (
-          <span
+          <p
             data-testid="quota-counter-breakdown"
-            className="text-[10px] opacity-70 truncate"
-            style={{ color: 'var(--tq-muted)' }}
+            className="text-xs font-body"
+            style={{ margin: 0, marginTop: 2, color: 'var(--tq-muted)' }}
           >
-            ({breakdown})
-          </span>
+            {breakdown}
+          </p>
         )}
-      </span>
-      <span className="flex items-center gap-2 shrink-0">
-        {showBuyButton && (
-          <button
-            type="button"
-            data-testid="quota-counter-buy"
-            onClick={handleBuyClick}
-            className="text-[11px] font-heading font-bold uppercase tracking-wide underline"
-            style={{ color: 'inherit', textDecorationColor: 'currentColor', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-          >
-            Buy 5 quotes &mdash; £9.99
-          </button>
-        )}
-        {isExhausted && (
-          <a
-            data-testid="quota-counter-subscribe"
-            href="/api/billing/checkout"
-            onClick={handleSubscribeClick}
-            className="text-[11px] font-heading font-bold uppercase tracking-wide underline"
-            style={{ color: 'inherit', textDecorationColor: 'currentColor' }}
-          >
-            Subscribe
-          </a>
-        )}
-      </span>
+      </div>
+      {(showBuyButton || showSubscribeButton) && (
+        <div className="flex fq:flex-row flex-col fq:items-center items-stretch fq:gap-2 gap-2 shrink-0">
+          {showBuyButton && (
+            <button
+              type="button"
+              data-testid="quota-counter-buy"
+              onClick={handleBuyClick}
+              className="text-xs font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors"
+              style={{
+                border: '1px solid currentColor',
+                minHeight: 44,
+                background: 'transparent',
+                color: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              Buy 5 quotes &mdash; £9.99
+            </button>
+          )}
+          {showSubscribeButton && (
+            <button
+              type="button"
+              data-testid="quota-counter-subscribe"
+              onClick={handleSubscribeClick}
+              className="text-xs font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors"
+              style={{
+                border: '1px solid currentColor',
+                minHeight: 44,
+                background: 'transparent',
+                color: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              Subscribe &mdash; £19.99/month
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// Helper kept outside the component so the test source-scan can find
-// it without faking React state.
-function remainingFromBilling(billing) {
-  const used = Number(billing?.freeQuotesUsed) || 0;
-  const limit = Number(billing?.freeQuotesLimit) || 0;
-  return Math.max(0, limit - used);
-}
-
-// Anchor-style "Subscribe" link kicks the user into Stripe Checkout.
-// The SubscriptionBanner's "exhausted" variant uses a POST + redirect
-// dance; here we hand off to the same endpoint via a plain link so
-// the counter stays simple. The browser fetches the checkout URL via
-// a quick POST and follows the returned redirect. Failures are
-// silent — banner remains the loud channel.
+// Anchor-style "Subscribe" button kicks the user into Stripe Checkout.
+// Mirrors the SubscriptionBanner pattern — POST to /api/billing/checkout
+// and follow the returned URL. Failures are silent — banner is the
+// loud channel for billing.
 function handleSubscribeClick(e) {
   e.preventDefault();
   (async () => {
@@ -132,14 +161,14 @@ function handleSubscribeClick(e) {
       const { url } = await r.json();
       if (url) window.location.href = url;
     } catch {
-      // Best-effort — banner is the loud channel for billing.
+      // Best-effort — surface failures via the next /auth/me refresh.
     }
   })();
 }
 
 // Buy-pack button (2026-06-24). POSTs to /api/billing/buy-quote-pack
 // and follows the returned Stripe Checkout URL. Failures are silent
-// for the same reason as the subscribe link above.
+// for the same reason as the subscribe button above.
 function handleBuyClick(e) {
   e.preventDefault();
   (async () => {
@@ -149,7 +178,24 @@ function handleBuyClick(e) {
       const { url } = await r.json();
       if (url) window.location.href = url;
     } catch {
-      // Best-effort — banner is the loud channel for billing.
+      // Best-effort — surface failures via the next /auth/me refresh.
     }
   })();
 }
+
+// Tone palette mirrors SubscriptionBanner's so the visual language
+// stays consistent across both surfaces. Uses --tq-* CSS vars where
+// possible (text colour) and stays with inline rgba for the tonal
+// backgrounds — same as SubscriptionBanner.
+const TONE_STYLES = {
+  muted: {
+    backgroundColor: 'rgba(148, 163, 184, 0.10)',
+    border: '1px solid rgba(148, 163, 184, 0.25)',
+    color: 'var(--tq-muted)',
+  },
+  urgent: {
+    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+    border: '1px solid rgba(248, 113, 113, 0.35)',
+    color: '#f87171',
+  },
+};

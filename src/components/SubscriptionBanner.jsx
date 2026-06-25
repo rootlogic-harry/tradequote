@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { isTrialEndingSoon, dayCopy, pickBannerVariant, freeQuotesCopy } from '../utils/trialState.js';
+import { isTrialEndingSoon, dayCopy, pickBannerVariant } from '../utils/trialState.js';
 
 /**
  * Subscription banner — surfaces the trial / billing state to the
@@ -8,6 +8,13 @@ import { isTrialEndingSoon, dayCopy, pickBannerVariant, freeQuotesCopy } from '.
  * Variant picking lives in `src/utils/trialState.js` so it's
  * unit-testable without a JSX transform. This component is a thin
  * switch + presentation layer + fetch effect.
+ *
+ * 2026-06-25 — the quota-driven variants (`free-remaining`,
+ * `exhausted`) were retired from this component and folded into
+ * `QuotaCounter` per the unified-banner locked spec. This component
+ * is now strictly Stripe-state-only: `past-due`, `canceled`,
+ * `expired`, `trial`, `trial-ending`. The two components occupy
+ * disjoint state spaces — never both visible at once.
  *
  * The status endpoint (/api/billing/status) returns `configured:
  * false` when Stripe env vars aren't set in this environment. In that
@@ -109,39 +116,11 @@ export default function SubscriptionBanner({ enabled = true }) {
     );
   }
 
-  if (variant === 'exhausted') {
-    // Hard lockout (2026-06-22; copy made dynamic 2026-06-23 for referrals).
-    // The effective limit is `status.freeQuotesLimit` — baseline 3 + any
-    // referral bonus. Falls back to 3 if the field is missing (defensive
-    // for stale clients during a deploy). Server's /analyse 402s on the
-    // next attempt with a matching message. CTA opens Stripe Checkout —
-    // no portal because the user doesn't have a Stripe customer yet (they
-    // never started a paid subscription, just used the free quotes).
-    const lockoutLimit = Number.isFinite(status.freeQuotesLimit) && status.freeQuotesLimit > 0
-      ? status.freeQuotesLimit
-      : 3;
-    return (
-      <Strip tone="urgent" testId="subscription-banner-exhausted">
-        <Body>
-          <strong>You've used your {lockoutLimit} free quotes. Subscribe to continue.</strong>
-        </Body>
-        <Cta onClick={openCheckout} disabled={busy}>Subscribe — £{status.pricing?.gbpPerMonth?.toFixed(2) || '19.99'}/month</Cta>
-      </Strip>
-    );
-  }
-
-  if (variant === 'free-remaining') {
-    // Soft CTA (2026-06-22). User is still inside the 3 free quotes
-    // — banner reminds them quietly without blocking anything.
-    return (
-      <Strip tone="muted" testId="subscription-banner-free-remaining">
-        <Body>
-          {freeQuotesCopy(status.freeQuotesUsed ?? 0, status.freeQuotesLimit ?? 3)}.
-        </Body>
-        <Cta onClick={openCheckout} disabled={busy}>Subscribe</Cta>
-      </Strip>
-    );
-  }
+  // NOTE (2026-06-25): the `exhausted` and `free-remaining` variants
+  // moved into QuotaCounter per the unified-banner locked spec.
+  // `pickBannerVariant` resolves both quota-driven cases to `'none'`
+  // so this component never tries to render them. The unified strip
+  // in QuotaCounter carries both the Buy + Subscribe CTAs.
 
   if (variant === 'trial-ending') {
     // CTA opens Checkout, not Portal. During the no-card-upfront

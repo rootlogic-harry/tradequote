@@ -305,60 +305,109 @@ describe('counterBreakdown — mixed-state secondary line', () => {
 
 // ─────────────────── source-level component guards ───────────────────
 
-describe('QuotaCounter.jsx — source-level contract', () => {
+describe('QuotaCounter.jsx — unified banner source contract (2026-06-25)', () => {
   test('exports a default React component', () => {
     expect(counterSrc).toMatch(/export default function QuotaCounter/);
   });
 
-  test('imports the pure helpers (selectCounterState + counterCopy)', () => {
+  test('imports the pure helpers (selectCounterState + counterCopy + counterBreakdown)', () => {
     expect(counterSrc).toMatch(/selectCounterState/);
     expect(counterSrc).toMatch(/counterCopy/);
+    expect(counterSrc).toMatch(/counterBreakdown/);
   });
 
   test('exposes a data-testid="quota-counter" hook for downstream tests', () => {
     expect(counterSrc).toMatch(/data-testid="quota-counter"/);
   });
 
-  test('emits a Subscribe link ONLY in the quota_exhausted branch', () => {
-    // Source has exactly one Subscribe affordance, gated by isExhausted.
-    expect(counterSrc).toMatch(/isExhausted\s*&&/);
-    expect(counterSrc).toMatch(/Subscribe/);
+  test('exposes a data-state attribute so e2e tests can read the active state', () => {
+    expect(counterSrc).toMatch(/data-state=\{state\}/);
   });
 
-  test('includes a Buy button for the £9.99 pack (2026-06-24)', () => {
-    // The buy-pack CTA must be present — visible in free-remaining /
-    // purchased-remaining / quota_exhausted; suppressed for subscribed
-    // / comped. Locked-spec label: "Buy 5 quotes — £9.99".
+  test('renders the Buy button for the £9.99 pack', () => {
+    // Locked-spec label: "Buy 5 quotes — £9.99".
     expect(counterSrc).toMatch(/data-testid="quota-counter-buy"/);
     expect(counterSrc).toMatch(/Buy 5 quotes/);
     expect(counterSrc).toMatch(/£9\.99/);
     expect(counterSrc).toMatch(/\/api\/billing\/buy-quote-pack/);
   });
 
-  test('Buy button visible in free-remaining / purchased-remaining / quota_exhausted', () => {
-    // Source-level: the showBuyButton flag must reference all three
-    // states. Suppressed for subscribed / comped means those names do
-    // NOT appear in the predicate (we can't easily prove negation in
-    // a source scan; the runtime branches are covered by the pure
-    // selector tests above).
-    expect(counterSrc).toMatch(/free-remaining[\s\S]{0,200}purchased-remaining[\s\S]{0,200}quota_exhausted/);
+  test('renders the Subscribe button alongside Buy (unified dual-CTA strip)', () => {
+    // 2026-06-25 unified-banner spec: Subscribe now lives in the
+    // QuotaCounter strip too, not only in the (removed) Subscription-
+    // Banner exhausted variant. Locked-spec label includes the price.
+    expect(counterSrc).toMatch(/data-testid="quota-counter-subscribe"/);
+    expect(counterSrc).toMatch(/Subscribe[\s\S]{0,80}£19\.99/);
+    expect(counterSrc).toMatch(/\/api\/billing\/checkout/);
   });
 
-  test('uses fq: breakpoint classes (mobile + desktop placement)', () => {
-    // Locked spec — mobile + desktop both use the existing fq: prefix.
-    expect(counterSrc).toMatch(/fq:/);
+  test('Buy + Subscribe flags reference free-remaining / purchased-remaining / quota_exhausted', () => {
+    // Source-level: the showBuyButton / showSubscribeButton flags
+    // must reference all three quota-spending states. Subscribed /
+    // comped are suppressed (table in spec) and the runtime branches
+    // are covered by the pure selector tests above.
+    expect(counterSrc).toMatch(/showBuyButton[\s\S]{0,400}free-remaining[\s\S]{0,200}purchased-remaining[\s\S]{0,200}quota_exhausted/);
+    expect(counterSrc).toMatch(/showSubscribeButton[\s\S]{0,400}free-remaining[\s\S]{0,200}purchased-remaining[\s\S]{0,200}quota_exhausted/);
   });
 
-  test('uses --tq-* CSS vars (no hardcoded fallback colours)', () => {
+  test('uses fq: breakpoint classes for mobile-vs-desktop stack', () => {
+    // Locked spec — stack vertically on mobile, inline on desktop.
+    expect(counterSrc).toMatch(/fq:flex-row/);
+    expect(counterSrc).toMatch(/flex-col/);
+  });
+
+  test('uses --tq-* CSS vars (no hardcoded fallback colours for theme text)', () => {
     // TRQ-168's lesson: no hardcoded fallbacks for theme colours.
     expect(counterSrc).toMatch(/var\(--tq-/);
   });
 
   test('renders the breakdown line when both free + purchased quotes exist', () => {
     // Mixed-state secondary line — "{free} free + {purchased} paid".
-    // The component pulls it via counterBreakdown from the helper.
     expect(counterSrc).toMatch(/counterBreakdown/);
     expect(counterSrc).toMatch(/data-testid="quota-counter-breakdown"/);
+  });
+
+  test('CTA buttons meet the 44px mobile touch-target minimum', () => {
+    // CLAUDE.md Mobile rule — 44px min on all interactive elements.
+    // The Buy + Subscribe buttons both set minHeight: 44.
+    expect(counterSrc).toMatch(/minHeight:\s*44/);
+  });
+
+  test('quota_exhausted gets the urgent tone (red palette)', () => {
+    // Urgent palette anchors on the same #f87171 SubscriptionBanner
+    // uses, so the visual language stays consistent.
+    expect(counterSrc).toMatch(/urgent/);
+    expect(counterSrc).toMatch(/#f87171/);
+  });
+});
+
+describe('QuotaCounter.jsx — CTA handler contract', () => {
+  // Both CTAs follow the same pattern: POST → read { url } from
+  // JSON → window.location.href = url. Pin both so neither silently
+  // regresses to a plain GET or a missing redirect.
+
+  test('Subscribe handler POSTs to /api/billing/checkout', () => {
+    expect(counterSrc).toMatch(
+      /handleSubscribeClick[\s\S]{0,400}fetch\(['"]\/api\/billing\/checkout['"][\s\S]{0,80}method:\s*['"]POST['"]/
+    );
+  });
+
+  test('Subscribe handler reads url from JSON and redirects', () => {
+    expect(counterSrc).toMatch(
+      /handleSubscribeClick[\s\S]{0,500}window\.location\.href\s*=\s*url/
+    );
+  });
+
+  test('Buy handler POSTs to /api/billing/buy-quote-pack', () => {
+    expect(counterSrc).toMatch(
+      /handleBuyClick[\s\S]{0,400}fetch\(['"]\/api\/billing\/buy-quote-pack['"][\s\S]{0,80}method:\s*['"]POST['"]/
+    );
+  });
+
+  test('Buy handler reads url from JSON and redirects', () => {
+    expect(counterSrc).toMatch(
+      /handleBuyClick[\s\S]{0,500}window\.location\.href\s*=\s*url/
+    );
   });
 });
 

@@ -1,22 +1,19 @@
 /**
- * Quota-tier banner variants (2026-06-22).
+ * Quota-tier banner — disjoint state spaces (2026-06-25).
  *
- * The new product surface for the 3-free-quote model. The banner now
- * has four quota-driven states layered on top of the existing
- * Stripe-driven ones:
+ * The quota-driven banners (`free-remaining`, `exhausted`) moved
+ * from SubscriptionBanner into the unified `QuotaCounter` strip per
+ * the unified-banner locked spec. SubscriptionBanner is now strictly
+ * Stripe-state-only.
  *
- *   subscribed     → no banner (paid customer; banner stays quiet)
- *   comped         → no banner (trusted user; comping is a private
- *                    arrangement, the customer-facing UI doesn't tell
- *                    them they're "comped" — that's an internal label)
- *   free-remaining → soft "X of 3 free quotes used" + Subscribe CTA
- *   exhausted      → hard "You've used your 3 free quotes. Subscribe
- *                    to continue." with bigger, primary CTA
+ * These tests pin that contract from two angles:
  *
- * pickBannerVariant gains a quota-first branch. The legacy Stripe
- * variants (past_due, canceled, trial-ending) still apply because
- * billing complications override quota state — e.g. a past_due
- * customer should see Update Card, not "free quotes" copy.
+ *   1. `pickBannerVariant` resolves the quota states to `'none'`.
+ *      Stripe-driven states (`past_due`, `canceled`, `expired`,
+ *      `trialing`, `active`) still resolve normally.
+ *   2. SubscriptionBanner.jsx no longer carries `subscription-banner-
+ *      exhausted` / `subscription-banner-free-remaining` JSX. The
+ *      data-testid grep proves the variants were physically removed.
  */
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
@@ -27,20 +24,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '../../');
 const bannerSrc = readFileSync(join(repoRoot, 'src/components/SubscriptionBanner.jsx'), 'utf8');
 
-describe('pickBannerVariant — quota states', () => {
+describe('pickBannerVariant — quota states resolve to "none" (handled by QuotaCounter)', () => {
   test('subscribed quotaState → "none" (paid customer; no banner)', () => {
     expect(
       pickBannerVariant({ configured: true, quotaState: 'subscribed' })
     ).toBe('none');
   });
 
-  test('comped quotaState → "none" (trusted user; never shown as "comped")', () => {
+  test('comped quotaState → "none" (trusted user; comping never surfaces)', () => {
     expect(
       pickBannerVariant({ configured: true, quotaState: 'comped' })
     ).toBe('none');
   });
 
-  test('free-remaining quotaState → "free-remaining" (soft CTA)', () => {
+  test('free-remaining quotaState → "none" (QuotaCounter owns this state now)', () => {
     expect(
       pickBannerVariant({
         configured: true,
@@ -48,10 +45,10 @@ describe('pickBannerVariant — quota states', () => {
         freeQuotesUsed: 1,
         freeQuotesLimit: 3,
       })
-    ).toBe('free-remaining');
+    ).toBe('none');
   });
 
-  test('exhausted quotaState → "exhausted" (hard lockout)', () => {
+  test('exhausted quotaState → "none" (QuotaCounter owns this state now)', () => {
     expect(
       pickBannerVariant({
         configured: true,
@@ -59,13 +56,25 @@ describe('pickBannerVariant — quota states', () => {
         freeQuotesUsed: 3,
         freeQuotesLimit: 3,
       })
-    ).toBe('exhausted');
+    ).toBe('none');
   });
 
-  test('Stripe past_due overrides free-remaining (Update Card wins over Subscribe)', () => {
+  test('purchased-remaining quotaState → "none" (QuotaCounter owns this state now)', () => {
+    expect(
+      pickBannerVariant({
+        configured: true,
+        quotaState: 'purchased-remaining',
+        purchasedQuotesRemaining: 4,
+      })
+    ).toBe('none');
+  });
+
+  test('Stripe past_due still wins over quota state (Update Card is urgent)', () => {
     // A user who is paying but whose card failed should see Update
-    // Card, not "X free quotes used". The Stripe state is more urgent
+    // Card from SubscriptionBanner. The Stripe state is more urgent
     // — they're already a paying customer; we just need their card.
+    // This test ensures the Stripe lane stays load-bearing even
+    // though the quota lane now resolves to 'none'.
     expect(
       pickBannerVariant({
         configured: true,
@@ -76,7 +85,7 @@ describe('pickBannerVariant — quota states', () => {
     ).toBe('past-due');
   });
 
-  test('Stripe canceled overrides exhausted (Resubscribe wins)', () => {
+  test('Stripe canceled still wins over quota state (Resubscribe is urgent)', () => {
     expect(
       pickBannerVariant({
         configured: true,
@@ -84,18 +93,6 @@ describe('pickBannerVariant — quota states', () => {
         quotaState: 'exhausted',
       })
     ).toBe('canceled');
-  });
-
-  test('exhausted wins over legacy trialing/expired state (quota is the new truth)', () => {
-    // A pre-existing user whose trial_ends_at is in the past would
-    // historically read as state='expired'. Quota model takes over.
-    expect(
-      pickBannerVariant({
-        configured: true,
-        state: 'expired',
-        quotaState: 'exhausted',
-      })
-    ).toBe('exhausted');
   });
 
   test('missing quotaState falls back to legacy state mapping', () => {
@@ -114,8 +111,11 @@ describe('pickBannerVariant — quota states', () => {
   });
 });
 
-describe('freeQuotesCopy', () => {
-  test('singular for 1 quote remaining', () => {
+describe('freeQuotesCopy (back-compat helper)', () => {
+  // The helper stays exported so any stale caller doesn't crash on
+  // an undefined import; SubscriptionBanner itself no longer renders
+  // this copy.
+  test('formats "{used} of {limit} free quotes used"', () => {
     expect(freeQuotesCopy(2, 3)).toBe('2 of 3 free quotes used');
   });
   test('formats correctly at 0 used', () => {
@@ -126,49 +126,41 @@ describe('freeQuotesCopy', () => {
   });
 });
 
-describe('SubscriptionBanner.jsx — quota variants source contract', () => {
-  test('renders an "exhausted" variant with its own data-testid', () => {
-    expect(bannerSrc).toMatch(/testId=["']subscription-banner-exhausted["']/);
+describe('SubscriptionBanner.jsx — quota variants removed (2026-06-25)', () => {
+  test('no longer renders the "exhausted" variant (moved to QuotaCounter)', () => {
+    expect(bannerSrc).not.toMatch(/testId=["']subscription-banner-exhausted["']/);
   });
 
-  test('renders a "free-remaining" variant with its own data-testid', () => {
-    expect(bannerSrc).toMatch(/testId=["']subscription-banner-free-remaining["']/);
+  test('no longer renders the "free-remaining" variant (moved to QuotaCounter)', () => {
+    expect(bannerSrc).not.toMatch(/testId=["']subscription-banner-free-remaining["']/);
   });
 
-  test('exhausted variant uses a dynamic limit (matches the effective allowance)', () => {
-    // The copy template is "You've used your N free quotes" where N comes
-    // from `status.freeQuotesLimit` — referrals Phase 1 (2026-06-23) made
-    // the limit dynamic (3 for cold signups, 5 for referees). The server's
-    // 402 body uses the same effective-limit template. Pin both the
-    // template structure AND the interpolated source so the banner can't
-    // silently regress to a hardcoded "3".
-    expect(bannerSrc).toMatch(/You've used your \{lockoutLimit\} free quotes\. Subscribe to continue\./);
-    expect(bannerSrc).toMatch(/lockoutLimit\s*=[\s\S]{0,200}status\.freeQuotesLimit/);
+  test('no longer imports freeQuotesCopy (no quota copy in this component)', () => {
+    expect(bannerSrc).not.toMatch(/freeQuotesCopy/);
   });
 
-  test('free-remaining variant renders the freeQuotesCopy helper with used/limit', () => {
-    // Copy text lives in the helper for testability — the JSX just
-    // invokes it. Pin both the helper call and the args so the banner
-    // can't quietly stop showing the count.
-    expect(bannerSrc).toMatch(/freeQuotesCopy\(status\.freeQuotesUsed/);
-    expect(bannerSrc).toMatch(/status\.freeQuotesLimit/);
+  test('still renders the Stripe-state variants (past-due, canceled, expired, trial, trial-ending)', () => {
+    expect(bannerSrc).toMatch(/testId=["']subscription-banner-past-due["']/);
+    expect(bannerSrc).toMatch(/testId=["']subscription-banner-canceled["']/);
+    expect(bannerSrc).toMatch(/testId=["']subscription-banner-expired["']/);
+    expect(bannerSrc).toMatch(/testId=["']subscription-banner-trial["']/);
+    expect(bannerSrc).toMatch(/testId=["']subscription-banner-trial-ending["']/);
   });
 
-  test('exhausted variant CTA opens Stripe checkout (hard subscribe path)', () => {
-    expect(bannerSrc).toMatch(
-      /variant === 'exhausted'[\s\S]*?testId="subscription-banner-exhausted"[\s\S]*?onClick=\{openCheckout\}[\s\S]*?<\/Strip>/
-    );
+  test('no longer carries the "free quotes used" copy template', () => {
+    // The "X free quotes used" phrasing was the load-bearing string
+    // for the free-remaining variant. Confirms the strip really did
+    // move out (the unified QuotaCounter uses "left" / "free quotes
+    // left" instead).
+    expect(bannerSrc).not.toMatch(/free quotes used/i);
   });
 
-  test('free-remaining variant CTA opens Stripe checkout (soft subscribe path)', () => {
-    expect(bannerSrc).toMatch(
-      /variant === 'free-remaining'[\s\S]*?testId="subscription-banner-free-remaining"[\s\S]*?onClick=\{openCheckout\}[\s\S]*?<\/Strip>/
-    );
+  test('no longer carries the exhausted lockout copy', () => {
+    expect(bannerSrc).not.toMatch(/You've used your.*free quotes\. Subscribe to continue/);
   });
 
-  test('subscribed + comped quotaStates render no banner', () => {
-    // pickBannerVariant returns 'none' for those, so the JSX should
-    // never render a "comped" Strip — there is no testid for it.
+  test('subscribed + comped quotaStates still render no banner', () => {
+    // Defensive — these never had their own variant.
     expect(bannerSrc).not.toMatch(/testId=["']subscription-banner-comped["']/);
     expect(bannerSrc).not.toMatch(/testId=["']subscription-banner-subscribed["']/);
   });
