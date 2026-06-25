@@ -118,6 +118,7 @@ async function main() {
         count, floor,
       });
     }
+
   } catch (err) {
     console.error('check-moat: query failed —', err.message);
     process.exit(2);
@@ -126,10 +127,41 @@ async function main() {
     await pool.end();
   }
 
-  const allPassed = results.every((r) => r.status === 'pass');
+  // Billing integrity audit (2026-06-25, post Pitfall #17 fix in CLAUDE.md).
+  // Canary for the bug class: any user with subscription_status='active'
+  // but no stripe_subscription_id is a victim of (or symptom of) a webhook
+  // misroute that wrongly promotes payment-mode (quote pack) purchases
+  // to a subscriber state. Should always return 0 rows post-fix.
+  // Tracked here so a moat-integrity run doubles as a billing-integrity run.
+  const billingAudit = await (async () => {
+    if (!client) return { status: 'skipped', orphans: 0, reason: 'no DB client' };
+    try {
+      const { rows } = await pool.query(
+        `SELECT id FROM users
+          WHERE subscription_status = 'active'
+            AND stripe_subscription_id IS NULL`
+      );
+      const orphans = rows.length;
+      return {
+        status: orphans === 0 ? 'pass' : 'fail',
+        orphans,
+        sampleIds: rows.slice(0, 5).map((r) => r.id),
+      };
+    } catch (err) {
+      return { status: 'error', orphans: null, reason: err.message };
+    }
+  })();
+
+  const allPassed = results.every((r) => r.status === 'pass')
+    && billingAudit.status === 'pass';
 
   if (args.json) {
-    console.log(JSON.stringify({ ok: allPassed, mode: args.fresh ? 'fresh' : 'prod', results }, null, 2));
+    console.log(JSON.stringify({
+      ok: allPassed,
+      mode: args.fresh ? 'fresh' : 'prod',
+      results,
+      billingIntegrity: billingAudit,
+    }, null, 2));
   } else {
     const mode = args.fresh ? 'fresh DB' : 'production DB';
     console.log(`check-moat (${mode})`);
@@ -144,8 +176,22 @@ async function main() {
         if (r.reason && r.count !== null) console.log(`    detail: ${r.reason}`);
       }
     }
+    // Billing integrity — different shape (must be exactly 0 orphans).
+    const billingStamp = billingAudit.status === 'pass' ? '✓' : '✗';
+    const billingLabel = 'billing_integrity'.padEnd(20);
+    if (billingAudit.status === 'pass') {
+      console.log(`  ${billingStamp} ${billingLabel}0 orphan subscriptions (must be 0)`);
+    } else if (billingAudit.status === 'fail') {
+      console.log(`  ${billingStamp} ${billingLabel}${billingAudit.orphans} orphan(s): users with subscription_status='active' but NO stripe_subscription_id`);
+      console.log(`    why it matters: see CLAUDE.md Pitfall #17 — quote-pack purchases wrongly promoting to subscribed`);
+      if (billingAudit.sampleIds?.length) {
+        console.log(`    sample ids: ${billingAudit.sampleIds.join(', ')}`);
+      }
+    } else {
+      console.log(`  ${billingStamp} ${billingLabel}audit error: ${billingAudit.reason}`);
+    }
     console.log('─'.repeat(60));
-    console.log(allPassed ? 'All moat checks passed.' : 'MOAT INTEGRITY FAILED. See above.');
+    console.log(allPassed ? 'All moat + billing checks passed.' : 'MOAT INTEGRITY FAILED. See above.');
   }
 
   process.exit(allPassed ? 0 : 1);
