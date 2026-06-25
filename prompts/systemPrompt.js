@@ -209,6 +209,25 @@ Cite the trigger in the SCHEDULE OF WORKS step that uses the mortar
 ("Bed cope stones in NHL 3.5 because the existing copes are mortared,
 visible in photos 2 and 4") so the tradesman can audit the decision.
 
+FOUNDATION WORKS (include ONLY when one of these triggers is observably true):
+By default, dry stone wall repairs do NOT require new foundation works.
+The existing wall's base is reused. Foundation line items must NOT
+appear in materials or schedule of works unless at least one of:
+  1. The damageDescription explicitly cites subsidence, undermining,
+     or footing failure visible in the photos.
+  2. The collapsed section extends below ground level — i.e. the
+     breach exposes earth or rubble below the visible wall base.
+  3. The tradesman's briefNotes / voice transcript specify foundation
+     work is part of the scope.
+  4. Photos show clear evidence of failed bedding (sinkholes adjacent
+     to the wall, void under the existing base, washed-out hearting
+     visible below ground).
+None of those true → no foundation line items. None. Most repairs
+re-bed on the existing footing without disturbance.
+If a trigger IS met, cite it in the SCHEDULE OF WORKS step that uses
+the foundation work ("Lift and re-bed left abutment because subsidence
+visible in photo 3") so the tradesman can audit the decision.
+
 PLANT HIRE (include in "materials" array when the job requires them):
 - Hiab / lorry-mounted crane hire: £350–£500 per day
 - Mini digger hire (1.5t): £120–£180 per day

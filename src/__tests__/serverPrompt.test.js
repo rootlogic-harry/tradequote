@@ -216,6 +216,20 @@ describe('Server-side SYSTEM_PROMPT', () => {
       expect(SYSTEM_PROMPT).toMatch(/over 20 m².{1,200}£100/s);
     });
 
+    // Mark's feedback 2026-06-25: AI was quoting for new foundation on
+    // every job — Mark said "80% of the time this is not necessary".
+    // Mirror the MORTAR conditional-inclusion pattern: default OFF,
+    // inclusion only on explicit triggers.
+    test('FOUNDATION WORKS rule defaults to no-foundation with explicit triggers', () => {
+      expect(SYSTEM_PROMPT).toMatch(/FOUNDATION WORKS/i);
+      // Default-off framing
+      expect(SYSTEM_PROMPT).toMatch(/do NOT require new foundation works|by default.{1,40}no foundation/i);
+      // At least 3 triggers named (subsidence, below ground, tradesman briefNotes)
+      expect(SYSTEM_PROMPT).toMatch(/subsidence/i);
+      expect(SYSTEM_PROMPT).toMatch(/below ground/i);
+      expect(SYSTEM_PROMPT).toMatch(/briefNotes/i);
+    });
+
     test('SCHEDULE OF WORKS examples do not bias toward mortar', () => {
       // The previous prompt used "NHL 3.5 hydraulic lime mortar" as the ONLY
       // material-spec example, and "bedded and set plumb on a cement and lime
