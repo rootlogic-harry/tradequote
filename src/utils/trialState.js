@@ -3,6 +3,13 @@
  * JSX component so Jest can unit-test them — the Jest config has
  * `transform: {}` (no JSX compile step), so anything importable
  * from a test file has to live in a plain .js module.
+ *
+ * 2026-06-25 — quota-driven banner variants (`free-remaining`,
+ * `exhausted`) moved into `QuotaCounter` per the unified-banner
+ * locked spec. SubscriptionBanner is now restricted to Stripe-state
+ * banners (`past-due`, `canceled`, `expired`, `trial`, `trial-ending`)
+ * and quota-driven states resolve to `'none'` here so the two
+ * components occupy disjoint state spaces and never render side-by-side.
  */
 
 /**
@@ -47,9 +54,10 @@ export function dayCopy(n) {
 }
 
 /**
- * "X of 3 free quotes used" copy helper (2026-06-22). Centralised
- * so the banner JSX stays a presentation layer and the test can pin
- * the exact string without scraping JSX.
+ * "X of 3 free quotes used" copy helper (2026-06-22). Retained for
+ * back-compat with any caller still reaching into the helper module
+ * — the SubscriptionBanner no longer renders this string (the
+ * unified QuotaCounter owns the free-quote copy as of 2026-06-25).
  */
 export function freeQuotesCopy(used, limit) {
   const safeUsed = Number.isFinite(used) ? used : 0;
@@ -60,28 +68,25 @@ export function freeQuotesCopy(used, limit) {
 /**
  * Pick which banner variant to render given the status payload.
  * Returns one of: 'none' | 'trial' | 'trial-ending' | 'expired'
- * | 'past-due' | 'canceled' | 'free-remaining' | 'exhausted'.
+ * | 'past-due' | 'canceled'.
  *
- * Centralising this so the JSX component is a thin switch and so
- * the precedence rules are testable without rendering.
+ * 2026-06-25 — the quota-driven variants (`free-remaining`,
+ * `exhausted`) were removed from this helper. `QuotaCounter` is now
+ * the sole surface for quota state (free / mixed / purchased /
+ * exhausted). Disjoint state spaces — the two components are never
+ * both visible for the same user state.
  *
- * Quota model (2026-06-22) takes precedence over the legacy
- * trial mapping but NOT over Stripe-side billing issues — a
- * past_due / canceled customer should see Update Card / Resubscribe
- * rather than "X free quotes used", because they're already a
- * paying customer who just needs us to recover their payment state.
  * Order of evaluation:
  *
  *   1. Not configured → none
  *   2. Stripe past_due / canceled → those banners (account recovery
  *      is more urgent than quota copy)
- *   3. quotaState === 'subscribed' | 'comped' → none (no banner; the
- *      customer is good and we don't want to flash quota copy at them)
- *   4. quotaState === 'exhausted' → exhausted (hard CTA)
- *   5. quotaState === 'free-remaining' → free-remaining (soft CTA)
- *   6. Legacy state mapping (trialing/expired/active/unknown) for
- *      backwards-compat with older client builds before quotaState
- *      was wired up.
+ *   3. quotaState === 'subscribed' | 'comped' | 'free-remaining' |
+ *      'exhausted' | 'purchased-remaining' → none (QuotaCounter
+ *      handles all of these now)
+ *   4. Legacy state mapping (trialing/expired/active/unknown) for
+ *      backwards-compat with older client builds before the quota
+ *      model existed.
  */
 export function pickBannerVariant(status) {
   if (!status) return 'none';
@@ -92,11 +97,14 @@ export function pickBannerVariant(status) {
   if (status.state === 'past_due') return 'past-due';
   if (status.state === 'canceled') return 'canceled';
 
-  // Quota model (2026-06-22) takes over from the legacy trial mapping.
+  // Quota-driven states now live in QuotaCounter (2026-06-25). The
+  // SubscriptionBanner stays out of the quota lane so the user
+  // never sees two banners narrating the same state.
   if (status.quotaState === 'subscribed') return 'none';
   if (status.quotaState === 'comped') return 'none';
-  if (status.quotaState === 'exhausted') return 'exhausted';
-  if (status.quotaState === 'free-remaining') return 'free-remaining';
+  if (status.quotaState === 'exhausted') return 'none';
+  if (status.quotaState === 'free-remaining') return 'none';
+  if (status.quotaState === 'purchased-remaining') return 'none';
 
   // Legacy fallback — older client builds without quotaState.
   if (status.state === 'active' || status.state === 'unknown') return 'none';

@@ -295,18 +295,27 @@ UI:
 
 ---
 
-## Persistent Quotes-Remaining Counter (2026-06-23)
+## Unified quotes-remaining banner (2026-06-23, unified 2026-06-25)
 
-Small, always-visible companion to `SubscriptionBanner`. Sits above the banner on every authenticated screen — quieter than the banner (~12px, single line) but never hides. Same data source: the `billing` block from `/auth/me`.
+`QuotaCounter` is the single surface for all quota-driven banner copy. It absorbed the `free-remaining` and `exhausted` variants that previously lived in `SubscriptionBanner`. The two components now occupy disjoint state spaces — `SubscriptionBanner` is strictly Stripe-state-only (`past-due`, `canceled`, `expired`, `trial`, `trial-ending`), `QuotaCounter` owns everything quota-driven.
 
-- **`src/components/QuotaCounter.jsx`** — JSX wrapper, dumb. Reads `selectCounterState()` + `counterCopy()` + `counterBreakdown()` from the pure helper to decide what to render.
+- **`src/components/QuotaCounter.jsx`** — unified banner strip. Reads `selectCounterState()` + `counterCopy()` + `counterBreakdown()` from the pure helper, then renders the count + breakdown + Buy + Subscribe CTAs as one strip. Mobile stacks vertically; desktop sits inline.
 - **`src/utils/quotaCounter.js`** — pure helpers. **Five states ship**: subscribed / comped / free-remaining / purchased-remaining / quota_exhausted (last added 2026-06-24 with the £9.99 pack). Mixed state (free + purchased both > 0) shows the combined total in the main label with a breakdown line below ("{free} free + {purchased} paid").
+- **Per-state CTA visibility** (locked 2026-06-25):
+  | State | Banner |
+  |---|---|
+  | `subscribed` | none (no nudge for unlimited users) |
+  | `comped` | label only — no Buy/Subscribe during comp |
+  | `free-remaining` | text + Buy + Subscribe |
+  | `purchased-remaining` | text + Buy + Subscribe |
+  | `quota_exhausted` | urgent text + Buy + Subscribe |
 - **Comped copy** is derived from `comp_until` every render via `Intl.DateTimeFormat('en-GB', { month: 'long' })`. "Free during {month}" when comp ends in the current calendar month; "Free through {month}" when it ends later. Don't hardcode month names — Paul's comp could be extended.
 - **server.js `/auth/me` billing block** exposes `compUntil` as an ISO string (or null) alongside the existing `quotaState` / `freeQuotesUsed` / `freeQuotesLimit` / `purchasedQuotesRemaining` fields. `resolveQuotaState()` returns `purchasedQuotesRemaining` directly.
 - **Refresh after analysis**: `runAnalysis()` accepts an optional `onAnalysisSuccess` callback (App.jsx wires it to a `refreshBilling()` helper that re-fetches `/auth/me`). Called ONLY on `ANALYSIS_SUCCESS` — failed analyses don't tick the counter down. JobDetails forwards the prop into `runAnalysis` (photo path) AND into `handleVideoAnalyse` (video path, wired 2026-06-24 to close the PR #58 gap).
-- **Buy button** (2026-06-24) — visible in free-remaining / purchased-remaining / quota_exhausted; suppressed for subscribed / comped. POSTs to `/api/billing/buy-quote-pack` → Stripe Checkout (`mode: 'payment'`, `automatic_tax: false`).
+- **Buy button** — POSTs to `/api/billing/buy-quote-pack` → Stripe Checkout (`mode: 'payment'`, `automatic_tax: false`). Label: `BUY 5 QUOTES — £9.99`.
+- **Subscribe button** (added 2026-06-25 as part of the unified strip) — POSTs to `/api/billing/checkout` → Stripe Checkout (`mode: 'subscription'`). Label: `SUBSCRIBE — £19.99/month`.
 
-**Safe vocabulary**: quote, free quote, quotes left, free during, free through, unlimited, remaining, paid, pack, buy. **Banned**: credit, trial.
+**Safe vocabulary**: quote, free quote, quotes left, free during, free through, unlimited, remaining, paid, pack, buy, subscribe. **Banned**: credit, trial.
 
 ---
 
@@ -417,7 +426,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,422 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + persistent quotes counter + pay-as-you-go pack). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,449 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
