@@ -315,6 +315,13 @@ export default function JobDetails({
         critiqueNotes: data.critiqueNotes || null,
         transcript: data.transcript || null,
       });
+
+      // Persistent quotes counter (2026-06-24): refresh billing on
+      // success so the counter ticks down without a page reload. Pure
+      // notification; only fired in the success branch — failures /
+      // aborts below skip this. PR #58 left this wired only on the
+      // photo path; the £9.99-pack PR finishes the gap for video.
+      try { onAnalysisSuccess?.(); } catch { /* best-effort */ }
     } catch (err) {
       if (err.name === 'AbortError') {
         dispatch({ type: 'ANALYSIS_CANCEL' });

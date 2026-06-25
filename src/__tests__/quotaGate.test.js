@@ -279,6 +279,130 @@ describe('quotaGate', () => {
     });
   });
 
+  describe('purchased_quotes (pay-as-you-go pack, 2026-06-24)', () => {
+    test('allows with purchased-remaining when free is exhausted but pack > 0', () => {
+      const user = {
+        free_quotes_used: 3,
+        bonus_free_quotes: 0,
+        purchased_quotes: 5,
+      };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'purchased-remaining',
+      });
+    });
+
+    test('free quotes spent FIRST — never burns a paid quote while a free one is available', () => {
+      // 2 free remaining, 5 paid → reason MUST be free-remaining.
+      const user = {
+        free_quotes_used: 1,
+        bonus_free_quotes: 0,
+        purchased_quotes: 5,
+      };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'free-remaining',
+      });
+    });
+
+    test('free + bonus exhausted, pack > 0 → purchased-remaining', () => {
+      // Referee with bonus also burns free+bonus first.
+      const user = {
+        free_quotes_used: 5,
+        bonus_free_quotes: 2,
+        purchased_quotes: 3,
+      };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'purchased-remaining',
+      });
+    });
+
+    test('free exhausted, pack exhausted → quota_exhausted', () => {
+      const user = {
+        free_quotes_used: 3,
+        purchased_quotes: 0,
+      };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: false,
+        reason: 'quota_exhausted',
+      });
+    });
+
+    test('negative purchased_quotes is clamped to 0 (defensive — refund bug couldn\'t grant)', () => {
+      const user = { free_quotes_used: 3, purchased_quotes: -5 };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: false,
+        reason: 'quota_exhausted',
+      });
+    });
+
+    test('null/undefined purchased_quotes treated as 0 (backwards compat with cold users)', () => {
+      const user = { free_quotes_used: 3, purchased_quotes: null };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: false,
+        reason: 'quota_exhausted',
+      });
+    });
+
+    test('subscription wins over purchased (paid customer never decrements pack)', () => {
+      const user = { free_quotes_used: 99, purchased_quotes: 5 };
+      expect(quotaGate(user, { hasActiveSubscription: true, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'subscribed',
+      });
+    });
+
+    test('comp wins over purchased (pack accumulates during comp)', () => {
+      const user = {
+        free_quotes_used: 99,
+        purchased_quotes: 5,
+        comp_until: '2026-12-22T00:00:00Z',
+      };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'comped',
+      });
+    });
+
+    test('resolveQuotaState exposes purchasedQuotesRemaining', () => {
+      const result = resolveQuotaState(
+        { free_quotes_used: 3, purchased_quotes: 4 },
+        { hasActiveSubscription: false, now: baseNow }
+      );
+      expect(result.purchasedQuotesRemaining).toBe(4);
+      expect(result.quotaState).toBe('purchased-remaining');
+    });
+
+    test('resolveQuotaState clamps negative purchasedQuotesRemaining to 0', () => {
+      const result = resolveQuotaState(
+        { free_quotes_used: 3, purchased_quotes: -7 },
+        { hasActiveSubscription: false, now: baseNow }
+      );
+      expect(result.purchasedQuotesRemaining).toBe(0);
+      expect(result.quotaState).toBe('exhausted');
+    });
+
+    test('resolveQuotaState defaults purchasedQuotesRemaining to 0 when absent', () => {
+      const result = resolveQuotaState(
+        { free_quotes_used: 0 },
+        { hasActiveSubscription: false, now: baseNow }
+      );
+      expect(result.purchasedQuotesRemaining).toBe(0);
+    });
+
+    test('quotaState is "free-remaining" when free > 0 even if pack > 0 (display picks total via counter)', () => {
+      const result = resolveQuotaState(
+        { free_quotes_used: 1, purchased_quotes: 3 },
+        { hasActiveSubscription: false, now: baseNow }
+      );
+      expect(result.quotaState).toBe('free-remaining');
+      expect(result.purchasedQuotesRemaining).toBe(3);
+      expect(result.freeQuotesUsed).toBe(1);
+      expect(result.freeQuotesLimit).toBe(3);
+    });
+  });
+
   describe('resolveQuotaState — billing payload helper', () => {
     test('subscribed', () => {
       expect(

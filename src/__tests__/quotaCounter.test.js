@@ -23,6 +23,7 @@ import {
   selectCounterState,
   compedMonthCopy,
   counterCopy,
+  counterBreakdown,
 } from '../utils/quotaCounter.js';
 import { runAnalysis } from '../utils/analyseJob.js';
 
@@ -77,6 +78,15 @@ describe('selectCounterState — maps /auth/me billing to UI state', () => {
 
   test('unknown quotaState → null (defensive)', () => {
     expect(selectCounterState({ quotaState: 'mystery' })).toBe(null);
+  });
+
+  test('purchased-remaining → "purchased-remaining" (2026-06-24 PR C state)', () => {
+    expect(
+      selectCounterState({
+        quotaState: 'purchased-remaining',
+        purchasedQuotesRemaining: 4,
+      })
+    ).toBe('purchased-remaining');
   });
 });
 
@@ -193,6 +203,104 @@ describe('counterCopy — load-bearing per-state strings', () => {
     expect(counterCopy(null)).toBe(null);
     expect(counterCopy(undefined)).toBe(null);
   });
+
+  // ─────── pay-as-you-go pack (2026-06-24) ───────
+
+  test('purchased-remaining → "{n} quotes left" (free exhausted, pack only)', () => {
+    expect(
+      counterCopy({
+        quotaState: 'purchased-remaining',
+        purchasedQuotesRemaining: 4,
+      })
+    ).toBe('4 quotes left');
+  });
+
+  test('purchased-remaining defaults to 0 when value missing', () => {
+    expect(counterCopy({ quotaState: 'purchased-remaining' })).toBe('0 quotes left');
+  });
+
+  test('mixed state (free + purchased > 0) shows TOTAL in main copy', () => {
+    // Locked-spec choice: ONE big number for "quotes I can run right
+    // now" with a breakdown rendered separately via counterBreakdown.
+    // Used 1 of 3 → 2 free remaining; +3 paid → 5 total.
+    expect(
+      counterCopy({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 3,
+        purchasedQuotesRemaining: 3,
+      })
+    ).toBe('5 quotes left');
+  });
+
+  test('free-only state keeps the existing "{r} of {l} free quotes left" copy', () => {
+    // Regression guard — pre-pack copy must still hold when no pack.
+    expect(
+      counterCopy({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 3,
+        purchasedQuotesRemaining: 0,
+      })
+    ).toBe('2 of 3 free quotes left');
+  });
+});
+
+describe('counterBreakdown — mixed-state secondary line', () => {
+  test('null billing → null', () => {
+    expect(counterBreakdown(null)).toBe(null);
+    expect(counterBreakdown(undefined)).toBe(null);
+  });
+
+  test('free-only → null (no breakdown needed)', () => {
+    expect(
+      counterBreakdown({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 3,
+        purchasedQuotesRemaining: 0,
+      })
+    ).toBe(null);
+  });
+
+  test('purchased-only → null (main label IS the breakdown)', () => {
+    expect(
+      counterBreakdown({
+        quotaState: 'purchased-remaining',
+        purchasedQuotesRemaining: 5,
+      })
+    ).toBe(null);
+  });
+
+  test('mixed (2 free + 3 paid) → "2 free + 3 paid"', () => {
+    expect(
+      counterBreakdown({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 1,
+        freeQuotesLimit: 3,
+        purchasedQuotesRemaining: 3,
+      })
+    ).toBe('2 free + 3 paid');
+  });
+
+  test('mixed (1 free + 1 paid) → "1 free + 1 paid"', () => {
+    expect(
+      counterBreakdown({
+        quotaState: 'free-remaining',
+        freeQuotesUsed: 2,
+        freeQuotesLimit: 3,
+        purchasedQuotesRemaining: 1,
+      })
+    ).toBe('1 free + 1 paid');
+  });
+
+  test('subscribed → null', () => {
+    expect(counterBreakdown({ quotaState: 'subscribed' })).toBe(null);
+  });
+
+  test('comped → null', () => {
+    expect(counterBreakdown({ quotaState: 'comped' })).toBe(null);
+  });
 });
 
 // ─────────────────── source-level component guards ───────────────────
@@ -217,18 +325,23 @@ describe('QuotaCounter.jsx — source-level contract', () => {
     expect(counterSrc).toMatch(/Subscribe/);
   });
 
-  test('does NOT include a buy button (PR C territory)', () => {
-    // Banned: anything that looks like the £9.99 buy-pack CTA from PR C.
-    // Strip comments first so the TODO referencing "purchased-remaining"
-    // (the PR C state name) doesn't trip the guard.
-    const stripped = counterSrc
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/\/\/[^\n]*/g, '');
-    expect(stripped).not.toMatch(/Buy/i);
-    expect(stripped).not.toMatch(/£9\.99/);
-    expect(stripped).not.toMatch(/quote pack/i);
-    expect(stripped).not.toMatch(/Top.?up/i);
-    expect(stripped).not.toMatch(/purchase/i);
+  test('includes a Buy button for the £9.99 pack (2026-06-24)', () => {
+    // The buy-pack CTA must be present — visible in free-remaining /
+    // purchased-remaining / quota_exhausted; suppressed for subscribed
+    // / comped. Locked-spec label: "Buy 5 quotes — £9.99".
+    expect(counterSrc).toMatch(/data-testid="quota-counter-buy"/);
+    expect(counterSrc).toMatch(/Buy 5 quotes/);
+    expect(counterSrc).toMatch(/£9\.99/);
+    expect(counterSrc).toMatch(/\/api\/billing\/buy-quote-pack/);
+  });
+
+  test('Buy button visible in free-remaining / purchased-remaining / quota_exhausted', () => {
+    // Source-level: the showBuyButton flag must reference all three
+    // states. Suppressed for subscribed / comped means those names do
+    // NOT appear in the predicate (we can't easily prove negation in
+    // a source scan; the runtime branches are covered by the pure
+    // selector tests above).
+    expect(counterSrc).toMatch(/free-remaining[\s\S]{0,200}purchased-remaining[\s\S]{0,200}quota_exhausted/);
   });
 
   test('uses fq: breakpoint classes (mobile + desktop placement)', () => {
@@ -241,9 +354,11 @@ describe('QuotaCounter.jsx — source-level contract', () => {
     expect(counterSrc).toMatch(/var\(--tq-/);
   });
 
-  test('TODO comment for purchased-remaining (PR C extension point)', () => {
-    // Helper file carries the TODO so PR C knows where to graft in.
-    expect(helperSrc).toMatch(/TODO[\s\S]{0,80}PR C[\s\S]{0,200}purchased/i);
+  test('renders the breakdown line when both free + purchased quotes exist', () => {
+    // Mixed-state secondary line — "{free} free + {purchased} paid".
+    // The component pulls it via counterBreakdown from the helper.
+    expect(counterSrc).toMatch(/counterBreakdown/);
+    expect(counterSrc).toMatch(/data-testid="quota-counter-breakdown"/);
   });
 });
 
@@ -283,9 +398,12 @@ describe('QuotaCounter — banned vocabulary', () => {
     expect(userFacing).not.toMatch(/\bdebug\b/i);
   });
 
-  test('no "credit" (reserved for PR C) or "trial" (could feel limiting)', () => {
+  test('no "credit" or "trial" leak (both off the safe list)', () => {
     // Strip imports + identifiers to avoid catching things like
     // useCallback or React itself. We're scanning JSX text + strings.
+    // "credit" was reserved for the £9.99 pack (this PR); the
+    // pack's CTA uses "Buy" and the breakdown uses "paid", so the
+    // banned-word guard still holds.
     const jsxAndStrings = userFacing.replace(/^import[^;]+;/gm, '');
     expect(jsxAndStrings).not.toMatch(/\bcredit\b/i);
     expect(jsxAndStrings).not.toMatch(/\btrial\b/i);

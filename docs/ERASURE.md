@@ -52,6 +52,7 @@ a "we deleted you" promise that's untrue.
 | `free_quote_grants` | user_id, quote_token (opaque UUID / job:id), counted_at — quota accounting only | CASCADE — no PII, but cascading keeps the table consistent |
 | `referral_codes` | user_id, code (human-readable string), created_at — no end-client PII | CASCADE — the code is tied to the user; deleting the user removes the code |
 | `referrals` | referrer_user_id, referee_user_id, code_used, timestamps — no end-client PII (waller↔waller relationship only) | CASCADE on either side — deleting either party CASCADE-removes the referral row |
+| `quote_purchases` | user_id, stripe_payment_id (Stripe-issued, no PII), quotes_added, amount_paid_pence, created_at — no end-client PII | CASCADE — billing audit row goes with the user; refund accounting is manual (docs/REFUNDS.md) |
 
 **CASCADE summary** — most child tables have
 `user_id TEXT REFERENCES users(id) ON DELETE CASCADE`, so a single

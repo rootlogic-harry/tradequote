@@ -114,8 +114,13 @@ describe('/analyse route — quota accounting on success', () => {
     );
   });
 
-  test('skips increment for subscribed users', () => {
-    expect(analyseBlock).toMatch(/if \(!hasActiveSubscription\)/);
+  test('skips increment for subscribed and comped users', () => {
+    // 2026-06-24: consumption branches on gate reason. The free-quote
+    // counter only ticks up when the gate's reason was 'free-remaining'
+    // (similarly purchased_quotes only decrements on 'purchased-
+    // remaining'). 'subscribed' / 'comped' reasons hit neither branch.
+    expect(analyseBlock).toMatch(/consumeReason\s*===\s*['"]free-remaining['"]/);
+    expect(analyseBlock).toMatch(/consumeReason\s*===\s*['"]purchased-remaining['"]/);
   });
 
   test('increment is best-effort — catches DB errors so they can\'t break the user response', () => {

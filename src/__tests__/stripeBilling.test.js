@@ -344,7 +344,7 @@ describe('TRQ-150 — server.js wiring', () => {
     expect(block).toMatch(/res\.status\(400\)\.json\(\{ error: 'missing signature/);
     expect(block).toMatch(/res\.status\(400\)\.json\(\{ error: 'invalid signature/);
     expect(block).toMatch(/res\.status\(500\)\.json\(\{ error: 'apply failed/);
-    expect(block).toMatch(/res\.json\(\{ received: true/);
+    expect(block).toMatch(/res\.json\(\{\s*received:\s*true/);
   });
 
   test('billing routes are auth-gated', () => {
