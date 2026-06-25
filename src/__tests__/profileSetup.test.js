@@ -93,10 +93,89 @@ describe('App.jsx — passes handleLogout to the profile modal (TRQ-170)', () =>
     // First mount is the onboarding flow — a brand-new user has nothing
     // to log out of yet, and showing "Sign out" there would be confusing.
     // The default-no-link behaviour is locked by withholding the prop.
+    //
+    // The regex tolerates additional props (currentUserId / userName /
+    // showToast were added 2026-06-25 to power the relocated
+    // ReferralPanel) but pins the absence of `onLogout` and `isModal`.
     const onboardingMount = appSrc.match(
-      /<ProfileSetup\s+state=\{state\}\s+dispatch=\{dispatch\}\s+onProfileComplete=\{handleProfileComplete\}\s*\/>/
+      /<ProfileSetup\b(?![^>]*\bisModal\b)[\s\S]*?onProfileComplete=\{handleProfileComplete\}[\s\S]*?\/>/
     );
     expect(onboardingMount).not.toBeNull();
     expect(onboardingMount[0]).not.toMatch(/onLogout/);
+  });
+});
+
+// Harry's 2026-06-25 ask: ReferralPanel lives inside ProfileSetup now,
+// positioned immediately after the Quote Accent Colour section. These
+// assertions pin the placement so a future cleanup doesn't accidentally
+// move the panel into the wrong section group.
+describe('ProfileSetup — hosts ReferralPanel after the accent section (2026-06-25)', () => {
+  test('imports ReferralPanel', () => {
+    expect(componentSrc).toMatch(
+      /import\s+ReferralPanel\s+from\s+['"][^'"]*ReferralPanel(?:\.jsx)?['"]/
+    );
+  });
+
+  test('renders <ReferralPanel /> with the documented props', () => {
+    expect(componentSrc).toMatch(/<ReferralPanel\b/);
+    // Props contract — same shape the component had on the Dashboard so
+    // we don't fork its contract during the move.
+    expect(componentSrc).toMatch(/currentUserId\s*=\s*\{[^}]+\}/);
+    expect(componentSrc).toMatch(/userName\s*=\s*\{[^}]+\}/);
+    expect(componentSrc).toMatch(/showToast\s*=\s*\{\s*showToast\s*\}/);
+  });
+
+  test('the ReferralPanel sits AFTER the Quote Accent Colour section', () => {
+    const accentIdx = componentSrc.indexOf('Quote Accent Colour');
+    const panelIdx = componentSrc.indexOf('<ReferralPanel');
+    expect(accentIdx).toBeGreaterThan(-1);
+    expect(panelIdx).toBeGreaterThan(-1);
+    expect(panelIdx).toBeGreaterThan(accentIdx);
+  });
+
+  test('the ReferralPanel sits BEFORE the save bar (so it scrolls naturally above the sticky footer)', () => {
+    const panelIdx = componentSrc.indexOf('<ReferralPanel');
+    const saveBarIdx = componentSrc.indexOf('Sticky save bar');
+    expect(panelIdx).toBeGreaterThan(-1);
+    expect(saveBarIdx).toBeGreaterThan(-1);
+    expect(panelIdx).toBeLessThan(saveBarIdx);
+  });
+
+  test('ProfileSetup destructures currentUserId / userName / showToast', () => {
+    // The panel needs all three. Source-level check on the function
+    // signature so we don't accidentally drop one in a refactor.
+    expect(componentSrc).toMatch(
+      /function\s+ProfileSetup\s*\(\s*\{[^}]*\bcurrentUserId\b[^}]*\}/
+    );
+    expect(componentSrc).toMatch(
+      /function\s+ProfileSetup\s*\(\s*\{[^}]*\buserName\b[^}]*\}/
+    );
+    expect(componentSrc).toMatch(
+      /function\s+ProfileSetup\s*\(\s*\{[^}]*\bshowToast\b[^}]*\}/
+    );
+  });
+});
+
+describe('App.jsx — wires the ReferralPanel props through to ProfileSetup (2026-06-25)', () => {
+  const appSrc = readFileSync(join(repoRoot, 'src/App.jsx'), 'utf8');
+
+  test('the Step-1 onboarding ProfileSetup mount forwards currentUserId / userName / showToast', () => {
+    const onboardingMount = appSrc.match(
+      /<ProfileSetup\b(?![^>]*\bisModal\b)[\s\S]*?onProfileComplete=\{handleProfileComplete\}[\s\S]*?\/>/
+    );
+    expect(onboardingMount).not.toBeNull();
+    expect(onboardingMount[0]).toMatch(/currentUserId\s*=\s*\{\s*state\.currentUserId\s*\}/);
+    expect(onboardingMount[0]).toMatch(/userName\s*=\s*\{[^}]*state\.currentUser\?\.name[^}]*\}/);
+    expect(onboardingMount[0]).toMatch(/showToast\s*=\s*\{\s*showToast\s*\}/);
+  });
+
+  test('the profile-modal ProfileSetup mount forwards currentUserId / userName / showToast', () => {
+    const modalMount = appSrc.match(
+      /<ProfileSetup\b[^>]*\bisModal\b[\s\S]*?\/>/
+    );
+    expect(modalMount).not.toBeNull();
+    expect(modalMount[0]).toMatch(/currentUserId\s*=\s*\{\s*state\.currentUserId\s*\}/);
+    expect(modalMount[0]).toMatch(/userName\s*=\s*\{[^}]*state\.currentUser\?\.name[^}]*\}/);
+    expect(modalMount[0]).toMatch(/showToast\s*=\s*\{\s*showToast\s*\}/);
   });
 });

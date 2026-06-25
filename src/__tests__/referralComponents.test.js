@@ -16,6 +16,11 @@ const componentsDir = join(__dirname, '../components');
 
 const panelSrc = readFileSync(join(componentsDir, 'ReferralPanel.jsx'), 'utf8');
 const welcomeSrc = readFileSync(join(componentsDir, 'ReferralWelcome.jsx'), 'utf8');
+const dashboardSrc = readFileSync(join(componentsDir, 'Dashboard.jsx'), 'utf8');
+const profileSetupSrc = readFileSync(
+  join(componentsDir, 'steps/ProfileSetup.jsx'),
+  'utf8'
+);
 
 describe('ReferralPanel', () => {
   test('fetches from /api/users/:id/referrals', () => {
@@ -83,5 +88,44 @@ describe('ReferralWelcome', () => {
   test('uses "invited" + "free quotes" (locked-spec safe vocabulary)', () => {
     expect(welcomeSrc).toMatch(/invited/);
     expect(welcomeSrc).toMatch(/free quotes/);
+  });
+});
+
+// Harry's 2026-06-25 ask: relocate ReferralPanel out of Dashboard (a
+// quote-management surface) and into ProfileSetup (where personal
+// settings like the accent colour already live). These source-level
+// scans pin the move so a future refactor doesn't silently put the
+// panel back on the wrong surface.
+describe('ReferralPanel mount location', () => {
+  test('is imported by ProfileSetup', () => {
+    // Relative path differs because ProfileSetup lives in steps/. Either
+    // ../ReferralPanel or ../../components/ReferralPanel forms are
+    // acceptable depending on which import root the dev picked, so the
+    // regex is generous.
+    expect(profileSetupSrc).toMatch(
+      /import\s+ReferralPanel\s+from\s+['"][^'"]*ReferralPanel(?:\.jsx)?['"]/
+    );
+  });
+
+  test('is rendered inside ProfileSetup', () => {
+    expect(profileSetupSrc).toMatch(/<ReferralPanel\b/);
+  });
+
+  test('ProfileSetup mounts ReferralPanel AFTER the Quote Accent Colour section', () => {
+    const accentIdx = profileSetupSrc.indexOf('Quote Accent Colour');
+    const panelIdx = profileSetupSrc.indexOf('<ReferralPanel');
+    expect(accentIdx).toBeGreaterThan(-1);
+    expect(panelIdx).toBeGreaterThan(-1);
+    expect(panelIdx).toBeGreaterThan(accentIdx);
+  });
+
+  test('is NOT imported by Dashboard (moved out per 2026-06-25 ask)', () => {
+    expect(dashboardSrc).not.toMatch(
+      /import\s+ReferralPanel\s+from/
+    );
+  });
+
+  test('is NOT rendered by Dashboard', () => {
+    expect(dashboardSrc).not.toMatch(/<ReferralPanel\b/);
   });
 });

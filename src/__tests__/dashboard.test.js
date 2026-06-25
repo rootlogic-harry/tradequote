@@ -164,3 +164,22 @@ describe('Dashboard archive view copy passes the visibility-rules check', () => 
     expect(archiveBlock).not.toMatch(/\b(AI|agent|confidence|calibration|model|prompt)\b/i);
   });
 });
+
+// Harry's 2026-06-25 ask: ReferralPanel moved off the dashboard
+// (quote-management surface) and into ProfileSetup (personal settings,
+// next to the accent colour). The positive assertion that the panel
+// renders in ProfileSetup lives in referralComponents.test.js — this
+// is the negative regression guard.
+describe('Dashboard no longer hosts ReferralPanel (2026-06-25)', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/Dashboard.jsx'), 'utf8'
+  );
+
+  it('does not import ReferralPanel', () => {
+    expect(src).not.toMatch(/import\s+ReferralPanel\s+from/);
+  });
+
+  it('does not render <ReferralPanel /> anywhere', () => {
+    expect(src).not.toMatch(/<ReferralPanel\b/);
+  });
+});
