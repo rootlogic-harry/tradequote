@@ -145,6 +145,45 @@ Single-page React app. All state in one `useReducer` in `App.jsx`. Layout: 240px
 
 Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 5.
 
+### Landing Page (2026-06-25, "Daylight" handoff)
+
+The unauthenticated `/` surface is a server-rendered marketing page —
+mirrors the existing `/login` pattern (`LOGIN_PAGE_HTML` string).
+Server-rendered (not React) because the spec requires "no JavaScript
+required", first-paint speed matters more than for the SPA, and
+consistency with `/login` keeps the unauth surface uniform.
+
+- **Markup**: `LANDING_PAGE_HTML` template literal in `server.js`,
+  served by the `GET /` route. Authenticated visitors fall through
+  via `next()` to the React SPA — single split point.
+- **Styles**: `public/landing/landing-light.css` (warm-limestone
+  Daylight tokens — `--bg #f4eee2`, `--ink #211a10`, `--brand
+  #bd5e09`). Copied into `dist/landing/` by Vite's public-dir
+  convention. The old Dark-Refined assets (`landing.css`,
+  `landing.js`, `landing/photos/`) remain on disk as reference but
+  are no longer linked from the page.
+- **Sections (8)**: nav, hero, trust strip, how-it-works, data band,
+  straight answers, pricing, footer. All copy verbatim from spec §3.
+- **Photography placeholders**: `.ph` striped divs marked with
+  `<!-- TODO: swap for real wall photo ... -->` comments. Harry will
+  swap to real Yorkshire wall photography pre-launch.
+- **Honesty guardrails (load-bearing)**: no video / voice / testimonial
+  / accuracy claims. Pinned by `landingPage.test.js` (banned-vocab
+  asserts). The page IS the most public surface in the product — copy
+  honesty matters more here than anywhere else.
+- **Pricing**: `£19.99/mo` matches `billing.js` `PRICE_GBP`. The
+  spec's `£19/mo` placeholder is gone (search-and-replaced); tests
+  guard against regression.
+- **Security wording**: "kept secure" (defensive default). An HTML
+  comment in the data card marks the swap-back point to "encrypted
+  in transit and at rest" once the Railway-PG at-rest control is
+  verified.
+- **ICO `ZC178109`**: footer + data card, mono-font.
+- **Single CTA target**: `/signup` (alias → `/login` → Google OAuth).
+
+If you need to change landing copy, edit the template literal and run
+`landingPage.test.js` — it pins every contract above.
+
 ### Vite Build
 
 `vite build` produces `dist/`. Express serves static files from `dist/` in production. Dev mode uses Vite proxy for `/api` routes.
@@ -426,7 +465,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,449 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,455 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + Daylight landing page). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 

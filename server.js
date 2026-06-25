@@ -1745,33 +1745,49 @@ app.get('/terms', (req, res) => {
 
 // --- Landing page for unauthenticated visitors at / ---
 //
-// New conversion-focused landing (2026-05-18 spec): hero + live demo
-// strip + trust + 3-step + pricing + footer. Visual styles live in
-// public/landing/landing.css and the demo controller in
-// public/landing/landing.js — both copied into dist/ by Vite's public-
-// dir convention so Express's static handler serves them at
-// /landing/landing.css and /landing/landing.js.
+// "Daylight" landing (2026-06-25 handoff, Spec v2). Trust-first,
+// photography-led, no JavaScript required. 8 sections: nav, hero,
+// trust strip, how it works, straight answers, data band, pricing,
+// footer. Styles live in public/landing/landing-light.css (copied
+// into dist/ by Vite's public-dir convention so Express's static
+// handler serves it at /landing/landing-light.css).
 //
 // Auth model is invite-only Google OAuth, so the spec's /signup CTA
-// is wired to /login (an alias is registered below) — both endpoints
+// is wired to /login via the alias registered below — both endpoints
 // land the user on the Google consent screen via Passport.
+//
+// Pricing is £19.99/mo — sourced from billing.js PRICE_GBP. The spec's
+// £19/mo placeholder is replaced everywhere (pricing card + answers).
+//
+// Photography placeholders (hero, step 1 three-tile) remain as .ph
+// striped divs — Harry will swap to real Yorkshire photography before
+// launch. Each carries a TODO comment marking the swap point.
+//
+// Resolutions applied (per handoff §0):
+//   - £19/mo → £19.99/mo (matches live Stripe price)
+//   - "encrypted in transit and at rest" → "kept secure" (Railway PG
+//     uses TLS in transit; at-rest claim not verified — defensive
+//     default). Swap back to the stronger phrasing if confirmed.
+//   - ICO ZC178109 placed in footer and data card.
 const LANDING_PAGE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FastQuote &mdash; From quote to customer, ready in 5 minutes.</title>
-  <meta name="description" content="FastQuote turns a few photos or a short video of a job into a professional quote in five minutes. Built for dry stone wallers." />
-  <meta name="theme-color" content="#0d0805" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FastQuote &mdash; Spend less time quoting, more time on the tools.</title>
+  <meta name="description" content="FastQuote turns a few photos of a job into a professional quote in five minutes. Built for dry stone wallers." />
+  <meta name="theme-color" content="#f4eee2" />
   <meta property="og:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
-  <meta property="og:description" content="Photo or film the wall. Get measurements, materials and a polished quote in five minutes." />
+  <meta property="og:description" content="Photo the wall. Get measurements, materials and a polished quote in five minutes." />
   <meta property="og:image" content="/og.png" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fastquote.uk/" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/landing/landing.css?v=2" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/landing/landing-light.css?v=1" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -1780,13 +1796,13 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web",
     "url": "https://fastquote.uk/",
-    "description": "Quoting tools for dry stone wallers — photo or short video in, professional quote out, in under five minutes."
+    "description": "Quoting tools for dry stone wallers — photo the wall, get a professional quote in under five minutes."
   }
   </script>
   <!-- TRQ-15: landing pageview beacon. Fires one anonymous POST to
        /api/track. Honours navigator.doNotTrack. Failure is silent.
-       Inline so it runs before any deferred scripts and so a blocked
-       landing.js can't suppress the analytics signal. -->
+       Inline so it runs before any deferred scripts. Not load-bearing
+       for rendering — the page is fully usable with JS disabled. -->
   <script>
     (function() {
       try {
@@ -1815,254 +1831,276 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   </script>
 </head>
 <body>
+
+  <!-- ─────── NAV ─────── -->
   <header class="nav">
     <div class="nav-inner">
-      <a href="/" class="brand" aria-label="FastQuote">
-        <span class="brand-mark" aria-hidden="true"></span>FASTQUOTE
+      <a href="/" class="brand" aria-label="FastQuote home">
+        <span class="brand-mark"></span>
+        <span class="brand-word">FASTQUOTE</span>
       </a>
       <nav class="nav-links" aria-label="Primary">
         <a href="#how">How it works</a>
+        <a href="#answers">Questions</a>
         <a href="#pricing">Pricing</a>
       </nav>
       <div class="nav-actions">
-        <a href="/login" class="nav-login">Log in</a>
-        <a href="/signup" class="btn btn-sm btn-primary">Get started &rarr;</a>
+        <a href="/login" class="link-quiet">Log in</a>
+        <a href="/signup" class="btn btn-primary btn-sm">Get started <span aria-hidden="true">&rarr;</span></a>
       </div>
     </div>
   </header>
 
+  <!-- ─────── HERO ─────── -->
   <section class="hero">
-    <div class="hero-bg" aria-hidden="true"></div>
-    <div class="hero-grain" aria-hidden="true"></div>
-    <div class="hero-inner">
+    <div class="hero-grid">
       <div class="hero-copy">
-        <span class="eyebrow">For dry stone wallers</span>
-        <h1 class="hero-title">
-          From quote to customer.
-          <span class="hero-title-amber">Ready in 5 minutes.</span>
-        </h1>
-        <p class="hero-sub">
-          Spend less time on paperwork, more time doing your job. Take a photo
-          or short video of the wall &mdash; FastQuote handles the measurements,
-          materials and a professional quote, typically in under five minutes.
-        </p>
-        <div class="hero-cta-row">
-          <a href="/signup" class="btn btn-lg btn-primary">Get started &rarr;</a>
+        <div class="eyebrow">
+          <span class="eyebrow-dash"></span>
+          For dry stone wallers
         </div>
-        <ul class="hero-facts">
-          <li>No card needed to try</li>
-          <li>Simple monthly pricing, cancel anytime</li>
-          <li>Built with West Yorkshire wallers</li>
+
+        <h1 class="hero-title">
+          <span>Spend less</span>
+          <span>time quoting.</span>
+          <span class="hero-title-emph">More on the tools.</span>
+        </h1>
+
+        <p class="hero-sub">
+          Take a few photos of the wall. FastQuote works out
+          the measurements, materials and labour, and turns it into a professional
+          quote you can send before you've packed up.
+        </p>
+
+        <div class="hero-cta">
+          <a href="/signup" class="btn btn-primary btn-lg">
+            Get started &mdash; no card <span aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+
+        <ul class="hero-bullets" aria-label="Quick facts">
+          <li><span class="dot"></span> Free while you make your first 3 quotes</li>
+          <li><span class="dot"></span> Every figure is yours to check and change</li>
+          <li><span class="dot"></span> Built with West Yorkshire wallers</li>
         </ul>
       </div>
 
-      <div class="hero-demo">
-        <div class="demo" data-demo aria-label="See how a quote is built">
-          <div class="demo-head">
-            <span class="demo-live">
-              <span class="demo-dot" aria-hidden="true"></span>
-              Live &middot; Brink Farm, SK10
-            </span>
-            <button type="button" class="demo-replay" aria-label="Replay demo">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="23 4 23 10 17 10"/>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-              </svg>
-              Replay
-            </button>
-          </div>
-          <div class="demo-stage">
-            <div class="demo-stage-step is-active" data-stage="1">
-              <p class="demo-stage-label">01 &middot; Photos go in</p>
-              <div class="demo-photos">
-                <div class="demo-photo" aria-hidden="true"><img src="/landing/photos/wall-1-urban.jpg" alt="" /></div>
-                <div class="demo-photo" aria-hidden="true"><img src="/landing/photos/wall-2-village.jpg" alt="" /></div>
-                <div class="demo-photo" aria-hidden="true"><img src="/landing/photos/wall-3-moorland.jpg" alt="" /></div>
-              </div>
-            </div>
-            <div class="demo-stage-step" data-stage="2">
-              <p class="demo-stage-label">02 &middot; Numbers come out</p>
-              <ul class="demo-rows">
-                <li class="demo-row" style="--d: 0ms">
-                  <span class="demo-row-label">Wall length</span>
-                  <span class="demo-row-v" data-target="18m"></span>
-                </li>
-                <li class="demo-row" style="--d: 100ms">
-                  <span class="demo-row-label">Stone reclaimed</span>
-                  <span class="demo-row-v" data-target="65%"></span>
-                </li>
-                <li class="demo-row" style="--d: 200ms">
-                  <span class="demo-row-label">New stone</span>
-                  <span class="demo-row-v" data-target="1.8 t"></span>
-                </li>
-                <li class="demo-row" style="--d: 300ms">
-                  <span class="demo-row-label">Labour</span>
-                  <span class="demo-row-v" data-target="2 &times; 6 days"></span>
-                </li>
-                <li class="demo-row" style="--d: 400ms">
-                  <span class="demo-row-label">Materials cost</span>
-                  <span class="demo-row-v" data-target="&pound;1,518"></span>
-                </li>
-              </ul>
-            </div>
-            <div class="demo-stage-step" data-stage="3">
-              <p class="demo-stage-label">03 &middot; Send to client</p>
-              <div class="demo-total">
-                <p class="demo-total-eyebrow">Quote total inc. VAT</p>
-                <p class="demo-total-value">&pound;7,581.60</p>
-                <p class="demo-total-meta">QT-2026-0047 &middot; valid 30 days</p>
-              </div>
-              <div class="demo-status">
-                <span class="demo-status-dot" aria-hidden="true"></span>
-                Sent to James &middot; viewed 12 mins ago
-              </div>
-            </div>
-          </div>
-          <div class="demo-progress" aria-hidden="true">
-            <div class="demo-progress-bar"></div>
-          </div>
+      <div class="hero-shot">
+        <!-- TODO: swap for real wall photo (4:5 portrait, Yorkshire countryside) -->
+        <div class="ph" data-label="Photo &mdash; finished wall in the landscape"></div>
+        <div class="quote-float" aria-hidden="true">
+          <div class="quote-float-ref">QT-2026-0047 &middot; Brink Farm, HD9</div>
+          <div class="quote-float-k">Quote total inc. VAT</div>
+          <div class="quote-float-v">&pound;7,581.60</div>
+          <div class="quote-float-badge"><i></i> Accepted</div>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- ─────── TRUST STRIP ─────── -->
   <section class="trust">
     <div class="trust-inner">
-      <div class="trust-cell">
-        <div class="trust-stat">80%+</div>
-        <div class="trust-label">Accuracy first time</div>
+      <div class="trust-item">
+        <div class="trust-num">5 min</div>
+        <div class="trust-lbl">Typical quote time</div>
       </div>
-      <div class="trust-cell">
-        <div class="trust-stat">5 mins</div>
-        <div class="trust-label">Typical quote time</div>
+      <div class="trust-divider"></div>
+      <div class="trust-item">
+        <div class="trust-num">100%</div>
+        <div class="trust-lbl">Editable by you</div>
       </div>
-      <div class="trust-cell">
-        <div class="trust-stat">&uarr;</div>
-        <div class="trust-label">Improve your win rate</div>
+      <div class="trust-divider"></div>
+      <div class="trust-item">
+        <div class="trust-num">3 free</div>
+        <div class="trust-lbl">Quotes to start</div>
       </div>
-      <div class="trust-cell">
-        <div class="trust-stat">DSWA</div>
-        <div class="trust-label">Working with members</div>
+      <div class="trust-divider"></div>
+      <div class="trust-item">
+        <div class="trust-num">DSWA</div>
+        <div class="trust-lbl">Built with members</div>
       </div>
     </div>
   </section>
 
+  <!-- ─────── HOW IT WORKS ─────── -->
   <section class="how" id="how">
     <div class="how-inner">
       <div class="how-head">
-        <span class="eyebrow section-eyebrow">How it works</span>
-        <h2 class="section-title">Three steps. Roughly five minutes.</h2>
+        <div class="eyebrow" style="justify-content:center;">
+          <span class="eyebrow-dash"></span>
+          How it works
+        </div>
+        <h2 class="how-title">Three steps. Roughly five minutes.</h2>
       </div>
-      <div class="how-grid">
-        <article class="step">
-          <p class="step-num">01</p>
-          <h3 class="step-title">Snap or film the wall</h3>
-          <p class="step-body">
-            A few photos or a short video &mdash; overview, close-up, side
-            profile. Voice notes if your hands are full of dust.
-          </p>
-          <div class="step-mock" aria-hidden="true">
-            <div class="step-mock-photos">
-              <img class="step-mock-photo" src="/landing/photos/wall-1-urban.jpg" alt="" loading="lazy" />
-              <img class="step-mock-photo" src="/landing/photos/wall-2-village.jpg" alt="" loading="lazy" />
-              <img class="step-mock-photo" src="/landing/photos/wall-3-moorland.jpg" alt="" loading="lazy" />
-            </div>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-num">01</div>
+          <div class="step-body">
+            <h3>Snap the wall</h3>
+            <p>A few photos &mdash; overview, close-up, side profile. That's all FastQuote needs to get to work.</p>
           </div>
-        </article>
-        <article class="step">
-          <p class="step-num">02</p>
-          <h3 class="step-title">Check the numbers</h3>
-          <p class="step-body">
-            Measurements, stone tonnage, materials, labour days. Every figure
-            is editable &mdash; confirm what looks right, tweak what doesn't.
-          </p>
-          <div class="step-mock" aria-hidden="true">
-            <div class="step-mock-table">
-              <div class="step-mock-row"><span>Wall length</span><span>18.0 m</span></div>
-              <div class="step-mock-row"><span>Wall height</span><span>1.2 m</span></div>
-              <div class="step-mock-row"><span>New stone</span><span>1.8 t</span></div>
-              <div class="step-mock-row amber"><span>Materials</span><span>&pound;1,518</span></div>
-            </div>
+          <!-- TODO: swap for real wall photos (3 x 4:5 tiles, Yorkshire job archive) -->
+          <div class="step-photos" aria-hidden="true">
+            <div class="ph"></div>
+            <div class="ph"></div>
+            <div class="ph"></div>
           </div>
-        </article>
-        <article class="step">
-          <p class="step-num">03</p>
-          <h3 class="step-title">Send. Track. Get on with it.</h3>
-          <p class="step-body">
-            A polished, branded quote your client sees on their phone. You see
-            when they open it and whether they accept.
-          </p>
-          <div class="step-mock" aria-hidden="true">
-            <div class="step-mock-quote">
-              <span class="step-mock-ref">QT-2026-0047</span>
-              <span class="step-mock-total">&pound;7,581.60</span>
-              <span class="step-mock-accepted">Accepted</span>
-            </div>
+        </li>
+
+        <li class="step">
+          <div class="step-num">02</div>
+          <div class="step-body">
+            <h3>Check the numbers</h3>
+            <p>Measurements, stone tonnage, materials, labour days. Every figure is editable &mdash; confirm what looks right, tweak what doesn't.</p>
           </div>
-        </article>
+          <div class="step-review" aria-hidden="true">
+            <div class="mock-row"><span>Wall length</span><span class="mock-val">18 m</span></div>
+            <div class="mock-row"><span>Wall height</span><span class="mock-val">1.2 m</span></div>
+            <div class="mock-row"><span>New stone</span><span class="mock-val">1.8 t</span></div>
+            <div class="mock-row mock-row--ok"><span>Materials</span><span class="mock-val">&pound;1,518</span></div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-num">03</div>
+          <div class="step-body">
+            <h3>Send. Track. Get on with it.</h3>
+            <p>A polished, branded quote your client sees on their phone. You see when they open it and whether they accept.</p>
+          </div>
+          <div class="step-send" aria-hidden="true">
+            <div class="mock-quote-ref">QT-2026-0047</div>
+            <div class="mock-quote-total">&pound;7,581.60</div>
+            <div class="mock-badge"><i></i> Accepted</div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ─────── DATA / TRUST ─────── -->
+  <section class="data" id="data">
+    <div class="data-inner">
+      <div class="eyebrow">
+        <span class="eyebrow-dash"></span>
+        Your data, looked after
+      </div>
+      <h2 class="data-title">Your clients' details, kept safe.</h2>
+      <p class="data-lead">Quotes and customer information sit behind proper data protection &mdash; not a spreadsheet on a laptop or a notebook in the van.</p>
+      <div class="data-grid">
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v5.5c0 4.8-3.4 8-8 9.5-4.6-1.5-8-4.7-8-9.5V5.5l8-3z"/><path d="M8.5 12l2.3 2.3L15.7 9.4"/></svg>
+          </div>
+          <h3>Registered with the ICO</h3>
+          <p>We're registered with the Information Commissioner's Office, the UK's data-protection regulator.</p>
+          <p class="data-ref">ICO reg. ZC178109</p>
+        </div>
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>
+          </div>
+          <h3>UK GDPR compliant</h3>
+          <p>We collect only what's needed to build your quotes, and handle it to UK GDPR standards.</p>
+        </div>
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7a4 4 0 018 0v3.5"/></svg>
+          </div>
+          <h3>Encrypted and secure</h3>
+          <!-- Defensive default per handoff §0.3: TLS in transit is confirmed
+               (Railway-managed Postgres); encryption-at-rest is not yet
+               verified. Swap to "encrypted in transit and at rest, so they
+               stay private." once Harry confirms the Railway-PG control. -->
+          <p>Your quotes and client details are kept secure, so they stay private.</p>
+        </div>
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 20h14"/></svg>
+          </div>
+          <h3>Your data stays yours</h3>
+          <p>We never sell it or share it. Export or delete everything whenever you like.</p>
+        </div>
       </div>
     </div>
   </section>
 
+  <!-- ─────── STRAIGHT ANSWERS ─────── -->
+  <section class="answers" id="answers">
+    <div class="answers-inner">
+      <div class="answers-head">
+        <div class="eyebrow">
+          <span class="eyebrow-dash"></span>
+          Straight answers
+        </div>
+        <h2 class="answers-title">Fair questions.</h2>
+      </div>
+      <div class="answers-grid">
+        <div class="answer">
+          <h3 class="answer-q">Can a computer really measure my wall?</h3>
+          <p class="answer-a">It gives you a starting figure from your photos &mdash; length, height, tonnage, labour. You check and correct every number before anything goes out. It never sends a quote you haven't approved.</p>
+        </div>
+        <div class="answer">
+          <h3 class="answer-q">I'm not good with tech.</h3>
+          <p class="answer-a">If you can take a photo and tap a button, you can use it. No training, no manual, nothing to set up. Most wallers send their first quote the same day they sign up.</p>
+        </div>
+        <div class="answer">
+          <h3 class="answer-q">What's it going to cost me?</h3>
+          <p class="answer-a">&pound;19.99 a month, cancel any time. Your first 3 quotes are free and there's no card needed to start &mdash; so you can win a job with it before you pay a penny.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────── PRICING / CTA ─────── -->
   <section class="pricing" id="pricing">
     <div class="pricing-inner">
-      <div class="pricing-head">
-        <span class="eyebrow section-eyebrow">Pricing</span>
-        <h2 class="section-title">One plan. Built to grow your trade.</h2>
-      </div>
       <div class="pricing-card">
-        <div class="pricing-money">
-          <p class="pricing-money-eyebrow">Pricing</p>
-          <p class="pricing-headline">
-            Fair, monthly,
-            <span>no surprises.</span>
-          </p>
-          <p class="pricing-caption">Start free &middot; cancel anytime</p>
+        <div class="pricing-head">
+          <div class="eyebrow">
+            <span class="eyebrow-dash"></span>
+            Pricing
+          </div>
+          <h2 class="pricing-title">One plan. Built for a one-person trade.</h2>
         </div>
-        <ul class="pricing-features">
-          <li>
-            <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-            Unlimited quotes &amp; clients
-          </li>
-          <li>
-            <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-            Client portal &amp; live quote tracking
-          </li>
-          <li>
-            <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-            PDF export &amp; print-ready quotes
-          </li>
-          <li>
-            <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-            Your branding on every quote
-          </li>
-        </ul>
-        <div class="pricing-cta-col">
-          <a href="/signup" class="btn btn-lg btn-primary btn-block">
-            Start free &mdash; no card needed &rarr;
-          </a>
-          <p class="pricing-cta-note">Free while you make your first 3 quotes.</p>
+
+        <div class="pricing-grid">
+          <div class="pricing-money">
+            <div class="pricing-from">From</div>
+            <div class="pricing-amount">
+              <span class="pricing-currency">&pound;</span>
+              <span class="pricing-figure">19.99</span>
+              <span class="pricing-period">/mo</span>
+            </div>
+            <div class="pricing-vat">+ VAT &middot; cancel anytime</div>
+          </div>
+
+          <ul class="pricing-features">
+            <li><span class="tick"></span> Unlimited quotes &amp; clients</li>
+            <li><span class="tick"></span> Client portal &amp; live quote tracking</li>
+            <li><span class="tick"></span> PDF export &amp; print-ready quotes</li>
+            <li><span class="tick"></span> Your branding on every quote</li>
+          </ul>
+
+          <div class="pricing-cta">
+            <a href="/signup" class="btn btn-primary btn-lg btn-block">
+              Start free &mdash; no card needed <span aria-hidden="true">&rarr;</span>
+            </a>
+            <div class="pricing-note">Free while you make your first 3 quotes.</div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- ─────── FOOTER ─────── -->
   <footer class="foot">
     <div class="foot-inner">
-      <div class="foot-brand-col">
-        <span class="foot-brand">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand">FASTQUOTE</span>
-          <span class="foot-tag">&mdash; Quoting tools for tradesmen.</span>
-        </span>
+      <div class="foot-brand">
+        <span class="brand-mark"></span>
+        <span class="brand-word">FASTQUOTE</span>
+        <span class="foot-tag">&mdash; Quoting tools for tradesmen.</span>
       </div>
       <div class="foot-links">
         <a href="/privacy">Privacy</a>
@@ -2070,11 +2108,12 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
         <a href="/dpa">DPA</a>
         <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>
       </div>
-      <div class="foot-right">&copy; 2026 FastQuote &middot; Built in West Yorkshire</div>
+      <div class="foot-meta">
+        &copy; 2026 FastQuote &middot; Built in West Yorkshire &middot; ICO reg. ZC178109
+      </div>
     </div>
   </footer>
 
-  <script src="/landing/landing.js?v=2" defer></script>
 </body>
 </html>`;
 
