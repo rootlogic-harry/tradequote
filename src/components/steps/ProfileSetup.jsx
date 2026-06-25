@@ -1,8 +1,19 @@
 import React, { useState } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
+import ReferralPanel from '../ReferralPanel.jsx';
 
-export default function ProfileSetup({ state, dispatch, isModal, onClose, onProfileComplete, onLogout }) {
+export default function ProfileSetup({
+  state,
+  dispatch,
+  isModal,
+  onClose,
+  onProfileComplete,
+  onLogout,
+  currentUserId,
+  userName,
+  showToast,
+}) {
   const [errors, setErrors] = useState({});
   const { profile } = state;
 
@@ -447,6 +458,19 @@ export default function ProfileSetup({ state, dispatch, isModal, onClose, onProf
           );
         })}
       </div>
+
+      {/* Referrals Phase 1 (2026-06-23) — referrer surface, relocated
+          from Dashboard to Profile on 2026-06-25 (Harry's ask). Lives
+          here because it's personal configuration (your code, your
+          share link, your bonus balance), not a quote-management tool.
+          The panel self-hides while loading and if the user has no
+          code yet, so it gracefully omits itself for the first-run
+          Step 1 mount where currentUserId may not yet be set. */}
+      <ReferralPanel
+        currentUserId={currentUserId}
+        userName={userName}
+        showToast={showToast}
+      />
 
       {!isModal && (
         <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--tq-muted)' }}>

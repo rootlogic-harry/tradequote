@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
-import ReferralPanel from './ReferralPanel.jsx';
 import { documentTerm } from '../utils/documentType.js';
 import { isThisMonth, isThisYear, buildMonthlyTotals } from '../utils/monthlyTotals.js';
 import { isActiveJob, isArchivedJob } from '../utils/jobLifecycle.js';
@@ -145,8 +144,6 @@ export default function Dashboard({
   onViewRams,
   isAdminPlan = false,
   viewMode = 'active',
-  currentUserId,
-  showToast,
 }) {
   const term = documentTerm(profile);
   // Use recentJobs (from reducer) if available, fallback to savedJobs
@@ -271,14 +268,6 @@ export default function Dashboard({
           </div>
         )}
       </div>
-
-      {/* Referrals Phase 1 (2026-06-23) — referrer surface. The panel
-          self-hides while loading and if the user has no code yet. */}
-      <ReferralPanel
-        currentUserId={currentUserId}
-        userName={userName}
-        showToast={showToast}
-      />
 
       {/* Current draft banner */}
       {currentDraft && (

@@ -766,8 +766,6 @@ export default function App() {
           onViewRams={handleViewRams}
           isAdminPlan={isAdmin}
           viewMode={state.viewMode}
-          currentUserId={state.currentUserId}
-          showToast={showToast}
         />
       );
     }
@@ -837,6 +835,9 @@ export default function App() {
             state={state}
             dispatch={dispatch}
             onProfileComplete={handleProfileComplete}
+            currentUserId={state.currentUserId}
+            userName={state.currentUser?.name}
+            showToast={showToast}
           />
         );
       case 2:
@@ -956,6 +957,9 @@ export default function App() {
               dispatch={dispatch}
               isModal
               onLogout={handleLogout}
+              currentUserId={state.currentUserId}
+              userName={state.currentUser?.name}
+              showToast={showToast}
               onClose={async () => {
                 setShowProfileModal(false);
                 if (state.currentUserId) {
