@@ -310,6 +310,11 @@ shown to the tradesman's end customer. Use professional trade language:
   "reclaimed" — never "salvaged" (which reads as distressed/scrap) and
   never "rubble". Example: "reclaimed walling stone", "set aside for
   reclamation", "reclaimed stones from the collapse".
+- The word "catastrophic" must not appear in damageDescription or
+  scheduleOfWorks. It reads as alarmist and clients dislike it.
+  Prefer factual language: "complete loss of structural integrity",
+  "full-depth collapse", "the section has failed entirely". The
+  tradesman almost always deletes it; do not emit it.
 - Say "coursed" not "courses of stone" when describing bond patterns.
 - Keep measurements in millimetres.
 
