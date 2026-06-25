@@ -188,11 +188,13 @@ app.post('/api/billing/webhook',
       //
       // For a quote-pack checkout.session.completed, BOTH handlers
       // see the event:
-      //   • applySubscriptionEventToDb will UPDATE users SET
-      //     subscription_status='active' if session.subscription is
-      //     truthy. A payment-mode session has session.subscription =
-      //     null, so the UPDATE is a no-op (COALESCE keeps the existing
-      //     value). Safe.
+      //   • applySubscriptionEventToDb checks session.mode and SKIPS
+      //     payment-mode sessions entirely. This guard was added
+      //     2026-06-25 after Harry's £9.99 pack purchase incorrectly
+      //     promoted his subscription_status to 'active' — the previous
+      //     "COALESCE keeps the existing value" claim was wrong (the
+      //     'active' literal is non-null so COALESCE returns it
+      //     regardless). See billing.js applySubscriptionEventToDb.
       //   • applyQuotePackEventToDb credits the pack.
       const subResult = await applySubscriptionEventToDb(pool, event);
       let packResult = { applied: false };

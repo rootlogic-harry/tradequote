@@ -79,6 +79,35 @@ describe('AI text removal from user-facing components', () => {
     });
   });
 
+  // Stripe Checkout product descriptions ARE customer-facing — they
+  // render on the Stripe-hosted payment page and on the receipt email.
+  // billing.js lives at the repo root (not inside src/), so the
+  // USER_FACING_FILES loop above doesn't cover it. Added 2026-06-25
+  // after a "5 AI-generated quotes" slip-through in the quote pack
+  // checkout copy (PR #59 / fixed in PR #62-ish).
+  test('billing.js Stripe Checkout copy contains no user-visible "AI" text', () => {
+    const billingPath = join(srcDir, '../billing.js');
+    const content = readFileSync(billingPath, 'utf-8');
+    const lines = content.split('\n');
+    const violations = [];
+
+    lines.forEach((line, idx) => {
+      if (isAllowedLine(line)) return;
+      for (const pattern of AI_PATTERNS) {
+        pattern.lastIndex = 0;
+        const match = pattern.exec(line);
+        if (match) {
+          violations.push({ line: idx + 1, text: line.trim(), match: match[0] });
+        }
+      }
+    });
+
+    if (violations.length > 0) {
+      const details = violations.map(v => `  Line ${v.line}: "${v.match}" in: ${v.text}`).join('\n');
+      fail(`Found ${violations.length} user-visible "AI" reference(s) in billing.js:\n${details}`);
+    }
+  });
+
   // TRQ-126: The Client Portal is the most public surface in the whole
   // product — the one page random people receive via email/SMS. Scan the
   // renderer source for any user-visible AI vocabulary. (The runtime

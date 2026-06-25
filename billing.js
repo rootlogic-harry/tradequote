@@ -232,6 +232,19 @@ export async function applySubscriptionEventToDb(pool, event) {
       // client_reference_id was set by us at session creation — it's the FastQuote user id.
       const userId = session.client_reference_id;
       if (!userId) return { applied: false, reason: 'no client_reference_id' };
+      // CRITICAL (2026-06-25): IGNORE payment-mode checkouts. Without
+      // this guard, a one-time quote-pack purchase (mode='payment')
+      // would promote the user to subscription_status='active' — Harry
+      // hit this live: bought a £9.99 pack, the gate then read his
+      // state as 'subscribed' and the counter showed "Unlimited". The
+      // previous "COALESCE handles it" reasoning was wrong — the
+      // COALESCE was protecting customer/subscription IDs (which ARE
+      // null in payment mode), not the literal 'active' string.
+      // applyQuotePackEventToDb handles payment-mode events; this
+      // function MUST only fire on subscription-mode.
+      if (session.mode !== 'subscription') {
+        return { applied: false, reason: `ignored: mode=${session.mode || 'unknown'}` };
+      }
       await pool.query(
         `UPDATE users
          SET stripe_customer_id = COALESCE($1, stripe_customer_id),
@@ -415,7 +428,7 @@ export async function createQuotePackCheckoutSession({ userId, email, successUrl
         currency: 'gbp',
         product_data: {
           name: QUOTE_PACK_DESCRIPTION,
-          description: `${QUOTE_PACK_SIZE} AI-generated quotes — never expire.`,
+          description: `${QUOTE_PACK_SIZE} quotes — no expiry date.`,
         },
         unit_amount: QUOTE_PACK_PRICE_PENCE,
       },

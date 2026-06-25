@@ -138,12 +138,17 @@ describe('TRQ-150 — applySubscriptionEventToDb', () => {
     };
   }
 
-  test('checkout.session.completed → sets customer + subscription + active', async () => {
+  test('checkout.session.completed (mode=subscription) → sets customer + subscription + active', async () => {
+    // 2026-06-25 hardening: fixture must include mode='subscription'. Without
+    // it, the new payment-mode safety guard skips the event (correct for
+    // quote-pack purchases; would have prevented Harry's £9.99 pack from
+    // wrongly promoting his subscription_status to 'active').
     const pool = mockPool();
     const result = await applySubscriptionEventToDb(pool, {
       type: 'checkout.session.completed',
       data: {
         object: {
+          mode: 'subscription',
           client_reference_id: 'user_abc',
           customer: 'cus_xyz',
           subscription: 'sub_xyz',
@@ -161,7 +166,7 @@ describe('TRQ-150 — applySubscriptionEventToDb', () => {
     const pool = mockPool();
     const result = await applySubscriptionEventToDb(pool, {
       type: 'checkout.session.completed',
-      data: { object: { customer: 'cus_xyz' } },
+      data: { object: { mode: 'subscription', customer: 'cus_xyz' } },
     });
     expect(result.applied).toBe(false);
     expect(pool.calls).toHaveLength(0);
