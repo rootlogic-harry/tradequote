@@ -54,6 +54,19 @@ describe('Server-side SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/walling stone/i);
   });
 
+  // Mark's feedback 2026-06-25: "Remove the word catastrophic from
+  // description unless Paul wants it, I nearly always delete it but it
+  // keeps popping back up". Mirrors the TRQ-122 "no rubble" precedent —
+  // ban it in CLIENT-FACING LANGUAGE so Claude doesn't regress from its
+  // training-data tendency.
+  test('"catastrophic" is banned from client-facing damage descriptions', () => {
+    expect(SYSTEM_PROMPT).toMatch(/[Cc]atastrophic.{1,80}must not appear|must not appear.{1,80}[Cc]atastrophic/);
+    // Sanity: the prompt itself isn't allowed to use the word as an example
+    // outside the ban rule. There should be at most one occurrence.
+    const occurrences = (SYSTEM_PROMPT.match(/catastrophic/gi) || []).length;
+    expect(occurrences).toBeLessThanOrEqual(1);
+  });
+
   // Measurement accuracy v2: methodology rigor. The prompt drives Claude
   // through an explicit 5-step scale/measure/check loop, recognises Tier A/B/C
   // scale anchors, and respects the new USER-PROVIDED SCALE REFERENCES channel
@@ -214,6 +227,20 @@ describe('Server-side SYSTEM_PROMPT', () => {
       expect(SYSTEM_PROMPT).toMatch(/[Gg]ritstone.{1,40}[Ll]imestone|[Ll]imestone.{1,40}[Gg]ritstone/);
       // Haulage contingency for large jobs
       expect(SYSTEM_PROMPT).toMatch(/over 20 m².{1,200}£100/s);
+    });
+
+    // Mark's feedback 2026-06-25: AI was quoting for new foundation on
+    // every job — Mark said "80% of the time this is not necessary".
+    // Mirror the MORTAR conditional-inclusion pattern: default OFF,
+    // inclusion only on explicit triggers.
+    test('FOUNDATION WORKS rule defaults to no-foundation with explicit triggers', () => {
+      expect(SYSTEM_PROMPT).toMatch(/FOUNDATION WORKS/i);
+      // Default-off framing
+      expect(SYSTEM_PROMPT).toMatch(/do NOT require new foundation works|by default.{1,40}no foundation/i);
+      // At least 3 triggers named (subsidence, below ground, tradesman briefNotes)
+      expect(SYSTEM_PROMPT).toMatch(/subsidence/i);
+      expect(SYSTEM_PROMPT).toMatch(/below ground/i);
+      expect(SYSTEM_PROMPT).toMatch(/briefNotes/i);
     });
 
     test('SCHEDULE OF WORKS examples do not bias toward mortar', () => {
