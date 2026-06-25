@@ -24,6 +24,7 @@ import {
   QUOTE_PACK_SIZE,
   QUOTE_PACK_DESCRIPTION,
   applyQuotePackEventToDb,
+  applySubscriptionEventToDb,
 } from '../../billing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -204,6 +205,80 @@ describe('applyQuotePackEventToDb — webhook handler', () => {
     });
     expect(result.applied).toBe(false);
     expect(result.reason).toMatch(/unhandled event type/);
+  });
+});
+
+// CRITICAL bug surfaced 2026-06-25: Harry bought a £9.99 quote pack
+// live and his subscription_status got flipped to 'active' (counter
+// showed "Unlimited" instead of "5 quotes left"). Root cause:
+// applySubscriptionEventToDb on a checkout.session.completed event
+// unconditionally wrote 'active' via `COALESCE($3, ...)` where $3 was
+// the literal string 'active' — the COALESCE was protecting customer/
+// subscription IDs (null in payment mode) but NOT the status itself.
+// These tests pin the fix: payment-mode sessions are SKIPPED entirely
+// by the subscription handler.
+describe('applySubscriptionEventToDb — payment-mode safety guard', () => {
+  function mockPool() {
+    return { query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }) };
+  }
+
+  test('payment-mode checkout.session.completed does NOT write subscription_status', async () => {
+    const pool = mockPool();
+    const result = await applySubscriptionEventToDb(pool, {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'payment',
+          client_reference_id: 'harrydoyle_lhoe',
+          customer: 'cus_xxx',
+          subscription: null,  // payment-mode sessions have no subscription
+          metadata: { fastquote_product: 'quote_pack' },
+        },
+      },
+    });
+    expect(result.applied).toBe(false);
+    expect(result.reason).toMatch(/mode=payment/);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  test('subscription-mode checkout.session.completed DOES write subscription_status', async () => {
+    const pool = mockPool();
+    const result = await applySubscriptionEventToDb(pool, {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          mode: 'subscription',
+          client_reference_id: 'user_real_sub',
+          customer: 'cus_yyy',
+          subscription: 'sub_yyy',
+        },
+      },
+    });
+    expect(result.applied).toBe(true);
+    expect(result.status).toBe('active');
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    // The actual UPDATE includes the 'active' literal — verify it's in the call
+    const sql = pool.query.mock.calls[0][0];
+    const params = pool.query.mock.calls[0][1];
+    expect(sql).toMatch(/UPDATE users[\s\S]*subscription_status/);
+    expect(params).toContain('active');
+  });
+
+  test('missing session.mode (defensive) is treated as not-subscription and skipped', async () => {
+    const pool = mockPool();
+    const result = await applySubscriptionEventToDb(pool, {
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          // mode field missing — should be skipped, not promoted
+          client_reference_id: 'user_xxx',
+          customer: 'cus_xxx',
+          subscription: null,
+        },
+      },
+    });
+    expect(result.applied).toBe(false);
+    expect(pool.query).not.toHaveBeenCalled();
   });
 });
 
