@@ -56,13 +56,17 @@ describe('Status transition validation', () => {
     expect(match[1]).toContain("'sent'");
   });
 
-  test('accepted can only transition to completed', () => {
+  test('accepted can transition to completed OR declined (client back-out)', () => {
     const match = serverSource.match(/accepted:\s*\[(.*?)\]/);
     expect(match).toBeTruthy();
     expect(match[1]).toContain("'completed'");
-    // Should NOT contain 'sent', 'declined', or 'draft'
+    // declined is allowed — the UI's "× DECLINED" button on accepted rows
+    // (PR #44) needs the server to honour the transition. Mark hit a
+    // "Failed to update status" error on 2026-06-26 when the gate was
+    // blocking it.
+    expect(match[1]).toContain("'declined'");
+    // Still should NOT allow backward to 'sent' or 'draft'
     expect(match[1]).not.toContain("'sent'");
-    expect(match[1]).not.toContain("'declined'");
     expect(match[1]).not.toContain("'draft'");
   });
 });
