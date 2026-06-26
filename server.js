@@ -2992,7 +2992,10 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
     const VALID_TRANSITIONS = {
       draft:     ['sent', 'accepted', 'declined', 'completed'],
       sent:      ['accepted', 'declined', 'completed'],
-      accepted:  ['completed'],
+      // accepted → declined: client backed out after initially accepting.
+      // Mark hit this on 2026-06-26; the UI (PR #44) offers the action
+      // but this server-side gate was rejecting it.
+      accepted:  ['completed', 'declined'],
       declined:  ['sent'],          // allow re-sending a declined quote
       completed: [],                // terminal state
     };
