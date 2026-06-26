@@ -7,6 +7,7 @@ export default function BottomNav({
   onGoToSaved,
   onSettingsClick,
   isAdminPlan = false,
+  isQuotaExhausted = false,
   className = '',
 }) {
   const items = [
@@ -21,11 +22,18 @@ export default function BottomNav({
     (key === 'saved' && currentView === 'saved') ||
     (key === 'new' && currentView === 'editor');
 
+  // Mobile PR-1 (2026-06-26). The 64px bar must grow to include the
+  // iOS safe-area inset so the home indicator on iPhone X+ doesn't
+  // overlap the labels. Padding pushes the icon/label row above the
+  // indicator strip; height grows the click target so the nav still
+  // visually fills the gap. Desktop (no safe-area inset) is
+  // unchanged because env() resolves to 0.
   return (
     <nav
       className={`fixed bottom-0 left-0 right-0 z-40 ${className}`}
       style={{
-        height: 64,
+        height: 'calc(64px + env(safe-area-inset-bottom))',
+        paddingBottom: 'env(safe-area-inset-bottom)',
         backgroundColor: 'var(--tq-nav-bg)',
         borderTop: '1px solid rgba(255,255,255,0.08)',
       }}
@@ -33,12 +41,23 @@ export default function BottomNav({
       <div className="flex items-center justify-around h-full px-2">
         {items.map(({ key, label, icon: Icon, action }) => {
           const active = isActive(key);
+          // Only the `new` button greys out when the user is locked
+          // out. Tap still fires `action` — handleStartNewQuote in
+          // App.jsx routes to the lockout screen so the user sees
+          // Subscribe / Buy. Visual signal + aria only; no native
+          // `disabled` (which would swallow the click).
+          const isLocked = key === 'new' && isQuotaExhausted;
           return (
             <button
               key={key}
               onClick={action}
+              aria-disabled={isLocked}
               className="flex flex-col items-center justify-center gap-1 flex-1 h-full"
-              style={{ color: active ? 'var(--tq-accent)' : 'var(--tq-nav-muted)' }}
+              style={{
+                color: active ? 'var(--tq-accent)' : 'var(--tq-nav-muted)',
+                opacity: isLocked ? 0.45 : 1,
+                cursor: isLocked ? 'not-allowed' : 'pointer',
+              }}
             >
               <Icon size={20} />
               <span className="text-[10px]" style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.03em' }}>

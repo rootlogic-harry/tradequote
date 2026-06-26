@@ -901,7 +901,11 @@ export default function App() {
       />
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 pb-16 fq:pb-0">
+      {/* Mobile PR-1 (2026-06-26): mobile pb grows with safe-area
+          inset to match the BottomNav, otherwise the last px of
+          content sits behind the home-indicator strip on iPhone
+          X+. Desktop (`fq:pb-0`) unchanged. */}
+      <main className="flex-1 min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] fq:pb-0">
         <StepIndicator
           currentStep={state.step}
           dispatch={dispatch}
@@ -939,6 +943,7 @@ export default function App() {
         onGoToSaved={handleGoToSaved}
         onSettingsClick={() => setShowProfileModal(true)}
         isAdminPlan={isAdmin}
+        isQuotaExhausted={isQuotaExhausted}
       />
 
       {/* Profile modal */}
