@@ -4,7 +4,9 @@ import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
 import { documentTerm } from '../utils/documentType.js';
 import { isThisMonth, isThisYear, buildMonthlyTotals } from '../utils/monthlyTotals.js';
-import { isActiveJob, isArchivedJob } from '../utils/jobLifecycle.js';
+import { isActiveJob, isCompletedJob, isArchivedJob } from '../utils/jobLifecycle.js';
+
+const VIEW_MODES = ['active', 'completed', 'archive'];
 import {
   needsFollowUp,
   relativeViewedLabel,
@@ -172,9 +174,14 @@ export default function Dashboard({
   // src/utils/jobLifecycle.js.
   const now = new Date();
   const activeJobs = useMemo(() => jobs.filter(j => isActiveJob(j, now)), [jobs]);
+  const completedJobs = useMemo(() => jobs.filter(j => isCompletedJob(j, now)), [jobs]);
   const archivedJobs = useMemo(() => jobs.filter(j => isArchivedJob(j, now)), [jobs]);
-  const isArchiveView = viewMode === 'archive';
-  const visibleJobs = isArchiveView ? archivedJobs : activeJobs;
+  const view = VIEW_MODES.includes(viewMode) ? viewMode : 'active';
+  const isActiveView = view === 'active';
+  const isCompletedView = view === 'completed';
+  const isArchiveView = view === 'archive';
+  const visibleJobs = isArchiveView ? archivedJobs : isCompletedView ? completedJobs : activeJobs;
+  const completedCount = completedJobs.length;
   const archiveCount = archivedJobs.length;
 
   const displayJobs = visibleJobs.slice(0, 5);
@@ -342,7 +349,7 @@ export default function Dashboard({
       {/* Recent jobs */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <div className="eyebrow">{isArchiveView ? 'ARCHIVED JOBS' : 'RECENT JOBS'}</div>
+          <div className="eyebrow">{isArchiveView ? 'ARCHIVED JOBS' : isCompletedView ? 'COMPLETED JOBS' : 'RECENT JOBS'}</div>
           <button
             onClick={onViewJobs}
             className="text-sm"
@@ -352,18 +359,28 @@ export default function Dashboard({
           </button>
         </div>
 
-        {/* Active / Archive tabs. Reuses the existing .pill class so the
-            look matches the SavedQuotes filter chips. Archive shows a
-            count badge unless empty (avoid "(0)"). */}
+        {/* Active / Completed / Archive tabs (Mark's 2026-06-26 ask).
+            Reuses the existing .pill class so the look matches the
+            SavedQuotes filter chips. Count badge hidden when zero so
+            tabs don't read "(0)". */}
         <div className="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Job list view">
           <button
             type="button"
             role="tab"
-            aria-selected={!isArchiveView}
+            aria-selected={isActiveView}
             onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'active' })}
-            className={`pill ${!isArchiveView ? 'active' : ''}`}
+            className={`pill ${isActiveView ? 'active' : ''}`}
           >
             Active
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isCompletedView}
+            onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'completed' })}
+            className={`pill ${isCompletedView ? 'active' : ''}`}
+          >
+            Completed{completedCount > 0 ? ` (${completedCount})` : ''}
           </button>
           <button
             type="button"
@@ -372,7 +389,7 @@ export default function Dashboard({
             onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'archive' })}
             className={`pill ${isArchiveView ? 'active' : ''}`}
           >
-            Archive{archiveCount > 0 ? ` (${archiveCount})` : ''}
+            Archived{archiveCount > 0 ? ` (${archiveCount})` : ''}
           </button>
         </div>
 
@@ -385,9 +402,11 @@ export default function Dashboard({
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
               {isArchiveView
                 ? `No archived ${term.lower}s yet — declined ${term.lower}s will show here once you have any.`
-                : `No jobs yet. Create your first ${term.lower} to get started.`}
+                : isCompletedView
+                  ? `No completed ${term.lower}s yet — finished work shows here once you mark a job as completed.`
+                  : `No jobs yet. Create your first ${term.lower} to get started.`}
             </p>
-            {!isArchiveView && (
+            {isActiveView && (
               <button onClick={onStartNewQuote} className="btn-primary">
                 + New {term.title}
               </button>
