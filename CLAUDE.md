@@ -149,6 +149,39 @@ Quick Quote mode skips Step 4: auto-confirms all measurements and lands on Step 
 
 `vite build` produces `dist/`. Express serves static files from `dist/` in production. Dev mode uses Vite proxy for `/api` routes.
 
+### Landing Page (2026-06-26 re-theme)
+
+The marketing surface at `GET /` for unauthenticated visitors. Three files,
+ONE stylesheet:
+
+- **`LANDING_PAGE_HTML`** in `server.js` (~line 1758) — server-rendered HTML
+  string. Sections in order: nav, hero (with live demo strip), trust strip,
+  how-it-works, data-trust band, pricing (£19.99/mo subscription card +
+  £9.99 pay-as-you-go pack panel), footer.
+- **`public/landing/landing.css`** — single stylesheet, Daylight palette
+  (warm limestone `#f4eee2` bg, cream `#fffdf8` cards, ink `#211a10` text,
+  amber `#bd5e09` brand). Re-themed on 2026-06-26 from "Dark Refined"; the
+  closed PR #65 attempted a wholesale spec-driven Daylight rebuild and was
+  rejected in favour of preserving the existing copy + animations. The
+  class names + structure are deliberately byte-identical between the two
+  palettes so `LANDING_PAGE_HTML` and `landing.js` keep working without
+  change. There is intentionally ONE landing stylesheet — do NOT add a
+  second `landing-light.css` file.
+- **`public/landing/landing.js`** — three-stage demo controller. Vanilla
+  JS, no deps. IntersectionObserver pauses when off-screen, replay button
+  restarts the cycle, prefers-reduced-motion holds stage 3 statically.
+  Touch this file with extreme caution — the animation is the highest-
+  praised part of the landing.
+
+Honesty guardrails enforced in the copy (asserted by `landingPage.test.js`):
+- No video / film references anywhere (video is disabled in prod via PR #35).
+- No "at rest" encryption claim (Railway-PG at-rest control is unverified —
+  softened to "kept secure").
+- No PII pointing at real customers (`Beck Farm, HD8` is fictional).
+- Footer email is `fastquote@harrydoyle.uk` — the working inbox. The
+  `fastquote.uk` MX does NOT accept `hello@`.
+- ICO `ZC178109` cited in the data-trust band AND the footer.
+
 ---
 
 ## Data Model
@@ -426,7 +459,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,449 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,463 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
