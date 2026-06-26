@@ -288,7 +288,16 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
           Cost Breakdown
         </h2>
 
-        <table className="w-full text-lg mb-4">
+        {/* Desktop layout (5-column table). Hidden on small SCREEN
+            viewports (<900px) so phones don't have to pan horizontally,
+            but ALWAYS shown in `@media print` so the server-side PDF
+            (Puppeteer at 800x600 + emulateMediaType("print")) and the
+            browser-native window.print() fallback both keep rendering
+            this exact <table> markup. That's what holds Pitfall #12:
+            QuoteDocument must stay byte-identical for read-only
+            consumers (PDF/DOCX/SavedQuoteViewer). The mobile stacked
+            block below is screen-only and never reaches a PDF. */}
+        <table className="hidden fq:table print:table w-full text-lg mb-4">
           <thead>
             <tr className="border-b border-gray-200 text-gray-500 text-base">
               <th className="text-left py-1">Description</th>
@@ -322,6 +331,56 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             ))}
           </tbody>
         </table>
+
+        {/* Mobile-only stacked layout (Mobile PR-3, audit items 3 + 17).
+            Each material renders as: description on row 1, then
+            `qty unit x rate = total` on row 2. Visible only on screens
+            below 900px, NEVER in print media: keeps the PDF byte-
+            identical (Pitfall #12). The data-mobile-cost-breakdown
+            attribute gives the parallel test + any future print rule
+            a stable hook. */}
+        <div
+          data-mobile-cost-breakdown
+          className="fq:hidden print:hidden mb-4 text-base"
+        >
+          {displayMaterials.map((mat) => (
+            <div key={mat.id} className="border-b border-gray-100 py-2">
+              <div className="text-gray-800">{mat.description}</div>
+              <div
+                className="text-gray-600 mt-1 flex justify-between gap-2"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                <span>
+                  {mat.quantity}{mat.unit ? ` ${mat.unit}` : ''} {'\u00d7'} {formatCurrency(mat.unitCost)}
+                </span>
+                <span className="text-gray-800">= {formatCurrency(mat.totalCost)}</span>
+              </div>
+            </div>
+          ))}
+          <div className="border-b border-gray-100 py-2 flex justify-between gap-2">
+            <span className="text-gray-800">Labour</span>
+            <span
+              className="text-gray-800"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              = {formatCurrency(totals.labourTotal)}
+            </span>
+          </div>
+          {additionalCosts.map((cost) => (
+            <div
+              key={cost.id}
+              className="border-b border-gray-100 py-2 flex justify-between gap-2"
+            >
+              <span className="text-gray-800">{cost.label}</span>
+              <span
+                className="text-gray-800"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                = {formatCurrency(cost.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
 
         {/* Totals — right-aligned, fixed-width, with a heavier rule above
              TOTAL and brand-accent on the value to read like a proper invoice. */}
