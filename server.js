@@ -1600,7 +1600,7 @@ app.get('/privacy', (req, res) => {
   </ul>
 
   <h2>Your rights</h2>
-  <p>You have the right to access, correct, port, restrict, or delete your personal data, and to object to processing. To exercise any of these, email <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>. We respond within 30 days. If you are unhappy with our handling, you can complain to the UK Information Commissioner's Office (<a href="https://ico.org.uk">ico.org.uk</a>).</p>
+  <p>You have the right to access, correct, port, restrict, or delete your personal data, and to object to processing. To exercise any of these, email <a href="mailto:fastquote@harrydoyle.uk">fastquote@harrydoyle.uk</a>. We respond within 30 days. If you are unhappy with our handling, you can complain to the UK Information Commissioner's Office (<a href="https://ico.org.uk">ico.org.uk</a>).</p>
 
   <h2>What we don't do</h2>
   <ul>
@@ -1613,7 +1613,7 @@ app.get('/privacy', (req, res) => {
   <p>HTTPS-only. Session secrets and database passwords are stored as Railway environment variables, never in code. Database backups are encrypted at rest. We run secret-scanning on every commit. See our <a href="/terms">Terms of Service</a> for limits on liability.</p>
 
   <h2>Contact</h2>
-  <p>Controller: Harry Doyle (sole trader t/a FastQuote), United Kingdom.<br>Email: <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a></p>
+  <p>Controller: Harry Doyle (sole trader t/a FastQuote), United Kingdom.<br>Email: <a href="mailto:fastquote@harrydoyle.uk">fastquote@harrydoyle.uk</a></p>
   </div></body></html>`);
 });
 
@@ -1730,7 +1730,7 @@ app.get('/terms', (req, res) => {
   <p>Use FastQuote only for its intended purpose: generating professional quotes for legitimate trade work. Do not attempt to access other users' data, reverse-engineer the service, or interfere with its operation.</p>
 
   <h2>Termination</h2>
-  <p>You can delete your account at any time by emailing <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>. We may suspend or terminate accounts for breach of these Terms after reasonable notice (except in cases of fraud or serious misuse, where notice may be immediate).</p>
+  <p>You can delete your account at any time by emailing <a href="mailto:fastquote@harrydoyle.uk">fastquote@harrydoyle.uk</a>. We may suspend or terminate accounts for breach of these Terms after reasonable notice (except in cases of fraud or serious misuse, where notice may be immediate).</p>
 
   <h2>Changes to these terms</h2>
   <p>We may update these terms; when we do, we increment the version and update the signup acceptance flow. Continued use after a change constitutes acceptance of the new version. We will notify you by email of material changes.</p>
@@ -1739,7 +1739,7 @@ app.get('/terms', (req, res) => {
   <p>These terms are governed by the laws of England and Wales. Any disputes will be resolved in the courts of England and Wales.</p>
 
   <h2>Contact</h2>
-  <p>Harry Doyle (sole trader t/a FastQuote), United Kingdom.<br>Email: <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a></p>
+  <p>Harry Doyle (sole trader t/a FastQuote), United Kingdom.<br>Email: <a href="mailto:fastquote@harrydoyle.uk">fastquote@harrydoyle.uk</a></p>
   </div></body></html>`);
 });
 
@@ -1761,17 +1761,17 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FastQuote &mdash; From quote to customer, ready in 5 minutes.</title>
-  <meta name="description" content="FastQuote turns a few photos or a short video of a job into a professional quote in five minutes. Built for dry stone wallers." />
-  <meta name="theme-color" content="#0d0805" />
+  <meta name="description" content="FastQuote turns a few photos of a job into a professional quote in five minutes. Built for dry stone wallers." />
+  <meta name="theme-color" content="#f4eee2" />
   <meta property="og:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
-  <meta property="og:description" content="Photo or film the wall. Get measurements, materials and a polished quote in five minutes." />
+  <meta property="og:description" content="Photograph the wall. Get measurements, materials and a polished quote in five minutes." />
   <meta property="og:image" content="/og.png" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fastquote.uk/" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/landing/landing.css?v=2" />
+  <link rel="stylesheet" href="/landing/landing.css?v=3" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -1780,7 +1780,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web",
     "url": "https://fastquote.uk/",
-    "description": "Quoting tools for dry stone wallers — photo or short video in, professional quote out, in under five minutes."
+    "description": "Quoting tools for dry stone wallers — photos in, professional quote out, in under five minutes."
   }
   </script>
   <!-- TRQ-15: landing pageview beacon. Fires one anonymous POST to
@@ -1842,8 +1842,8 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
           <span class="hero-title-amber">Ready in 5 minutes.</span>
         </h1>
         <p class="hero-sub">
-          Spend less time on paperwork, more time doing your job. Take a photo
-          or short video of the wall &mdash; FastQuote handles the measurements,
+          Spend less time on paperwork, more time doing your job. Take a few
+          photos of the wall &mdash; FastQuote handles the measurements,
           materials and a professional quote, typically in under five minutes.
         </p>
         <div class="hero-cta-row">
@@ -1861,7 +1861,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
           <div class="demo-head">
             <span class="demo-live">
               <span class="demo-dot" aria-hidden="true"></span>
-              Live &middot; Brink Farm, SK10
+              Live &middot; Beck Farm, HD8
             </span>
             <button type="button" class="demo-replay" aria-label="Replay demo">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1956,10 +1956,10 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
       <div class="how-grid">
         <article class="step">
           <p class="step-num">01</p>
-          <h3 class="step-title">Snap or film the wall</h3>
+          <h3 class="step-title">Snap the wall</h3>
           <p class="step-body">
-            A few photos or a short video &mdash; overview, close-up, side
-            profile. Voice notes if your hands are full of dust.
+            A few photos &mdash; overview, close-up, side profile. Voice
+            notes if your hands are full of dust.
           </p>
           <div class="step-mock" aria-hidden="true">
             <div class="step-mock-photos">
@@ -2004,6 +2004,51 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <section class="data" id="data-trust">
+    <div class="data-inner">
+      <div class="data-head">
+        <span class="eyebrow">Your data, looked after</span>
+        <h2 class="data-title">Your clients' details, kept safe.</h2>
+        <p class="data-lead">Quotes and customer information sit behind proper data protection &mdash; not a spreadsheet on a laptop or a notebook in the van.</p>
+      </div>
+      <div class="data-grid">
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v5.5c0 4.8-3.4 8-8 9.5-4.6-1.5-8-4.7-8-9.5V5.5l8-3z"/><path d="M8.5 12l2.3 2.3L15.7 9.4"/></svg>
+          </div>
+          <h3>Registered with the ICO</h3>
+          <p>We're registered with the Information Commissioner's Office, the UK's data-protection regulator.</p>
+          <p class="data-ref">ICO reg. ZC178109</p>
+        </div>
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>
+          </div>
+          <h3>UK GDPR compliant</h3>
+          <p>We collect only what's needed to build your quotes, and handle it to UK GDPR standards.</p>
+        </div>
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7a4 4 0 018 0v3.5"/></svg>
+          </div>
+          <h3>Kept secure</h3>
+          <!-- Defensive default per spec §3: softened the stronger "encrypted
+               in transit / encrypted on disk" phrasing until the Railway-PG
+               disk-level control is verified (TLS in transit is confirmed).
+               Swap back to the stronger phrasing when ready. -->
+          <p>Your quotes and client details are kept secure, so they stay private.</p>
+        </div>
+        <div class="data-item">
+          <div class="data-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 20h14"/></svg>
+          </div>
+          <h3>Your data stays yours</h3>
+          <p>We never sell it or share it. Export or delete everything whenever you like.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="pricing" id="pricing">
     <div class="pricing-inner">
       <div class="pricing-head">
@@ -2012,35 +2057,40 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
       </div>
       <div class="pricing-card">
         <div class="pricing-money">
-          <p class="pricing-money-eyebrow">Pricing</p>
+          <p class="pricing-money-eyebrow">Subscription</p>
           <p class="pricing-headline">
             Fair, monthly,
             <span>no surprises.</span>
           </p>
+          <div class="pricing-amount">
+            <span class="pricing-currency">&pound;</span>
+            <span class="pricing-figure">19.99</span>
+            <span class="pricing-period">/month</span>
+          </div>
           <p class="pricing-caption">Start free &middot; cancel anytime</p>
         </div>
         <ul class="pricing-features">
           <li>
             <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#bd5e09" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </span>
             Unlimited quotes &amp; clients
           </li>
           <li>
             <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#bd5e09" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </span>
             Client portal &amp; live quote tracking
           </li>
           <li>
             <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#bd5e09" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </span>
             PDF export &amp; print-ready quotes
           </li>
           <li>
             <span class="tick" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#bd5e09" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </span>
             Your branding on every quote
           </li>
@@ -2050,6 +2100,23 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
             Start free &mdash; no card needed &rarr;
           </a>
           <p class="pricing-cta-note">Free while you make your first 3 quotes.</p>
+        </div>
+      </div>
+
+      <!-- Pay-as-you-go pack (2026-06-24). Secondary panel — intentionally
+           worse per-quote value than the subscription so it stays a top-up
+           for occasional users, not a substitute for paying monthly. -->
+      <div class="pricing-pack">
+        <div>
+          <p class="pricing-pack-label">Or pay as you go</p>
+          <h3 class="pricing-pack-title">5 quotes &mdash; &pound;9.99</h3>
+        </div>
+        <p class="pricing-pack-blurb">A one-off top-up. Use them whenever &mdash; they don't expire.</p>
+        <div class="pricing-pack-cta">
+          <a href="/signup" class="btn btn-primary">
+            Buy 5 quotes &mdash; &pound;9.99
+          </a>
+          <p class="pricing-pack-note">No subscription &middot; sign in to buy</p>
         </div>
       </div>
     </div>
@@ -2068,9 +2135,12 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/dpa">DPA</a>
-        <a href="mailto:hello@fastquote.uk">hello@fastquote.uk</a>
+        <a href="mailto:fastquote@harrydoyle.uk">fastquote@harrydoyle.uk</a>
       </div>
-      <div class="foot-right">&copy; 2026 FastQuote &middot; Built in West Yorkshire</div>
+      <div class="foot-right">
+        <div>&copy; 2026 FastQuote &middot; Built in West Yorkshire</div>
+        <div class="foot-meta">ICO reg. ZC178109</div>
+      </div>
     </div>
   </footer>
 
