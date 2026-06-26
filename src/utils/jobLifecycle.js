@@ -1,20 +1,17 @@
 /**
- * Job lifecycle bucketing for the dashboard / saved-jobs Active vs Archive
- * split (Mark's ask, 2026-06-21).
+ * Job lifecycle bucketing for the dashboard / saved-jobs tab split.
  *
- * Bucket definitions:
- *   ACTIVE   = everything EXCEPT declined.
- *              Includes draft, sent (even past expiry), accepted, completed,
- *              and unknown future statuses. Mark's feedback 2026-06-21:
- *              expired sent quotes must stay active because customers
- *              regularly authorise walling jobs months after the quote
- *              technically expires.
- *   ARCHIVE  = declined only.
+ * Bucket definitions (Mark's ask 2026-06-26, three-tab structure):
+ *   ACTIVE    = in-flight work: draft, sent (even past expiry), accepted,
+ *               and unknown future statuses. Mark's feedback 2026-06-21:
+ *               expired sent quotes stay active (late-authorisation use case).
+ *   COMPLETED = completed only. Lives in its own tab so a hundred finished
+ *               jobs don't crowd the working list.
+ *   ARCHIVE   = declined only.
  *
- * The two buckets remain mutually exclusive and total. `isExpired` is
- * still exported because the ExpiryBadge in Dashboard.jsx uses it to
- * stamp "EXPIRED" on the sent-quote row — it just no longer drives
- * bucketing.
+ * The three buckets are mutually exclusive and total. `isExpired` is still
+ * exported because the ExpiryBadge in Dashboard.jsx uses it to stamp
+ * "EXPIRED" on sent-quote rows — it doesn't drive bucketing.
  *
  * Pure functions; no React, no DOM. Tested in jobLifecycle.test.js.
  */
@@ -37,22 +34,36 @@ export function isExpired(job, now = new Date()) {
 
 /**
  * True if the job belongs in the Active list (the default view).
- * Active = everything except declined. Expired sends stay here per
- * Mark's 2026-06-21 feedback (late-authorisation use case).
+ * Active = in-flight work (draft/sent/accepted + any unknown future
+ * status). Completed AND declined are bucketed elsewhere.
  *
- * The `now` parameter is kept in the signature for symmetry with
- * `isExpired` and to leave the door open for time-based bucketing
- * later (e.g. auto-archive completed jobs after 90 days). Today it
- * is unused.
+ * Expired sends stay active per Mark's 2026-06-21 feedback
+ * (late-authorisation use case).
+ *
+ * The `now` parameter is unused today but kept for signature symmetry.
  */
 // eslint-disable-next-line no-unused-vars
 export function isActiveJob(job, now = new Date()) {
   if (!job || typeof job !== 'object') return false;
   const status = (job.status || 'draft').toLowerCase();
   if (status === 'declined') return false;
+  if (status === 'completed') return false;
   // Unknown statuses default to active so a future status value
   // (e.g. 'invoiced') doesn't disappear from the dashboard silently.
   return true;
+}
+
+/**
+ * True if the job belongs in the Completed list.
+ * Completed = status === 'completed' only.
+ *
+ * The `now` parameter is unused today but kept for signature symmetry.
+ */
+// eslint-disable-next-line no-unused-vars
+export function isCompletedJob(job, now = new Date()) {
+  if (!job || typeof job !== 'object') return false;
+  const status = (job.status || 'draft').toLowerCase();
+  return status === 'completed';
 }
 
 /**

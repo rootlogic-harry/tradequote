@@ -3,11 +3,13 @@ import { listJobs, deleteJob, deletePhotos } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import { documentTerm } from '../utils/documentType.js';
-import { isActiveJob, isArchivedJob } from '../utils/jobLifecycle.js';
+import { isActiveJob, isCompletedJob, isArchivedJob } from '../utils/jobLifecycle.js';
 
-// Active-view filters drop Declined because declined jobs live in the
-// archive bucket. The "All" pill within Active still excludes declined.
-const ACTIVE_FILTERS = ['All', 'Draft', 'Sent', 'Accepted', 'Completed'];
+// Active-view filters drop Completed (its own tab as of 2026-06-26) and
+// Declined (archive bucket). The "All" pill within Active matches both.
+const ACTIVE_FILTERS = ['All', 'Draft', 'Sent', 'Accepted'];
+
+const VIEW_MODES = ['active', 'completed', 'archive'];
 
 export default function SavedQuotes({
   onViewQuote,
@@ -67,22 +69,27 @@ export default function SavedQuotes({
 
   const getStatus = (job) => (job.status || 'draft').toUpperCase();
 
-  // Active vs Archive split — only declined quotes move off the main
-  // list. Per Mark's 2026-06-21 feedback, expired sends stay active
-  // because customers regularly authorise walling jobs months after
-  // the quote technically expires. Bucket logic lives in
-  // src/utils/jobLifecycle.js.
+  // Three-tab split (Mark's ask 2026-06-26): Active | Completed | Archive.
+  // Active = draft/sent/accepted (in-flight). Completed = finished work.
+  // Archive = declined. Expired sends stay Active per Mark 2026-06-21
+  // (late-authorisation use case). Bucket logic in jobLifecycle.js.
   const now = useMemo(() => new Date(), []);
-  const isArchiveView = viewMode === 'archive';
-  const bucketedQuotes = useMemo(
-    () => quotes.filter(q => (isArchiveView ? isArchivedJob(q, now) : isActiveJob(q, now))),
-    [quotes, isArchiveView, now]
-  );
+  const view = VIEW_MODES.includes(viewMode) ? viewMode : 'active';
+  const isActiveView = view === 'active';
+  const isCompletedView = view === 'completed';
+  const isArchiveView = view === 'archive';
+
+  const bucketedQuotes = useMemo(() => {
+    const fn = isArchiveView ? isArchivedJob : isCompletedView ? isCompletedJob : isActiveJob;
+    return quotes.filter(q => fn(q, now));
+  }, [quotes, view, now]);
+
+  const completedCount = useMemo(() => quotes.filter(q => isCompletedJob(q, now)).length, [quotes, now]);
   const archiveCount = useMemo(() => quotes.filter(q => isArchivedJob(q, now)).length, [quotes, now]);
 
-  // In archive view the status-filter pills don't apply — both buckets
-  // already constrain the list, and adding another axis is just noise.
-  const statusFiltered = (isArchiveView || activeFilter === 'All')
+  // Status-filter pills only render in Active. Completed + Archive are
+  // single-status buckets — another axis would just be noise.
+  const statusFiltered = (!isActiveView || activeFilter === 'All')
     ? bucketedQuotes
     : bucketedQuotes.filter(q => getStatus(q) === activeFilter.toUpperCase());
 
@@ -157,22 +164,31 @@ export default function SavedQuotes({
           Saved jobs
         </h2>
         <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-          {bucketedQuotes.length} {isArchiveView ? 'archived' : 'active'} job{bucketedQuotes.length !== 1 ? 's' : ''}
+          {bucketedQuotes.length} {isArchiveView ? 'archived' : isCompletedView ? 'completed' : 'active'} job{bucketedQuotes.length !== 1 ? 's' : ''}
         </p>
       </div>
 
-      {/* Active / Archive tabs. Default 'Active' on every session — the
-          archive view is opt-in. Count badge hidden when zero so the
-          tab doesn't read "(0)". */}
+      {/* Active / Completed / Archive tabs (Mark's 2026-06-26 ask). Count
+          badges hidden when zero so tabs don't read "(0)". Default tab is
+          'Active' on every session — the others are opt-in. */}
       <div className="flex flex-wrap gap-2 mb-4" role="tablist" aria-label="Job list view">
         <button
           type="button"
           role="tab"
-          aria-selected={!isArchiveView}
+          aria-selected={isActiveView}
           onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'active' })}
-          className={`pill ${!isArchiveView ? 'active' : ''}`}
+          className={`pill ${isActiveView ? 'active' : ''}`}
         >
           Active
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isCompletedView}
+          onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'completed' })}
+          className={`pill ${isCompletedView ? 'active' : ''}`}
+        >
+          Completed{completedCount > 0 ? ` (${completedCount})` : ''}
         </button>
         <button
           type="button"
@@ -181,7 +197,7 @@ export default function SavedQuotes({
           onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'archive' })}
           className={`pill ${isArchiveView ? 'active' : ''}`}
         >
-          Archive{archiveCount > 0 ? ` (${archiveCount})` : ''}
+          Archived{archiveCount > 0 ? ` (${archiveCount})` : ''}
         </button>
       </div>
 
@@ -216,8 +232,9 @@ export default function SavedQuotes({
           )}
         </div>
 
-        {/* Filter pills — active view only */}
-        {!isArchiveView && (
+        {/* Filter pills — Active view only. Completed + Archive are
+            single-status buckets. */}
+        {isActiveView && (
           <div className="flex flex-wrap gap-2 self-start">
             {ACTIVE_FILTERS.map((f) => (
               <button
@@ -232,7 +249,15 @@ export default function SavedQuotes({
         )}
       </div>
 
-      {/* Empty bucket — archive has no jobs at all */}
+      {/* Empty bucket — Completed or Archive view, no jobs at all */}
+      {isCompletedView && bucketedQuotes.length === 0 && !searchTerm.trim() && (
+        <div className="text-center py-12">
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            No completed {term.lower}s yet — finished work shows here once you mark a job as completed.
+          </p>
+        </div>
+      )}
+
       {isArchiveView && bucketedQuotes.length === 0 && !searchTerm.trim() && (
         <div className="text-center py-12">
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
@@ -242,7 +267,7 @@ export default function SavedQuotes({
       )}
 
       {/* Empty filter/search state — active view only */}
-      {!isArchiveView && filteredQuotes.length === 0 && (activeFilter !== 'All' || searchTerm.trim()) && (
+      {isActiveView && filteredQuotes.length === 0 && (activeFilter !== 'All' || searchTerm.trim()) && (
         <div className="text-center py-12">
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
             {searchTerm.trim()
@@ -259,11 +284,11 @@ export default function SavedQuotes({
         </div>
       )}
 
-      {/* Search-with-no-results inside archive view */}
-      {isArchiveView && filteredQuotes.length === 0 && searchTerm.trim() && (
+      {/* Search-with-no-results inside Completed or Archive view */}
+      {!isActiveView && filteredQuotes.length === 0 && searchTerm.trim() && (
         <div className="text-center py-12">
           <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-            No archived jobs matching "{searchTerm.trim()}"
+            No {isArchiveView ? 'archived' : 'completed'} jobs matching "{searchTerm.trim()}"
           </p>
           <button
             onClick={() => setSearchTerm('')}
@@ -325,12 +350,12 @@ export default function SavedQuotes({
                   is unambiguous. Wrapper goes flex-col on mobile so the
                   buttons stack vertically.
 
-                  In archive view, per-status action buttons (Mark Sent /
-                  Accepted / Declined / Complete) are hidden \u2014 archive
-                  rows are read-only-ish, the user opens the row to view
-                  the quote and can change status from there if needed.
-                  Delete stays visible so declined jobs can still be
-                  pruned. */}
+                  Per-status action buttons are gated by `!isArchiveView`.
+                  Completed view naturally hides them too because no row
+                  there matches the DRAFT/SENT/ACCEPTED status conditions
+                  below \u2014 Completed is a terminal state. Delete stays
+                  visible in all three views so finished or declined
+                  jobs can still be pruned. */}
               <div className="flex flex-col fq:flex-row gap-2 shrink-0 fq:flex-wrap w-full fq:w-auto" onClick={e => e.stopPropagation()}>
                 {!isArchiveView && status === 'DRAFT' && (
                   <>
