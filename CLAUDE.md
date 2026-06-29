@@ -459,7 +459,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,463 tests across ~155 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,466 tests across ~156 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -474,6 +474,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - `planNormalisation.test.js` — isAdminPlan utility, source-level scan
 - `selfCritique.test.js`, `feedbackAgent.test.js`, `calibrationAgent.test.js` — agent tests
 - `aiTextRemoval.test.js` — banned vocabulary enforcement
+- `touchTargets.test.js` — mobile 44px touch-target lint (regression guard, allow-list for current violations)
 - `analyseJob.test.js` — client-side analysis function (endpoint, dispatch, errors)
 - `autoCalibration.test.js` — auto-calibration threshold logic
 - `agentRetryQueue.test.js` — retry queue entry building and backoff
@@ -534,7 +535,7 @@ Test files live in `src/__tests__/`. Key test suites:
 
 - Single breakpoint: `fq: 900px` (desktop ≥900px side rail, mobile <900px bottom nav)
 - Accordion layout below `fq` breakpoint for Review & Edit (measurements, costs, schedule, damage description)
-- 44px minimum touch targets on all interactive elements
+- 44px minimum touch targets on all interactive elements (regression-guarded by `src/__tests__/touchTargets.test.js` — fails CI on NEW sub-44px elements; current violations are allow-listed and scheduled for the mobile-responsive PR pack)
 - Single-column photo grid
 - Required photo slots: solid primary border. Recommended: dashed grey border
 - RAMS: horizontal scrolling pill bar for section navigation
