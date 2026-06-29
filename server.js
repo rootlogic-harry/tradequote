@@ -23,6 +23,7 @@ import {
   applyQuotePackEventToDb,
   currentSubscriptionState,
   daysOfTrialRemaining,
+  QUOTE_PACK_PRICE_PENCE,
 } from './billing.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
@@ -145,6 +146,38 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+// Analytics Phase 1 (2026-06-29) — small helpers used by the webhook
+// handler to attribute pack_purchased / subscription_started events.
+// Kept route-local since they only matter for the fan-out below; the
+// recordEvent INSERT itself lives further down with the other event
+// infrastructure.
+function extractUserIdFromStripeEvent(event) {
+  if (!event) return null;
+  const obj = event.data?.object || {};
+  if (event.type === 'checkout.session.completed') {
+    return obj.metadata?.fastquote_user_id || obj.client_reference_id || null;
+  }
+  if (event.type?.startsWith('customer.subscription.')) {
+    return obj.metadata?.fastquote_user_id || null;
+  }
+  if (event.type === 'payment_intent.succeeded') {
+    return obj.metadata?.fastquote_user_id || null;
+  }
+  return null;
+}
+function extractPriceIdFromStripeEvent(event) {
+  if (!event) return null;
+  const obj = event.data?.object || {};
+  // Subscription objects carry items.data[].price.id.
+  if (event.type?.startsWith('customer.subscription.')) {
+    return obj.items?.data?.[0]?.price?.id || null;
+  }
+  // Checkout sessions don't carry the price id directly; the metadata
+  // we set at session creation is the most reliable source. Fall back
+  // to null rather than guess.
+  return obj.metadata?.fastquote_price_id || null;
+}
+
 // TRQ-150 — Stripe webhook. MUST be mounted BEFORE express.json so
 // the raw body is available for HMAC signature verification. If we
 // let express.json parse it first, Stripe's signature check fails
@@ -196,6 +229,28 @@ app.post('/api/billing/webhook',
       //     'active' literal is non-null so COALESCE returns it
       //     regardless). See billing.js applySubscriptionEventToDb.
       //   • applyQuotePackEventToDb credits the pack.
+      // Analytics Phase 1 — capture the prior subscription_status BEFORE
+      // applySubscriptionEventToDb runs, so we can detect the FIRST
+      // false→active transition for the subscription_started event.
+      // Pitfall #17 (CLAUDE.md) reminds us COALESCE re-asserts 'active'
+      // on every webhook redelivery — without this pre-read we'd fire
+      // subscription_started on every status update.
+      const subUserId = extractUserIdFromStripeEvent(event);
+      let priorSubStatus = null;
+      if (subUserId) {
+        try {
+          const { rows: subRows } = await pool.query(
+            'SELECT subscription_status FROM users WHERE id = $1',
+            [subUserId]
+          );
+          priorSubStatus = subRows[0]?.subscription_status ?? null;
+        } catch (e) {
+          // Best-effort — log and continue. If the read fails we just
+          // won't fire subscription_started for this delivery (cheap cost).
+          console.warn('[stripe webhook] prior-status read failed:', e?.message || e);
+        }
+      }
+
       const subResult = await applySubscriptionEventToDb(pool, event);
       let packResult = { applied: false };
       try {
@@ -205,6 +260,34 @@ app.post('/api/billing/webhook',
         console.error('[stripe webhook] quote pack apply failed:', err?.message || err);
         return res.status(500).json({ error: 'apply failed' });
       }
+
+      // Analytics Phase 1 — fire pack_purchased only when the webhook
+      // actually credited a new pack (credited > 0). Redeliveries of
+      // the same payment_intent dedupe at the SQL layer via the
+      // UNIQUE stripe_payment_id; the credited count reflects that,
+      // so we never double-fire on a Stripe retry.
+      if (packResult.applied && packResult.credited > 0 && packResult.userId) {
+        recordEvent('pack_purchased', packResult.userId, {
+          pence: QUOTE_PACK_PRICE_PENCE,
+        }).catch(() => {});
+      }
+      // Analytics Phase 1 — fire subscription_started ONLY when the
+      // status genuinely flipped to 'active' from something else
+      // (null, 'past_due', 'canceled', etc.). Stripe re-asserts
+      // 'active' on every renewal webhook so we MUST gate on the
+      // pre-read above. Status comes from subResult.status when the
+      // handler set one explicitly. priceId is best-effort from the
+      // event payload.
+      if (
+        subResult.applied
+        && subResult.status === 'active'
+        && priorSubStatus !== 'active'
+        && subResult.userId
+      ) {
+        const priceId = extractPriceIdFromStripeEvent(event);
+        recordEvent('subscription_started', subResult.userId, { priceId }).catch(() => {});
+      }
+
       // 200 ACKs the event; Stripe stops retrying. Even if we couldn't
       // apply the event (e.g. unhandled type), ACK — otherwise Stripe
       // re-delivers the same event endlessly.
@@ -720,6 +803,27 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_pageviews_path ON pageviews(path);
     `);
 
+    // Analytics Phase 1 (2026-06-29) — first-party event log. Parallel
+    // to `pageviews` but for named funnel events (signup_completed,
+    // quote_started, quote_analysed, pack_purchased, ...). The
+    // event_name allowlist is enforced server-side at /api/event so
+    // free-form names can't slip in and leak context. `props` is JSONB
+    // for flexible per-event metadata; `user_id` is TEXT to match
+    // users.id (Google "google-1234..." / legacy "mark"/"harry").
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS events (
+        id BIGSERIAL PRIMARY KEY,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        event_name TEXT NOT NULL,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        session_id TEXT,
+        path TEXT,
+        props JSONB
+      );
+      CREATE INDEX IF NOT EXISTS idx_events_name_created ON events(event_name, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_events_user_created ON events(user_id, created_at DESC);
+    `);
+
     // Migrate hardcoded calibration notes to DB (idempotent)
     const hardcodedNotes = [
       { fieldType: 'material_unit_cost', fieldLabel: 'Chapter 8 traffic management', note: 'If any photograph shows the wall is adjacent to a public carriageway, include a Chapter 8 traffic management line item (£380–450). This is a legal requirement for roadside works.' },
@@ -938,10 +1042,27 @@ app.get('/auth/google/callback',
       if (err) return next(err);
       req.login(user, (loginErr) => {
         if (loginErr) return next(loginErr);
+        // Analytics Phase 1 — fire signup_completed. `wasNew` mirrors
+        // the boolean used downstream for new-user routing, so the
+        // funnel can separate first-login activations from returning
+        // logins. Best-effort, swallowed internally.
+        recordEvent('signup_completed', user.id, { wasNew: !!user?._isNewUser }).catch(() => {});
         // Best-effort: a failure here must NEVER block the login. The
         // referral helper logs and swallows internally.
         if (pendingRef && user?._isNewUser) {
           applyReferralAtSignup(user.id, pendingRef)
+            .then((result) => {
+              if (result?.applied) {
+                // Analytics — fire referral_redeemed on the success
+                // branch only. `referrerId` exposes downstream
+                // attribution; `code` is the (already-normalised)
+                // referral code, capped for safety.
+                recordEvent('referral_redeemed', user.id, {
+                  code: String(pendingRef).slice(0, 64),
+                  referrerId: result.referrerUserId || null,
+                }).catch(() => {});
+              }
+            })
             .catch((e) => console.warn('[Referrals] applyReferralAtSignup failed:', e.message))
             .finally(next);
         } else {
@@ -2432,10 +2553,32 @@ app.put('/api/users/:id/settings/:key', async (req, res) => {
     );
     // Also update users.profile_complete column so passport deserialization sees it
     if (req.params.key === 'profile_complete') {
+      const newValue = !!req.body.value;
       await pool.query(
         'UPDATE users SET profile_complete = $2 WHERE id = $1',
-        [req.params.id, !!req.body.value]
+        [req.params.id, newValue]
       );
+      // Analytics Phase 1 — fire profile_completed on the first
+      // false→true transition only. Idempotency via the events table:
+      // if we've already recorded this event for this user we don't
+      // re-fire on subsequent toggles (rare edit flows). At pre-launch
+      // scale there's no concurrent-first-save race to worry about.
+      if (newValue) {
+        try {
+          const { rows: existing } = await pool.query(
+            `SELECT 1 FROM events
+               WHERE event_name = 'profile_completed' AND user_id = $1
+               LIMIT 1`,
+            [req.params.id]
+          );
+          if (existing.length === 0) {
+            recordEvent('profile_completed', req.params.id, {}).catch(() => {});
+          }
+        } catch (e) {
+          // events table missing or transient — analytics is best-effort.
+          console.warn('[profile_completed] check failed:', e?.message || e);
+        }
+      }
     }
     res.json({ ok: true });
   } catch (err) {
@@ -2884,6 +3027,11 @@ app.post('/api/users/:id/jobs/:jobId/client-token', async (req, res) => {
     );
 
     const baseUrl = (process.env.PUBLIC_BASE_URL || 'https://fastquote.uk').replace(/\/$/, '');
+    // Analytics Phase 1 — fire quote_sent on token generation success.
+    // Regenerating the token (e.g. resending a quote) counts as a
+    // new "sent" event, which is the right granularity for the
+    // funnel — we want to see retries / resends as their own signal.
+    recordEvent('quote_sent', userId, { jobId }).catch(() => {});
     res.json({
       token,
       url: `${baseUrl}/q/${token}`,
@@ -3909,6 +4057,10 @@ app.post('/api/users/:id/jobs/:jobId/video',
     // reasons skip the bucket update entirely. Declared at the route
     // scope so it survives the gate's IIFE.
     let videoGateReason = null;
+    // Analytics Phase 1 — wall-clock start, captured before any
+    // ffmpeg / Whisper / Claude work begins so the durationMs in the
+    // quote_analysed event reflects the user-perceived latency.
+    const videoAnalyseStart = Date.now();
     {
       let quotaUser = null;
       try {
@@ -4165,6 +4317,15 @@ app.post('/api/users/:id/jobs/:jobId/video',
         promptVersion,
         transcript: result.transcript,
       });
+
+      // Analytics Phase 1 — fire quote_analysed on the video success
+      // path. `source: 'video'` distinguishes from the photo route so
+      // the funnel can compare drop-off between the two capture modes.
+      recordEvent('quote_analysed', userId, {
+        source: 'video',
+        durationMs: Date.now() - videoAnalyseStart,
+        freeOrPaid: videoGateReason,
+      }).catch(() => {});
 
       // Quota accounting (2026-06-22, pay-as-you-go pack 2026-06-24).
       // For the video path the jobId already exists (the SPA creates the
@@ -4458,7 +4619,13 @@ function rangeToInterval(range) {
 app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) => {
   const range = ['24h', '7d', '30d', 'all'].includes(req.query.range)
     ? req.query.range : '30d';
-  const cached = analyticsCache.get(range);
+  // Analytics Phase 1: the "Exclude internal" toggle changes the SQL
+  // predicate for the events section, so the cache key must include
+  // it. Other sections aren't affected by this flag, so we still get
+  // useful cache hits across toggle switches at the same range.
+  const excludeInternalKey = req.query.excludeInternal !== '0' ? 'ex1' : 'ex0';
+  const cacheKey = `${range}:${excludeInternalKey}`;
+  const cached = analyticsCache.get(cacheKey);
   if (cached && Date.now() - cached.at < ANALYTICS_CACHE_MS) {
     return res.json(cached.payload);
   }
@@ -4702,6 +4869,60 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       LIMIT 10
     `);
 
+    // Analytics Phase 1 (2026-06-29) — events feed for the dashboard.
+    // The default UI toggle excludes internal users (Harry + Mark)
+    // since their QA traffic skews the conversion percentages. The
+    // server returns BOTH the all-rows totals and a separate
+    // funnel-with-internal-excluded set so the client can render
+    // either view without a second round-trip.
+    //
+    // "Exclude internal" is implemented as a SQL predicate on
+    // `props->>'internal'`. Anything other than the literal string
+    // 'true' passes the filter, so external users (no internal prop)
+    // and the few rows where the env-var was set after the event are
+    // both counted as external.
+    const excludeInternalSql = `COALESCE(props->>'internal', '') <> 'true'`;
+    const eventsExcludeInternal = req.query.excludeInternal !== '0';
+    const eventsFilter = eventsExcludeInternal ? `AND ${excludeInternalSql}` : '';
+
+    // Top event names by count over the selected range (defaults to
+    // 30d via rangeToInterval). Capped at 20 rows — the allowlist is
+    // 15 names so any growth beyond that is a noisy bug.
+    const eventsTopQuery = pool.query(`
+      SELECT event_name AS "eventName", COUNT(*)::int AS "count"
+      FROM events
+      WHERE ${sinceFilter('created_at')}
+        ${eventsFilter}
+      GROUP BY event_name
+      ORDER BY COUNT(*) DESC
+      LIMIT 20
+    `);
+
+    // Funnel counts — distinct users per stage so a power user who
+    // analyses 20 quotes doesn't dominate the funnel percentages.
+    const eventsFunnelQuery = pool.query(`
+      SELECT event_name AS "eventName",
+             COUNT(DISTINCT user_id)::int AS "users",
+             COUNT(*)::int AS "count"
+      FROM events
+      WHERE ${sinceFilter('created_at')}
+        ${eventsFilter}
+        AND event_name IN (
+          'signup_completed', 'profile_completed', 'quote_started',
+          'quote_analysed', 'quote_sent', 'client_responded'
+        )
+      GROUP BY event_name
+    `);
+
+    // Total events + raw distinct-users headline.
+    const eventsSummaryQuery = pool.query(`
+      SELECT COUNT(*)::int AS "total",
+             COUNT(DISTINCT user_id)::int AS "users"
+      FROM events
+      WHERE ${sinceFilter('created_at')}
+        ${eventsFilter}
+    `);
+
     // System errors over time + recent. Limited to 30 days for the
     // chart and 50 rows for the table. Both feed the new Errors
     // section in Analytics.jsx.
@@ -4768,12 +4989,14 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       quotesPerWeekRes, failuresPerDayRes, signupsPerDayRes,
       pageviewsPerDayRes, pageviewsTopPathsRes,
       errorsPerDayRes, errorsRecentRes, retentionRes,
+      eventsTopRes, eventsFunnelRes, eventsSummaryRes,
     ] = await Promise.all([
       usersQuery, signupsQuery, quotesQuery, perUserQuery, perQuoteQuery,
       spendByModelQuery, failuresQuery, retryQueueQuery, portalQuery, dailyTrendQuery,
       quotesPerWeekQuery, failuresPerDayQuery, signupsPerDayQuery,
       pageviewsPerDayQuery, pageviewsTopPathsQuery,
       errorsPerDayQuery, errorsRecentQuery, retentionQuery,
+      eventsTopQuery, eventsFunnelQuery, eventsSummaryQuery,
     ]);
 
     // Convert per-user token totals into £ for the dashboard. Per-user
@@ -4940,9 +5163,34 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
         })),
         total30d: errorsPerDayRes.rows.reduce((sum, r) => sum + r.count, 0),
       },
+      // Analytics Phase 1 (2026-06-29) — events feed for the dashboard.
+      // `excludeInternal` reflects the filter the server actually
+      // applied so the UI can render the toggle's current state on
+      // first paint. `funnel` is an ordered list with users + count
+      // per stage; the client computes drop-off percentages between
+      // adjacent stages.
+      events: {
+        excludeInternal: eventsExcludeInternal,
+        summary: eventsSummaryRes.rows[0] || { total: 0, users: 0 },
+        top: eventsTopRes.rows,
+        funnel: (() => {
+          const STAGES = [
+            'signup_completed', 'profile_completed', 'quote_started',
+            'quote_analysed', 'quote_sent', 'client_responded',
+          ];
+          const by = new Map(
+            eventsFunnelRes.rows.map((r) => [r.eventName, r])
+          );
+          return STAGES.map((s) => ({
+            eventName: s,
+            users: by.get(s)?.users || 0,
+            count: by.get(s)?.count || 0,
+          }));
+        })(),
+      },
     };
 
-    analyticsCache.set(range, { at: Date.now(), payload });
+    analyticsCache.set(cacheKey, { at: Date.now(), payload });
     res.json(payload);
   } catch (err) {
     // Explicit log so a Mark-on-prod 500 leaves a footprint in
@@ -5222,6 +5470,13 @@ app.post('/auth/redeem-referral', requireAuth, async (req, res) => {
       : null;
 
     if (result.applied) {
+      // Analytics — fire referral_redeemed for the manual-entry path
+      // (matches the URL-redemption fire in /auth/google/callback so
+      // both code paths show up in the funnel identically).
+      recordEvent('referral_redeemed', userId, {
+        code: String(rawCode || '').slice(0, 64),
+        referrerId: result.referrerUserId || null,
+      }).catch(() => {});
       return res.json({ applied: true, billing });
     }
     // Spec: invalid (unknown / self / already-redeemed) does NOT error
@@ -5462,6 +5717,17 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
       critiqueNotes,
       promptVersion,
     });
+
+    // Analytics Phase 1 — fire quote_analysed on the photo success
+    // path. Server-side fire so ad-blockers can't suppress it and the
+    // count matches the actual analyse calls. The duration / source /
+    // freeOrPaid trio answers the spec's week-1 question: "are paid
+    // quotes more reliable than free ones?".
+    recordEvent('quote_analysed', userIdParam, {
+      source: 'photo',
+      durationMs: Date.now() - analyseStart,
+      freeOrPaid: gateDecision.reason,
+    }).catch(() => {});
 
     // Quota accounting (2026-06-22, consume-on-success rule formalised
     // 2026-06-24). Only on full success — the parse-failure path above
@@ -5714,7 +5980,7 @@ app.post('/q/:token/respond', async (req, res) => {
        WHERE client_token = $5
          AND client_token_expires_at > NOW()
          AND client_response IS NULL
-       RETURNING id`,
+       RETURNING id, user_id`,
       [response, reason, req.ip, ua || null, token]
     );
 
@@ -5724,6 +5990,14 @@ app.post('/q/:token/respond', async (req, res) => {
       // but conflicts with the resource's current state.
       return res.status(409).json({ error: 'Response already recorded or link expired' });
     }
+
+    // Analytics Phase 1 — fire client_responded attributed to the
+    // tradesman (the job owner), not the client (who is account-less
+    // by design). Closes the funnel: this is the win condition.
+    recordEvent('client_responded', rows[0].user_id, {
+      response,
+      jobId: rows[0].id,
+    }).catch(() => {});
 
     res.json({ ok: true });
   } catch (err) {
@@ -5816,6 +6090,138 @@ app.post('/api/track', pageviewRateLimit, async (req, res) => {
     // Tracking failures never surface to the client. Log + return 204
     // so retries don't compound the problem.
     console.error('[/api/track]', err?.message || err);
+    res.status(204).end();
+  }
+});
+
+// --- Analytics Phase 1 (2026-06-29): first-party event log ---
+//
+// Parallel infrastructure to /api/track + pageviews, but for named
+// funnel events. The 11-name allowlist is the PII safeguard: anything
+// outside the list 204s silently so an accidental free-form name (e.g.
+// "saved client_email=foo@bar.com") can't leak through. Every fire
+// path — client-side trackEvent(), server-side recordEvent() — goes
+// through the same allowlist via /api/event for client calls, or
+// through recordEvent() directly for server-side calls.
+//
+// Phase 2 (Microsoft Clarity) is deliberately NOT shipped here — DPA
+// implications need Harry's sign-off separately.
+
+// The complete set of event names we accept. Adding a new name
+// requires a same-PR update to the dashboard funnel widget and (for
+// client-side fires) the relevant component. Twelve from the spec's
+// week-1 funnel, plus landing_viewed which is reserved for future use
+// by the marketing pageview beacon refactor (not wired in Phase 1).
+const EVENT_NAME_ALLOWLIST = new Set([
+  'signup_started',       // landing CTA click (deferred — needs inline JS)
+  'signup_completed',     // /auth/google/callback success
+  'referral_redeemed',    // applyReferralAtSignup success
+  'profile_completed',    // first false→true profile_complete flip
+  'quote_started',        // SPA NEW_QUOTE
+  'photo_uploaded',       // JobDetails photo slot success
+  'quote_analysed',       // /api/users/:id/analyse success (photo + video)
+  'quote_sent',           // POST /client-token success
+  'client_responded',     // /q/:token/respond
+  'pack_purchased',       // applyQuotePackEventToDb success
+  'subscription_started', // applySubscriptionEventToDb first→active
+  'pdf_downloaded',       // QuoteOutput PDF button
+  'landing_viewed',       // reserved
+  'client_link_copied',   // reserved
+  'step_entered',         // reserved
+]);
+
+// Internal-user identification — Harry's decision 2026-06-29 was CSV
+// env var. Production Railway value to be set as `INTERNAL_USER_IDS`,
+// e.g. `harry,mark`. Events from these users are written with
+// `props.internal = true` rather than dropped, so the admin dashboard
+// can both QA the funnel AND exclude them from public-facing rates.
+function isInternalUser(userId) {
+  if (!userId) return false;
+  const raw = process.env.INTERNAL_USER_IDS || '';
+  if (!raw.trim()) return false;
+  const ids = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return ids.includes(String(userId));
+}
+
+// Central INSERT helper. Called from server-side fire sites (auth
+// callback, profile flip, analyse success, client-token, /q respond,
+// billing webhooks). Best-effort: errors logged once, never thrown
+// upstream — analytics MUST NOT break the user flow.
+async function recordEvent(name, userId, props = {}, { sessionId = null, path = null } = {}) {
+  if (!name || !EVENT_NAME_ALLOWLIST.has(name)) return;
+  const finalProps = (props && typeof props === 'object') ? { ...props } : {};
+  if (isInternalUser(userId)) {
+    finalProps.internal = true;
+  }
+  try {
+    await pool.query(
+      `INSERT INTO events (event_name, user_id, session_id, path, props)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [name, userId || null, sessionId, path, JSON.stringify(finalProps)]
+    );
+  } catch (err) {
+    // Silent capture per spec — log once, never surface.
+    console.warn('[recordEvent]', name, err?.message || err);
+  }
+}
+
+// Public client beacon. Same shape as /api/track: rate-limited, bot-
+// filtered, silent 204 on any malformed/unauthorised input.
+const eventRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many event requests.' },
+});
+
+app.post('/api/event', eventRateLimit, async (req, res) => {
+  try {
+    const { name, props } = req.body || {};
+    // Reject unknown / malformed names with 204 (not 400) — we don't
+    // surface internal structure to the client. This is the PII
+    // safeguard: only the hard-coded EVENT_NAME_ALLOWLIST writes.
+    if (!name || typeof name !== 'string' || !EVENT_NAME_ALLOWLIST.has(name)) {
+      return res.status(204).end();
+    }
+    const ua = (req.get('user-agent') || '').slice(0, 500);
+    if (isBotUserAgent(ua)) {
+      return res.status(204).end();
+    }
+    const userId = req.user?.id || req.session?.legacyUserId || null;
+    const sessionId = req.sessionID || null;
+    // Path from Referer — the SPA route the user was on when the
+    // event fired. Strip query string + cap length to keep the row
+    // small and avoid leaking ?token=… into the analytics table.
+    const referer = req.get('referer') || '';
+    let pathClean = null;
+    if (referer) {
+      try {
+        const u = new URL(referer);
+        pathClean = u.pathname.slice(0, 200);
+      } catch {
+        // Unparseable Referer — leave null.
+      }
+    }
+    const safeProps = (props && typeof props === 'object' && !Array.isArray(props)) ? props : {};
+    // Defensive: cap individual prop value lengths so a runaway client
+    // can't stuff a 1MB string into JSONB. 1KB per value is generous
+    // for the fields we expect (priceId, response strings, slot keys).
+    const trimmedProps = {};
+    for (const [k, v] of Object.entries(safeProps)) {
+      if (typeof k !== 'string' || k.length > 64) continue;
+      if (v === null || typeof v === 'boolean' || typeof v === 'number') {
+        trimmedProps[k] = v;
+      } else if (typeof v === 'string') {
+        trimmedProps[k] = v.slice(0, 1000);
+      }
+      // Drop objects/arrays/functions — flat props only.
+    }
+    await recordEvent(name, userId, trimmedProps, { sessionId, path: pathClean });
+    res.status(204).end();
+  } catch (err) {
+    // Best-effort, never propagate.
+    console.warn('[/api/event]', err?.message || err);
     res.status(204).end();
   }
 });

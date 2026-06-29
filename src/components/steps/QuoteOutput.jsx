@@ -19,6 +19,7 @@ import { calculateAllTotals } from '../../utils/calculations.js';
 import { saveJob as saveQuote, updateJob } from '../../utils/userDB.js';
 import { exportQuoteAsDocx } from '../../utils/exportDocx.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
+import { trackEvent } from '../../utils/trackEvent.js';
 
 export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false, onRequestOpenProfile }) {
   // TRQ-94: profile is no longer enforced at sign-up. We block ONLY at
@@ -142,6 +143,11 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       return;
     }
     if (!requireProfile()) return; // TRQ-94 gate
+    // Analytics Phase 1 — fire pdf_downloaded on click intent (not on
+    // server success) so the funnel captures the user action even if
+    // the server PDF path fails and we fall back to window.print().
+    // `hideCosts` distinguishes the worker-copy variant.
+    trackEvent('pdf_downloaded', { hideCosts: !!hideCosts });
     setGeneratingServerPdf(true);
 
     const falLbackToPrint = (reason) => {

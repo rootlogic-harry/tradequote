@@ -28,6 +28,7 @@ import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
+import { trackEvent } from './utils/trackEvent.js';
 import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
 import { autosaveDraft } from './utils/autosaveDraft.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
@@ -488,6 +489,11 @@ export default function App() {
     // Clear draft photos for fresh start
     if (state.currentUserId) deletePhotos(state.currentUserId, 'draft').catch(() => {});
     dispatch({ type: 'NEW_QUOTE' });
+    // Analytics Phase 1 — fire quote_started here (App entry point)
+    // rather than in the reducer so we get one event per user action,
+    // not one per NEW_QUOTE dispatch (which can happen during state
+    // restore too). `mode: 'full'` distinguishes from Quick Quote.
+    trackEvent('quote_started', { mode: 'full' });
     setCurrentView('editor');
   };
 
@@ -507,6 +513,10 @@ export default function App() {
     }
     if (state.currentUserId) deletePhotos(state.currentUserId, 'draft').catch(() => {});
     dispatch({ type: 'NEW_QUOTE', mode: 'quick' });
+    // Analytics Phase 1 — Quick Quote variant of quote_started. Same
+    // event name (one funnel) but `mode: 'quick'` so the dashboard
+    // can split the two modes for the analyse-skipped-review question.
+    trackEvent('quote_started', { mode: 'quick' });
     setCurrentView('editor');
   };
 

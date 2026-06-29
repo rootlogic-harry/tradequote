@@ -53,6 +53,7 @@ a "we deleted you" promise that's untrue.
 | `referral_codes` | user_id, code (human-readable string), created_at — no end-client PII | CASCADE — the code is tied to the user; deleting the user removes the code |
 | `referrals` | referrer_user_id, referee_user_id, code_used, timestamps — no end-client PII (waller↔waller relationship only) | CASCADE on either side — deleting either party CASCADE-removes the referral row |
 | `quote_purchases` | user_id, stripe_payment_id (Stripe-issued, no PII), quotes_added, amount_paid_pence, created_at — no end-client PII | CASCADE — billing audit row goes with the user; refund accounting is manual (docs/REFUNDS.md) |
+| `events` | user_id (FastQuote id only, no PII), event_name (server-side allowlist of ~15 names), session_id, path (Referer pathname only), props JSONB (event-specific metadata — slot key, price id, duration, etc., no client PII) — Analytics Phase 1 first-party event log | CASCADE on user deletion (`ON DELETE CASCADE` on user_id). No end-client PII to scrub. |
 
 **CASCADE summary** — most child tables have
 `user_id TEXT REFERENCES users(id) ON DELETE CASCADE`, so a single
