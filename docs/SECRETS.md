@@ -35,13 +35,13 @@ permissioned account on our behalf:
 | `STRIPE_SECRET_KEY` (live) | Railway env (production only) | **High** — live keys can move money. Treat as urgent. |
 | `STRIPE_WEBHOOK_SECRET` | Railway env | Low — Stripe dashboard regenerate |
 | `SESSION_SECRET` | Railway env | Medium — rotation logs every active user out |
-| `GOOGLE_CLIENT_SECRET` | Railway env | Medium — invalidates active sessions if not coordinated |
+| `AUTH0_CLIENT_SECRET` (2026-06-29) | Railway env | Medium — invalidates active sessions if not coordinated. Rotate via Auth0 dashboard → Applications → FastQuote → Settings → "Rotate". |
 | `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` (TRQ-147) | Railway env (backup service only) | Medium — rotate via Cloudflare dashboard |
 
 Things that are **not** secrets (safe to commit, log, share):
 
-- `GOOGLE_CLIENT_ID`, `R2_BUCKET_NAME`, `PUBLIC_BASE_URL` — public-facing
-  identifiers.
+- `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CALLBACK_URL`,
+  `R2_BUCKET_NAME`, `PUBLIC_BASE_URL` — public-facing identifiers.
 - `NODE_ENV`, `PORT`.
 - Database table names, schema field names, error messages (provided
   they don't echo a key).

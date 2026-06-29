@@ -45,17 +45,21 @@ describe('schema migration', () => {
 });
 
 describe('OAuth — ?ref= capture survives the round-trip', () => {
-  test('/auth/google stashes the incoming ref on the session BEFORE Google redirect', () => {
-    const start = serverSrc.indexOf("app.get('/auth/google'");
-    const next = serverSrc.indexOf("app.get('/auth/google/callback'", start);
+  // 2026-06-29: migrated from passport-google-oauth20 to passport-auth0
+  // (Universal Login hosts both Google + Email Passwordless). Routes
+  // renamed: /auth/google → /auth/login, /auth/google/callback →
+  // /auth/callback. The referral-capture contract is unchanged.
+  test('/auth/login stashes the incoming ref on the session BEFORE Auth0 redirect', () => {
+    const start = serverSrc.indexOf("app.get('/auth/login'");
+    const next = serverSrc.indexOf("app.get('/auth/google'", start);
     const block = serverSrc.slice(start, next);
     expect(block).toMatch(/pendingReferralCode/);
     expect(block).toMatch(/req\.query\??\.\??ref/);
   });
 
-  test('/auth/google/callback applies the referral after req.login', () => {
-    const start = serverSrc.indexOf("app.get('/auth/google/callback'");
-    const next = serverSrc.indexOf('\nasync function', start);
+  test('/auth/callback applies the referral after req.login', () => {
+    const start = serverSrc.indexOf("app.get('/auth/callback'");
+    const next = serverSrc.indexOf('\napp.get(', start + 1);
     const block = serverSrc.slice(start, next);
     // The applier must run AFTER req.login (so user.id is stable).
     const loginIdx = block.indexOf('req.login(user');
@@ -65,8 +69,8 @@ describe('OAuth — ?ref= capture survives the round-trip', () => {
   });
 
   test('callback only applies the referral for genuinely new users', () => {
-    const start = serverSrc.indexOf("app.get('/auth/google/callback'");
-    const next = serverSrc.indexOf('\nasync function', start);
+    const start = serverSrc.indexOf("app.get('/auth/callback'");
+    const next = serverSrc.indexOf('\napp.get(', start + 1);
     const block = serverSrc.slice(start, next);
     expect(block).toMatch(/user\?\._isNewUser/);
   });
@@ -165,20 +169,25 @@ describe('API endpoints', () => {
   });
 });
 
-describe('Login page — referral field', () => {
-  test('login HTML has placeholders for sign-in URL + referral block', () => {
+describe('Login page — referral handling (2026-06-29: Universal Login)', () => {
+  // Auth0 (2026-06-29): the referral field moved off the FastQuote login
+  // page and onto Auth0 Universal Login. /login now forwards `?ref=` to
+  // /auth/login as a query parameter so passport-auth0 can stash it on
+  // the session before the redirect to Auth0. The locked-input UX
+  // (existing PAULJULY pre-fill) is no longer needed — Universal Login
+  // already shows the ref code in the URL bar via the OAuth state
+  // parameter, and there's no second input that could conflict.
+  test('login HTML has placeholder for sign-in URL', () => {
     expect(serverSrc).toMatch(/SIGNIN_HREF/);
-    expect(serverSrc).toMatch(/REF_BLOCK_HTML/);
   });
 
-  test('locked-when-URL-has-ref path uses disabled input', () => {
-    // The route renders the locked variant when refFromUrl is truthy
-    // → input is disabled to prevent the "first-code-vs-last-code" conflict.
+  test('/login forwards ?ref= to /auth/login (preserving the round-trip)', () => {
     const start = serverSrc.indexOf("app.get('/login'");
     const next = serverSrc.indexOf('\napp.', start + 1);
     const block = serverSrc.slice(start, next);
-    expect(block).toMatch(/disabled/);
     expect(block).toMatch(/normaliseReferralCode\(req\.query\.ref\)/);
+    expect(block).toMatch(/\/auth\/login/);
+    expect(block).toMatch(/ref=\$\{encodeURIComponent\(refFromUrl\)\}/);
   });
 });
 

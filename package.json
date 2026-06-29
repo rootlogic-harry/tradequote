@@ -34,6 +34,7 @@
     "multer": "^2.1.1",
     "openai": "^6.34.0",
     "passport": "^0.7.0",
+    "passport-auth0": "^1.4.5",
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.20.0",
     "puppeteer-core": "^24.42.0",

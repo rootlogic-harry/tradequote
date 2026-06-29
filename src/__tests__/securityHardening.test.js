@@ -64,7 +64,17 @@ describe('sec-audit H-2 — test auth bypass is double-gated', () => {
 describe('sec-audit H-3 — required production secrets are checked at boot', () => {
   test('lists the secrets that must be present in production', () => {
     expect(serverSrc).toMatch(/REQUIRED_PROD_ENV/);
-    for (const k of ['SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'DATABASE_URL']) {
+    // 2026-06-29: GOOGLE_CLIENT_ID/SECRET retired with the move to Auth0
+    // Universal Login (Google credentials live in Auth0 now). The four
+    // AUTH0_* vars are the new fail-closed-at-boot contract.
+    for (const k of [
+      'SESSION_SECRET',
+      'AUTH0_DOMAIN',
+      'AUTH0_CLIENT_ID',
+      'AUTH0_CLIENT_SECRET',
+      'AUTH0_CALLBACK_URL',
+      'DATABASE_URL',
+    ]) {
       expect(serverSrc).toMatch(new RegExp(`['"]${k}['"]`));
     }
   });
@@ -151,10 +161,14 @@ describe('sec-audit L-2 — HSTS in production', () => {
 
 describe('sec-audit L-4 — session regeneration on login (fixation defence)', () => {
   test('OAuth callback regenerates session and re-logs the user in', () => {
-    // The greedy regex on the route is brittle (nested parens),
-    // so we slice from the route registration to the next top-level
-    // `app.` call.
-    const start = serverSrc.indexOf("app.get('/auth/google/callback'");
+    // 2026-06-29: route renamed /auth/google/callback → /auth/callback
+    // as part of the Auth0 Universal Login migration. The fixation
+    // defence (regenerate-before-login) is unchanged.
+    //
+    // The greedy regex on the route is brittle (nested parens), so we
+    // slice from the route registration to the next top-level `app.`
+    // call.
+    const start = serverSrc.indexOf("app.get('/auth/callback'");
     expect(start).toBeGreaterThan(-1);
     const next = serverSrc.indexOf('\napp.', start + 1);
     const block = serverSrc.slice(start, next === -1 ? start + 2000 : next);

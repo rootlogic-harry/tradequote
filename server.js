@@ -8,7 +8,7 @@ import https from 'https';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import passport from 'passport';
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import Auth0Strategy from 'passport-auth0';
 import rateLimit from 'express-rate-limit';
 import { safeError, setSystemErrorLogger } from './safeError.js';
 import {
@@ -86,10 +86,16 @@ const __dirname = dirname(__filename);
 // signing falls back to a public default, OAuth fails open, DB calls
 // throw at first request. Fail-closed at boot so ops sees it instantly
 // rather than us ending up with a forge-able session secret in prod.
+// Auth0 (2026-06-29) — Auth0 Universal Login is the SOLE sign-in surface.
+// Google social and Email Passwordless (magic link) both live behind the
+// Auth0 tenant; the old GOOGLE_CLIENT_ID/SECRET vars are no longer used
+// directly by this server (Google OAuth credentials sit inside Auth0).
 const REQUIRED_PROD_ENV = [
   'SESSION_SECRET',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
+  'AUTH0_DOMAIN',
+  'AUTH0_CLIENT_ID',
+  'AUTH0_CLIENT_SECRET',
+  'AUTH0_CALLBACK_URL',
   'DATABASE_URL',
 ];
 if (process.env.NODE_ENV === 'production') {
@@ -900,40 +906,89 @@ app.use(session({
   name: 'tq_session',
 }));
 
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID || 'missing',
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'missing',
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || '/auth/google/callback',
+// Auth0 (2026-06-29) — Universal Login hosts BOTH Google social AND Email
+// Passwordless (magic link) behind one screen. The verify callback runs
+// once per successful authentication, with the Auth0 ID-token claims
+// surfaced as `profile._json` (sub, email, email_verified, name).
+//
+// Account-linking rule (locked): match existing users by `lower(email)`
+// FIRST. The existing 10 Google users on `auth_provider = 'google'` get
+// auto-relabelled to `auth_provider = 'auth0'` with their new Auth0
+// `sub` on first login. New emails create new user rows. The case-
+// insensitive unique index `idx_users_email_unique` (server.js L695)
+// guarantees no dupe rows even under concurrent first-logins.
+//
+// IMPORTANT: we discard the Auth0 accessToken and idToken immediately
+// after extracting the ID-token claims. They're never persisted to
+// `users` or `session` — the FastQuote session is the only credential
+// the server tracks post-callback.
+passport.use(new Auth0Strategy({
+  domain: process.env.AUTH0_DOMAIN || 'missing.auth0.com',
+  clientID: process.env.AUTH0_CLIENT_ID || 'missing',
+  clientSecret: process.env.AUTH0_CLIENT_SECRET || 'missing',
+  callbackURL: process.env.AUTH0_CALLBACK_URL || '/auth/callback',
 },
-async (accessToken, refreshToken, profile, done) => {
+async (_accessToken, _refreshToken, _extraParams, profile, done) => {
   try {
-    const googleId = profile.id;
-    const email = profile.emails?.[0]?.value ?? null;
-    const name = profile.displayName ?? email ?? 'User';
-    const avatar = profile.photos?.[0]?.value ?? null;
+    const claims = (profile && profile._json) || {};
+    const sub = claims.sub || profile?.id || null;
+    const email = claims.email || profile?.emails?.[0]?.value || null;
+    const name = claims.name || profile?.displayName || email || 'User';
+    const avatar = claims.picture || profile?.picture || null;
 
-    // Existing user by Google ID
-    const existing = await pool.query(
-      'SELECT * FROM users WHERE auth_provider = $1 AND auth_provider_id = $2',
-      ['google', googleId]
-    );
+    if (!sub) {
+      return done(new Error('Auth0 callback returned no subject identifier'), null);
+    }
 
-    if (existing.rows.length > 0) {
-      await pool.query(
-        'UPDATE users SET last_login_at = NOW(), avatar_url = $1, email = COALESCE(email, $2) WHERE id = $3',
-        [avatar, email, existing.rows[0].id]
+    // 1. Match existing user by lower(email). This covers BOTH the legacy
+    //    Google users (currently auth_provider='google') AND any returning
+    //    Auth0 user. The idx_users_email_unique partial index
+    //    (lower(email) WHERE email IS NOT NULL) makes this a single
+    //    index seek. New Auth0 sub on first login → relabel the row.
+    if (email) {
+      const byEmail = await pool.query(
+        'SELECT * FROM users WHERE lower(email) = lower($1) LIMIT 1',
+        [email]
       );
-      // _isNewUser marker is consumed inside the /auth/google/callback
-      // handler to decide whether to apply a referral. Existing users
-      // are skipped (signup-time bonus only — a returning user can
-      // still redeem via POST /auth/redeem-referral if they want to).
-      const u = existing.rows[0];
+      if (byEmail.rows.length > 0) {
+        const u = byEmail.rows[0];
+        await pool.query(
+          `UPDATE users
+              SET last_login_at = NOW(),
+                  avatar_url = COALESCE($1, avatar_url),
+                  auth_provider = 'auth0',
+                  auth_provider_id = $2
+            WHERE id = $3`,
+          [avatar, sub, u.id]
+        );
+        // Refresh in-memory copy so the rest of the request sees the
+        // new provider/sub without an extra round-trip.
+        u.avatar_url = avatar || u.avatar_url;
+        u.auth_provider = 'auth0';
+        u.auth_provider_id = sub;
+        u._isNewUser = false;
+        return done(null, u);
+      }
+    }
+
+    // 2. Fallback — match by (auth_provider='auth0', sub) in case a user
+    //    has no email on file (rare; legacy local accounts). Idempotent.
+    const bySub = await pool.query(
+      'SELECT * FROM users WHERE auth_provider = $1 AND auth_provider_id = $2',
+      ['auth0', sub]
+    );
+    if (bySub.rows.length > 0) {
+      const u = bySub.rows[0];
+      await pool.query(
+        'UPDATE users SET last_login_at = NOW(), avatar_url = COALESCE($1, avatar_url), email = COALESCE(email, $2) WHERE id = $3',
+        [avatar, email, u.id]
+      );
       u._isNewUser = false;
       return done(null, u);
     }
 
-    // New user — provision account with unique, URL-safe ID
-    const baseId = (name || 'user')
+    // 3. New user — provision account with unique, URL-safe ID.
+    const baseId = (name || email || 'user')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')
       .slice(0, 20) || 'user';
@@ -941,22 +996,21 @@ async (accessToken, refreshToken, profile, done) => {
     const clash = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
     if (clash.rows.length > 0) {
       // 32 bits from crypto.randomBytes. Math.random().toString(36)
-      // only gives ~21 bits and two concurrent Google signups can
-      // collide, erroring the second INSERT on the unique id.
+      // only gives ~21 bits and two concurrent signups can collide,
+      // erroring the second INSERT on the unique id.
       userId = `${baseId}_${crypto.randomBytes(4).toString('hex')}`;
     }
 
-    // TRQ-151: record legal acceptance for new signups. By
-    // completing Google OAuth they have accepted the current
-    // versions of Terms, Privacy Policy, and DPA. Versions are
-    // pinned at the moment of signup so the audit trail captures
-    // exactly which text they agreed to.
+    // TRQ-151: record legal acceptance for new signups. By completing
+    // Auth0 Universal Login they have accepted the current versions of
+    // Terms, Privacy Policy, and DPA. The DPA version was bumped on
+    // 2026-06-29 to add Auth0 as a sub-processor; existing 10 users
+    // will be re-prompted to accept on next login via the existing
+    // re-acceptance mechanism (LEGAL_VERSIONS bump triggers it).
     //
-    // TRQ-150: start the 30-day no-card trial clock NOW. The trial
-    // is FastQuote-side (not Stripe-side) because we don't collect a
-    // card at signup. When the user later clicks Subscribe, Stripe
-    // sees a subscription with no trial — the FastQuote-side clock
-    // is already wound down by then.
+    // TRQ-150: start the 30-day no-card trial clock NOW. The trial is
+    // FastQuote-side (not Stripe-side) because we don't collect a card
+    // at signup.
     const inserted = await pool.query(
       `INSERT INTO users (id, name, email, avatar_url, auth_provider, auth_provider_id,
         plan, profile_complete, created_at, last_login_at,
@@ -964,12 +1018,12 @@ async (accessToken, refreshToken, profile, done) => {
         privacy_accepted_version, privacy_accepted_at,
         dpa_accepted_version, dpa_accepted_at,
         trial_ends_at, subscription_status)
-       VALUES ($1, $2, $3, $4, 'google', $5, 'basic', false, NOW(), NOW(),
+       VALUES ($1, $2, $3, $4, 'auth0', $5, 'basic', false, NOW(), NOW(),
         $6, NOW(), $7, NOW(), $8, NOW(),
         NOW() + INTERVAL '30 days', 'trialing')
        RETURNING *`,
       [
-        userId, name, email, avatar, googleId,
+        userId, name, email, avatar, sub,
         LEGAL_VERSIONS.terms, LEGAL_VERSIONS.privacy, LEGAL_VERSIONS.dpa,
       ]
     );
@@ -997,60 +1051,89 @@ app.use(passport.session());
 
 // --- Auth Routes ---
 
-app.get('/auth/google', (req, res, next) => {
+// Auth0 (2026-06-29) — Universal Login is the SOLE sign-in entrypoint.
+// Google social + Email Passwordless (magic link) both live behind it.
+// Old /auth/google route stays mounted as a 301 redirect to /auth/login
+// so cached bookmarks, external links, and the referrals share-URL
+// contract keep working. See docs/AUTH0_SETUP.md for the Auth0 dashboard
+// configuration that maps to this code.
+app.get('/auth/login', (req, res, next) => {
   // Referrals Phase 1 (2026-06-23): stash any incoming ?ref= code on
-  // the session BEFORE Google's redirect so it survives the round-trip
-  // back to our /auth/google/callback. The query string from the original
-  // landing URL is lost by the time the user returns from Google.
+  // the session BEFORE Auth0's redirect so it survives the round-trip
+  // back to /auth/callback. The query string from the original
+  // landing URL is lost by the time the user returns from Auth0.
   // Manual entry is handled separately via POST /auth/redeem-referral
   // (lets the user redeem retroactively if they already signed up).
   const refRaw = req.query?.ref;
   if (typeof refRaw === 'string' && refRaw.length > 0 && refRaw.length <= 64) {
     req.session.pendingReferralCode = refRaw;
   }
-  return passport.authenticate('google', {
-    scope: ['openid', 'profile', 'email'],
-    prompt: 'select_account',
+  // "Remember this device" checkbox on Universal Login posts back as
+  // ?remember=1. We stash the boolean on the session so the post-
+  // callback handler can extend cookie.maxAge to 30 days. Default
+  // remains 7 days (the session cookie config above).
+  const rememberRaw = req.query?.remember;
+  if (rememberRaw === '1' || rememberRaw === 'true') {
+    req.session.rememberDevice = true;
+  }
+  return passport.authenticate('auth0', {
+    scope: 'openid email profile',
   })(req, res, next);
+});
+
+// Back-compat: /auth/google was the old entrypoint. 301 to /auth/login
+// so cached browser bookmarks, the referrals share-URL contract
+// (?ref=CODE), and any external links land on Universal Login.
+app.get('/auth/google', (req, res) => {
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  res.redirect(301, `/auth/login${qs}`);
 });
 
 // `handleOauthFailure` is a 4-arg error middleware that Express treats as
 // an error handler. If Passport blows up mid-callback (bad state param,
-// session lost between /auth/google and this callback, network error
-// talking to Google) we must NOT let the default 500 handler render —
+// session lost between /auth/login and this callback, network error
+// talking to Auth0) we must NOT let the default 500 handler render —
 // that leaves the user on an ugly error page with no route back. Instead
 // we log the cause server-side and bounce to /login?error=oauth_failed,
-// which shows a clear message plus the Sign-in button again.
+// which redirects to /auth/login (a fresh Universal Login attempt).
 function handleOauthFailure(err, req, res, _next) {
   console.warn(`[OAuth] callback error: ${err?.message || err}`);
   try { req.session?.destroy?.(() => {}); } catch {}
   // Railway DNS blips and Postgres restarts show up here as "session
-  // store unreachable" — the user's Google credentials are fine, it's
+  // store unreachable" — the user's Auth0 credentials are fine, it's
   // our infrastructure that's hiccupping. Point them at a friendlier
-  // message so they don't assume their Google account is broken (Mark
+  // message so they don't assume their account is broken (Mark
   // hit this during today's outage and thought he'd lost access).
   const reason = isTransientInfrastructureError(err) ? 'reconnecting' : 'oauth_failed';
   res.redirect(`/login?error=${reason}`);
 }
 
-app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login?error=auth_failed' }),
+app.get('/auth/callback',
+  passport.authenticate('auth0', { failureRedirect: '/login?error=auth_failed' }),
   // sec-audit L-4 — regenerate the session on successful login so any
   // pre-login session id (planted via fixation) is invalidated. Passport
   // re-attaches req.user to the new session for us.
   //
-  // Referrals Phase 1 (2026-06-23): `pendingReferralCode` was set on the
-  // pre-login session in /auth/google. The regenerate() below blows that
-  // session away, so we lift the code out FIRST and pass it through as
-  // a local. Applying the referral happens after the user is logged in
-  // (so we have a stable user.id) but before redirect.
+  // Referrals Phase 1 (2026-06-23): `pendingReferralCode` and the
+  // (2026-06-29) `rememberDevice` flag were set on the pre-login session
+  // in /auth/login. The regenerate() below blows that session away, so
+  // we lift the values out FIRST and pass them through as locals.
+  // Applying the referral happens after the user is logged in (so we
+  // have a stable user.id) but before redirect.
   (req, res, next) => {
     const user = req.user;
     const pendingRef = req.session?.pendingReferralCode || null;
+    const rememberDevice = !!req.session?.rememberDevice;
     req.session.regenerate((err) => {
       if (err) return next(err);
       req.login(user, (loginErr) => {
         if (loginErr) return next(loginErr);
+        // "Remember this device" → extend cookie maxAge to 30 days.
+        // Default cookie maxAge stays 7 days (session config above).
+        // Applied AFTER regenerate so the new session id picks it up.
+        if (rememberDevice && req.session?.cookie) {
+          req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+        }
         // Analytics Phase 1 — fire signup_completed. `wasNew` mirrors
         // the boolean used downstream for new-user routing, so the
         // funnel can separate first-login activations from returning
@@ -1089,6 +1172,14 @@ app.get('/auth/google/callback',
   },
   handleOauthFailure,
 );
+
+// Back-compat for any cached /auth/google/callback (e.g. an Auth0
+// migration where the dashboard callback URL is briefly the old path).
+// 301 to /auth/callback preserving the OAuth2 query string.
+app.get('/auth/google/callback', (req, res) => {
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  res.redirect(301, `/auth/callback${qs}`);
+});
 
 /**
  * Referrals Phase 1 (2026-06-23) — shared validator/applier for a
@@ -1265,16 +1356,54 @@ async function getOrCreateReferralCode(userId, userName) {
   return null;
 }
 
-app.get('/auth/logout', (req, res, next) => {
+// Auth0 (2026-06-29) — Logout MUST destroy BOTH the Auth0 session AND
+// the FastQuote session, or the user will get auto-signed-back-in by
+// Auth0's idle SSO cookie on the next visit. Order is locked:
+//
+//   1. req.logout() + req.session.destroy() + clear `tq_session` cookie
+//      (kill FastQuote-side state first; if the redirect to Auth0 fails
+//      we still leave the user logged out locally).
+//   2. Redirect to https://${AUTH0_DOMAIN}/v2/logout?returnTo=…
+//      which clears the Auth0 cookie and bounces back to /login.
+//
+// POST /auth/logout is the canonical method (matches what the SPA fires
+// from the user menu via fetch). GET /auth/logout stays mounted as a
+// 302 to /auth/login for legacy link compatibility (old "Sign out" anchor
+// tags in the wild) — they hit /auth/login which is the new
+// entrypoint regardless of session state.
+function destroyAndRedirectToAuth0Logout(req, res, next) {
+  const domain = process.env.AUTH0_DOMAIN;
+  const clientId = process.env.AUTH0_CLIENT_ID;
+  // Default returnTo matches the OAuth callback's origin: production
+  // sets the canonical base URL via AUTH0_LOGOUT_RETURN_TO so dev hits
+  // localhost and prod hits fastquote.uk without code change.
+  const returnTo = process.env.AUTH0_LOGOUT_RETURN_TO
+    || `${req.protocol}://${req.get('host')}/login`;
+
+  const finishRedirect = () => {
+    if (!domain || !clientId) {
+      // Local dev / tests without an Auth0 tenant: skip the round-trip
+      // and bounce back to /login directly.
+      return res.redirect('/login');
+    }
+    const url = `https://${domain}/v2/logout?client_id=${encodeURIComponent(clientId)}`
+      + `&returnTo=${encodeURIComponent(returnTo)}`;
+    res.redirect(url);
+  };
+
   req.logout((err) => {
     if (err) return next(err);
     req.session.destroy((destroyErr) => {
       if (destroyErr) console.error('[Logout] Session destroy error:', destroyErr.message);
       res.clearCookie('tq_session');
-      res.redirect('/login');
+      finishRedirect();
     });
   });
-});
+}
+
+app.post('/auth/logout', destroyAndRedirectToAuth0Logout);
+// GET kept for legacy <a href="/auth/logout"> links. Same behaviour.
+app.get('/auth/logout', destroyAndRedirectToAuth0Logout);
 
 app.get('/auth/me', async (req, res) => {
   // Server-driven feature flags. The video walkthrough pipeline is
@@ -1411,7 +1540,31 @@ app.post('/api/session/legacy', (req, res) => {
   res.json({ ok: true });
 });
 
-// --- Login page (static HTML served directly by Express) ---
+// --- Login page (Auth0 Universal Login is the SOLE sign-in surface) ---
+//
+// Auth0 (2026-06-29) — Universal Login at https://${AUTH0_DOMAIN}/login
+// is now the login page. Google + Email Passwordless (magic link) both
+// live behind it. This server-side /login route does three things:
+//
+//   1. If the user is already authenticated, redirect to /.
+//   2. If `?error=…` is present, render a small fallback HTML page
+//      with the error message + a "Try again" button that links to
+//      /auth/login (which kicks off Universal Login). The error page
+//      preserves the referrals UX — a `?ref=` carries through to
+//      /auth/login when the user clicks Try Again. Security tests
+//      assert XSS sanitisation on the `?error=` parameter, so the
+//      error map is locked to known values.
+//   3. Otherwise, 302 to /auth/login preserving `?ref=` and
+//      `?remember=`. Universal Login IS the canonical sign-in page —
+//      visitors hitting /login directly are bounced straight to it
+//      rather than seeing an intermediate "click here to sign in"
+//      screen.
+//
+// The fallback HTML page intentionally has NO Google-specific copy
+// or branding — Auth0 Universal Login hosts the Google + Magic Link
+// buttons and is the only place we mention "sign in with…". This
+// avoids the user confusion of "is this Google sign-in?" when they
+// might be using the magic link path instead.
 
 const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -1419,21 +1572,21 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FastQuote &mdash; Sign In</title>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', sans-serif;
-      background: #1a1714;
-      color: #f0ede8;
+      background: #fffdf8;
+      color: #211a10;
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
     }
     .card {
-      background: #222018;
-      border: 1px solid #3a3630;
+      background: #fffdf8;
+      border: 1px solid #e6dfd0;
       border-radius: 14px;
       padding: 48px 40px;
       text-align: center;
@@ -1444,19 +1597,19 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 32px;
       font-weight: 800;
-      color: #e8a838;
+      color: #bd5e09;
       letter-spacing: 0.05em;
       margin-bottom: 8px;
     }
-    .tagline { color: #7a6f5e; font-size: 14px; margin-bottom: 40px; }
+    .tagline { color: #6b6253; font-size: 14px; margin-bottom: 40px; }
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 12px;
       padding: 14px 28px;
-      background: #fff;
-      color: #1a1714;
+      background: #bd5e09;
+      color: #fffdf8;
       border-radius: 8px;
       text-decoration: none;
       font-weight: 600;
@@ -1465,89 +1618,28 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       transition: background 0.15s;
       width: 100%;
     }
-    .btn:hover { background: #f0ede8; }
+    .btn:hover { background: #a14f06; }
     .error {
-      color: #f87171;
+      color: #b91c1c;
       font-size: 13px;
       margin-bottom: 20px;
       padding: 10px 14px;
-      background: rgba(248,113,113,0.08);
+      background: rgba(185,28,28,0.06);
       border-radius: 6px;
-      border: 1px solid rgba(248,113,113,0.2);
+      border: 1px solid rgba(185,28,28,0.18);
     }
-    .footer { margin-top: 32px; font-size: 12px; color: #4a4640; }
-    /* Referrals Phase 1 (2026-06-23) */
-    .ref-block { margin-top: 20px; text-align: left; }
-    .ref-toggle {
-      background: none;
-      border: none;
-      color: #7a6f5e;
-      font-size: 13px;
-      cursor: pointer;
-      padding: 6px 0;
-      font-family: inherit;
-    }
-    .ref-toggle:hover { color: #e8a838; }
-    .ref-panel { margin-top: 8px; }
-    .ref-input {
-      width: 100%;
-      padding: 10px 12px;
-      background: #1a1714;
-      border: 1px solid #3a3630;
-      border-radius: 6px;
-      color: #f0ede8;
-      font-family: inherit;
-      font-size: 14px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .ref-input:disabled { opacity: 0.7; cursor: not-allowed; background: #221f1a; }
-    .ref-input:focus { outline: none; border-color: #e8a838; }
-    .ref-hint { color: #7a6f5e; font-size: 12px; margin-top: 6px; }
-    .ref-locked-note { color: #e8a838; font-size: 12px; margin-top: 6px; }
+    .footer { margin-top: 32px; font-size: 12px; color: #8a7f6b; }
+    .footer a { color: #8a7f6b; text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">FASTQUOTE</div>
-    <div class="tagline">Professional quoting for tradespeople</div>
+    <div class="tagline">Sign in to send your next quote</div>
     \${ERROR_HTML}
-    <a id="signin-btn" href="\${SIGNIN_HREF}" class="btn">
-      <svg width="20" height="20" viewBox="0 0 48 48">
-        <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-        <path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-        <path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-      </svg>
-      Sign in with Google
-    </a>
-    \${REF_BLOCK_HTML}
-    <div class="footer"><a href="/privacy" style="color:#4a4640;text-decoration:none">Privacy</a> &middot; <a href="/terms" style="color:#4a4640;text-decoration:none">Terms</a></div>
+    <a id="signin-btn" href="\${SIGNIN_HREF}" class="btn">Try again</a>
+    <div class="footer"><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/dpa">DPA</a></div>
   </div>
-  <script>
-    (function() {
-      var toggle = document.getElementById('ref-toggle');
-      var panel = document.getElementById('ref-panel');
-      var input = document.getElementById('ref-input');
-      var signinBtn = document.getElementById('signin-btn');
-      if (toggle && panel) {
-        toggle.addEventListener('click', function() {
-          var hidden = panel.style.display === 'none';
-          panel.style.display = hidden ? 'block' : 'none';
-          toggle.textContent = hidden ? '− Hide referral code' : '+ Got a referral code?';
-        });
-      }
-      if (input && signinBtn && !input.disabled) {
-        // Keep the Sign-in URL in sync with what the user types so the
-        // OAuth round-trip carries the code as ?ref=… and the callback
-        // can apply it. Empty input → plain /auth/google (no ref).
-        input.addEventListener('input', function() {
-          var v = (input.value || '').trim();
-          signinBtn.href = v ? '/auth/google?ref=' + encodeURIComponent(v) : '/auth/google';
-        });
-      }
-    })();
-  </script>
 </body>
 </html>`;
 
@@ -1555,68 +1647,53 @@ app.get('/login', (req, res) => {
   if (req.isAuthenticated?.() || req.session?.legacyUserId) {
     return res.redirect('/');
   }
-  // Error copy per-cause. Paul's case was session_expired → we want a
-  // clear "your session ran out, tap Sign-in again" message rather than
-  // a scary 'sign-in failed' which implies bad password / Google issue.
+
+  // Referrals Phase 1 (2026-06-23) + Auth0 (2026-06-29): forward `?ref=`
+  // and `?remember=` through to /auth/login so the OAuth state carries
+  // them across the round-trip back to /auth/callback. Normalised here
+  // so a malformed value never reaches Universal Login.
+  const refFromUrl = normaliseReferralCode(req.query.ref);
+  const qsParts = [];
+  if (refFromUrl) qsParts.push(`ref=${encodeURIComponent(refFromUrl)}`);
+  if (req.query.remember === '1' || req.query.remember === 'true') {
+    qsParts.push('remember=1');
+  }
+  const authLoginHref = qsParts.length ? `/auth/login?${qsParts.join('&')}` : '/auth/login';
+
+  // No error → straight to Universal Login. This is the common path:
+  // landing-page "Log in" link, /signup CTA, dashboard "Sign in" prompts.
+  if (!req.query.error) {
+    return res.redirect(302, authLoginHref);
+  }
+
+  // Error copy per-cause. Locked map of known reasons — anything else
+  // collapses to the empty string, which is why XSS via `?error=` is
+  // impossible (sec-audit SEC-17). Paul's case was session_expired →
+  // we want a clear "your session ran out" message rather than a
+  // scary 'sign-in failed' which implies a credential problem.
   let errorMsg = '';
   switch (req.query.error) {
     case 'session_expired':
       errorMsg = "<div class='error'>Your session ran out. Please sign in again to get back to your quotes.</div>";
       break;
     case 'oauth_failed':
-      errorMsg = "<div class='error'>We couldn't complete the Google sign-in. Please try again.</div>";
+      errorMsg = "<div class='error'>We couldn't complete the sign-in. Please try again.</div>";
       break;
     case 'auth_failed':
       errorMsg = "<div class='error'>Sign-in failed. Please try again.</div>";
       break;
     case 'reconnecting':
       // Transient infrastructure error — our DB was briefly unreachable.
-      // Your Google account is fine; retrying in a moment will work.
-      errorMsg = "<div class='error'>We\u2019re reconnecting to our database. Please wait a moment and sign in again \u2014 your Google account is fine.</div>";
+      // The Auth0 round-trip is fine; retrying in a moment will work.
+      errorMsg = "<div class='error'>We are reconnecting to our database. Please wait a moment and sign in again.</div>";
       break;
     default:
       errorMsg = '';
   }
 
-  // Referrals Phase 1 (2026-06-23): if the URL has ?ref=…, pre-fill
-  // the field AND lock it (disabled). Per spec — removes the "first-
-  // code-vs-last-code" conflict by removing the conflict entirely.
-  // If no URL ref, the field is empty + editable, hidden behind a
-  // "Got a referral code?" toggle so the default UX stays clean.
-  const refFromUrl = normaliseReferralCode(req.query.ref);
-  let refBlockHtml = '';
-  let signinHref = '/auth/google';
-  if (refFromUrl) {
-    signinHref = `/auth/google?ref=${encodeURIComponent(refFromUrl)}`;
-    refBlockHtml = `
-      <div class="ref-block">
-        <div class="ref-panel">
-          <input id="ref-input" class="ref-input" type="text"
-            value="${escapeHtml(refFromUrl)}" disabled
-            aria-label="Referral code">
-          <div class="ref-locked-note">Referral applied — you'll start with 5 free quotes.</div>
-        </div>
-      </div>
-    `;
-  } else {
-    refBlockHtml = `
-      <div class="ref-block">
-        <button id="ref-toggle" type="button" class="ref-toggle">+ Got a referral code?</button>
-        <div id="ref-panel" class="ref-panel" style="display:none;">
-          <input id="ref-input" class="ref-input" type="text"
-            placeholder="e.g. PAULJULY"
-            autocomplete="off" autocapitalize="characters" spellcheck="false"
-            aria-label="Referral code">
-          <div class="ref-hint">Optional. Bumps you to 5 free quotes if recognised.</div>
-        </div>
-      </div>
-    `;
-  }
-
   const html = LOGIN_PAGE_HTML
     .replace('${ERROR_HTML}', errorMsg)
-    .replace('${SIGNIN_HREF}', signinHref)
-    .replace('${REF_BLOCK_HTML}', refBlockHtml);
+    .replace('${SIGNIN_HREF}', authLoginHref);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });
@@ -1647,10 +1724,14 @@ function escapeHtml(s) {
 // a one-off re-acceptance flow. The schema supports both — this PR
 // just lays the audit trail.
 const LEGAL_VERSIONS = Object.freeze({
-  // privacy bumped 2026-06-19 — EU migration completed (TRQ-149)
-  privacy: '2026-06-19',
+  // privacy bumped 2026-06-29 — Auth0 (Okta Inc.) added as sub-processor
+  // for authentication (replaces direct Google OAuth). DPA bumped same
+  // day to add Auth0 to the sub-processor list. Existing users (Mark,
+  // Paul, Harry) re-accept on next login via the standard
+  // version-bump re-acceptance mechanism.
+  privacy: '2026-06-29',
   terms: '2026-06-15',
-  dpa: '2026-06-15',
+  dpa: '2026-06-29',
 });
 
 const LEGAL_PAGE_STYLE = `
@@ -1714,7 +1795,8 @@ app.get('/privacy', (req, res) => {
     <li><strong>OpenAI, LLC</strong> (United States) &mdash; audio from voice dictation and video walkthroughs is sent to Whisper for transcription. Audio is in-memory only; never persisted. Same transfer safeguards as Anthropic.</li>
     <li><strong>Railway Corp.</strong> &mdash; hosting + managed Postgres. Production data is currently in Railway's US West region; we are migrating to Railway's EU region (see "Data storage" below).</li>
     <li><strong>Cloudflare R2</strong> &mdash; off-platform encrypted backups of the database. Bucket is access-token-scoped; AES256 server-side encryption at rest.</li>
-    <li><strong>Google LLC</strong> &mdash; sign-in only. We receive your name and email. No other Google services used.</li>
+    <li><strong>Auth0 by Okta (Okta, Inc.)</strong> &mdash; authentication and identity management. We use Auth0 (Okta Inc.) to handle sign-in. Auth0 receives your email and login event records when you authenticate. UK &amp; EU data residency available. Transfer covered by the UK Addendum to the EU Standard Contractual Clauses.</li>
+    <li><strong>Google LLC</strong> &mdash; sign-in only, via Auth0&apos;s Google social connection. We receive your name and email. No other Google services used.</li>
     <li><strong>Stripe, Inc.</strong> (once billing is live) &mdash; payment processing for the £19.99/month subscription. Stripe is the controller for payment data; we never see your full card number.</li>
   </ul>
 
@@ -1807,7 +1889,8 @@ app.get('/dpa', (req, res) => {
     <li><strong>OpenAI, LLC</strong> &mdash; voice-to-text (US, SCCs + UK Addendum).</li>
     <li><strong>Railway Corp.</strong> &mdash; hosting + managed Postgres (currently US, migrating to EU).</li>
     <li><strong>Cloudflare, Inc.</strong> &mdash; encrypted backup storage (R2, multi-region with EU option).</li>
-    <li><strong>Google LLC</strong> &mdash; authentication only.</li>
+    <li><strong>Auth0 by Okta (Okta, Inc.)</strong> &mdash; authentication and identity management (UK &amp; EU data residency available). Hosts Universal Login for both Google social sign-in and the email magic link option.</li>
+    <li><strong>Google LLC</strong> &mdash; sign-in only, via Auth0&apos;s Google social connection.</li>
     <li><strong>Stripe, Inc.</strong> &mdash; payment processing (controller for payment data, not a sub-processor of yours).</li>
   </ul>
 
@@ -6159,7 +6242,7 @@ app.post('/api/track', pageviewRateLimit, async (req, res) => {
 // by the marketing pageview beacon refactor (not wired in Phase 1).
 const EVENT_NAME_ALLOWLIST = new Set([
   'signup_started',       // landing CTA click (deferred — needs inline JS)
-  'signup_completed',     // /auth/google/callback success
+  'signup_completed',     // /auth/callback success (Auth0 Universal Login)
   'referral_redeemed',    // applyReferralAtSignup success
   'profile_completed',    // first false→true profile_complete flip
   'quote_started',        // SPA NEW_QUOTE

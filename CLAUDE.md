@@ -100,7 +100,7 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 | PDF (primary) | Server-side Puppeteer + `@sparticuz/chromium` via `pdfRenderer.js` — selectable text, native pagination |
 | PDF (fallback) | Browser-native `window.print()` (print-to-PDF) — used when the server `/pdf` endpoint fails. Same `public/print.css` is applied so the document matches. |
 | DOCX | `docx` library (v9.6.1) |
-| Auth | Google OAuth 2.0 + legacy session switcher |
+| Auth | Auth0 Universal Login (Google social + Email Passwordless / magic link) via `passport-auth0`, plus legacy session switcher (dev only). See `docs/AUTH0_SETUP.md`. |
 | Sessions | connect-pg-simple (PostgreSQL-backed) |
 | Voice-to-text | OpenAI Whisper (`openai` SDK), `multer` for upload |
 | Video processing | ffmpeg (apt), fluent-ffmpeg (frame extraction, audio extraction) |
@@ -540,11 +540,19 @@ Test files live in `src/__tests__/`. Key test suites:
 
 ## Auth
 
-**Primary:** Google OAuth 2.0 via Passport. Session stored in PostgreSQL via connect-pg-simple. Cookie: `tq_session`.
+**Primary (2026-06-29):** Auth0 Universal Login via `passport-auth0`. Auth0 hosts BOTH Google social sign-in AND Email Passwordless (magic link) behind one screen. Session stored in PostgreSQL via connect-pg-simple. Cookie: `tq_session`. Replaced direct `passport-google-oauth20` — Google credentials now live inside the Auth0 tenant rather than on Railway. Full dashboard config runbook in `docs/AUTH0_SETUP.md`.
 
-**Legacy:** Session-based user switcher for development (Mark/Harry). Uses `req.session.legacyUserId`.
+**Legacy:** Session-based user switcher for development (Mark/Harry). Uses `req.session.legacyUserId`. Gated to non-production builds (sec-audit C-1).
 
-**Flow:** `/auth/google` → Google consent → `/auth/google/callback` → redirect to `/` (or `/?onboarding=true` for new users). New Google users land on profile setup before accessing the dashboard.
+**Flow:** `/auth/login` → Auth0 Universal Login (Google button + email field for magic link) → `/auth/callback` → redirect to `/`. The `/auth/google` and `/auth/google/callback` routes stay mounted as 301 redirects to the new paths so cached bookmarks + the referrals share-URL `?ref=` contract keep working. `/login` itself is now a 302 to `/auth/login` — Universal Login IS the login page.
+
+**Account linking:** First Auth0 login matches existing users by `lower(email)` (guaranteed-unique via the `idx_users_email_unique` partial index). The existing Google users auto-relabel from `auth_provider='google'` to `auth_provider='auth0'` with their new Auth0 `sub` on first login. The Stripe `client_reference_id` lineage uses `users.id`, which never changes.
+
+**Logout:** `POST /auth/logout` (or GET for legacy `<a href>` links) destroys the FastQuote session FIRST, then redirects to `https://${AUTH0_DOMAIN}/v2/logout?client_id=…&returnTo=…` so Auth0's idle-SSO cookie is killed too — otherwise the next visit re-authenticates the user silently.
+
+**"Remember this device":** `?remember=1` on `/auth/login` extends `req.session.cookie.maxAge` from the 7-day default to 30 days, applied after `req.session.regenerate()` so the new session id picks it up.
+
+**Token discipline:** the Auth0 verify callback extracts `sub`, `email`, `email_verified`, `name`, `picture` from the ID-token claims and discards `accessToken` + `idToken` immediately. They are NEVER persisted to `users` or `session` — the FastQuote session is the only credential the server tracks post-callback.
 
 ---
 
