@@ -23,7 +23,6 @@ import {
   applyQuotePackEventToDb,
   currentSubscriptionState,
   daysOfTrialRemaining,
-  QUOTE_PACK_PRICE_PENCE,
 } from './billing.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
