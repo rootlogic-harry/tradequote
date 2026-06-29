@@ -264,19 +264,23 @@ describe('Sidebar terminology lockdown + rail-quota chip', () => {
   });
 });
 
-// ─── App.jsx wires the rail chip and hides QuotaCounter on Dashboard ──
-describe('App.jsx wires the rail-quota chip + hides QuotaCounter on Dashboard', () => {
+// ─── App.jsx wires the rail chip; QuotaCounter banner removed ─────────
+describe('App.jsx wires the rail-quota chip + QuotaCounter banner removed app-wide', () => {
   it('forwards billing to Sidebar', () => {
     expect(appSrc).toMatch(/billing=\{billing\}/);
   });
 
-  it('QuotaCounter is suppressed when currentView === "dashboard"', () => {
-    expect(appSrc).toMatch(/currentView !== ['"]dashboard['"][^<]*<QuotaCounter/);
+  // 2026-06-29 (later): QuotaCounter was suppressed on Dashboard in
+  // PR #84; Harry's follow-up removed it from Step pages + SavedQuotes
+  // too. The rail chip (Sidebar) is the single quota surface on
+  // desktop. The 402 lockout modal still fires at the actionable
+  // moment when quota is exhausted.
+  it('QuotaCounter banner is NOT mounted anywhere in App.jsx', () => {
+    expect(appSrc).not.toMatch(/<QuotaCounter\b/);
   });
 
-  it('QuotaCounter is still mounted on other views (Step pages, SavedQuotes)', () => {
-    // The suppression guard implies the component is otherwise present.
-    expect(appSrc).toMatch(/<QuotaCounter billing=/);
+  it('QuotaCounter import is removed from App.jsx', () => {
+    expect(appSrc).not.toMatch(/import\s+QuotaCounter\s+from/);
   });
 
   it('App.jsx imports incrementQuoteSequence (reference-bug fix)', () => {
