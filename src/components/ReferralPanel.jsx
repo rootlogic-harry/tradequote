@@ -127,19 +127,25 @@ export default function ReferralPanel({ currentUserId, userName, showToast }) {
         >
           {data.code}
         </div>
+        {/* On mobile (<fq) the row stacks vertically and the code box
+            renders full-width. Making the two buttons full-width too
+            keeps the column visually balanced — without w-full they
+            were narrower than the code box and looked unfinished
+            (audit item #22). Inline minHeight bumps them past 44px so
+            the touch-target lint stays green. */}
         <button
           type="button"
           onClick={handleCopyCode}
-          className="btn-ghost text-xs"
-          style={{ height: 40, padding: '0 16px' }}
+          className="btn-ghost text-xs w-full fq:w-auto"
+          style={{ minHeight: 44, padding: '0 16px' }}
         >
           Copy code
         </button>
         <button
           type="button"
           onClick={handleShare}
-          className="btn-primary text-xs"
-          style={{ height: 40, padding: '0 16px' }}
+          className="btn-primary text-xs w-full fq:w-auto"
+          style={{ minHeight: 44, padding: '0 16px' }}
           data-testid="referral-share"
         >
           {copied ? 'Copied!' : 'Share link'}

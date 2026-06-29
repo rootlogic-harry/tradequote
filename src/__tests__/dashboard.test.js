@@ -187,3 +187,122 @@ describe('Dashboard no longer hosts ReferralPanel (2026-06-25)', () => {
     expect(src).not.toMatch(/<ReferralPanel\b/);
   });
 });
+
+// PR-8 (2026-06-29): Dashboard mobile polish per /tmp/mobile-responsive-plan.md
+// audit items #8, #9, #19, #20, #22, plus Q3 (hide QUICK QUOTE on mobile).
+// These are source-level scans because the test stack is node-only — no
+// JSDOM rendering of Dashboard.
+describe('Dashboard mobile action rows + stats polish (PR-8)', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/Dashboard.jsx'), 'utf8'
+  );
+
+  it('header CTA row wraps on small screens (audit #8)', () => {
+    // The header row holding QUICK + NEW QUOTE must allow wrap so the
+    // two buttons don't overflow the column on 360px Androids.
+    expect(src).toMatch(/flex flex-wrap gap-2 shrink-0/);
+  });
+
+  it('hides QUICK QUOTE on mobile, keeps it on desktop (Q3)', () => {
+    // QUICK is admin-only / mobile-clutter per Harry's 2026-06-26 approval.
+    // Render with `hidden fq:inline-flex` (or equivalent) so basic mobile
+    // users see only `+ NEW QUOTE` in the header.
+    const quickButtonRegion = src.match(
+      /onStartQuickQuote[\s\S]{0,300}?<\/button>/
+    );
+    expect(quickButtonRegion).toBeTruthy();
+    expect(quickButtonRegion[0]).toMatch(/hidden fq:inline-flex/);
+  });
+
+  it('per-row status action buttons use .row-action-btn (audit #9)', () => {
+    // Previously inline `style={{ height: 36, padding: '0 16px' }}` —
+    // bypassed the global .row-action-btn mobile rule (44px full-width).
+    // After PR-8, no inline `height: 36` lives in Dashboard's per-row
+    // action block (the FollowUpRow phone/WhatsApp buttons are out of
+    // scope for this PR and live elsewhere in the file).
+    const recentJobsStart = src.indexOf('RECENT JOBS');
+    expect(recentJobsStart).toBeGreaterThan(-1);
+    const tail = src.slice(recentJobsStart);
+    // Every per-status action button uses row-action-btn class.
+    expect(tail).toMatch(/className="row-action-btn"/);
+    // None of the per-status action buttons re-introduce inline 36px height.
+    const actionBlock = tail.slice(0, tail.indexOf('</div>\n            );') > 0 ? tail.indexOf('</div>\n            );') : tail.length);
+    expect(actionBlock).not.toMatch(/height: 36[^0-9]/);
+  });
+
+  it('stats strip renders both full + compact currency forms (audit #19)', () => {
+    // Two spans per money cell — full (default) and compact (<360px).
+    expect(src).toMatch(/stat-value-full/);
+    expect(src).toMatch(/stat-value-compact/);
+    expect(src).toMatch(/formatCurrencyCompact/);
+    // Each money stat (This month / This year / Accepted) emits both
+    // forms — at least 3 occurrences each.
+    const fullMatches = src.match(/stat-value-full/g) || [];
+    const compactMatches = src.match(/stat-value-compact/g) || [];
+    expect(fullMatches.length).toBeGreaterThanOrEqual(3);
+    expect(compactMatches.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('monthly breakdown reflows to 2 columns on small phones (audit #20)', () => {
+    // Was `grid-cols-3 fq:grid-cols-6`; PR-8 drops to `grid-cols-2`
+    // on phones so cells don't squash the £ value into the Jan/Feb label.
+    expect(src).toMatch(/grid grid-cols-2 fq:grid-cols-6/);
+    // Belt-and-braces: the old 3-col layout is gone for the monthly grid.
+    expect(src).not.toMatch(/grid-cols-3 fq:grid-cols-6/);
+  });
+});
+
+describe('formatCurrencyCompact (PR-8 helper for stats strip)', () => {
+  // Test-load the helper directly. It's a pure function with no
+  // React / DOM dependencies.
+  const path = join(__dirname, '../utils/formatCurrencyCompact.js');
+  const helperSrc = readFileSync(path, 'utf8');
+
+  it('helper file exports formatCurrencyCompact', () => {
+    expect(helperSrc).toMatch(/export\s+function\s+formatCurrencyCompact/);
+  });
+
+  // Behavioural tests run via dynamic import so we don't have to add
+  // it to a separate test stub.
+  it('produces sensible abbreviated forms', async () => {
+    const { formatCurrencyCompact } = await import('../utils/formatCurrencyCompact.js');
+    expect(formatCurrencyCompact(0)).toBe('£0');
+    expect(formatCurrencyCompact(850)).toBe('£850');
+    expect(formatCurrencyCompact(1234)).toBe('£1.2k');
+    expect(formatCurrencyCompact(12500)).toBe('£12.5k');
+    expect(formatCurrencyCompact(1_200_000)).toBe('£1.2M');
+    expect(formatCurrencyCompact(12_500_000)).toBe('£12.5M');
+    // Trailing .0 trimmed (£1M, not £1.0M).
+    expect(formatCurrencyCompact(1_000_000)).toBe('£1M');
+    expect(formatCurrencyCompact(1_000)).toBe('£1k');
+    // Negative amounts keep the leading minus.
+    expect(formatCurrencyCompact(-1500)).toBe('-£1.5k');
+    // Non-finite inputs fall back to £0 (defensive).
+    expect(formatCurrencyCompact(NaN)).toBe('£0');
+    expect(formatCurrencyCompact(undefined)).toBe('£0');
+  });
+});
+
+describe('ReferralPanel mobile button balance (PR-8 / audit #22)', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/ReferralPanel.jsx'), 'utf8'
+  );
+
+  it('Copy + Share buttons are full-width on mobile, auto on desktop', () => {
+    // Both buttons get `w-full fq:w-auto` so they fill the column under
+    // the (also full-width) code box and don't look unbalanced on phones.
+    const copyButton = src.match(/onClick=\{handleCopyCode\}[\s\S]{0,200}?<\/button>/);
+    const shareButton = src.match(/onClick=\{handleShare\}[\s\S]{0,300}?<\/button>/);
+    expect(copyButton).toBeTruthy();
+    expect(shareButton).toBeTruthy();
+    expect(copyButton[0]).toMatch(/w-full fq:w-auto/);
+    expect(shareButton[0]).toMatch(/w-full fq:w-auto/);
+  });
+
+  it('both buttons meet the 44px touch-target rule on mobile', () => {
+    // The previous fixed `height: 40` was below the 44px CLAUDE.md rule —
+    // PR-8 bumps to minHeight: 44 (44px on every viewport).
+    const matches = src.match(/minHeight:\s*44/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+});
