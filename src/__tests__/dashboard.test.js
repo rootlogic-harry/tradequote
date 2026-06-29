@@ -268,6 +268,39 @@ describe('Dashboard does NOT ship the review-only prototype artifacts', () => {
   });
 });
 
+// ─── 2026-06-29 (later) — RAMS + Duplicate removed from kebab ────────
+describe('Dashboard kebab no longer offers Duplicate or Create RAMS', () => {
+  it('the kebabItemsFor switch does not include Duplicate', () => {
+    // Anchor on the helper definition. PR #84 had
+    // { id: 'duplicate', label: 'Duplicate' } in multiple branches;
+    // Harry's 2026-06-29 follow-up removed all of them because the
+    // action had no real wiring (routed to onViewJob — a placeholder).
+    const helperStart = dashboardSrc.indexOf('function kebabItemsFor');
+    const helperEnd = dashboardSrc.indexOf('function KebabMenu', helperStart);
+    expect(helperStart).toBeGreaterThan(-1);
+    expect(helperEnd).toBeGreaterThan(helperStart);
+    const helperBody = dashboardSrc.slice(helperStart, helperEnd);
+    expect(helperBody).not.toMatch(/Duplicate/);
+    expect(helperBody).not.toMatch(/['"]duplicate['"]/);
+  });
+
+  it('the kebabItemsFor switch does not include Create/View RAMS', () => {
+    const helperStart = dashboardSrc.indexOf('function kebabItemsFor');
+    const helperEnd = dashboardSrc.indexOf('function KebabMenu', helperStart);
+    const helperBody = dashboardSrc.slice(helperStart, helperEnd);
+    expect(helperBody).not.toMatch(/Create RAMS/);
+    expect(helperBody).not.toMatch(/View RAMS/);
+    expect(helperBody).not.toMatch(/['"]create-rams['"]/);
+    expect(helperBody).not.toMatch(/['"]view-rams['"]/);
+  });
+
+  it('the kebab button is suppressed entirely for completed quotes (no items)', () => {
+    // Empty items list ⇒ no kebab rendered. JobRow checks
+    // kebabItemsFor(status).length > 0 before rendering the button.
+    expect(dashboardSrc).toMatch(/kebabItemsFor\(status\)\.length\s*>\s*0/);
+  });
+});
+
 // ─── 2026-06-29 kebab UX follow-up ───────────────────────────────────
 describe('Dashboard kebab — Re-open routes to draft (not sent)', () => {
   it("declined → 'reopen' opens the status modal with target='draft'", () => {

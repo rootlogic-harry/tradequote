@@ -85,6 +85,58 @@ const PRIMARY_ACTION = {
 };
 
 // ─────────────────────────────────────────────────────────────────────
+// Per-status kebab item set. Exported at module scope so JobRow can
+// decide whether to render the kebab button at all (empty list ⇒ no
+// kebab; Completed quotes are terminal and have nothing to add).
+//
+// 2026-06-29 (Harry): Duplicate and Create/View RAMS removed.
+// Duplicate had no real wiring (routed to onViewJob — a placeholder
+// promise). RAMS lives on QuoteOutput behind a dedicated button —
+// surfacing it in the row-level kebab created ambiguity ("which
+// Create RAMS am I tapping?"). Row click opens the quote; canonical
+// RAMS button lives there.
+//
+// `__` is a divider sentinel.
+// ─────────────────────────────────────────────────────────────────────
+function kebabItemsFor(status) {
+  if (status === 'draft') {
+    return [
+      { id: 'edit', label: 'Edit quote' },
+      { id: '__' },
+      { id: 'decline', label: 'Mark declined', danger: true },
+      { id: 'delete', label: 'Delete', danger: true },
+    ];
+  }
+  if (status === 'sent') {
+    return [
+      { id: 'resend', label: 'Resend link' },
+      { id: '__' },
+      { id: 'decline', label: 'Mark declined', danger: true },
+    ];
+  }
+  if (status === 'accepted') {
+    // The row's primary button is "Mark complete". The only remaining
+    // off-path action is Mark declined (client backed out post-
+    // acceptance — Mark's 2026-06-26 use case).
+    return [
+      { id: 'decline', label: 'Mark declined', danger: true },
+    ];
+  }
+  if (status === 'completed') {
+    // Terminal. Row click opens the quote; the kebab adds nothing.
+    return [];
+  }
+  if (status === 'declined') {
+    return [
+      { id: 'reopen', label: 'Re-open' },
+      { id: '__' },
+      { id: 'delete', label: 'Delete', danger: true },
+    ];
+  }
+  return [];
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Kebab overflow menu — contextual per status. Click-outside closes.
 // Click on a menu item fires onAction(label, job) and closes the menu.
 // stopPropagation on both the kebab and the menu so the row doesn't
@@ -104,54 +156,7 @@ function KebabMenu({ job, status, isAdminPlan, onClose, onAction }) {
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
 
-  // Build item list per status. `__` is a divider sentinel.
-  const items = (() => {
-    if (status === 'draft') {
-      return [
-        { id: 'edit', label: 'Edit quote' },
-        { id: 'duplicate', label: 'Duplicate' },
-        { id: '__' },
-        { id: 'decline', label: 'Mark declined', danger: true },
-        { id: 'delete', label: 'Delete', danger: true },
-      ];
-    }
-    if (status === 'sent') {
-      return [
-        { id: 'resend', label: 'Resend link' },
-        { id: 'duplicate', label: 'Duplicate' },
-        { id: '__' },
-        { id: 'decline', label: 'Mark declined', danger: true },
-      ];
-    }
-    if (status === 'accepted') {
-      const base = [];
-      // RAMS is admin-only per CLAUDE.md plan-model + the existing
-      // Dashboard pattern (RAMS UX surface is admin-gated).
-      if (isAdminPlan) {
-        const hasRams = job.hasRams || !!job.ramsSnapshot;
-        base.push({ id: hasRams ? 'view-rams' : 'create-rams', label: hasRams ? 'View RAMS' : 'Create RAMS' });
-      }
-      base.push({ id: 'duplicate', label: 'Duplicate' });
-      base.push({ id: '__' });
-      base.push({ id: 'decline', label: 'Mark declined', danger: true });
-      return base;
-    }
-    if (status === 'completed') {
-      return [
-        { id: 'view', label: 'View quote' },
-        { id: 'duplicate', label: 'Duplicate' },
-      ];
-    }
-    if (status === 'declined') {
-      return [
-        { id: 'reopen', label: 'Re-open' },
-        { id: 'duplicate', label: 'Duplicate' },
-        { id: '__' },
-        { id: 'delete', label: 'Delete', danger: true },
-      ];
-    }
-    return [];
-  })();
+  const items = kebabItemsFor(status);
 
   return (
     <div className="kebab-menu" ref={ref} role="menu">
@@ -262,28 +267,32 @@ function JobRow({ job, isAdminPlan, onOpen, onAdvance, onMenuAction }) {
         )}
       </div>
 
-      <div className="kebab-menu-wrap" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          className="kebab-btn touch-44"
-          aria-label="More actions"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          style={{ minHeight: 44, minWidth: 44 }}
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
-        >
-          <KebabIcon />
-        </button>
-        {menuOpen && (
-          <KebabMenu
-            job={job}
-            status={status}
-            isAdminPlan={isAdminPlan}
-            onClose={() => setMenuOpen(false)}
-            onAction={onMenuAction}
-          />
-        )}
-      </div>
+      {/* Kebab is only rendered when the status has at least one
+          off-path action. Completed quotes are terminal — no kebab. */}
+      {kebabItemsFor(status).length > 0 && (
+        <div className="kebab-menu-wrap" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="kebab-btn touch-44"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            style={{ minHeight: 44, minWidth: 44 }}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+          >
+            <KebabIcon />
+          </button>
+          {menuOpen && (
+            <KebabMenu
+              job={job}
+              status={status}
+              isAdminPlan={isAdminPlan}
+              onClose={() => setMenuOpen(false)}
+              onAction={onMenuAction}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
