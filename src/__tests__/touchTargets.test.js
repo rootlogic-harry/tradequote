@@ -311,12 +311,6 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/StatusModal.jsx", line: 246, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
   { file: "src/components/StatusModal.jsx", line: 376, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
   { file: "src/components/StatusModal.jsx", line: 395, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  // -- src/components/SubscriptionBanner.jsx --
-  { file: "src/components/SubscriptionBanner.jsx", line: 92, pr: "PR-4", why: "SubscriptionBanner Cta sub-44px (audit #4)" },
-  { file: "src/components/SubscriptionBanner.jsx", line: 103, pr: "PR-4", why: "SubscriptionBanner Cta sub-44px (audit #4)" },
-  { file: "src/components/SubscriptionBanner.jsx", line: 114, pr: "PR-4", why: "SubscriptionBanner Cta sub-44px (audit #4)" },
-  { file: "src/components/SubscriptionBanner.jsx", line: 136, pr: "PR-4", why: "SubscriptionBanner Cta sub-44px (audit #4)" },
-  { file: "src/components/SubscriptionBanner.jsx", line: 176, pr: "PR-4", why: "SubscriptionBanner Cta sub-44px (audit #4)" },
   // -- src/components/Toast.jsx --
   { file: "src/components/Toast.jsx", line: 24, pr: "PR-future-polish", why: "Toast dismiss × button" },
   // -- src/components/UserSelector.jsx --
