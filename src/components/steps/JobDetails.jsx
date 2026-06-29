@@ -8,6 +8,7 @@ import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
 import { uploadWithRetry } from '../../utils/uploadWithProgress.js';
 import { documentTerm } from '../../utils/documentType.js';
+import { trackEvent } from '../../utils/trackEvent.js';
 
 const VIDEO_ERROR_MAP = [
   [/ANTHROPIC_API_KEY/i, 'Our analysis service is temporarily unavailable. Please try again later.'],
@@ -136,6 +137,11 @@ export default function JobDetails({
       if (state.currentUserId) {
         savePhoto(state.currentUserId, 'draft', slotKey, { data: dataUrl, name: file.name });
       }
+      // Analytics Phase 1 — fire photo_uploaded after the dispatch
+      // succeeds so we don't count silently-failed uploads. `slot`
+      // (overview/closeup/etc.) feeds the "which slots do users skip?"
+      // question from the week-1 spec.
+      trackEvent('photo_uploaded', { slot: slotKey });
     } catch (err) {
       console.error('Photo processing failed:', err);
       showToast?.('Could not process this photo. Try a different image.', 'error');
@@ -176,6 +182,9 @@ export default function JobDetails({
     if (state.currentUserId) {
       savePhoto(state.currentUserId, 'draft', slotKey, { data: dataUrl, name: file.name });
     }
+    // Analytics Phase 1 — same event as the file-picker path; drop is
+    // just an alternative input method, the funnel signal is the same.
+    trackEvent('photo_uploaded', { slot: slotKey });
   };
 
   const [extraPhotoLabel, setExtraPhotoLabel] = useState('Other');

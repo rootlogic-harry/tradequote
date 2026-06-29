@@ -277,7 +277,7 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/AgentActivity.jsx", line: 207, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/AgentActivity.jsx", line: 285, pr: "PR-future-admin", why: "Admin-only surface" },
   // -- src/components/AutosaveStatus.jsx --
-  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\" },
+  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\\\\\" },
   // -- src/components/CalibrationManager.jsx --
   { file: "src/components/CalibrationManager.jsx", line: 78, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/CalibrationManager.jsx", line: 114, pr: "PR-future-admin", why: "Admin-only surface" },
@@ -329,24 +329,24 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/review/MeasurementRow.jsx --
   { file: "src/components/review/MeasurementRow.jsx", line: 166, pr: "PR-future-polish", why: "Numeric edit input inside measurement row" },
   // -- src/components/steps/JobDetails.jsx --
-  { file: "src/components/steps/JobDetails.jsx", line: 357, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 374, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 390, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 407, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 433, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 455, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 479, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 525, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 574, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 598, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 623, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 680, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 860, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 904, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 915, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 935, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 972, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 987, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 366, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 383, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 399, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 416, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 442, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 464, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 488, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 534, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 583, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 607, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 632, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 689, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 869, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 913, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 924, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 944, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 981, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 996, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   // -- src/components/steps/ProfileSetup.jsx --
   { file: "src/components/steps/ProfileSetup.jsx", line: 69, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
   { file: "src/components/steps/ProfileSetup.jsx", line: 86, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
@@ -362,8 +362,8 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/ProfileSetup.jsx", line: 362, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
   { file: "src/components/steps/ProfileSetup.jsx", line: 371, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
   // -- src/components/steps/QuoteOutput.jsx --
-  { file: "src/components/steps/QuoteOutput.jsx", line: 838, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
-  { file: "src/components/steps/QuoteOutput.jsx", line: 990, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
+  { file: "src/components/steps/QuoteOutput.jsx", line: 844, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
+  { file: "src/components/steps/QuoteOutput.jsx", line: 996, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
 
 ];
 

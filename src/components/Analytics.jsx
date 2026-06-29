@@ -23,6 +23,16 @@ import React, { useEffect, useState } from 'react';
  */
 export default function Analytics() {
   const [range, setRange] = useState('30d');
+  // Analytics Phase 1 (2026-06-29) — exclude internal users (Harry +
+  // Mark + Paul + other beta users) by default so the funnel
+  // percentages reflect external signups. Toggled on the Events tab;
+  // the param is forwarded to /api/admin/analytics so the server
+  // applies the predicate.
+  const [excludeInternal, setExcludeInternal] = useState(true);
+  // Sub-tab: 'overview' (existing operational analytics) or 'events'
+  // (Phase 1 funnel + event log). Harry's call 2026-06-29 — keep the
+  // funnel visible but partitioned from spend/retention/agent stats.
+  const [subTab, setSubTab] = useState('overview');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -31,7 +41,11 @@ export default function Analytics() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/admin/analytics?range=${encodeURIComponent(range)}`, {
+    const qs = new URLSearchParams({
+      range,
+      excludeInternal: excludeInternal ? '1' : '0',
+    });
+    fetch(`/api/admin/analytics?${qs.toString()}`, {
       credentials: 'include',
     })
       .then(async (res) => {
@@ -46,13 +60,14 @@ export default function Analytics() {
       .catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [range]);
+  }, [range, excludeInternal]);
 
   return (
     <div className="max-w-6xl mx-auto">
       <Header range={range} setRange={setRange} loading={loading} data={data} />
+      <SubTabs subTab={subTab} setSubTab={setSubTab} eventCount={data?.events?.totalEvents} />
       {error && <ErrorBanner message={error} />}
-      {!error && data && (
+      {!error && data && subTab === 'overview' && (
         <>
           <SummaryCards data={data} />
           <RetentionSection retention={data.retention} />
@@ -65,6 +80,13 @@ export default function Analytics() {
           <ReliabilitySection reliability={data.reliability} />
           <PortalSection portal={data.portal} />
         </>
+      )}
+      {!error && data && subTab === 'events' && (
+        <EventsSection
+          events={data.events}
+          excludeInternal={excludeInternal}
+          setExcludeInternal={setExcludeInternal}
+        />
       )}
       {!error && !data && loading && (
         <div className="text-center py-20" style={{ color: 'var(--tq-muted)' }}>
@@ -104,6 +126,40 @@ function Header({ range, setRange, loading, data }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Sub-tabs ─────────────────────────────────────────────────────────
+
+function SubTabs({ subTab, setSubTab, eventCount }) {
+  return (
+    <div
+      className="flex flex-wrap gap-2 mb-6 border-b"
+      role="tablist"
+      aria-label="Analytics sections"
+      style={{ borderColor: 'var(--tq-border)' }}
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'overview'}
+        onClick={() => setSubTab('overview')}
+        className={`pill ${subTab === 'overview' ? 'active' : ''}`}
+        style={{ minHeight: 44 }}
+      >
+        Overview
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'events'}
+        onClick={() => setSubTab('events')}
+        className={`pill ${subTab === 'events' ? 'active' : ''}`}
+        style={{ minHeight: 44 }}
+      >
+        Events{typeof eventCount === 'number' && eventCount > 0 ? ` (${eventCount.toLocaleString()})` : ''}
+      </button>
     </div>
   );
 }
@@ -510,6 +566,130 @@ function PageviewsSection({ pageviews, series }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ─── Analytics Phase 1 (2026-06-29): events feed ─────────────────────
+
+// Human-readable labels for the funnel stages. Server-side event names
+// stay snake_case for stable querying; the UI uses sentence-case so
+// admins read "Quote analysed" not "quote_analysed". Vocabulary is
+// deliberately factual — no "AI inferred" / "model predicted" wording
+// (see CLAUDE.md Visibility Rules).
+const EVENT_LABELS = {
+  signup_completed: 'Signup completed',
+  profile_completed: 'Profile completed',
+  quote_started: 'Quote started',
+  quote_analysed: 'Quote analysed',
+  quote_sent: 'Quote sent',
+  client_responded: 'Client responded',
+  pack_purchased: 'Pack purchased',
+  subscription_started: 'Subscription started',
+  referral_redeemed: 'Referral redeemed',
+  photo_uploaded: 'Photo uploaded',
+  pdf_downloaded: 'PDF downloaded',
+  signup_started: 'Signup started',
+  landing_viewed: 'Landing viewed',
+  step_entered: 'Step entered',
+  client_link_copied: 'Client link copied',
+};
+function eventLabel(name) {
+  return EVENT_LABELS[name] || name;
+}
+
+function EventsSection({ events, excludeInternal, setExcludeInternal }) {
+  if (!events) return null;
+  const summary = events.summary || { total: 0, users: 0 };
+  const top = events.top || [];
+  const funnel = events.funnel || [];
+  // Funnel drop-off: each stage's user count divided by the previous
+  // stage's. Floors at 0% if a later stage exceeds the prior (e.g.
+  // a user analyses without "completing" profile — historical data
+  // before instrumentation), which we surface as a > 100% conversion.
+  const funnelWithRates = funnel.map((stage, i) => {
+    if (i === 0) return { ...stage, fromPrevPct: null };
+    const prev = funnel[i - 1].users;
+    const pct = prev > 0 ? Math.round((stage.users / prev) * 100) : null;
+    return { ...stage, fromPrevPct: pct };
+  });
+  return (
+    <Section title="Events">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>
+          {summary.total.toLocaleString()} events · {summary.users} distinct users
+        </div>
+        <label
+          className="flex items-center gap-2 text-xs cursor-pointer"
+          style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+        >
+          {/*
+            The 44px touch surface lives on the wrapping <label>; the
+            checkbox itself is 16px by browser default. Admin-only
+            surface, exempt from the 44px lint via data-touch-exempt.
+          */}
+          <input
+            type="checkbox"
+            checked={!!excludeInternal}
+            onChange={(e) => setExcludeInternal(e.target.checked)}
+            style={{ minHeight: 16, minWidth: 16 }}
+            data-touch-exempt="true"
+          />
+          Exclude internal users
+        </label>
+      </div>
+
+      {funnelWithRates.length > 0 && (
+        <div className="mb-6">
+          <div className="text-xs mb-2" style={{ color: 'var(--tq-muted)' }}>
+            Funnel (distinct users per stage)
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b" style={{ borderColor: 'var(--tq-border)', color: 'var(--tq-muted)' }}>
+                  <th className="text-left py-2 pr-3">Stage</th>
+                  <th className="text-right py-2 pr-3">Users</th>
+                  <th className="text-right py-2 pr-3">Events</th>
+                  <th className="text-right py-2">From previous</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnelWithRates.map((s) => (
+                  <tr key={s.eventName} className="border-b" style={{ borderColor: 'var(--tq-border-soft)' }}>
+                    <td className="py-1 pr-3">{eventLabel(s.eventName)}</td>
+                    <td className="py-1 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{s.users}</td>
+                    <td className="py-1 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--tq-muted)' }}>{s.count}</td>
+                    <td className="py-1 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                      {s.fromPrevPct === null ? '—' : `${s.fromPrevPct}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {top.length > 0 && (
+        <div>
+          <div className="text-xs mb-2" style={{ color: 'var(--tq-muted)' }}>
+            Top events by count
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <tbody>
+                {top.map((row) => (
+                  <tr key={row.eventName} className="border-b" style={{ borderColor: 'var(--tq-border-soft)' }}>
+                    <td className="py-1 pr-3">{eventLabel(row.eventName)}</td>
+                    <td className="py-1 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </Section>

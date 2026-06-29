@@ -50,7 +50,13 @@ describe('App.jsx — Analytics view wiring', () => {
 
 describe('Analytics.jsx — data fetch + UI sections', () => {
   test('fetches /api/admin/analytics with range query param', () => {
-    expect(analyticsSrc).toMatch(/\/api\/admin\/analytics\?range=/);
+    // Analytics Phase 1 (2026-06-29) — URL is now built via
+    // URLSearchParams to carry range + excludeInternal cleanly, so
+    // we match the endpoint path AND the presence of the range
+    // param rather than a literal `?range=`.
+    expect(analyticsSrc).toMatch(/['"`]\/api\/admin\/analytics/);
+    expect(analyticsSrc).toMatch(/range/);
+    expect(analyticsSrc).toMatch(/URLSearchParams|\?range=/);
   });
 
   test('range selector includes 24h / 7d / 30d / all', () => {

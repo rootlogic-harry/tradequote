@@ -208,6 +208,7 @@ Honesty guardrails enforced in the copy (asserted by `landingPage.test.js`):
 | `users.bonus_free_quotes` (2026-06-23, referrals Phase 1) | Additive bonus quotes earned via referrals — referee gets +2 at signup, referrer gets +2 per successful referral. Read by quotaGate as `effectiveLimit = FREE_QUOTES_LIMIT + bonus`. |
 | `referral_codes`, `referrals` (2026-06-23) | One code per user (lazy-generated, except Paul's seeded `PAULJULY`). `referrals` tracks each referrer↔referee pair with `first_analysis_at` as the reward trigger. Single-level only, no claw-back. |
 | `users.purchased_quotes`, `quote_purchases` (2026-06-24) | Pay-as-you-go pack — £9.99 for 5 quotes, no expiry. `purchased_quotes` is the user's current balance (decremented atomically on a successful analyse when the gate's reason was `purchased-remaining`). `quote_purchases` is the audit row per Stripe PaymentIntent — `stripe_payment_id UNIQUE` makes the webhook idempotent on redelivery. Refund handling is manual — see `docs/REFUNDS.md`. |
+| `events` (2026-06-29, Analytics Phase 1) | First-party event log. Columns: `event_name` (server-side allowlist), `user_id` (TEXT, CASCADE), `session_id` (express-session id), `path` (Referer pathname), `props` JSONB. Parallel to `pageviews` but for named funnel events (signup_completed, quote_started, quote_analysed, pack_purchased, etc.). The 15-name `EVENT_NAME_ALLOWLIST` in `server.js` is the PII safeguard — `/api/event` silent-204s unknown names. Server-side fires go through `recordEvent()`; client-side fires use `src/utils/trackEvent.js` (DNT-honouring beacon). Internal users (Harry + Mark) flagged via `props.internal = true` per the `INTERNAL_USER_IDS` env var. No third-party SDK — `/privacy`'s "no third-party tracking" claim stays true. |
 
 ### JSONB Snapshot Contract
 
@@ -365,6 +366,22 @@ UI:
 - **UI** — Buy button in `QuotaCounter.jsx`, visible in free-remaining / purchased-remaining / quota_exhausted; suppressed for subscribed / comped. Label: "Buy 5 quotes — £9.99".
 
 **Safe vocabulary**: pack, buy, paid, quote, £9.99. **Banned**: credit, trial.
+
+---
+
+## Analytics Phase 1 — first-party event log (2026-06-29)
+
+Pre-launch funnel visibility without adding a third-party sub-processor. Keeps `/privacy` v2026-06-19's "We do not use any third-party tracking or analytics SDK on the app" claim load-bearing-true.
+
+- **Schema** — `events` table next to `pageviews` (server.js ~L724). `event_name TEXT NOT NULL`, `user_id TEXT REFERENCES users(id) ON DELETE CASCADE`, `session_id TEXT`, `path TEXT`, `props JSONB`. Indexed on (event_name, created_at) and (user_id, created_at).
+- **Allowlist** — `EVENT_NAME_ALLOWLIST` Set in `server.js` defines the ~15 permitted event names. Unknown names hit `/api/event` and 204 silently — the PII safeguard against accidental free-form names leaking sensitive context. Adding a new event requires extending the Set AND the dashboard funnel widget (see `EVENTS_LABELS` map in `Analytics.jsx`).
+- **Server-side fires** (cleanest, ad-blocker-resistant, survives Stripe redirects): `signup_completed` (auth callback), `referral_redeemed` (URL + manual paths), `profile_completed` (first false→true flip via `PUT /api/users/:id/settings/profile_complete`, idempotency via events-table presence check), `quote_analysed` (photo + video analyse success, attaches `source/durationMs/freeOrPaid`), `quote_sent` (`/client-token` success), `client_responded` (`/q/:token/respond`), `pack_purchased` (webhook fan-out, only when `credited > 0`), `subscription_started` (webhook fan-out, only on **first** false→active transition — Pitfall #17 made the pre-read mandatory).
+- **Client-side fires** (`src/utils/trackEvent.js`, DNT-honouring): `quote_started` (App.jsx handleStartNewQuote + handleStartQuickQuote), `photo_uploaded` (JobDetails file-picker + drag-drop), `pdf_downloaded` (QuoteOutput, fired on click intent so fallback-to-print still counts).
+- **Internal users** — `INTERNAL_USER_IDS` env var (CSV of user ids, e.g. `harry,mark`) flags events with `props.internal = true` rather than dropping them. Admin Analytics has an "Exclude internal users" toggle (default ON) that filters via `props->>'internal' = 'true'`. Don't drop rows — useful for QA.
+- **Privacy** — first-party, cookie-less, DNT-honouring, legitimate-interest basis (same model as `pageviews`). No DPA bump. No banner. Phase 2 (Microsoft Clarity) is **deferred** pending separate Harry sign-off.
+- **Test ownership** — `src/__tests__/analytics.test.js` covers trackEvent DNT/test-env/silent-failure, allowlist enforcement, isInternalUser CSV parsing, and the FIRST-active-transition guard for subscription_started.
+
+**Safe vocabulary** (admin-facing labels in dashboard): "Quote started", "Quote analysed", "Profile completed", etc. The server-side `event_name` strings stay snake_case — never user-visible.
 
 ---
 

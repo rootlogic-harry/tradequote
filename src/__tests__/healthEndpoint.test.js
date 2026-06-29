@@ -28,9 +28,13 @@ const uptimeDoc = readFileSync(join(repoRoot, 'docs/UPTIME.md'), 'utf8');
 
 describe('TRQ-155 — /health route', () => {
   // Slice the /health handler block so per-assertion matches don't
-  // accidentally hit some other route's behaviour.
+  // accidentally hit some other route's behaviour. The end marker is
+  // the next `app.` registration after /health so the slice doesn't
+  // bleed into the stripe webhook block that lives between /health
+  // and the express.json mount.
   const start = serverSrc.indexOf("app.get('/health'");
-  const end = serverSrc.indexOf('app.use(express.json', start);
+  const nextApp = serverSrc.indexOf('\napp.', start + 1);
+  const end = nextApp > start ? nextApp : serverSrc.indexOf('app.use(express.json', start);
   const block = serverSrc.slice(start, end);
 
   test('the route exists and is mounted before express.json middleware', () => {
