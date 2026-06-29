@@ -34,6 +34,9 @@ import {
   isVideoAnalysisEnabledFromProcessEnv,
   VIDEO_DISABLED_MESSAGE,
 } from './src/utils/videoAnalysisEnabled.js';
+import {
+  isEmailIntegrationEnabledFromProcessEnv,
+} from './src/utils/emailIntegrationEnabled.js';
 import { buildTradesmanProfileBlock } from './src/utils/tradesmanProfileBlock.js';
 import {
   parseAIResponse,
@@ -1411,8 +1414,14 @@ app.get('/auth/me', async (req, res) => {
   // default-open in staging/dev). The client uses this to hide the
   // video CaptureChoice card and skip the upload UI entirely so
   // disabled video isn't a dead button.
+  //
+  // EMAIL_INTEGRATION_ENABLED (2026-06-29) gates the "Send via Email"
+  // and "Send via Outlook" entry points in QuoteOutput's caret menu.
+  // Same fail-closed-in-prod / default-open-in-staging contract.
+  // See docs/EMAIL_FLAG.md.
   const features = {
     videoAnalysisEnabled: isVideoAnalysisEnabledFromProcessEnv(),
+    emailIntegrationEnabled: isEmailIntegrationEnabledFromProcessEnv(),
   };
 
   // Quota state (2026-06-22). The SubscriptionBanner reads this to

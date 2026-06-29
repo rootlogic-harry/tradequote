@@ -577,6 +577,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - Video walkthrough requires ffmpeg on the server (installed via `nixpacks.toml` aptPkgs). Max 3 minutes, 500MB. Mobile-optimised with native camera capture, SSE real-time progress, XHR upload with real % tracking, automatic retry (3 attempts), and full playback preview. Video files stored temporarily in `/tmp` during processing, cleaned up after. No chunked/resumable upload yet (single XHR).
 - Video processing pipeline: validate duration → extract frames (max 50) → extract audio → transcribe via Whisper → analyse via Claude. All server-side.
 - **Video analysis is currently disabled in production via `VIDEO_ANALYSIS_ENABLED=false`** (set explicitly; the env var also fail-closes if unset in prod). A deeper rebuild is queued — see `docs/VIDEO_FLAG.md` and the Phase 1 ticket draft. Staging keeps video enabled so iteration can continue.
+- **QuoteOutput "Send via Email" + "Send via Outlook" menu items are gated by `EMAIL_INTEGRATION_ENABLED`** (2026-06-29). Same fail-closed-in-prod / default-open-in-staging contract as the video flag — see `docs/EMAIL_FLAG.md`. The primary "Send to client" button now advances the job's status (draft → sent) via the existing `/status` route regardless of this flag; only the Email / Outlook entry points in the caret menu are gated. `buildEmlMessage.js` and the `handleSendViaOutlook` handler are preserved untouched (CLAUDE.md Pitfall #15) so the flag flip is reversible.
 
 ---
 
