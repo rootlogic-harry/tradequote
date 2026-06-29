@@ -472,11 +472,12 @@ export default function App() {
 
   const handleStartNewQuote = () => {
     if (isQuotaExhausted) {
+      const freeLimit = billing?.freeQuotesLimit ?? 3;
       dispatch({
         type: 'ANALYSIS_QUOTA_EXHAUSTED',
-        message: "You've used your 3 free quotes. Subscribe to continue.",
-        freeQuotesUsed: billing?.freeQuotesUsed ?? 3,
-        freeQuotesLimit: billing?.freeQuotesLimit ?? 3,
+        message: `You've used your ${freeLimit} free quotes. Subscribe to continue.`,
+        freeQuotesUsed: billing?.freeQuotesUsed ?? freeLimit,
+        freeQuotesLimit: freeLimit,
       });
       return;
     }
@@ -492,11 +493,12 @@ export default function App() {
 
   const handleStartQuickQuote = () => {
     if (isQuotaExhausted) {
+      const freeLimit = billing?.freeQuotesLimit ?? 3;
       dispatch({
         type: 'ANALYSIS_QUOTA_EXHAUSTED',
-        message: "You've used your 3 free quotes. Subscribe to continue.",
-        freeQuotesUsed: billing?.freeQuotesUsed ?? 3,
-        freeQuotesLimit: billing?.freeQuotesLimit ?? 3,
+        message: `You've used your ${freeLimit} free quotes. Subscribe to continue.`,
+        freeQuotesUsed: billing?.freeQuotesUsed ?? freeLimit,
+        freeQuotesLimit: freeLimit,
       });
       return;
     }
