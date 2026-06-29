@@ -571,8 +571,22 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         Review the final document, then download as PDF or Word, or send via email.
       </p>
 
-      {/* Primary actions: export/download */}
-      <div className="flex flex-col fq:flex-row flex-wrap gap-3 mb-4">
+      {/* PR-2 of 10 (mobile-responsive plan, audit item 2): the
+           Step 5 action bar is regrouped into three logical clusters
+           (Download / Send / More) so the mobile fold above the quote
+           preview is three primary chips instead of 12 wrapping
+           buttons. Grouping approved by Harry on 2026-06-26 (Q1).
+           Each group carries data-action-group + aria-label so
+           screen readers announce the cluster, and the assertions in
+           quoteOutputActionBar.test.js can scope to each cluster. */}
+
+      {/* Download — file-export actions the trader keeps locally. */}
+      <div
+        data-action-group="download"
+        role="group"
+        aria-label="Download"
+        className="flex flex-col fq:flex-row flex-wrap gap-3 mb-3"
+      >
         <button
           onClick={handleDownloadPdfServer}
           disabled={generatingServerPdf}
@@ -582,38 +596,34 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
           {generatingServerPdf && <InlineSpinner />}
           {generatingServerPdf ? 'Generating PDF...' : 'Download PDF'}
         </button>
-        {/* Worker copy — admin-only. Same PDF, costs hidden, suffix
-             on the filename, "Job Details" instead of "Quote ref" in
-             the header. Mark sends this to Paul / Jordan when they
-             do a job without him on site. */}
-        {isAdminPlan && (
-          <button
-            onClick={() => handleDownloadPdfServer({ hideCosts: true })}
-            disabled={generatingServerPdf}
-            className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-            title="Same PDF with the cost breakdown removed. For sending workers to site without exposing the customer's price."
-          >
-            {generatingServerPdf && <InlineSpinner />}
-            Download worker copy
-          </button>
-        )}
-        <button
-          onClick={handlePrint}
-          disabled={printing}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-          title="Uses your browser's print dialog — fallback if Download PDF fails"
-        >
-          {printing && <InlineSpinner />}
-          {printing ? 'Preparing preview\u2026' : 'Save via print'}
-        </button>
         <button
           onClick={handleDownloadDocx}
           disabled={generatingDocx}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {generatingDocx && <InlineSpinner />}
           {generatingDocx ? 'Generating Word...' : 'Download Word'}
         </button>
+        <button
+          onClick={handlePrint}
+          disabled={printing}
+          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+          title="Uses your browser's print dialog — fallback if Download PDF fails"
+        >
+          {printing && <InlineSpinner />}
+          {printing ? 'Preparing preview...' : 'Save via print'}
+        </button>
+      </div>
+
+      {/* Send — client-facing transmission. buildEmlMessage.js is
+           load-bearing (CLAUDE.md Pitfall #15); we only restructure
+           the BUTTON wiring, never the .eml builder. */}
+      <div
+        data-action-group="send"
+        role="group"
+        aria-label="Send"
+        className="flex flex-col fq:flex-row flex-wrap gap-3 mb-3"
+      >
         <button onClick={handleEmail} className="btn-ghost">
           Send via Email
         </button>
@@ -634,43 +644,101 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
               ? 'Tap again to send'
               : 'Send via Outlook'}
         </button>
-        <button
-          onClick={handleExportQuickbooks}
-          disabled={exportingQb || !(savedJobId || state.savedJobId)}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-          title={
-            (savedJobId || state.savedJobId)
-              ? 'Download a CSV you can import into QuickBooks Online'
-              : `Save the ${term.lower} first to enable export`
-          }
-        >
-          {exportingQb && <InlineSpinner />}
-          {exportingQb ? 'Building CSV\u2026' : 'Export for QuickBooks'}
-        </button>
-        {!isReadOnly && (
-          <button
-            onClick={handleSave}
-            disabled={saving || saved}
-            className={`btn-ghost ${
-              saved
-                ? 'border-tq-confirmed text-tq-confirmed'
-                : saveError
-                  ? 'border-red-500 text-red-400'
-                  : ''
-            }`}
+      </div>
+
+      {/* More \u2014 admin / occasional / non-primary actions behind a
+           native <details> disclosure. Native disclosure gives us
+           aria-expanded + keyboard + ESC handling for free; no
+           dropdown library needed. Collapsed by default on every
+           viewport (no `open` attr) so the mobile fold above the
+           quote preview stays clean. Admin-gated items (Worker copy,
+           QuickBooks, Create RAMS) stay wrapped in {isAdminPlan &&
+           ...} so basic users never see them regardless of whether
+           the disclosure is open. */}
+      <div
+        data-action-group="more"
+        role="group"
+        aria-label="More"
+        className="mb-4"
+      >
+        <details className="action-group-more">
+          <summary
+            className="btn-ghost cursor-pointer list-none"
+            style={{ width: 'auto' }}
+            title="Save, send to QuickBooks, create RAMS, and other extras"
           >
-            {saving ? 'Saving...' : saved ? 'Saved \u2713' : `Save ${term.title}`}
-          </button>
-        )}
+            More
+          </summary>
+          <div className="flex flex-col fq:flex-row flex-wrap gap-3 mt-3">
+            {!isReadOnly && (
+              <button
+                onClick={handleSave}
+                disabled={saving || saved}
+                className={`btn-ghost ${
+                  saved
+                    ? 'border-tq-confirmed text-tq-confirmed'
+                    : saveError
+                      ? 'border-red-500 text-red-400'
+                      : ''
+                }`}
+              >
+                {saving ? 'Saving...' : saved ? 'Saved \u2713' : `Save ${term.title}`}
+              </button>
+            )}
+            {/* Worker copy \u2014 admin-only. Same PDF, costs hidden,
+                 filename-suffixed. Mark sends this to Paul / Jordan
+                 when they do a job without him on site. */}
+            {isAdminPlan && (
+              <button
+                onClick={() => handleDownloadPdfServer({ hideCosts: true })}
+                disabled={generatingServerPdf}
+                className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Same PDF with the cost breakdown removed. For sending workers to site without exposing the customer's price."
+              >
+                {generatingServerPdf && <InlineSpinner />}
+                Download worker copy
+              </button>
+            )}
+            {isAdminPlan && (
+              <button
+                onClick={handleExportQuickbooks}
+                disabled={exportingQb || !(savedJobId || state.savedJobId)}
+                className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
+                title={
+                  (savedJobId || state.savedJobId)
+                    ? 'Download a CSV you can import into QuickBooks Online'
+                    : `Save the ${term.lower} first to enable export`
+                }
+              >
+                {exportingQb && <InlineSpinner />}
+                {exportingQb ? 'Building CSV\u2026' : 'Export for QuickBooks'}
+              </button>
+            )}
+            {!isReadOnly && onCreateRams && isAdminPlan && (
+              <button
+                onClick={() => onCreateRams(savedJobId)}
+                disabled={!savedJobId}
+                className="btn-ghost disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
+                title={savedJobId ? 'Create RAMS for this job' : `Save the ${term.lower} first to create a RAMS`}
+              >
+                Create RAMS
+              </button>
+            )}
+          </div>
+        </details>
         {saveError && !saving && (
-          <span className="text-xs self-center" style={{ color: 'var(--tq-error-txt, #f87171)' }}>
+          <p className="text-xs mt-2" style={{ color: 'var(--tq-error-txt, #f87171)' }}>
             Save failed — your work is preserved in this tab.
-          </span>
+          </p>
         )}
       </div>
 
-      {/* Secondary actions: edit, RAMS, new quote */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      {/* Secondary navigation row — these are step-traversal, not
+           action-bar actions, so they sit outside the Download/Send/More
+           grouping per the Harry-approved brief. Create RAMS moved into
+           the More group (admin-only). */}
+      <div className="flex flex-col fq:flex-row flex-wrap gap-3 mb-4">
         {!isReadOnly && state.quoteMode === 'quick' && (
           <button onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })} className="btn-ghost text-sm">
             Full Review & Edit
@@ -679,17 +747,6 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         {!isReadOnly && (
           <button onClick={() => dispatch({ type: 'SET_STEP', step: 2 })} className="btn-ghost text-sm" style={{ color: 'var(--tq-muted)' }}>
             Edit Job Details
-          </button>
-        )}
-        {!isReadOnly && onCreateRams && isAdminPlan && (
-          <button
-            onClick={() => onCreateRams(savedJobId)}
-            disabled={!savedJobId}
-            className="btn-ghost text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
-            title={savedJobId ? 'Create RAMS for this job' : `Save the ${term.lower} first to create a RAMS`}
-          >
-            Create RAMS
           </button>
         )}
         {!isReadOnly && !onBack && (
