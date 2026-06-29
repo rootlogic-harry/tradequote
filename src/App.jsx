@@ -1073,6 +1073,12 @@ export default function App() {
               currentUserId={state.currentUserId}
               userName={state.currentUser?.name}
               showToast={showToast}
+              onCancel={() => {
+                // 2026-06-29 — close-only path. ProfileSetup has already
+                // reverted local state to the snapshot, so we just dismiss
+                // the modal. No server hit, no profile_complete touch.
+                setShowProfileModal(false);
+              }}
               onClose={async () => {
                 setShowProfileModal(false);
                 if (state.currentUserId) {

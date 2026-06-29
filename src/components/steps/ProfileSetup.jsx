@@ -33,6 +33,7 @@ export default function ProfileSetup({
   dispatch,
   isModal,
   onClose,
+  onCancel,
   onProfileComplete,
   onLogout,
   currentUserId,
@@ -94,19 +95,20 @@ export default function ProfileSetup({
   };
 
   const handleCancel = () => {
-    // Cancel reverts to the snapshotted profile and closes the modal
-    // (or stays on the Step-1 page — there's nothing to navigate away
-    // to from onboarding). The modal's existing onClose path will
-    // re-fetch the saved profile on next open.
+    // 2026-06-29 — Cancel discards unsaved edits and closes the modal
+    // WITHOUT hitting the server. Reverts the local reducer state so
+    // a re-open of the modal doesn't carry half-edited values, then
+    // calls onCancel (close-only). The previous implementation also
+    // routed Cancel through onClose, which App wires to a save —
+    // resulting in a no-op save round-trip (server log noise + a
+    // wasted DB write). onCancel skips the save entirely.
     if (isModal) {
       dispatch({ type: 'UPDATE_PROFILE', updates: initialProfileRef.current });
-      // Use the close-without-save path. The legacy onClose persists;
-      // here we bypass it by calling setShowProfileModal directly via
-      // the prop chain. App.jsx wires onClose to a save-then-close,
-      // so for Cancel we just dispatch a state revert and close. The
-      // simplest contract: cancel = revert + onClose (the parent will
-      // re-fetch on re-open; the post-revert save is a no-op).
-      if (onClose) onClose();
+      // Prefer onCancel (close-only). Fall back to onClose for any
+      // legacy caller that hasn't wired onCancel yet — the no-op save
+      // is harmless in that case.
+      if (onCancel) onCancel();
+      else if (onClose) onClose();
     }
   };
 
@@ -128,6 +130,25 @@ export default function ProfileSetup({
   ];
 
   // ── Business section ──────────────────────────────────────────────
+  //
+  // INPUT autoComplete attributes (organization / name / tel / email /
+  // street-address) are INTENTIONALLY KEPT despite the spec's "remove
+  // the stray icon inside every input" line.
+  //
+  // The stray icon is NOT app markup — confirmed by source audit: no
+  // <svg>/<span> inside .nq-field wrappers, no ::before/::after on
+  // .nq-field. The glyph is Chrome's autofill contact-card indicator
+  // and/or 1Password's key icon, both attached to the input by the
+  // browser/extension based on these autoComplete hints.
+  //
+  // Suppressing the glyph requires dropping autoComplete entirely,
+  // which kills iOS Safari + Chrome + Android Keyboard autofill on
+  // first-run profile setup — a real convenience hit for users
+  // (Paul on iOS specifically benefits). The trade-off favours
+  // autofill for the first-time setup-once-then-forget UX over the
+  // brief cosmetic glyph.
+  //
+  // Decision logged 2026-06-29 (Harry).
   const renderBusiness = () => (
     <div>
       <div className="ps-section-head">
