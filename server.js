@@ -3423,15 +3423,37 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
     }));
     // Current value = most recent job's prompt_chars (or null if none).
     const promptCharsCurrent = promptCharsHistory[0]?.promptChars ?? null;
-    // Avg-of-last-20 — the alarm metric. Above 10,000 chars indicates
-    // the calibration corpus is bloating and admin should consider
-    // pruning notes.
     const last20 = promptCharsHistory.slice(0, 20);
     const promptCharsAvg20 = last20.length > 0
       ? Math.round(last20.reduce((s, r) => s + r.promptChars, 0) / last20.length)
       : null;
-    const PROMPT_CHARS_ALARM_THRESHOLD = 10000;
-    const promptCharsAlarm = promptCharsAvg20 != null && promptCharsAvg20 > PROMPT_CHARS_ALARM_THRESHOLD;
+
+    // Breakdown: base prompt (fixed) vs calibration notes (growable).
+    // 2026-06-29 refit — the old 10,000 threshold was unrealistic (base
+    // prompt alone is 20k+) and the alarm copy wrongly blamed
+    // "calibration corpus growing" when notes were a minority. Split
+    // the metric so the breakdown surfaces where the chars actually live.
+    const basePromptChars = SYSTEM_PROMPT.length;
+    const { rows: notesRows } = await pool.query(
+      `SELECT COALESCE(SUM(length(note)), 0)::int AS chars,
+              COUNT(*)::int AS count
+         FROM calibration_notes
+         WHERE status = 'approved'`
+    );
+    const notesChars = notesRows[0]?.chars ?? 0;
+    const notesCount = notesRows[0]?.count ?? 0;
+    const notesShare = promptCharsAvg20 && promptCharsAvg20 > 0
+      ? notesChars / promptCharsAvg20
+      : 0;
+
+    // Two alarms: absolute budget (catches runaway growth) + share
+    // (catches the architectural bug of unbounded note accumulation
+    // even when individual notes are small).
+    const PROMPT_CHARS_ALARM_THRESHOLD = 30000;
+    const NOTES_SHARE_ALARM_THRESHOLD = 0.5;
+    const absoluteAlarm = promptCharsAvg20 != null && promptCharsAvg20 > PROMPT_CHARS_ALARM_THRESHOLD;
+    const shareAlarm = notesShare > NOTES_SHARE_ALARM_THRESHOLD;
+    const promptCharsAlarm = absoluteAlarm || shareAlarm;
 
     res.json({
       fieldBias,
@@ -3449,13 +3471,21 @@ app.get('/api/admin/learning', requireAuth, requireAdminPlan, async (req, res) =
         isOutlier: Number(r.avg_accuracy) < 0.4 && Number(r.quote_count) >= 3,
       })),
       // TRQ-176: prompt-length budget. Newest-first sparkline data +
-      // headline current + avg-of-last-20 alarm. Empty arrays / null
-      // values are valid (pre-feature jobs); the dashboard handles them.
+      // headline current + avg-of-last-20 alarm + base/notes breakdown
+      // (2026-06-29). Empty arrays / null values are valid (pre-feature
+      // jobs); the dashboard handles them.
       promptSize: {
         current: promptCharsCurrent,
         avg20: promptCharsAvg20,
         alarm: promptCharsAlarm,
+        absoluteAlarm,
+        shareAlarm,
         threshold: PROMPT_CHARS_ALARM_THRESHOLD,
+        notesShareThreshold: NOTES_SHARE_ALARM_THRESHOLD,
+        basePromptChars,
+        notesChars,
+        notesCount,
+        notesShare,
         history: promptCharsHistory,
       },
     });

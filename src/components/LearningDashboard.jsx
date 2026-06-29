@@ -73,12 +73,11 @@ export default function LearningDashboard({ currentUserId }) {
       </p>
 
       {/* TRQ-176: prompt-length budget alarm — must render before any
-          other section so admin sees the threshold breach immediately. */}
+          other section so admin sees the threshold breach immediately.
+          2026-06-29 refit: alarm now shows base/notes breakdown + fires
+          on absolute OR notes-share threshold. */}
       {promptSize && promptSize.alarm && (
-        <PromptBudgetAlarm
-          avg20={promptSize.avg20}
-          threshold={promptSize.threshold}
-        />
+        <PromptBudgetAlarm promptSize={promptSize} />
       )}
 
       {/* TRQ-176: prompt-length budget telemetry */}
@@ -355,10 +354,22 @@ function TypeBadge({ type }) {
 }
 
 // TRQ-176: prompt-length budget alarm. Banner-style warning shown only
-// when avg-of-last-20 jobs exceeds the threshold. Admin-only — mounted
-// inside LearningDashboard which is gated by isAdmin in App.jsx.
-// Copy uses "calibration corpus" (admin-only vocabulary).
-function PromptBudgetAlarm({ avg20, threshold }) {
+// when avg-of-last-20 jobs exceeds the threshold OR the calibration-
+// notes share crosses the 50% line. Admin-only — mounted inside
+// LearningDashboard which is gated by isAdmin in App.jsx. Copy uses
+// "calibration corpus" (admin-only vocabulary).
+function PromptBudgetAlarm({ promptSize }) {
+  const {
+    avg20,
+    threshold,
+    absoluteAlarm,
+    shareAlarm,
+    basePromptChars,
+    notesChars,
+    notesCount,
+    notesShare,
+  } = promptSize;
+  const sharePct = Math.round((notesShare || 0) * 100);
   return (
     <div
       role="alert"
@@ -381,12 +392,27 @@ function PromptBudgetAlarm({ avg20, threshold }) {
         Average prompt size over the last 20 quotes is{' '}
         <strong style={{ fontFamily: 'JetBrains Mono, monospace' }}>
           {avg20.toLocaleString()} chars
-        </strong>{' '}
-        — over the{' '}
+        </strong>
+        {' '}— base{' '}
         <strong style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-          {threshold.toLocaleString()}
-        </strong>{' '}
-        threshold. Calibration corpus is growing — consider pruning notes.
+          {basePromptChars.toLocaleString()}
+        </strong>
+        {' '}+ calibration notes{' '}
+        <strong style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          {notesChars.toLocaleString()}
+        </strong>
+        {' '}({notesCount} approved, {sharePct}% of total).
+        {absoluteAlarm && (
+          <> Over the{' '}
+            <strong style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              {threshold.toLocaleString()}
+            </strong>
+            {' '}char absolute threshold.
+          </>
+        )}
+        {shareAlarm && (
+          <> Calibration corpus exceeds 50% of the prompt — consider pruning superseded notes.</>
+        )}
       </div>
     </div>
   );
@@ -407,7 +433,7 @@ function PromptSizePanel({ promptSize }) {
       <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
         Character count of the system prompt + appended calibration notes, stamped at save time.
       </p>
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-3 gap-3 mb-3">
         <Stat label="Current" value={promptSize.current.toLocaleString()} />
         <Stat
           label="Avg (Last 20)"
@@ -415,6 +441,22 @@ function PromptSizePanel({ promptSize }) {
         />
         <Stat label="Threshold" value={promptSize.threshold.toLocaleString()} />
       </div>
+      {promptSize.basePromptChars != null && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <Stat
+            label="Base prompt"
+            value={promptSize.basePromptChars.toLocaleString()}
+          />
+          <Stat
+            label={`Calibration notes (${promptSize.notesCount || 0})`}
+            value={(promptSize.notesChars || 0).toLocaleString()}
+          />
+          <Stat
+            label="Notes share"
+            value={`${Math.round((promptSize.notesShare || 0) * 100)}%`}
+          />
+        </div>
+      )}
       <Sparkline values={points} threshold={promptSize.threshold} />
       <p className="text-xs mt-2" style={{ color: 'var(--tq-muted)' }}>
         {promptSize.history.length} quote{promptSize.history.length === 1 ? '' : 's'} plotted (newest right).

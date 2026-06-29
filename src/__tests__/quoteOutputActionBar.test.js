@@ -139,7 +139,10 @@ describe('QuoteOutput action bar — More disclosure has correct ARIA', () => {
 
   test('More disclosure summary text reads "More" to the user', () => {
     const moreBlock = extractGroupBlock(quoteOutputSrc, 'more');
-    expect(moreBlock).toMatch(/<summary[\s\S]{0,200}More[\s\S]{0,200}<\/summary>/);
+    // 2026-06-29: window widened from 200 → 500 chars after the
+    // summary-toggle-fix wrap (display:inline-flex on <summary> broke
+    // the native click; fix put .btn-ghost on an inner <span>).
+    expect(moreBlock).toMatch(/<summary[\s\S]{0,500}More[\s\S]{0,500}<\/summary>/);
   });
 
   test('More group is collapsed by default on mobile (no `open` attribute hardcoded)', () => {
