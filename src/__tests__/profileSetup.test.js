@@ -179,3 +179,102 @@ describe('App.jsx — wires the ReferralPanel props through to ProfileSetup (202
     expect(modalMount[0]).toMatch(/showToast\s*=\s*\{\s*showToast\s*\}/);
   });
 });
+
+// ----------------------------------------------------------------------
+// Mobile PR-9 (2026-06-29) — ProfileSetup polish (audit items 10, 18 +
+// the App.jsx profile-modal close-X follow-up that originally lived in
+// PR-2 but didn't make it into #73). Closes:
+//   - audit #10: sticky save bar overlaps BottomNav + iOS home indicator
+//   - audit #18: accent swatches don't wrap on small phones
+//   - logo upload file picker is sub-44px and stylistically off-brand
+//   - audit #14: profile-modal close-X is a sub-44px text-2xl glyph
+//
+// All four are source-level assertions — the suite stays JSDOM-free.
+// ----------------------------------------------------------------------
+describe('ProfileSetup — sticky save bar respects safe-area + BottomNav (audit #10, PR-9)', () => {
+  test('non-modal save bar sits above the 64px BottomNav and respects safe-area-inset-bottom on mobile', () => {
+    // Mirrors the ReviewEdit.jsx:511 pattern shipped in TRQ-172. Without
+    // this offset the Save button can sit under the iOS home indicator
+    // and overlap the BottomNav on iPhone 13.
+    expect(componentSrc).toMatch(
+      /sticky\s+bottom-\[calc\(env\(safe-area-inset-bottom\)\+64px\)\]\s+fq:bottom-0/
+    );
+  });
+
+  test('modal mount of the save bar does NOT apply the sticky/safe-area offset', () => {
+    // Inside the modal the parent already scrolls; sticky positioning
+    // would compete with the modal's overflow-y-auto. The class is
+    // gated behind `!isModal` via the ternary on the save-bar div.
+    expect(componentSrc).toMatch(
+      /isModal\s*\?\s*['"]mt-4['"]\s*:\s*['"]sticky\s+bottom-\[calc\(env\(safe-area-inset-bottom\)\+64px\)\]\s+fq:bottom-0\s+py-4['"]/
+    );
+  });
+});
+
+describe('ProfileSetup — accent swatches wrap on small phones (audit #18, PR-9)', () => {
+  test('the swatch row has flex-wrap so 4 swatches do not overflow at 360px', () => {
+    // Pre-fix: `flex gap-3` with 4 × 64px swatches = 292px — fits 390px
+    // but breaks layout at narrower viewports as soon as any padding
+    // is added to the parent. flex-wrap is a no-op on desktop and the
+    // wrap kicks in only when the row would actually overflow.
+    expect(componentSrc).toMatch(
+      /flex\s+flex-wrap\s+gap-3"\s+role="radiogroup"\s+aria-label="Quote accent colour"/
+    );
+  });
+});
+
+describe('ProfileSetup — logo upload is a 44px-tall button-styled label (PR-9)', () => {
+  test('the file input is wrapped in a <label> with a canonical 44px touch class', () => {
+    // The default <input type="file"> renders a sub-44px native pill
+    // that doesn't match the form's other CTAs. The fix wraps it in a
+    // <label> styled with .btn-ghost + .touch-44 + minHeight: 44 so the
+    // tappable surface is a full button. Source-level assertion pins
+    // the structural choice (wrap-in-label) rather than the exact text.
+    const logoIdx = componentSrc.indexOf('Company Logo');
+    expect(logoIdx).toBeGreaterThan(-1);
+    const logoBlock = componentSrc.slice(logoIdx, logoIdx + 1500);
+    expect(logoBlock).toMatch(/<label[^>]*\btouch-44\b/);
+    expect(logoBlock).toMatch(/minHeight:\s*44/);
+    // The label's child is the actual file input, hidden via .sr-only
+    // so the styled label is the only visible affordance.
+    expect(logoBlock).toMatch(/<input\b[\s\S]{0,200}type="file"[\s\S]{0,400}className="sr-only"/);
+  });
+
+  test('the file input keeps onChange={handleLogoUpload} (no behavioural regression)', () => {
+    expect(componentSrc).toMatch(
+      /<input\b[\s\S]{0,200}type="file"[\s\S]{0,200}onChange=\{handleLogoUpload\}/
+    );
+  });
+
+  test('the visible label text is one of the locked options (no banned-vocab drift)', () => {
+    // Pinned copy: "Upload logo" when no logo, "Change logo" when one
+    // exists. Both stay clear of the AI vocabulary fence.
+    expect(componentSrc).toMatch(/'Change logo'\s*:\s*'Upload logo'|"Change logo"\s*:\s*"Upload logo"/);
+  });
+});
+
+describe('App.jsx — profile modal close-X has a 44x44 hit area (audit #14, PR-9)', () => {
+  const appSrc = readFileSync(join(repoRoot, 'src/App.jsx'), 'utf8');
+
+  test('the close button has minHeight and minWidth >= 44 (or the .touch-44 class)', () => {
+    // The Edit Profile modal close-X was previously a `text-2xl` glyph
+    // button with no padding — sub-44px hit area, audit #14. The fix
+    // wraps it in a 44x44 hit surface. Find the close button by its
+    // proximity to the "Edit Profile" header + the &times; glyph.
+    const closeButton = appSrc.match(
+      /Edit Profile[\s\S]{0,800}<button[\s\S]{0,400}&times;\s*<\/button>/
+    );
+    expect(closeButton).not.toBeNull();
+    expect(closeButton[0]).toMatch(/touch-44|minHeight:\s*44/);
+    expect(closeButton[0]).toMatch(/touch-44|minWidth:\s*44/);
+  });
+
+  test('the close button has an aria-label for screen readers', () => {
+    // A glyph-only button must expose its purpose to assistive tech.
+    const closeButton = appSrc.match(
+      /Edit Profile[\s\S]{0,800}<button[\s\S]{0,400}&times;\s*<\/button>/
+    );
+    expect(closeButton).not.toBeNull();
+    expect(closeButton[0]).toMatch(/aria-label="Close"/);
+  });
+});

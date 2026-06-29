@@ -161,17 +161,33 @@ export default function ProfileSetup({
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Company Logo
           </label>
+          {/*
+            Logo upload — visually-hidden file input behind a label
+            styled as a 44px-tall button. The default file picker
+            renders a sub-44px pill that's visually inconsistent with
+            every other CTA in the form (audit #18, PR-9). The label
+            element forwards the click to the native file input, so
+            screen readers + keyboard users + mobile tap all reach the
+            picker without any JS bridge.
+          */}
           <div className="flex items-center gap-3">
             {profile.logo && (
               <img src={profile.logo} alt="Logo" className="w-12 h-12 object-contain border border-tq-border" style={{ borderRadius: 2 }} />
             )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleLogoUpload}
-              className="text-sm text-tq-muted file:mr-3 file:py-1.5 file:px-3 file:border-0 file:text-sm file:font-body file:bg-tq-card file:text-tq-text hover:file:bg-tq-border"
-              style={{ borderRadius: 2 }}
-            />
+            <label
+              className="btn-ghost cursor-pointer touch-44 inline-flex items-center"
+              style={{ minHeight: 44 }}
+            >
+              {profile.logo ? 'Change logo' : 'Upload logo'}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="sr-only"
+                aria-label="Upload company logo"
+                data-touch-exempt="true"
+              />
+            </label>
           </div>
         </div>
 
@@ -415,7 +431,7 @@ export default function ProfileSetup({
       <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
         Tints the colour of the client link you share. Choose what matches your brand.
       </p>
-      <div className="mb-8 flex gap-3" role="radiogroup" aria-label="Quote accent colour">
+      <div className="mb-8 flex flex-wrap gap-3" role="radiogroup" aria-label="Quote accent colour">
         {[
           { key: 'amber', label: 'Amber', hex: '#c4610a' },
           { key: 'rust',  label: 'Rust',  hex: '#a33d1c' },
@@ -480,9 +496,18 @@ export default function ProfileSetup({
         </p>
       )}
 
-      {/* Sticky save bar */}
+      {/*
+        Sticky save bar \u2014 on mobile (<fq), sit above the fixed 64px
+        BottomNav and respect any iOS safe-area inset (home-indicator).
+        On desktop (>=fq) the BottomNav is hidden so bottom returns to 0.
+        Mirrors the ReviewEdit sticky-CTA pattern (TRQ-172) \u2014 without
+        this, the Save button on Step 1 can overlap the BottomNav and
+        sit under the iOS home indicator. Inside the modal mount the
+        save bar is non-sticky (the modal scrolls internally), so the
+        adjustment is only applied to the full-page Step 1 mount.
+      */}
       <div
-        className={`${isModal ? 'mt-4' : 'sticky bottom-0 py-4'} flex justify-end`}
+        className={`${isModal ? 'mt-4' : 'sticky bottom-[calc(env(safe-area-inset-bottom)+64px)] fq:bottom-0 py-4'} flex justify-end`}
         style={isModal ? {} : { backgroundColor: 'var(--tq-bg)', borderTop: '1px solid var(--tq-border)' }}
       >
         <button onClick={handleSave} className="btn-primary">

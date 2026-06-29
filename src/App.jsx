@@ -952,9 +952,18 @@ export default function App() {
           <div className="bg-tq-surface rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 border border-tq-border">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-heading font-bold text-tq-accent">Edit Profile</h2>
+              {/*
+                Profile modal close-X — wrapped in a 44x44 hit area
+                (audit #14, PR-9 follow-up to PR-2). The previous
+                `text-2xl` glyph button had no padding and was a
+                sub-44px touch target on mobile.
+              */}
               <button
+                type="button"
                 onClick={() => setShowProfileModal(false)}
-                className="text-tq-muted hover:text-tq-text text-2xl"
+                aria-label="Close"
+                className="text-tq-muted hover:text-tq-text text-2xl inline-flex items-center justify-center touch-44"
+                style={{ minHeight: 44, minWidth: 44 }}
               >
                 &times;
               </button>
