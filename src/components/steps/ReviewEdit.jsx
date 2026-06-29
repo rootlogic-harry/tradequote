@@ -18,7 +18,7 @@ function AccordionSection({ title, isOpen, onToggle, children }) {
       <button
         onClick={onToggle}
         className="w-full px-4 py-3 flex items-center justify-between text-left"
-        style={{ backgroundColor: 'var(--tq-card)' }}
+        style={{ backgroundColor: 'var(--tq-card)', minHeight: 44 }}
       >
         <span className="font-heading font-bold text-tq-text">{title}</span>
         <span className={`text-tq-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}>
@@ -140,6 +140,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
       <button
         onClick={() => toggleSection('transcript')}
         className="w-full bg-tq-card px-4 py-3 flex items-center justify-between text-left"
+        style={{ minHeight: 44 }}
       >
         <span className="font-heading font-bold text-tq-text text-sm">
           Video Transcript (read-only)
@@ -247,34 +248,35 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
             <input
               value={cost.label}
               onChange={(e) => updateAdditionalCost(i, 'label', e.target.value)}
-              className="flex-1 bg-transparent border-b border-tq-border text-sm text-tq-text outline-none focus:border-tq-accent"
+              className="flex-1 bg-transparent border-b border-tq-border text-sm text-tq-text outline-none focus:border-tq-accent min-h-[44px]"
               placeholder="Label"
             />
             <input
               type="number"
               value={cost.amount}
               onChange={(e) => updateAdditionalCost(i, 'amount', parseFloat(e.target.value) || 0)}
-              className="w-24 bg-transparent border-b border-tq-border text-sm font-mono text-tq-text outline-none focus:border-tq-accent text-right"
+              className="w-24 bg-transparent border-b border-tq-border text-sm font-mono text-tq-text outline-none focus:border-tq-accent text-right min-h-[44px]"
             />
             <button
               onClick={() => removeAdditionalCost(i)}
-              className="text-tq-muted hover:text-tq-error text-sm"
+              className="touch-44 text-tq-muted hover:text-tq-error text-sm"
+              aria-label="Remove additional cost"
             >
               ×
             </button>
           </div>
         ))}
         <div className="flex flex-wrap gap-2 mt-2">
-          <button onClick={() => addAdditionalCost('Travel')} className="text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
+          <button onClick={() => addAdditionalCost('Travel')} className="touch-44 text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
             + Travel
           </button>
-          <button onClick={() => addAdditionalCost('Accommodation')} className="text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
+          <button onClick={() => addAdditionalCost('Accommodation')} className="touch-44 text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
             + Accommodation
           </button>
-          <button onClick={() => addAdditionalCost('Skip hire')} className="text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
+          <button onClick={() => addAdditionalCost('Skip hire')} className="touch-44 text-xs text-tq-accent hover:text-tq-accent-dark px-2 py-1 rounded border border-tq-border">
             + Skip hire
           </button>
-          <button onClick={() => addAdditionalCost()} className="text-xs text-tq-accent hover:text-tq-accent-dark">
+          <button onClick={() => addAdditionalCost()} className="touch-44 text-xs text-tq-accent hover:text-tq-accent-dark">
             + Add cost
           </button>
         </div>
@@ -354,14 +356,15 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
                     dispatch({ type: 'UPDATE_NOTES', notes: updated });
                   }}
                   rows={2}
-                  className="flex-1 bg-transparent border-b border-tq-border text-xs text-tq-text outline-none focus:border-tq-accent resize-none"
+                  className="flex-1 bg-transparent border-b border-tq-border text-xs text-tq-text outline-none focus:border-tq-accent resize-none min-h-[44px]"
                 />
                 <button
                   onClick={() => {
                     const updated = notes.filter((_, idx) => idx !== i);
                     dispatch({ type: 'UPDATE_NOTES', notes: updated });
                   }}
-                  className="text-tq-muted hover:text-tq-error text-sm shrink-0"
+                  className="touch-44 text-tq-muted hover:text-tq-error text-sm shrink-0"
+                  aria-label="Remove note"
                 >
                   ×
                 </button>
@@ -374,7 +377,7 @@ export default function ReviewEdit({ state, dispatch, showToast }) {
               notes.push('');
               dispatch({ type: 'UPDATE_NOTES', notes });
             }}
-            className="text-xs text-tq-accent hover:text-tq-accent-dark"
+            className="touch-44 text-xs text-tq-accent hover:text-tq-accent-dark"
           >
             + Add note
           </button>

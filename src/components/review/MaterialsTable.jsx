@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useDragReorder from '../../hooks/useDragReorder.js';
 
-function BlurNumberInput({ value: propValue, onCommit, className }) {
+function BlurNumberInput({ value: propValue, onCommit, className, style }) {
   const [local, setLocal] = useState(String(propValue ?? ''));
 
   useEffect(() => {
@@ -18,6 +18,7 @@ function BlurNumberInput({ value: propValue, onCommit, className }) {
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => onCommit(parseFloat(local) || 0)}
       className={className}
+      style={{ minHeight: 44, ...(style || {}) }}
     />
   );
 }
@@ -69,9 +70,9 @@ export default function MaterialsTable({ materials = [], dispatch }) {
     dispatch({ type: 'UPDATE_MATERIALS', materials: next });
   }, [materials, dispatch]);
 
-  const UNIT_OPTIONS = ['m\u00B2', 't', 'Item', 'lin.m', 'Nr', 'days'];
+  const UNIT_OPTIONS = ['m²', 't', 'Item', 'lin.m', 'Nr', 'days'];
 
-  const inputClass = "w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none";
+  const inputClass = "w-full bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none min-h-[44px]";
 
   return (
     <div>
@@ -86,7 +87,7 @@ export default function MaterialsTable({ materials = [], dispatch }) {
             <th className="text-left px-1.5 py-1" style={{ minWidth: 140 }}>Description</th>
             <th className="text-left px-1.5 py-1 w-14">Qty</th>
             <th className="text-left px-1.5 py-1 w-14">Unit</th>
-            <th className="text-left px-1.5 py-1 w-20">Rate {'\u00A3'}</th>
+            <th className="text-left px-1.5 py-1 w-20">Rate {'£'}</th>
             <th className="text-right px-1.5 py-1 w-20">Total</th>
             <th className="w-7"></th>
           </tr>
@@ -99,13 +100,14 @@ export default function MaterialsTable({ materials = [], dispatch }) {
               className={`border-b border-tq-border/50 ${dragState.dragIndex === i ? 'opacity-50' : ''} ${dragState.isDragging && dragState.overIndex === i ? 'border-t-2 border-t-tq-accent' : ''}`}
             >
               <td className="px-1 py-1 text-center" {...getDragHandleProps(i)}>
-                <span style={{ cursor: 'grab' }} className="text-tq-muted text-xs select-none">{'\u2807'}</span>
+                <span style={{ cursor: 'grab' }} className="text-tq-muted text-xs select-none">{'⠇'}</span>
               </td>
               <td className="px-1.5 py-1">
                 <input
                   value={mat.description}
                   onChange={(e) => updateMaterial(i, 'description', e.target.value)}
                   className={inputClass}
+                  style={{ minHeight: 44 }}
                 />
               </td>
               <td className="px-1.5 py-1">
@@ -115,13 +117,14 @@ export default function MaterialsTable({ materials = [], dispatch }) {
                   value={mat.quantity}
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
                   className={inputClass}
+                  style={{ minHeight: 44 }}
                 />
               </td>
               <td className="px-1.5 py-1">
                 <select
                   value={mat.unit || 'Item'}
                   onChange={(e) => updateMaterial(i, 'unit', e.target.value)}
-                  className="bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none cursor-pointer w-full"
+                  className="bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none cursor-pointer w-full min-h-[44px]"
                 >
                   {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
@@ -134,14 +137,15 @@ export default function MaterialsTable({ materials = [], dispatch }) {
                 />
               </td>
               <td className="px-1.5 py-1 text-right font-mono text-tq-text whitespace-nowrap">
-                {'\u00A3'}{(mat.totalCost || 0).toFixed(2)}
+                {'£'}{(mat.totalCost || 0).toFixed(2)}
               </td>
               <td className="px-1 py-1 text-center">
                 <button
                   onClick={() => removeMaterial(i)}
-                  className="text-tq-muted hover:text-tq-error text-sm"
+                  className="touch-44 text-tq-muted hover:text-tq-error text-sm"
+                  aria-label="Remove material"
                 >
-                  {'\u00D7'}
+                  {'×'}
                 </button>
               </td>
             </tr>
@@ -150,41 +154,45 @@ export default function MaterialsTable({ materials = [], dispatch }) {
       </table>
       </div>
 
-      {/* Mobile cards */}
+      {/* Mobile cards — re-flowed from grid-cols-4 to grid-cols-2 with 44px
+          touch targets and explicit up/down move buttons (PR-5+6). */}
       <div className="fq:hidden space-y-3">
         {materials.map((mat, i) => (
           <div key={mat.id || i} className="border border-tq-border rounded p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1 mr-2">
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => moveItem(i, i - 1)}
                   disabled={i === 0}
-                  className="text-tq-muted hover:text-tq-accent text-sm disabled:opacity-30"
+                  className="touch-44 text-tq-muted hover:text-tq-accent text-sm disabled:opacity-30"
+                  aria-label="Move material up"
                 >
-                  {'\u2191'}
+                  {'↑'}
                 </button>
                 <button
                   onClick={() => moveItem(i, i + 1)}
                   disabled={i === materials.length - 1}
-                  className="text-tq-muted hover:text-tq-accent text-sm disabled:opacity-30"
+                  className="touch-44 text-tq-muted hover:text-tq-accent text-sm disabled:opacity-30"
+                  aria-label="Move material down"
                 >
-                  {'\u2193'}
+                  {'↓'}
                 </button>
               </div>
               <input
                 value={mat.description}
                 onChange={(e) => updateMaterial(i, 'description', e.target.value)}
-                className="flex-1 bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none font-medium"
+                className="flex-1 bg-transparent border-b border-transparent hover:border-tq-border focus:border-tq-accent text-tq-text text-sm outline-none font-medium min-h-[44px]"
                 placeholder="Description"
               />
               <button
                 onClick={() => removeMaterial(i)}
-                className="text-tq-muted hover:text-tq-error text-sm ml-2"
+                className="touch-44 text-tq-muted hover:text-tq-error text-sm"
+                aria-label="Remove material"
               >
-                {'\u00D7'}
+                {'×'}
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-tq-muted mb-0.5">Qty</label>
                 <input
@@ -192,7 +200,7 @@ export default function MaterialsTable({ materials = [], dispatch }) {
                   autoComplete="off"
                   value={mat.quantity}
                   onChange={(e) => updateMaterial(i, 'quantity', e.target.value)}
-                  className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm text-tq-text outline-none focus:border-tq-accent"
+                  className="w-full bg-tq-card border border-tq-border rounded px-2 text-sm text-tq-text outline-none focus:border-tq-accent min-h-[44px]"
                 />
               </div>
               <div>
@@ -200,23 +208,23 @@ export default function MaterialsTable({ materials = [], dispatch }) {
                 <select
                   value={mat.unit || 'Item'}
                   onChange={(e) => updateMaterial(i, 'unit', e.target.value)}
-                  className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm text-tq-text outline-none focus:border-tq-accent cursor-pointer"
+                  className="w-full bg-tq-card border border-tq-border rounded px-2 text-sm text-tq-text outline-none focus:border-tq-accent cursor-pointer min-h-[44px]"
                 >
                   {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-tq-muted mb-0.5">Rate {'\u00A3'}</label>
+                <label className="block text-xs text-tq-muted mb-0.5">Rate {'£'}</label>
                 <BlurNumberInput
                   value={mat.unitCost}
                   onCommit={(v) => updateMaterial(i, 'unitCost', v)}
-                  className="w-full bg-tq-card border border-tq-border rounded px-2 py-1 text-sm font-mono text-tq-text outline-none focus:border-tq-accent"
+                  className="w-full bg-tq-card border border-tq-border rounded px-2 text-sm font-mono text-tq-text outline-none focus:border-tq-accent"
                 />
               </div>
               <div>
                 <label className="block text-xs text-tq-muted mb-0.5">Total</label>
-                <div className="px-2 py-1 text-sm font-mono text-tq-text">
-                  {'\u00A3'}{(mat.totalCost || 0).toFixed(2)}
+                <div className="px-2 py-1 text-sm font-mono text-tq-text flex items-center min-h-[44px]">
+                  {'£'}{(mat.totalCost || 0).toFixed(2)}
                 </div>
               </div>
             </div>

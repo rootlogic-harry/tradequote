@@ -411,6 +411,17 @@
       min-height: 48px;
       line-height: 1.4;
     }
+    /* Forward-compat utility: opt-in 44px minimum touch target. Reserved
+       in the touch-target lint (PR #69) and now defined here so callers
+       can apply `.touch-44` to elements that don't fit any existing
+       button class (small × / + buttons, inline icon buttons, etc.). */
+    .touch-44 {
+      min-height: 44px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
     .rv-measure {
       display: flex;
       align-items: center;

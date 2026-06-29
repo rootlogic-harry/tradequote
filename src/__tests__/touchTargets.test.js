@@ -265,6 +265,8 @@ function scanRepoForViolations() {
 //   why:   one-line reason / what's wrong
 //
 // Discovery date: 2026-06-26 against commit 1252d3e3.
+// Last shrunk: 2026-06-29 — PR-5+6 cleared MaterialsTable, ScheduleList,
+// and ReviewEdit entries (162 → 139 violations total).
 // -------------------------------------------------------------------
 const CURRENT_VIOLATIONS = [
   // -- src/components/AgentActivity.jsx --
@@ -384,23 +386,8 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/review/LivePreview.jsx --
   { file: "src/components/review/LivePreview.jsx", line: 34, pr: "PR-future-polish", why: "LivePreview toggle / close (full-width, but no explicit min-h)" },
   { file: "src/components/review/LivePreview.jsx", line: 47, pr: "PR-future-polish", why: "LivePreview toggle / close (full-width, but no explicit min-h)" },
-  // -- src/components/review/MaterialsTable.jsx --
-  { file: "src/components/review/MaterialsTable.jsx", line: 12, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 105, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 112, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 121, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 140, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 159, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 166, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 174, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 180, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 190, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
-  { file: "src/components/review/MaterialsTable.jsx", line: 200, pr: "PR-6", why: "Materials desktop table + mobile cards inputs (audit #6, qty/unit/rate/up/down/×)" },
   // -- src/components/review/MeasurementRow.jsx --
   { file: "src/components/review/MeasurementRow.jsx", line: 166, pr: "PR-future-polish", why: "Numeric edit input inside measurement row" },
-  // -- src/components/review/ScheduleList.jsx --
-  { file: "src/components/review/ScheduleList.jsx", line: 55, pr: "PR-5", why: "Schedule of Works title input + × remove (audit #5)" },
-  { file: "src/components/review/ScheduleList.jsx", line: 72, pr: "PR-5", why: "Schedule of Works title input + × remove (audit #5)" },
   // -- src/components/steps/JobDetails.jsx --
   { file: "src/components/steps/JobDetails.jsx", line: 357, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   { file: "src/components/steps/JobDetails.jsx", line: 374, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
@@ -437,19 +424,6 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/steps/QuoteOutput.jsx --
   { file: "src/components/steps/QuoteOutput.jsx", line: 838, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
   { file: "src/components/steps/QuoteOutput.jsx", line: 990, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
-  // -- src/components/steps/ReviewEdit.jsx --
-  { file: "src/components/steps/ReviewEdit.jsx", line: 18, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 140, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 247, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 253, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 259, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 268, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 271, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 274, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 277, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 349, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 359, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
-  { file: "src/components/steps/ReviewEdit.jsx", line: 371, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
 
 ];
 
