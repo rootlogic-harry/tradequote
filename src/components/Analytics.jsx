@@ -24,11 +24,15 @@ import React, { useEffect, useState } from 'react';
 export default function Analytics() {
   const [range, setRange] = useState('30d');
   // Analytics Phase 1 (2026-06-29) — exclude internal users (Harry +
-  // Mark) by default so the funnel percentages reflect external
-  // signups. Toggled on the Events section header; the param is
-  // forwarded to /api/admin/analytics so the server applies the
-  // predicate.
+  // Mark + Paul + other beta users) by default so the funnel
+  // percentages reflect external signups. Toggled on the Events tab;
+  // the param is forwarded to /api/admin/analytics so the server
+  // applies the predicate.
   const [excludeInternal, setExcludeInternal] = useState(true);
+  // Sub-tab: 'overview' (existing operational analytics) or 'events'
+  // (Phase 1 funnel + event log). Harry's call 2026-06-29 — keep the
+  // funnel visible but partitioned from spend/retention/agent stats.
+  const [subTab, setSubTab] = useState('overview');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -61,8 +65,9 @@ export default function Analytics() {
   return (
     <div className="max-w-6xl mx-auto">
       <Header range={range} setRange={setRange} loading={loading} data={data} />
+      <SubTabs subTab={subTab} setSubTab={setSubTab} eventCount={data?.events?.totalEvents} />
       {error && <ErrorBanner message={error} />}
-      {!error && data && (
+      {!error && data && subTab === 'overview' && (
         <>
           <SummaryCards data={data} />
           <RetentionSection retention={data.retention} />
@@ -71,15 +76,17 @@ export default function Analytics() {
           <PerQuoteSection quotes={data.perQuote} />
           <SpendSection spend={data.spend} pricing={data.pricing} />
           <PageviewsSection pageviews={data.pageviews} series={data.series} />
-          <EventsSection
-            events={data.events}
-            excludeInternal={excludeInternal}
-            setExcludeInternal={setExcludeInternal}
-          />
           <ErrorsSection errors={data.errors} />
           <ReliabilitySection reliability={data.reliability} />
           <PortalSection portal={data.portal} />
         </>
+      )}
+      {!error && data && subTab === 'events' && (
+        <EventsSection
+          events={data.events}
+          excludeInternal={excludeInternal}
+          setExcludeInternal={setExcludeInternal}
+        />
       )}
       {!error && !data && loading && (
         <div className="text-center py-20" style={{ color: 'var(--tq-muted)' }}>
@@ -119,6 +126,40 @@ function Header({ range, setRange, loading, data }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Sub-tabs ─────────────────────────────────────────────────────────
+
+function SubTabs({ subTab, setSubTab, eventCount }) {
+  return (
+    <div
+      className="flex flex-wrap gap-2 mb-6 border-b"
+      role="tablist"
+      aria-label="Analytics sections"
+      style={{ borderColor: 'var(--tq-border)' }}
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'overview'}
+        onClick={() => setSubTab('overview')}
+        className={`pill ${subTab === 'overview' ? 'active' : ''}`}
+        style={{ minHeight: 44 }}
+      >
+        Overview
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={subTab === 'events'}
+        onClick={() => setSubTab('events')}
+        className={`pill ${subTab === 'events' ? 'active' : ''}`}
+        style={{ minHeight: 44 }}
+      >
+        Events{typeof eventCount === 'number' && eventCount > 0 ? ` (${eventCount.toLocaleString()})` : ''}
+      </button>
     </div>
   );
 }
