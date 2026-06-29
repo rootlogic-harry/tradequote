@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { listJobs, deleteJob, deletePhotos } from '../utils/userDB.js';
 import { formatCurrency, formatDate } from '../utils/quoteBuilder.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
@@ -10,6 +10,231 @@ import { isActiveJob, isCompletedJob, isArchivedJob } from '../utils/jobLifecycl
 const ACTIVE_FILTERS = ['All', 'Draft', 'Sent', 'Accepted'];
 
 const VIEW_MODES = ['active', 'completed', 'archive'];
+
+// ─────────────────────────────────────────────────────────────────────
+// Mirrors Dashboard.jsx's per-status primary action contract — keeps
+// the two surfaces' row UX byte-identical (Harry's 2026-06-29 audit:
+// SavedQuotes mobile was "an absolute mess" because the old layout
+// stacked 3-4 buttons full-width per row). Now: status stamp + client
+// + ref/£ + ONE primary button + kebab. Same row-redesign grid.
+// ─────────────────────────────────────────────────────────────────────
+const PRIMARY_ACTION = {
+  draft: { label: 'Send', target: 'sent' },
+  sent: { label: 'Mark accepted', target: 'accepted' },
+  accepted: { label: 'Mark complete', target: 'completed' },
+};
+
+// Per-status kebab item set. SavedQuotes adds RAMS items for admin
+// users on accepted jobs (Dashboard's kebab dropped them because the
+// canonical RAMS button lives on QuoteOutput — but SavedQuotes is the
+// archive browser, so surfacing existing RAMS access here is useful).
+function kebabItemsFor(status, { isAdminPlan = false, hasRams = false, canViewRams = false, canCreateRams = false } = {}) {
+  if (status === 'draft') {
+    return [
+      { id: 'edit', label: 'Edit quote' },
+      { id: '__' },
+      { id: 'decline', label: 'Mark declined', danger: true },
+      { id: 'delete', label: 'Delete', danger: true },
+    ];
+  }
+  if (status === 'sent') {
+    return [
+      { id: 'decline', label: 'Mark declined', danger: true },
+    ];
+  }
+  if (status === 'accepted') {
+    const items = [];
+    if (isAdminPlan && hasRams && canViewRams) {
+      items.push({ id: 'view-rams', label: 'View RAMS' });
+      items.push({ id: '__' });
+    } else if (isAdminPlan && canCreateRams) {
+      items.push({ id: 'create-rams', label: 'Create RAMS' });
+      items.push({ id: '__' });
+    }
+    items.push({ id: 'decline', label: 'Mark declined', danger: true });
+    return items;
+  }
+  if (status === 'completed') {
+    // Completed is terminal but we still want a Delete affordance so
+    // old finished jobs can be pruned. Dashboard's kebab returns []
+    // here because Dashboard's Recent list is bounded; SavedQuotes is
+    // the full archive, so users will accumulate completed rows.
+    return [
+      { id: 'delete', label: 'Delete', danger: true },
+    ];
+  }
+  if (status === 'declined') {
+    return [
+      { id: 'delete', label: 'Delete', danger: true },
+    ];
+  }
+  return [];
+}
+
+function KebabIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
+
+function KebabMenu({ items, onClose, onAction }) {
+  const ref = useRef(null);
+  // Inline two-tap confirm for destructive items (Delete). First tap
+  // arms; second tap fires. Mirrors Dashboard.jsx.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [onClose]);
+
+  return (
+    <div className="kebab-menu" ref={ref} role="menu">
+      {items.map((it, i) =>
+        it.id === '__'
+          ? <div key={`d${i}`} className="kebab-menu-div" aria-hidden="true" />
+          : (
+            <button
+              key={it.id}
+              type="button"
+              role="menuitem"
+              className={`touch-44 ${it.danger ? 'danger' : ''} ${it.id === 'delete' && deleteArmed ? 'armed' : ''}`}
+              style={{ minHeight: 44, width: '100%', justifyContent: 'flex-start' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (it.id === 'delete' && !deleteArmed) {
+                  setDeleteArmed(true);
+                  return;
+                }
+                onAction(it.id);
+                onClose();
+              }}
+            >
+              {it.id === 'delete' && deleteArmed ? 'Tap again to confirm' : it.label}
+            </button>
+          )
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// JobRow — single row in the saved-jobs list. Same grid contract as
+// Dashboard's JobRow: [stamp] [client+site] [ref+£] [primary] [⋯].
+// Mobile reflows via the .job-row-redesign @media block in index.html.
+//
+// Two SavedQuotes-specific differences vs Dashboard:
+//   1. Carries the additional badges (Expiry / RAMS / Video) inline
+//      next to the client name — SavedQuotes is the archive browser
+//      so denser metadata is acceptable.
+//   2. Kebab includes Delete on completed/declined (Dashboard hides
+//      these because its Recent list is bounded).
+// ─────────────────────────────────────────────────────────────────────
+function JobRow({
+  quote,
+  isAdminPlan,
+  onOpen,
+  onAdvance,
+  onMenuAction,
+  onCreateRams,
+  onViewRams,
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const status = (quote.status || 'draft').toLowerCase();
+  const primary = PRIMARY_ACTION[status];
+  const hasRams = quote.hasRams || !!quote.ramsSnapshot;
+  const canViewRams = !!onViewRams;
+  const canCreateRams = !!onCreateRams;
+
+  const statusLabel = {
+    draft: 'Draft',
+    sent: 'Sent',
+    accepted: 'Accepted',
+    completed: 'Completed',
+    declined: 'Declined',
+  }[status] || 'Draft';
+
+  const items = kebabItemsFor(status, { isAdminPlan, hasRams, canViewRams, canCreateRams });
+
+  return (
+    <div
+      className="job-row job-row-redesign"
+      onClick={() => onOpen(quote)}
+      role="button"
+      tabIndex={0}
+      style={{ minHeight: 44 }}
+    >
+      <div className="job-row-stamp" data-s={status}>{statusLabel}</div>
+
+      <div className="min-w-0">
+        <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
+          {quote.clientName || 'Unnamed client'}
+        </div>
+        {quote.siteAddress && (
+          <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
+            {quote.siteAddress}
+            {quote.quoteDate ? ` · ${formatDate(quote.quoteDate)}` : ''}
+          </div>
+        )}
+        {/* Inline badges — wrap on mobile so they never overflow */}
+        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+          <VideoBadge captureMode={quote.snapshot?.captureMode} />
+          {status === 'sent' && <ExpiryBadge expiresAt={quote.expiresAt} />}
+          {status === 'accepted' && isAdminPlan && <RamsBadge hasRams={hasRams} />}
+        </div>
+      </div>
+
+      <div className="job-row-money">
+        <div className="ref">{quote.quoteReference || '—'}</div>
+        <div className="total">{formatCurrency(quote.totalAmount || 0)}</div>
+      </div>
+
+      <div className="job-row-primary">
+        {primary && (
+          <button
+            type="button"
+            className="row-action-btn"
+            style={
+              primary.target === 'sent'
+                ? { borderColor: 'var(--tq-accent)', background: 'var(--tq-accent)', color: '#ffffff' }
+                : { borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }
+            }
+            onClick={(e) => { e.stopPropagation(); onAdvance(quote, primary.target); }}
+          >
+            {primary.label}
+          </button>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <div className="kebab-menu-wrap" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="kebab-btn touch-44"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            style={{ minHeight: 44, minWidth: 44 }}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+          >
+            <KebabIcon />
+          </button>
+          {menuOpen && (
+            <KebabMenu
+              items={items}
+              onClose={() => setMenuOpen(false)}
+              onAction={(id) => onMenuAction(id, quote)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SavedQuotes({
   onViewQuote,
@@ -27,7 +252,6 @@ export default function SavedQuotes({
   const [localQuotes, setLocalQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -58,21 +282,14 @@ export default function SavedQuotes({
       deletePhotos(currentUserId, id).catch(() => {});
       setLocalQuotes(prev => prev.filter(q => q.id !== id));
       if (dispatch) dispatch({ type: 'DELETE_JOB', id });
-      setConfirmDeleteId(null);
       showToast?.('Job deleted', 'success');
     } catch (err) {
       console.error('Failed to delete quote:', err);
       showToast?.('Failed to delete job. Check your connection and try again.', 'error');
-      setConfirmDeleteId(null);
     }
   };
 
-  const getStatus = (job) => (job.status || 'draft').toUpperCase();
-
   // Three-tab split (Mark's ask 2026-06-26): Active | Completed | Archive.
-  // Active = draft/sent/accepted (in-flight). Completed = finished work.
-  // Archive = declined. Expired sends stay Active per Mark 2026-06-21
-  // (late-authorisation use case). Bucket logic in jobLifecycle.js.
   const now = useMemo(() => new Date(), []);
   const view = VIEW_MODES.includes(viewMode) ? viewMode : 'active';
   const isActiveView = view === 'active';
@@ -87,6 +304,8 @@ export default function SavedQuotes({
   const completedCount = useMemo(() => quotes.filter(q => isCompletedJob(q, now)).length, [quotes, now]);
   const archiveCount = useMemo(() => quotes.filter(q => isArchivedJob(q, now)).length, [quotes, now]);
 
+  const getStatus = (job) => (job.status || 'draft').toUpperCase();
+
   // Status-filter pills only render in Active. Completed + Archive are
   // single-status buckets — another axis would just be noise.
   const statusFiltered = (!isActiveView || activeFilter === 'All')
@@ -95,16 +314,41 @@ export default function SavedQuotes({
 
   const filteredQuotes = searchTerm.trim()
     ? statusFiltered.filter(q => {
-        const term = searchTerm.toLowerCase();
-        return (q.clientName || '').toLowerCase().includes(term) ||
-               (q.quoteReference || '').toLowerCase().includes(term) ||
-               (q.siteAddress || '').toLowerCase().includes(term);
+        const t = searchTerm.toLowerCase();
+        return (q.clientName || '').toLowerCase().includes(t) ||
+               (q.quoteReference || '').toLowerCase().includes(t) ||
+               (q.siteAddress || '').toLowerCase().includes(t);
       })
     : statusFiltered;
 
-  const openStatusModal = (e, jobId, targetStatus) => {
-    e.stopPropagation();
+  const openStatusModal = (jobId, targetStatus) => {
     if (dispatch) dispatch({ type: 'OPEN_STATUS_MODAL', jobId, targetStatus });
+  };
+
+  const handleAdvance = (quote, targetStatus) => {
+    openStatusModal(quote.id, targetStatus);
+  };
+
+  const handleMenuAction = (actionId, quote) => {
+    switch (actionId) {
+      case 'edit':
+        onViewQuote?.(quote);
+        return;
+      case 'decline':
+        openStatusModal(quote.id, 'declined');
+        return;
+      case 'delete':
+        handleDelete(quote.id);
+        return;
+      case 'view-rams':
+        onViewRams?.(quote);
+        return;
+      case 'create-rams':
+        onCreateRams?.(quote);
+        return;
+      default:
+        onViewQuote?.(quote);
+    }
   };
 
   if (loading) {
@@ -202,7 +446,8 @@ export default function SavedQuotes({
       </div>
 
       {/* Search and filter row. Status pills only render in active view —
-          archive jobs are already constrained to declined. */}
+          archive jobs are already constrained to declined. Stacks
+          vertically on mobile so neither field cramps the other. */}
       <div className="flex flex-col fq:flex-row gap-3 mb-6">
         <div className="relative flex-1 fq:max-w-xs">
           <input
@@ -211,10 +456,9 @@ export default function SavedQuotes({
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search by client, reference, or address..."
             className="nq-field w-full pl-9"
-            style={{ minHeight: 40 }}
           />
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2"
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
             width="14" height="14" viewBox="0 0 24 24"
             fill="none" stroke="var(--tq-muted)" strokeWidth="2" strokeLinecap="round"
           >
@@ -226,8 +470,8 @@ export default function SavedQuotes({
               type="button"
               onClick={() => setSearchTerm('')}
               aria-label="Clear search"
-              className="touch-44 absolute right-0 top-1/2 -translate-y-1/2"
-              style={{ color: 'var(--tq-muted)', lineHeight: 1 }}
+              className="touch-44 absolute right-1 top-1/2 -translate-y-1/2"
+              style={{ minHeight: 44, minWidth: 44, color: 'var(--tq-muted)', lineHeight: 1, fontSize: 20, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               &times;
             </button>
@@ -279,8 +523,8 @@ export default function SavedQuotes({
           <button
             type="button"
             onClick={() => { setActiveFilter('All'); setSearchTerm(''); }}
-            className="touch-44 mt-2 text-xs px-3"
-            style={{ color: 'var(--tq-accent)' }}
+            className="touch-44 mt-2 text-sm px-3"
+            style={{ minHeight: 44, color: 'var(--tq-accent)', background: 'transparent', border: 'none' }}
           >
             Clear filters
           </button>
@@ -296,163 +540,32 @@ export default function SavedQuotes({
           <button
             type="button"
             onClick={() => setSearchTerm('')}
-            className="touch-44 mt-2 text-xs px-3"
-            style={{ color: 'var(--tq-accent)' }}
+            className="touch-44 mt-2 text-sm px-3"
+            style={{ minHeight: 44, color: 'var(--tq-accent)', background: 'transparent', border: 'none' }}
           >
             Clear search
           </button>
         </div>
       )}
 
-      {/* Job rows */}
+      {/* Job rows — same redesign grid as Dashboard (Harry's 2026-06-29
+          audit). Mobile reflows via index.html's .job-row-redesign
+          @media block. */}
       <div className="space-y-2">
-        {filteredQuotes.map(quote => {
-          const hasRams = quote.hasRams || !!quote.ramsSnapshot;
-          const status = getStatus(quote);
-          const borderLeft = status === 'ACCEPTED' || status === 'COMPLETED'
-            ? '3px solid var(--tq-confirmed-bd)'
-            : status === 'DECLINED'
-              ? '3px solid var(--tq-error-bd)'
-              : '3px solid transparent';
-
-          return (
-            <div
-              key={quote.id}
-              className="job-row"
-              style={{ borderLeft }}
-              onClick={() => onViewQuote(quote)}
-            >
-              {/* Left: name, status, metadata */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="jr-ref">{quote.quoteReference}</span>
-                  <StatusBadge status={status} />
-                  <VideoBadge captureMode={quote.snapshot?.captureMode} />
-                  {status === 'SENT' && <ExpiryBadge expiresAt={quote.expiresAt} />}
-                  {status === 'ACCEPTED' && <RamsBadge hasRams={hasRams} />}
-                </div>
-                <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
-                  {quote.clientName || 'Unnamed client'}
-                </div>
-                <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
-                  {quote.siteAddress || ''}
-                  {quote.quoteDate ? ` \u00b7 ${formatDate(quote.quoteDate)}` : ''}
-                  <span className="fq:hidden"> · {formatCurrency(quote.totalAmount)}</span>
-                </div>
-              </div>
-
-              {/* Middle: amount (desktop) */}
-              <div
-                className="mx-4 shrink-0 hidden fq:block"
-                style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--tq-text)' }}
-              >
-                {formatCurrency(quote.totalAmount)}
-              </div>
-
-              {/* Action buttons. `.row-action-btn` is compact 36px on
-                  desktop, full-width 44px on mobile so each tap target
-                  is unambiguous. Wrapper goes flex-col on mobile so the
-                  buttons stack vertically.
-
-                  Per-status action buttons are gated by `!isArchiveView`.
-                  Completed view naturally hides them too because no row
-                  there matches the DRAFT/SENT/ACCEPTED status conditions
-                  below \u2014 Completed is a terminal state. Delete stays
-                  visible in all three views so finished or declined
-                  jobs can still be pruned. */}
-              <div className="flex flex-col fq:flex-row gap-2 shrink-0 fq:flex-wrap w-full fq:w-auto" onClick={e => e.stopPropagation()}>
-                {!isArchiveView && status === 'DRAFT' && (
-                  <>
-                    <button onClick={(e) => openStatusModal(e, quote.id, 'sent')} className="row-action-btn" style={{ background: 'var(--tq-accent)', color: '#fff', borderColor: 'var(--tq-accent)' }}>
-                      Mark Sent
-                    </button>
-                    <button
-                      onClick={(e) => openStatusModal(e, quote.id, 'declined')}
-                      className="row-action-btn"
-                      style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                    >
-                      {'✗'} Declined
-                    </button>
-                  </>
-                )}
-
-                {!isArchiveView && status === 'SENT' && (
-                  <>
-                    <button
-                      onClick={(e) => openStatusModal(e, quote.id, 'accepted')}
-                      className="row-action-btn"
-                      style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
-                    >
-                      {'\u2713'} Accepted
-                    </button>
-                    <button
-                      onClick={(e) => openStatusModal(e, quote.id, 'declined')}
-                      className="row-action-btn"
-                      style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                    >
-                      {'\u2717'} Declined
-                    </button>
-                  </>
-                )}
-
-                {!isArchiveView && status === 'ACCEPTED' && (
-                  <>
-                    {isAdminPlan && hasRams && onViewRams ? (
-                      <button onClick={() => onViewRams(quote)} className="row-action-btn">
-                        View RAMS
-                      </button>
-                    ) : isAdminPlan && onCreateRams ? (
-                      <button
-                        onClick={() => onCreateRams(quote)}
-                        className="row-action-btn"
-                        style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
-                      >
-                        Create RAMS
-                      </button>
-                    ) : null}
-                    <button
-                      onClick={(e) => openStatusModal(e, quote.id, 'completed')}
-                      className="row-action-btn"
-                      style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
-                    >
-                      Complete
-                    </button>
-                    {/* Manual decline from accepted — customer pulled out
-                        after acceptance. Mirrors the same button on
-                        Dashboard.jsx. */}
-                    <button
-                      onClick={(e) => openStatusModal(e, quote.id, 'declined')}
-                      className="row-action-btn"
-                      style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                    >
-                      {'✗'} Declined
-                    </button>
-                  </>
-                )}
-
-                {confirmDeleteId === quote.id ? (
-                  <>
-                    <button
-                      onClick={() => handleDelete(quote.id)}
-                      className="row-action-btn"
-                      style={{ backgroundColor: 'var(--tq-error-bg)', color: 'var(--tq-error-txt)', borderColor: 'var(--tq-error-bd)' }}
-                    >
-                      Confirm
-                    </button>
-                    <button onClick={() => setConfirmDeleteId(null)} className="row-action-btn">
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={() => setConfirmDeleteId(quote.id)} className="row-action-btn" style={{ color: 'var(--tq-muted)' }}>
-                    Delete
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {filteredQuotes.map(quote => (
+          <JobRow
+            key={quote.id}
+            quote={quote}
+            isAdminPlan={isAdminPlan}
+            onOpen={onViewQuote}
+            onAdvance={handleAdvance}
+            onMenuAction={handleMenuAction}
+            onCreateRams={onCreateRams}
+            onViewRams={onViewRams}
+          />
+        ))}
       </div>
     </div>
   );
 }
+

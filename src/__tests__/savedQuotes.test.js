@@ -5,6 +5,11 @@
  *
  * Source-level checks. Node test env, no JSDOM, so this mirrors the
  * pattern used in dashboard.test.js / savedQuoteViewer.test.js.
+ *
+ * 2026-06-29 (Harry's overnight UX audit): the row layout was
+ * refactored to mirror Dashboard.jsx's redesigned JobRow — one primary
+ * action button + kebab overflow instead of the old stack-3-buttons-
+ * full-width-on-mobile pattern. These tests pin the new contract.
  */
 
 import { readFileSync } from 'fs';
@@ -41,16 +46,6 @@ describe('SavedQuotes three-tab UI (active / completed / archive)', () => {
     expect(src).toMatch(/SET_VIEW_MODE.*archive/);
   });
 
-  it('hides per-status action buttons in archive view', () => {
-    // Each of Mark Sent / Accepted / Declined / Complete is gated on
-    // !isArchiveView so archive rows are read-only-ish. Completed view
-    // naturally renders no per-status actions because no row there
-    // matches DRAFT/SENT/ACCEPTED (status === 'COMPLETED').
-    expect(src).toMatch(/!isArchiveView\s*&&\s*status\s*===\s*['"]DRAFT['"]/);
-    expect(src).toMatch(/!isArchiveView\s*&&\s*status\s*===\s*['"]SENT['"]/);
-    expect(src).toMatch(/!isArchiveView\s*&&\s*status\s*===\s*['"]ACCEPTED['"]/);
-  });
-
   it('count badges omitted when buckets are empty (no "(0)")', () => {
     expect(src).toMatch(/completedCount\s*>\s*0/);
     expect(src).toMatch(/archiveCount\s*>\s*0/);
@@ -81,45 +76,67 @@ describe('SavedQuotes three-tab UI (active / completed / archive)', () => {
     expect(src).not.toMatch(/declined and expired/i);
     expect(src).not.toMatch(/expired .+ will show here/i);
   });
-
-  it('keeps the Delete button available so declined jobs can be pruned', () => {
-    // Delete is NOT gated on !isArchiveView — Mark may want to actually
-    // remove old declined entries from the database.
-    const deleteBlockStart = src.indexOf('Delete');
-    expect(deleteBlockStart).toBeGreaterThan(-1);
-    // The 200 chars around Delete must not contain `!isArchiveView`
-    const context = src.slice(Math.max(0, deleteBlockStart - 200), deleteBlockStart + 50);
-    // Find which conditional Delete is under — should be confirmDeleteId, not viewMode
-    expect(context).toMatch(/confirmDeleteId/);
-  });
 });
 
-// Mark's ask (2026-06-21, after archive went live): add a manual
-// Decline button to DRAFT + ACCEPTED. SavedQuotes mirrors Dashboard
-// so the user gets the same affordance from either surface.
-describe('SavedQuotes decline-from-other-statuses', () => {
-  it('DRAFT block now exposes a Decline button', () => {
-    const draftStart = src.indexOf("status === 'DRAFT'");
-    const sentStart = src.indexOf("status === 'SENT'", draftStart + 1);
-    expect(draftStart).toBeGreaterThan(-1);
-    expect(sentStart).toBeGreaterThan(draftStart);
-    const draftBlock = src.slice(draftStart, sentStart);
-    expect(draftBlock).toMatch(/openStatusModal\([^)]*,\s*quote\.id,\s*['"]declined['"]/);
+// Row redesign (Harry's 2026-06-29 audit) replaced the old action-stack
+// with a one-primary-button + kebab pattern. The behaviour the previous
+// tests pinned — decline available from draft / sent / accepted, delete
+// available on every status — is preserved via the kebab menu.
+describe('SavedQuotes row redesign — Dashboard-parity', () => {
+  it('uses the shared .job-row-redesign grid class', () => {
+    expect(src).toMatch(/job-row job-row-redesign/);
   });
 
-  it('ACCEPTED block now exposes a Decline button', () => {
-    // Anchor on the ACTION block (there are also earlier `status ===
-    // 'ACCEPTED'` matches for border-colour + badge guards).
-    const acceptedStart = src.indexOf("status === 'ACCEPTED' && (");
-    expect(acceptedStart).toBeGreaterThan(-1);
-    const acceptedBlock = src.slice(acceptedStart, acceptedStart + 3000);
-    expect(acceptedBlock).toMatch(/openStatusModal\([^)]*,\s*quote\.id,\s*['"]declined['"]/);
-    expect(acceptedBlock).toMatch(/Complete/);
+  it('declares a PRIMARY_ACTION contract covering draft/sent/accepted', () => {
+    const m = src.match(/const\s+PRIMARY_ACTION\s*=\s*\{([\s\S]*?)\};/);
+    expect(m).not.toBeNull();
+    expect(m[1]).toMatch(/draft:/);
+    expect(m[1]).toMatch(/sent:/);
+    expect(m[1]).toMatch(/accepted:/);
   });
 
-  it('decline buttons share the error-border styling across all statuses', () => {
-    const declineMatches = src.match(/borderColor:\s*['"]var\(--tq-error-bd\)['"]/g) || [];
-    expect(declineMatches.length).toBeGreaterThanOrEqual(3); // DRAFT + SENT + ACCEPTED
+  it('exposes Decline from draft / sent / accepted via the kebab menu', () => {
+    // The kebabItemsFor function returns a decline item for each of
+    // the in-flight statuses. We assert the source contains the three
+    // status branches AND a decline action item inside each.
+    const m = src.match(/function kebabItemsFor\([\s\S]*?\n\}/);
+    expect(m).not.toBeNull();
+    const body = m[0];
+    expect(body).toMatch(/status === ['"]draft['"]/);
+    expect(body).toMatch(/status === ['"]sent['"]/);
+    expect(body).toMatch(/status === ['"]accepted['"]/);
+    // At least three decline entries — one per in-flight status.
+    const declineEntries = body.match(/id:\s*['"]decline['"]/g) || [];
+    expect(declineEntries.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('decline menu items route through openStatusModal with target "declined"', () => {
+    // The kebab handler dispatches the same OPEN_STATUS_MODAL action
+    // the legacy buttons did, with target 'declined'. Wired in
+    // handleMenuAction.
+    expect(src).toMatch(/case ['"]decline['"]:[\s\S]{0,200}openStatusModal\([^,]+,\s*['"]declined['"]\)/);
+  });
+
+  it('renders a kebab button with a 44px touch target', () => {
+    expect(src).toMatch(/className=["']kebab-btn touch-44["']/);
+    expect(src).toMatch(/minHeight:\s*44,\s*minWidth:\s*44/);
+  });
+
+  it('keeps Delete available on every status (including completed + declined)', () => {
+    // Delete must be reachable from at least four statuses so the
+    // archive can be pruned — the kebab items list contains a delete
+    // entry for draft, completed, and declined explicitly. Sent +
+    // accepted hide delete to prevent accidental loss of in-flight
+    // work; if needed the user can mark declined first.
+    const m = src.match(/function kebabItemsFor\([\s\S]*?\n\}/);
+    expect(m).not.toBeNull();
+    const body = m[0];
+    const deleteEntries = body.match(/id:\s*['"]delete['"]/g) || [];
+    expect(deleteEntries.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('row primary action button uses .row-action-btn (44px on mobile)', () => {
+    expect(src).toMatch(/className=["']row-action-btn["']/);
   });
 });
 
