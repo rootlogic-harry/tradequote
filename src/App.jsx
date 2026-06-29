@@ -22,7 +22,6 @@ import Analytics from './components/Analytics.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import SubscriptionBanner from './components/SubscriptionBanner.jsx';
-import QuotaCounter from './components/QuotaCounter.jsx';
 import ReferralWelcome from './components/ReferralWelcome.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -1021,10 +1020,14 @@ export default function App() {
               visible. Self-hides if billing isn't loaded yet.
               Dashboard redesign (2026-06-29): the Dashboard view moves
               this surface to the side rail (`RailQuotaChip` in
-              Sidebar.jsx). It STAYS mounted on Step pages + SavedQuotes
-              where the in-flow banner is still useful (you're about
-              to spend a quote / you're browsing the archive). */}
-          {currentView !== 'dashboard' && <QuotaCounter billing={billing} />}
+              Sidebar.jsx).
+              2026-06-29 (later): Harry's call — the inline banner was
+              redundant noise on Step pages + SavedQuotes too. Rail chip
+              is visible across the app on desktop. The 402 lockout
+              modal still fires when quota is exhausted, so users hit
+              the wall at the actionable moment, not at every page
+              load. Mobile: rail is hidden under 900px; users see the
+              chip on Dashboard before entering the flow. */}
           <SubscriptionBanner />
           {/* Referrals Phase 1 (2026-06-23) — referee welcome. Self-
               hides unless the user has bonus quotes AND has not yet

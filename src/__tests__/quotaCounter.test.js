@@ -471,20 +471,19 @@ describe('QuotaCounter — banned vocabulary', () => {
 // ─────────────────── App + JobDetails wiring ───────────────────
 
 describe('QuotaCounter wiring — App.jsx + JobDetails', () => {
-  test('App.jsx imports QuotaCounter', () => {
-    expect(appSrc).toMatch(/import\s+QuotaCounter\s+from\s+['"]\.\/components\/QuotaCounter\.jsx['"]/);
+  // 2026-06-29 (later): QuotaCounter was REMOVED from App.jsx entirely.
+  // The rail chip (Sidebar.jsx → RailQuotaChip) is the single quota
+  // surface across the app on desktop. Mobile users see the chip on
+  // Dashboard before entering the flow + hit the 402 lockout modal
+  // when quota is exhausted. The inline banner was redundant noise.
+  // The component file (QuotaCounter.jsx) is retained for the future,
+  // but no longer mounted.
+  test('App.jsx no longer imports QuotaCounter', () => {
+    expect(appSrc).not.toMatch(/import\s+QuotaCounter\s+from\s+['"]\.\/components\/QuotaCounter\.jsx['"]/);
   });
 
-  test('App.jsx mounts <QuotaCounter billing={billing} />', () => {
-    expect(appSrc).toMatch(/<QuotaCounter\s+billing=\{billing\}\s*\/>/);
-  });
-
-  test('App.jsx mounts QuotaCounter above SubscriptionBanner', () => {
-    const counterIdx = appSrc.indexOf('<QuotaCounter');
-    const bannerIdx = appSrc.indexOf('<SubscriptionBanner');
-    expect(counterIdx).toBeGreaterThan(0);
-    expect(bannerIdx).toBeGreaterThan(0);
-    expect(counterIdx).toBeLessThan(bannerIdx);
+  test('App.jsx no longer mounts <QuotaCounter />', () => {
+    expect(appSrc).not.toMatch(/<QuotaCounter\b/);
   });
 
   test('App.jsx defines refreshBilling callback', () => {
