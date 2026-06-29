@@ -22,6 +22,7 @@ import Analytics from './components/Analytics.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import SubscriptionBanner from './components/SubscriptionBanner.jsx';
+import QuotaExhaustedModal from './components/QuotaExhaustedModal.jsx';
 import ReferralWelcome from './components/ReferralWelcome.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -1127,6 +1128,20 @@ export default function App() {
           onConfirm={handleStatusConfirm}
           onCancel={() => dispatch({ type: 'CLOSE_STATUS_MODAL' })}
           isAdminPlan={isAdmin}
+        />
+      )}
+
+      {/* Quota-exhausted modal (2026-06-29). Renders globally whenever
+          state.quotaLockout is set so the lockout surfaces wherever the
+          user is. Previously the lockout UI only lived as an inline
+          panel on the AIAnalysis (Step 3) screen — but exhausted users
+          stopped at Step 1 / Dashboard never reached it, making the
+          click a silent dead-end. Modal offers Buy + Subscribe so the
+          user always has a forward path. */}
+      {state.quotaLockout && (
+        <QuotaExhaustedModal
+          lockout={state.quotaLockout}
+          onDismiss={() => dispatch({ type: 'CLEAR_QUOTA_LOCKOUT' })}
         />
       )}
 
