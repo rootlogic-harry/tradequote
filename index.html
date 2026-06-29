@@ -442,6 +442,257 @@
       background: var(--tq-confirmed-bg);
     }
 
+    /* ── Settings redesign (2026-06-29) ──
+       Five-section modal with left nav + right content + sticky save bar.
+       Mapped onto the existing --tq-* token vocabulary — no new palette
+       introduced. See /tmp/fastquote-profile-handoff/ for the source-of-
+       truth prototype. The same shell renders for the Step-1 onboarding
+       mount (full-page, no scrim — see `.ps-shell.ps-shell--page` below)
+       and the Edit Profile modal mount (inside App.jsx's modal scrim). */
+    .ps-shell {
+      display: flex;
+      flex-direction: column;
+      background: var(--tq-bg);
+      width: 100%;
+      min-height: 0;
+    }
+    /* Modal mount — fills the modal scrim provided by App.jsx. The scrim
+       sizes it to max-w 980 × max-h 86vh, so this just stretches to fit. */
+    .ps-shell--modal {
+      height: 100%;
+    }
+    /* Full-page Step-1 mount — caps width like the other onboarding
+       screens, leaves the page background visible above/below. */
+    .ps-shell--page {
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid var(--tq-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .ps-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--tq-border);
+      background: var(--tq-card);
+    }
+    .ps-head-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
+      line-height: 1;
+      color: var(--tq-text);
+    }
+    .ps-head-sub {
+      font-size: 13px;
+      color: var(--tq-muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .ps-head-x {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+      border-radius: 4px;
+      border: 1px solid var(--tq-border);
+      background: var(--tq-card);
+      color: var(--tq-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      line-height: 1;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    .ps-head-x:hover { color: var(--tq-text); border-color: var(--tq-muted); }
+
+    .ps-body {
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: 212px 1fr;
+      min-height: 0;
+    }
+    .ps-nav {
+      border-right: 1px solid var(--tq-border);
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      background: var(--tq-surface);
+      overflow-y: auto;
+    }
+    .ps-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      min-height: 44px;
+      border: none;
+      background: none;
+      border-radius: 4px;
+      color: var(--tq-text);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      font-size: 14.5px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .ps-nav-item:hover { background: var(--tq-card); }
+    .ps-nav-item.is-active {
+      background: var(--tq-accent);
+      color: #ffffff;
+    }
+    .ps-nav-item.is-active .ps-nav-badge {
+      background: rgba(255,255,255,0.2);
+      color: #ffffff;
+    }
+    .ps-nav-badge {
+      margin-left: auto;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--tq-muted);
+      background: var(--tq-border-soft);
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+    .ps-content {
+      overflow-y: auto;
+      padding: 28px 30px 36px;
+      min-width: 0;
+    }
+    .ps-section-head { margin-bottom: 20px; }
+    .ps-section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 0.01em;
+      margin: 0;
+      color: var(--tq-text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ps-section-desc {
+      font-size: 13.5px;
+      color: var(--tq-muted);
+      margin-top: 5px;
+      max-width: 520px;
+      line-height: 1.5;
+    }
+    .ps-opt-badge {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--tq-muted);
+      background: var(--tq-border-soft);
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+    /* Required-field asterisk — reuses --tq-accent so it matches the
+       existing field-error visual language without introducing a new
+       hex. CLAUDE.md token vocabulary lockdown. */
+    .ps-req { color: var(--tq-accent); margin-left: 2px; }
+    /* Toggle row — the "VAT registered" / "Hide labour days" affordance.
+       Keeps the existing label+native-checkbox markup but presents it as
+       a card so users scan it as a setting, not a form field. */
+    .ps-toggle-row {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 14px 16px;
+      border: 1px solid var(--tq-border);
+      border-radius: 4px;
+      background: var(--tq-card);
+    }
+    .ps-toggle-row .ps-toggle-body { flex: 1; min-width: 0; }
+    .ps-toggle-row .ps-toggle-key {
+      font-weight: 600;
+      font-size: 14.5px;
+      color: var(--tq-text);
+    }
+    .ps-toggle-row .ps-toggle-sub {
+      font-size: 12.5px;
+      color: var(--tq-muted);
+      margin-top: 3px;
+      line-height: 1.45;
+    }
+    /* Sticky footer save bar — pinned to the bottom of the modal body
+       across every section. Respects safe-area-inset-bottom on mobile
+       so it doesn't sit under the iOS home indicator. Matches the
+       TRQ-172 / PR #77 pattern in ReviewEdit + the legacy ProfileSetup
+       save bar. */
+    .ps-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 22px;
+      padding-bottom: calc(14px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--tq-border);
+      background: var(--tq-card);
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+    }
+    .ps-foot-state {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--tq-muted);
+    }
+    .ps-foot-state-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--tq-accent);
+    }
+    .ps-foot-actions { display: flex; gap: 10px; }
+    /* Mobile: <900px (the canonical fq: breakpoint). Modal goes
+       full-screen, left nav reflows to a horizontal scroller across the
+       top of the body. */
+    @media (max-width: 899px) {
+      .ps-shell--page {
+        max-width: none;
+        margin: 0;
+        border: none;
+        border-radius: 0;
+      }
+      .ps-body { grid-template-columns: 1fr; }
+      .ps-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-right: none;
+        border-bottom: 1px solid var(--tq-border);
+        padding: 10px;
+        gap: 6px;
+      }
+      .ps-nav-item {
+        flex-shrink: 0;
+        min-height: 44px;
+        white-space: nowrap;
+      }
+      .ps-content { padding: 20px 18px 28px; }
+      .ps-head { padding: 14px 18px; }
+      .ps-foot { padding: 12px 18px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    }
+
     /* ── Dashboard redesign (2026-06-29) ──
        Money-first stats, single-action rows, flagged-row amber bar,
        side-rail quota chip. Mapped onto the existing --tq-* token

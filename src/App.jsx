@@ -1042,28 +1042,29 @@ export default function App() {
         isQuotaExhausted={isQuotaExhausted}
       />
 
-      {/* Profile modal */}
+      {/* Profile / Settings modal — 2026-06-29 redesign.
+          The header (title + close-X) lives inside ProfileSetup so the
+          5-section nav + sticky save bar all share one shell. App.jsx
+          owns only the scrim and the 980×86vh frame. */}
       {showProfileModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-tq-surface rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 border border-tq-border">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-heading font-bold text-tq-accent">Edit Profile</h2>
-              {/*
-                Profile modal close-X — wrapped in a 44x44 hit area
-                (audit #14, PR-9 follow-up to PR-2). The previous
-                `text-2xl` glyph button had no padding and was a
-                sub-44px touch target on mobile.
-              */}
-              <button
-                type="button"
-                onClick={() => setShowProfileModal(false)}
-                aria-label="Close"
-                className="text-tq-muted hover:text-tq-text text-2xl inline-flex items-center justify-center touch-44"
-                style={{ minHeight: 44, minWidth: 44 }}
-              >
-                &times;
-              </button>
-            </div>
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-0 fq:p-6"
+          aria-modal="true"
+          role="dialog"
+          aria-label="Edit Profile / Settings"
+        >
+          <div
+            className="bg-tq-bg w-full fq:rounded-lg overflow-hidden border-0 fq:border border-tq-border flex flex-col h-screen fq:h-[min(86vh,820px)]"
+            style={{
+              maxWidth: 980,
+            }}
+          >
+            {/*
+              Profile modal close-X is now rendered INSIDE ProfileSetup
+              as part of its .ps-head element (audit #14, PR-9 hit-area
+              fix preserved — see .ps-head-x in index.html). App.jsx no
+              longer renders its own "Edit Profile" header here.
+            */}
             <ProfileSetup
               state={state}
               dispatch={dispatch}
@@ -1072,6 +1073,12 @@ export default function App() {
               currentUserId={state.currentUserId}
               userName={state.currentUser?.name}
               showToast={showToast}
+              onCancel={() => {
+                // 2026-06-29 — close-only path. ProfileSetup has already
+                // reverted local state to the snapshot, so we just dismiss
+                // the modal. No server hit, no profile_complete touch.
+                setShowProfileModal(false);
+              }}
               onClose={async () => {
                 setShowProfileModal(false);
                 if (state.currentUserId) {

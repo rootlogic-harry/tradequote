@@ -88,15 +88,22 @@ describe('ProfileSetup.jsx — toggle UI', () => {
 
   test('lives in the Quote Preferences section alongside showNotesOnQuote', () => {
     // Both flags are quote-output preferences and should share a section so
-    // the tradesman finds them together.
+    // the tradesman finds them together. Settings redesign (2026-06-29):
+    // the Quote Preferences section now contains the Document Type toggle
+    // FIRST, then hideLabourDays + showNotesOnQuote, then the Quote
+    // Accent Colour swatches. Bound the section by its render head ↔ the
+    // Sharing section's render head.
     const prefIdx = src.indexOf('Quote Preferences');
-    const nextSectionIdx = src.indexOf('Document Type');
+    const nextSectionIdx = src.indexOf('renderShare');
     expect(prefIdx).toBeGreaterThan(-1);
     expect(nextSectionIdx).toBeGreaterThan(prefIdx);
     const prefBlock = src.slice(prefIdx, nextSectionIdx);
     expect(prefBlock).toMatch(/hideLabourDays/);
     // Sanity: the other preference still lives here too.
     expect(prefBlock).toMatch(/showNotesOnQuote/);
+    // And the Document Type toggle is co-located (was previously its own
+    // section heading; now folded in per the redesign).
+    expect(prefBlock).toMatch(/documentType/);
   });
 });
 
