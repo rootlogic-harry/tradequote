@@ -102,13 +102,6 @@ export default function JobDetails({
   const [videoFile, setVideoFile] = useState(null);
   const [videoExtraPhotos, setVideoExtraPhotos] = useState([]);
 
-  // TRQ-171: The persona is a waller standing next to a wall, on a phone.
-  // Capture (photos/video) happens first; the Client & Site form is
-  // collapsed under a disclosure so paperwork doesn't block the camera.
-  // Quick Quote mode (admin-only) keeps it expanded by default because
-  // the admin flow is desk-driven, not on-site.
-  const [showClientDetails, setShowClientDetails] = useState(state.quoteMode === 'quick');
-
   // Reset captureMode if the flag flips off while a video-mode draft is
   // open. Without this the conditional render below would simply hide
   // the video panel, leaving the user staring at an empty step with no
@@ -346,42 +339,17 @@ export default function JobDetails({
   const inputClass = (field) =>
     `nq-field ${errors[field] ? '!border-tq-error' : ''}`;
 
-  // TRQ-171: extracted Client & Site section, rendered inside a disclosure
-  // BELOW the capture/photo blocks. The disclosure defaults open for Quick
-  // Quote (admin-only) and closed for the basic-user on-site flow. The
-  // form fields, validation hooks, and onBlur re-sync (TRQ-100) are
-  // preserved verbatim — only their wrapper changed.
-  const clientSiteSection = (
-    <div className="mb-8">
-      <button
-        type="button"
-        aria-expanded={showClientDetails}
-        aria-controls="client-site-fields"
-        onClick={() => setShowClientDetails((v) => !v)}
-        className="flex items-center gap-2 w-full text-left font-heading font-bold uppercase tracking-wide text-sm transition-colors"
-        style={{
-          color: 'var(--tq-text)',
-          minHeight: 44,
-          padding: '8px 0',
-          borderBottom: '1px solid var(--tq-border-soft)',
-          marginBottom: showClientDetails ? 16 : 0,
-        }}
-      >
-        <span style={{ fontSize: 18, lineHeight: 1, color: 'var(--tq-accent)' }}>
-          {showClientDetails ? '−' : '+'}
-        </span>
-        <span>{showClientDetails ? 'Client details' : 'Add client details'}</span>
-        {!showClientDetails && !jobDetails.siteAddress?.trim() && (
-          <span
-            className="ml-auto text-[10px] uppercase tracking-wide"
-            style={{ color: 'var(--tq-accent)', fontWeight: 600 }}
-          >
-            Site address required
-          </span>
-        )}
-      </button>
-      {showClientDetails && (
-      <div id="client-site-fields" className="grid grid-cols-1 fq:grid-cols-2 gap-4">
+  return (
+    <div className="max-w-4xl mx-auto">
+      <h2 className="page-title mb-1">
+        Job Details & Photos
+      </h2>
+      <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
+        Enter the job details and upload photos of the damaged wall.
+      </p>
+
+      <div className="eyebrow mb-3">Client & Site</div>
+      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Client Name *
@@ -530,18 +498,6 @@ export default function JobDetails({
           </p>
         </div>
       </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div className="max-w-4xl mx-auto">
-      <h2 className="page-title mb-1">
-        Job Details & Photos
-      </h2>
-      <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
-        Enter the job details and upload photos of the damaged wall.
-      </p>
 
       {/* Capture mode choice. When video analysis is disabled the choice
           screen collapses to photos-only — we still render the
@@ -660,10 +616,6 @@ export default function JobDetails({
               Without a reference card, tell us the size of something visible in the walkthrough. Measurements become much more accurate.
             </p>
           </div>
-
-          {/* TRQ-171: Client & Site form sits BELOW the video upload card so
-              the camera/upload affordance is the first thing visible. */}
-          <div className="mt-6">{clientSiteSection}</div>
 
           {/* Video analyse CTA */}
           <div className="flex justify-end gap-3 mt-6">
@@ -1013,11 +965,6 @@ export default function JobDetails({
           </p>
         </div>
       )}
-
-      {/* TRQ-171: Client & Site form sits BELOW the photo grid so the
-          camera-first persona (waller on a phone) hits photo slots
-          immediately on entering Step 2. */}
-      {clientSiteSection}
 
       {/* Analyse CTA */}
       <div className="flex justify-end gap-3">
