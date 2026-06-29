@@ -83,19 +83,32 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
       <div
         style={{
           background: 'var(--tq-card)', borderRadius: 12, width: 420,
-          maxWidth: '90vw', overflow: 'hidden',
+          maxWidth: '90vw',
+          // PR-7: the modal card is now a flex column with a viewport-
+          // capped max-height. The header + body + sticky footer below
+          // each take their share, and the body is the only scrolling
+          // region — so on a 390x844 phone the Cancel/Confirm bar at the
+          // bottom always stays visible regardless of how long the body
+          // grows (e.g. completed-with-notes variant).
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header band */}
-        <div style={{ padding: '16px 20px', backgroundColor: cfg.bandBg, borderBottom: `1.5px solid ${cfg.bandBd}` }}>
+        <div style={{ padding: '16px 20px', backgroundColor: cfg.bandBg, borderBottom: `1.5px solid ${cfg.bandBd}`, flexShrink: 0 }}>
           <h3 style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--tq-text)', margin: 0 }}>
             {cfg.header}
           </h3>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '20px' }}>
+        {/* Body — the only scrolling region inside the modal card.
+            overscrollBehavior: 'contain' stops iOS Safari from rubber-
+            banding the page underneath when the body hits the top or
+            bottom of its scroll range. */}
+        <div style={{ padding: '20px', overflowY: 'auto', overscrollBehavior: 'contain', flex: '1 1 auto' }}>
           {targetStatus === 'sent' && (
             <>
               <p style={{ color: 'var(--tq-muted)', fontSize: 14, marginBottom: 16 }}>
@@ -151,9 +164,11 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
                   value={declineReason}
                   onChange={e => setDeclineReason(e.target.value)}
                   style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 6,
+                    width: '100%', padding: '10px 12px', borderRadius: 6,
                     backgroundColor: 'var(--tq-surface)', border: '1px solid var(--tq-border)',
                     color: 'var(--tq-text)', fontSize: 14, fontFamily: 'Inter, sans-serif',
+                    // PR-7 / audit item 21 — guarantee a 44px touch target.
+                    minHeight: 44,
                   }}
                 >
                   {DECLINE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
@@ -180,6 +195,8 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
                       borderRadius: 8, cursor: 'pointer',
                       backgroundColor: completionFeedback === opt.value ? 'var(--tq-confirmed-bg)' : 'var(--tq-surface)',
                       border: `1.5px solid ${completionFeedback === opt.value ? 'var(--tq-confirmed-bd)' : 'var(--tq-border)'}`,
+                      // PR-7: the whole card is the tap target.
+                      minHeight: 44,
                     }}
                   >
                     <input
@@ -188,6 +205,7 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
                       value={opt.value}
                       checked={completionFeedback === opt.value}
                       onChange={() => setCompletionFeedback(opt.value)}
+                      data-touch-exempt="true"
                       style={{ accentColor: 'var(--tq-confirmed-bd)' }}
                     />
                     <div>
@@ -208,10 +226,12 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
                     rows={3}
                     placeholder="E.g. more stone needed than estimated, access was harder than expected..."
                     style={{
-                      width: '100%', padding: '8px 12px', borderRadius: 6,
+                      width: '100%', padding: '10px 12px', borderRadius: 6,
                       backgroundColor: 'var(--tq-surface)', border: '1px solid var(--tq-border)',
                       color: 'var(--tq-text)', fontSize: 13, fontFamily: 'Inter, sans-serif',
                       resize: 'vertical',
+                      // PR-7 / audit item 21 — guarantee a 44px touch target.
+                      minHeight: 88,
                     }}
                   />
                 </div>
@@ -228,37 +248,55 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
           {isAdminPlan && job?.clientToken && (
             <PortalAuditBlock job={job} currentUserId={currentUserId} />
           )}
+        </div>
 
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={onCancel}
-              style={{
-                flex: 1, padding: '10px 16px', borderRadius: 6,
-                border: '1px solid var(--tq-border)', backgroundColor: 'transparent',
-                color: 'var(--tq-muted)', fontFamily: 'Barlow Condensed, sans-serif',
-                fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirm}
-              style={{
-                flex: 2, padding: '10px 16px', borderRadius: 6,
-                border: 'none', backgroundColor: cfg.btnBg,
-                color: cfg.btnColor, fontFamily: 'Barlow Condensed, sans-serif',
-                fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
-            >
-              {targetStatus === 'sent' && 'CONFIRM \u2014 MARK AS SENT'}
-              {targetStatus === 'accepted' && 'CONFIRM ACCEPTED'}
-              {targetStatus === 'declined' && 'CONFIRM DECLINED'}
-              {targetStatus === 'completed' && 'CONFIRM COMPLETED'}
-            </button>
-          </div>
+        {/* PR-7: Cancel / Confirm action bar \u2014 pinned to the bottom of
+            the modal card OUTSIDE the scrolling body, so on a 390x844
+            phone with the keyboard up (or the completed-with-notes
+            variant), the primary controls never scroll out of reach.
+            `position: sticky; bottom: 0` keeps them anchored even when
+            the parent stacking context shifts; `flexShrink: 0` makes
+            the flex layout honour the bar's natural height. */}
+        <div
+          style={{
+            display: 'flex', gap: 8, padding: '12px 20px',
+            borderTop: '1px solid var(--tq-border)',
+            background: 'var(--tq-card)',
+            position: 'sticky', bottom: 0,
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: '12px 16px', borderRadius: 6,
+              border: '1px solid var(--tq-border)', backgroundColor: 'transparent',
+              color: 'var(--tq-muted)', fontFamily: 'Barlow Condensed, sans-serif',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              // PR-7 / audit item 21 \u2014 44px touch target.
+              minHeight: 44,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            style={{
+              flex: 2, padding: '12px 16px', borderRadius: 6,
+              border: 'none', backgroundColor: cfg.btnBg,
+              color: cfg.btnColor, fontFamily: 'Barlow Condensed, sans-serif',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              // PR-7 / audit item 21 \u2014 44px touch target.
+              minHeight: 44,
+            }}
+          >
+            {targetStatus === 'sent' && 'CONFIRM \u2014 MARK AS SENT'}
+            {targetStatus === 'accepted' && 'CONFIRM ACCEPTED'}
+            {targetStatus === 'declined' && 'CONFIRM DECLINED'}
+            {targetStatus === 'completed' && 'CONFIRM COMPLETED'}
+          </button>
         </div>
       </div>
     </div>
@@ -377,7 +415,7 @@ function PortalAuditBlock({ job, currentUserId }) {
           type="button"
           onClick={handleCopy}
           style={{
-            padding: '7px 14px',
+            padding: '10px 14px',
             borderRadius: 6,
             border: '1px solid var(--tq-border)',
             background: copied ? 'var(--tq-confirmed-bg)' : 'transparent',
@@ -388,6 +426,8 @@ function PortalAuditBlock({ job, currentUserId }) {
             cursor: 'pointer',
             textTransform: 'uppercase',
             letterSpacing: '0.06em',
+            // PR-7 / audit item 21 — 44px touch target.
+            minHeight: 44,
           }}
         >
           {copied ? 'Copied ✓' : 'Copy link'}
@@ -397,7 +437,7 @@ function PortalAuditBlock({ job, currentUserId }) {
           onClick={handleRegenerate}
           disabled={busy}
           style={{
-            padding: '7px 14px',
+            padding: '10px 14px',
             borderRadius: 6,
             border: '1px solid var(--tq-border)',
             background: 'transparent',
@@ -409,6 +449,8 @@ function PortalAuditBlock({ job, currentUserId }) {
             textTransform: 'uppercase',
             letterSpacing: '0.06em',
             opacity: busy ? 0.6 : 1,
+            // PR-7 / audit item 21 — 44px touch target.
+            minHeight: 44,
           }}
         >
           {busy ? 'Regenerating…' : 'Regenerate'}
