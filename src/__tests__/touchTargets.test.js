@@ -307,9 +307,6 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/common/AutoGrowTextarea.jsx", line: 107, pr: "PR-future-polish", why: "Base textarea — min-height is set per caller, not the wrapper" },
   // -- src/components/review/LabourSection.jsx --
   { file: "src/components/review/LabourSection.jsx", line: 12, pr: "PR-future-polish", why: "Labour input (covered by 3-col flex sized by parent, audit notes OK)" },
-  // -- src/components/review/LivePreview.jsx --
-  { file: "src/components/review/LivePreview.jsx", line: 34, pr: "PR-future-polish", why: "LivePreview toggle / close (full-width, but no explicit min-h)" },
-  { file: "src/components/review/LivePreview.jsx", line: 47, pr: "PR-future-polish", why: "LivePreview toggle / close (full-width, but no explicit min-h)" },
   // -- src/components/review/MeasurementRow.jsx --
   { file: "src/components/review/MeasurementRow.jsx", line: 166, pr: "PR-future-polish", why: "Numeric edit input inside measurement row" },
   // -- src/components/steps/JobDetails.jsx --
