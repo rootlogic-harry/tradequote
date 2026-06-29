@@ -442,6 +442,239 @@
       background: var(--tq-confirmed-bg);
     }
 
+    /* ── Dashboard redesign (2026-06-29) ──
+       Money-first stats, single-action rows, flagged-row amber bar,
+       side-rail quota chip. Mapped onto the existing --tq-* token
+       vocabulary — no new palette introduced. See
+       /tmp/fastquote-dashboard-handoff/design_handoff_dashboard/
+       for the source-of-truth prototype. */
+
+    /* Won/Awaiting/Pipeline/Win-rate strip — replaces the old
+       This-month/This-year/Awaiting/Accepted strip. Keeps the dark
+       canvas of .stats-strip so the visual frame is unchanged; only
+       the cell content + accent vocab is new. */
+    .stats-strip .stat-cell.accent .stat-label { color: var(--tq-confirmed-bd); }
+    .stats-strip .stat-cell.accent .stat-value { color: var(--tq-confirmed-bd); }
+    .stats-strip .stat-cell.warn { background: linear-gradient(180deg, rgba(217,119,6,0.18), transparent); }
+    .stats-strip .stat-cell.warn .stat-label { color: var(--tq-accent); }
+    .stats-strip .stat-cell.warn .stat-value { color: var(--tq-accent); }
+    .stats-strip .stat-sub {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--tq-nav-muted);
+      margin-top: 6px;
+    }
+    .stats-strip .stat-link {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--tq-accent);
+      background: none;
+      border: none;
+      padding: 6px 0 0;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .stats-strip .stat-link:hover { color: var(--tq-nav-text); }
+
+    /* Flagged job row — amber inset bar marking rows that need user
+       attention (sent ≥2d with no reply OR accepted with no RAMS).
+       inset box-shadow doesn't shift layout. */
+    .job-row.flagged { box-shadow: inset 4px 0 0 var(--tq-accent); }
+    .job-flag {
+      display: inline-block;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--tq-accent-dk);
+      background: var(--tq-accent-bg);
+      padding: 2px 7px;
+      border-radius: 2px;
+      margin-top: 6px;
+    }
+
+    /* Kebab overflow button + menu */
+    .kebab-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 2px;
+      border: 1.5px solid var(--tq-border);
+      background: var(--tq-card);
+      color: var(--tq-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .kebab-btn:hover { border-color: var(--tq-accent); color: var(--tq-text); }
+    @media (max-width: 899px) {
+      .kebab-btn { width: 44px; height: 44px; }
+    }
+    .kebab-menu-wrap { position: relative; }
+    .kebab-menu {
+      position: absolute;
+      right: 0;
+      top: 40px;
+      z-index: 30;
+      background: var(--tq-card);
+      border: 1.5px solid var(--tq-border);
+      border-radius: 2px;
+      box-shadow: 0 16px 40px -12px rgba(0,0,0,0.32);
+      min-width: 200px;
+      overflow: hidden;
+      padding: 4px;
+    }
+    .kebab-menu button {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: none;
+      background: none;
+      color: var(--tq-text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      border-radius: 2px;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .kebab-menu button:hover { background: var(--tq-surface); }
+    .kebab-menu button.danger { color: var(--tq-error-txt); }
+    .kebab-menu button.danger:hover { background: var(--tq-error-bg); }
+    .kebab-menu-div {
+      height: 1px;
+      background: var(--tq-border);
+      margin: 4px 0;
+    }
+
+    /* Side-rail quota chip — moved from the top-of-page QuotaCounter
+       (kept for Step pages + SavedQuotes; Dashboard only loses the
+       inline banner). Amber tint kicks in at quota <= 2. Hidden
+       entirely for subscribed / comped — no useful info there. */
+    .rail-quota {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.04);
+      margin: 0 4px 12px;
+    }
+    .rail-quota.low {
+      background: rgba(217,119,6,0.16);
+      outline: 1px solid rgba(217,119,6,0.4);
+    }
+    .rail-quota-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--tq-nav-text);
+      font-weight: 500;
+    }
+    .rail-quota.low .rail-quota-count { color: #f6c98a; }
+    .rail-quota-topup {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--tq-accent);
+      background: none;
+      border: none;
+      padding: 4px 6px;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .rail-quota-topup:hover { color: var(--tq-nav-text); }
+
+    /* Recent-jobs row redesign — desktop uses an aligned grid so
+       value / action / ⋯ form clean vertical lines. Mobile reflows
+       per the prototype's @media block: status stamp full width,
+       client/site fills middle, primary action full-width, ref + £
+       on the right. */
+    .job-row.job-row-redesign {
+      display: grid;
+      grid-template-columns: 100px 1fr 140px 160px 44px;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 20px;
+    }
+    .job-row-stamp {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .job-row-stamp::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: currentColor;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .job-row-stamp[data-s="draft"] { color: var(--tq-muted); }
+    .job-row-stamp[data-s="sent"] { color: var(--tq-accent); }
+    .job-row-stamp[data-s="accepted"] { color: var(--tq-confirmed-txt); }
+    .job-row-stamp[data-s="completed"] { color: var(--tq-muted); }
+    .job-row-stamp[data-s="declined"] { color: var(--tq-error-txt); }
+    .job-row-money {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .job-row-money .ref {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--tq-muted);
+    }
+    .job-row-money .total {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--tq-text);
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+    .job-row-primary {
+      display: flex;
+      justify-content: stretch;
+    }
+    .job-row-primary .row-action-btn {
+      width: 100%;
+      justify-content: center;
+    }
+    @media (max-width: 899px) {
+      .job-row.job-row-redesign {
+        grid-template-columns: 1fr auto;
+        gap: 10px 12px;
+        padding: 14px;
+      }
+      .job-row-stamp { grid-column: 1 / -1; }
+      .job-row-primary {
+        grid-column: 1 / -1;
+        order: 99;
+      }
+      .job-row-money {
+        text-align: right;
+        margin-left: auto;
+      }
+    }
+
   </style>
 
   <!-- Print stylesheet — shared between window.print() (Phase 1)

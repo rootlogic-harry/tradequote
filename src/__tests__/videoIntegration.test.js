@@ -144,12 +144,17 @@ describe('Video integration into Step 2 (JobDetails)', () => {
       expect(badgesSource).toMatch(/captureMode\s*!==\s*['"]video['"]/);
     });
 
-    it('Dashboard imports VideoBadge', () => {
-      expect(dashboardSource).toMatch(/import.*VideoBadge.*from.*badges/);
+    // Dashboard redesign (2026-06-29): VideoBadge removed from the row
+    // — collapsed to a single status stamp per the design handoff. The
+    // captureMode info is still in the job snapshot and visible inside
+    // SavedQuoteViewer / SavedQuotes (which keep the badge). VideoBadge
+    // is also gated off in prod (VIDEO_ANALYSIS_ENABLED=false).
+    it('Dashboard no longer imports VideoBadge (redesign 2026-06-29)', () => {
+      expect(dashboardSource).not.toMatch(/import.*VideoBadge.*from.*badges/);
     });
 
-    it('Dashboard renders VideoBadge with captureMode', () => {
-      expect(dashboardSource).toMatch(/VideoBadge.*captureMode/);
+    it('Dashboard no longer renders VideoBadge with captureMode (redesign 2026-06-29)', () => {
+      expect(dashboardSource).not.toMatch(/<VideoBadge\b/);
     });
 
     it('SavedQuotes imports VideoBadge', () => {
