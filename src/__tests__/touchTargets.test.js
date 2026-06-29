@@ -304,13 +304,8 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/Sidebar.jsx", line: 103, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   { file: "src/components/Sidebar.jsx", line: 127, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   // -- src/components/StatusModal.jsx --
-  { file: "src/components/StatusModal.jsx", line: 150, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  { file: "src/components/StatusModal.jsx", line: 185, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  { file: "src/components/StatusModal.jsx", line: 205, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  { file: "src/components/StatusModal.jsx", line: 234, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  { file: "src/components/StatusModal.jsx", line: 246, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  { file: "src/components/StatusModal.jsx", line: 376, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
-  { file: "src/components/StatusModal.jsx", line: 395, pr: "PR-7", why: "StatusModal selects/textarea/buttons sub-44px (audit #7/#21)" },
+  // (PR-7 cleared all 7 entries — audit items 7 + 21 closed 2026-06-29.)
+  // (PR-4 cleared all 5 SubscriptionBanner entries — audit #4 closed 2026-06-29.)
   // -- src/components/Toast.jsx --
   { file: "src/components/Toast.jsx", line: 24, pr: "PR-future-polish", why: "Toast dismiss × button" },
   // -- src/components/UserSelector.jsx --
