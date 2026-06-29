@@ -324,6 +324,17 @@
       .stats-strip .stat-cell:nth-last-child(-n+2) { border-bottom: none; }
       .stats-strip .stat-value { font-size: 18px; }
     }
+    /* Stat-value compact/full toggle (Dashboard.jsx renders both forms).
+       Default: full visible, compact hidden. On very-small viewports
+       (<360px, e.g. iPhone SE / older Androids) flip the visibility so
+       7-figure year totals (£1,200,000) render as their abbreviated
+       form (£1.2M) and don't overflow the ~165px stat cell. Audit #19. */
+    .stat-value-full { display: inline; }
+    .stat-value-compact { display: none; }
+    @media (max-width: 359px) {
+      .stat-value-full { display: none; }
+      .stat-value-compact { display: inline; }
+    }
     .job-row {
       display: flex;
       align-items: center;

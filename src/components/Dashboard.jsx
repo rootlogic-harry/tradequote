@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
+import { formatCurrencyCompact } from '../utils/formatCurrencyCompact.js';
 import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
 import PortalBadge from './PortalBadge.jsx';
 import { documentTerm } from '../utils/documentType.js';
@@ -207,8 +208,19 @@ export default function Dashboard({
             {getGreeting()}{userName ? `, ${userName}` : ''}
           </h1>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={onStartQuickQuote} className="btn-ghost" title="Skip the review step">
+        {/* Header CTAs.
+            QUICK is an admin-only fast-path (Harry's Q3 audit ask,
+            approved 2026-06-26) — hidden on mobile entirely, where the
+            header just shows the primary `+ NEW QUOTE` action.
+            flex-wrap keeps the row from overflowing on 360px Androids
+            when both buttons are visible at the desktop breakpoint
+            mid-resize / between media-query steps. */}
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            onClick={onStartQuickQuote}
+            className="btn-ghost hidden fq:inline-flex"
+            title="Skip the review step"
+          >
             QUICK {term.upper}
           </button>
           <button onClick={onStartNewQuote} className="btn-primary">
@@ -217,15 +229,27 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* Stats strip */}
+      {/* Stats strip.
+          Money values are rendered twice — full form (`£1,200,000.00`)
+          and abbreviated form (`£1.2M`). CSS media query in index.html
+          shows the appropriate one per viewport: full ≥360px, compact
+          <360px — so 7-figure year totals don't overflow the ~165px
+          cell on an iPhone SE / older Android (audit item #19).
+          Awaiting is an integer count so it never needs abbreviation. */}
       <div className="stats-strip" style={{ borderRadius: 2 }}>
         <div className="stat-cell">
           <div className="stat-label">This month</div>
-          <div className="stat-value">{formatCurrency(thisMonthTotal)}</div>
+          <div className="stat-value">
+            <span className="stat-value-full">{formatCurrency(thisMonthTotal)}</span>
+            <span className="stat-value-compact">{formatCurrencyCompact(thisMonthTotal)}</span>
+          </div>
         </div>
         <div className="stat-cell">
           <div className="stat-label">This year</div>
-          <div className="stat-value">{formatCurrency(thisYearTotal)}</div>
+          <div className="stat-value">
+            <span className="stat-value-full">{formatCurrency(thisYearTotal)}</span>
+            <span className="stat-value-compact">{formatCurrencyCompact(thisYearTotal)}</span>
+          </div>
         </div>
         <div className="stat-cell">
           <div className="stat-label">Awaiting</div>
@@ -233,7 +257,10 @@ export default function Dashboard({
         </div>
         <div className="stat-cell">
           <div className="stat-label">Accepted</div>
-          <div className="stat-value">{formatCurrency(acceptedValue)}</div>
+          <div className="stat-value">
+            <span className="stat-value-full">{formatCurrency(acceptedValue)}</span>
+            <span className="stat-value-compact">{formatCurrencyCompact(acceptedValue)}</span>
+          </div>
         </div>
       </div>
 
@@ -241,8 +268,8 @@ export default function Dashboard({
         <button
           type="button"
           onClick={() => setShowMonthly(v => !v)}
-          className="text-xs uppercase tracking-wide"
-          style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--tq-muted)' }}
+          className="text-xs uppercase tracking-wide inline-flex items-center"
+          style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--tq-muted)', minHeight: 44, padding: '4px 0' }}
           aria-expanded={showMonthly}
         >
           {showMonthly ? '\u2212' : '+'} Monthly breakdown ({currentYear})
@@ -252,7 +279,12 @@ export default function Dashboard({
             className="mt-3 p-4"
             style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}
           >
-            <div className="grid grid-cols-3 fq:grid-cols-6 gap-3">
+            {/* On 320-360px phones, 3 columns squashes the £ value
+                under a "Jan" label that already touches its neighbour.
+                Drop to 2 cols on very-small viewports — month label and
+                cell value both get more breathing room. Desktop unchanged
+                (6 cols = 2 rows). Audit item #20. */}
+            <div className="grid grid-cols-2 fq:grid-cols-6 gap-3">
               {monthlyTotals.map((m) => (
                 <div key={m.month} className="text-center">
                   <div
@@ -352,8 +384,8 @@ export default function Dashboard({
           <div className="eyebrow">{isArchiveView ? 'ARCHIVED JOBS' : isCompletedView ? 'COMPLETED JOBS' : 'RECENT JOBS'}</div>
           <button
             onClick={onViewJobs}
-            className="text-sm"
-            style={{ color: 'var(--tq-accent)', fontWeight: 500 }}
+            className="text-sm inline-flex items-center"
+            style={{ color: 'var(--tq-accent)', fontWeight: 500, minHeight: 44, padding: '4px 8px' }}
           >
             View all &rarr;
           </button>
@@ -452,19 +484,26 @@ export default function Dashboard({
                       there if they want to restore. */}
                   {!isArchiveView && (
                     <div className="flex flex-wrap gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                      {/* Per-row action buttons use the shared
+                          .row-action-btn class so the global mobile rule
+                          (44px tall + full-width below the fq breakpoint)
+                          kicks in. Previously these were inline-styled
+                          at a fixed 36px height and spilled out of the
+                          column on 360px (audit item #9). Status-specific
+                          tints are kept via inline style. */}
                       {status === 'DRAFT' && (
                         <>
                           <button
                             onClick={(e) => openStatusModal(e, job.id, 'sent')}
-                            className="btn-primary text-xs"
-                            style={{ height: 36, padding: '0 16px' }}
+                            className="row-action-btn"
+                            style={{ borderColor: 'var(--tq-accent)', background: 'var(--tq-accent)', color: '#ffffff' }}
                           >
                             Mark Sent
                           </button>
                           <button
                             onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                            className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                            className="row-action-btn"
+                            style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                           >
                             {'✗'} Declined
                           </button>
@@ -474,15 +513,15 @@ export default function Dashboard({
                         <>
                           <button
                             onClick={(e) => openStatusModal(e, job.id, 'accepted')}
-                            className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                            className="row-action-btn"
+                            style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                           >
                             {'\u2713'} Accepted
                           </button>
                           <button
                             onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                            className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                            className="row-action-btn"
+                            style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                           >
                             {'\u2717'} Declined
                           </button>
@@ -493,24 +532,23 @@ export default function Dashboard({
                           {isAdminPlan && hasRams ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
-                              className="btn-ghost text-xs"
-                              style={{ height: 36, padding: '0 16px' }}
+                              className="row-action-btn"
                             >
                               View RAMS
                             </button>
                           ) : isAdminPlan ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
-                              className="btn-ghost text-xs"
-                              style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
+                              className="row-action-btn"
+                              style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
                             >
                               Create RAMS
                             </button>
                           ) : null}
                           <button
                             onClick={(e) => openStatusModal(e, job.id, 'completed')}
-                            className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
+                            className="row-action-btn"
+                            style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
                           >
                             Complete
                           </button>
@@ -520,8 +558,8 @@ export default function Dashboard({
                               the SENT decline path so note-capture works. */}
                           <button
                             onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                            className="btn-ghost text-xs"
-                            style={{ height: 36, padding: '0 16px', borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
+                            className="row-action-btn"
+                            style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
                           >
                             {'✗'} Declined
                           </button>
