@@ -32,8 +32,10 @@ export default function LivePreview({ state, dispatch }) {
       {/* Mobile: preview button */}
       <div className="mt-6 fq:hidden">
         <button
+          type="button"
           onClick={() => setOverlayOpen(true)}
-          className="w-full border border-tq-accent text-tq-accent font-heading font-bold uppercase tracking-wide py-3 rounded hover:bg-tq-accent/10 transition-colors"
+          className="touch-44 w-full border border-tq-accent text-tq-accent font-heading font-bold uppercase tracking-wide rounded hover:bg-tq-accent/10 transition-colors inline-flex items-center justify-center"
+          style={{ minHeight: 48 }}
         >
           Preview Quote
         </button>
@@ -42,11 +44,14 @@ export default function LivePreview({ state, dispatch }) {
       {/* Mobile: full-screen overlay (editable) */}
       {overlayOpen && (
         <div className="fixed inset-0 z-50 bg-tq-bg flex flex-col fq:hidden">
-          <div className="sticky top-0 z-10 bg-tq-surface border-b border-tq-border px-4 py-3 flex items-center justify-between">
+          <div className="sticky top-0 z-10 bg-tq-surface border-b border-tq-border px-4 py-2 flex items-center justify-between">
             <h3 className="font-heading font-bold text-tq-text">Quote Preview</h3>
             <button
+              type="button"
               onClick={() => setOverlayOpen(false)}
-              className="text-tq-muted hover:text-tq-text text-2xl leading-none"
+              aria-label="Close preview"
+              className="touch-44 text-tq-muted hover:text-tq-text text-2xl leading-none inline-flex items-center justify-center"
+              style={{ minHeight: 44, minWidth: 44 }}
             >
               &times;
             </button>
