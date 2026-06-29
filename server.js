@@ -3153,7 +3153,13 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
       // Mark hit this on 2026-06-26; the UI (PR #44) offers the action
       // but this server-side gate was rejecting it.
       accepted:  ['completed', 'declined'],
-      declined:  ['sent'],          // allow re-sending a declined quote
+      // declined → sent: re-send a declined quote untouched.
+      // declined → draft: customer called back to discuss — waller wants
+      //   to edit the quote (price/scope) before re-sending. Honest UX:
+      //   moving to draft signals "back in your hands" rather than
+      //   "magically went out again". Added 2026-06-29 alongside the
+      //   dashboard redesign's Re-open kebab action.
+      declined:  ['sent', 'draft'],
       completed: [],                // terminal state
     };
     const currentStatus = rows[0].current_status || 'draft';

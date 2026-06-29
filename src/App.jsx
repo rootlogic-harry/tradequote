@@ -29,7 +29,7 @@ import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { trackEvent } from './utils/trackEvent.js';
-import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, incrementQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
+import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, incrementQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError, getClientStatus, generateClientToken, deleteJob } from './utils/userDB.js';
 import { autosaveDraft } from './utils/autosaveDraft.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
@@ -597,10 +597,76 @@ export default function App() {
         showToast(`${term.title} recorded as declined`, 'info');
       } else if (targetStatus === 'completed') {
         showToast('Job marked as completed', 'success');
+      } else if (targetStatus === 'draft') {
+        // 2026-06-29: Re-open from declined. App-chrome uses "Quote"
+        // (terminology lockdown — Dashboard redesign 2026-06-29).
+        showToast('Quote re-opened — edit and re-send when ready', 'success');
       }
       fetchIncompleteJobs(state.currentUserId);
     } catch (err) {
       showToast('Failed to update status', 'error');
+    }
+  };
+
+  // --- Dashboard kebab actions (2026-06-29 UX follow-up) ---
+  // Resend link: copy the existing client-portal URL to clipboard so the
+  // waller can paste into WhatsApp / SMS / email. If no token exists yet
+  // (rare for a sent quote but possible), generate one on the fly.
+  const handleResendLink = async (job) => {
+    if (!state.currentUserId || !job?.id) return;
+    try {
+      let url = null;
+      try {
+        const status = await getClientStatus(state.currentUserId, job.id);
+        if (status?.url) url = status.url;
+      } catch {
+        // 404 = no token yet; fall through to generate
+      }
+      if (!url) {
+        const created = await generateClientToken(state.currentUserId, job.id);
+        url = created?.url || null;
+      }
+      if (!url) {
+        showToast('Could not get a link for this quote', 'error');
+        return;
+      }
+      // Use the modern clipboard API; falls back to a quick textarea
+      // selection trick for older Safari (rare on iOS 16+ but cheap to
+      // include).
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      showToast('Link copied — paste into WhatsApp or email', 'success');
+    } catch (err) {
+      showToast('Could not copy the link', 'error');
+    }
+  };
+
+  // Delete a quote from the Dashboard kebab. Confirmation happens INSIDE
+  // the kebab menu (inline two-tap pattern) so we don't need a modal
+  // here — by the time this fires, the user has already confirmed.
+  const handleDeleteJob = async (jobId) => {
+    if (!state.currentUserId || !jobId) return;
+    try {
+      await deleteJob(state.currentUserId, jobId);
+      // Best-effort photo cleanup; safe to ignore failure.
+      deletePhotos(state.currentUserId, jobId).catch(() => {});
+      const jobs = await listJobs(state.currentUserId);
+      dispatch({ type: 'JOBS_UPDATED', jobs });
+      setSavedJobs(jobs);
+      fetchIncompleteJobs(state.currentUserId);
+      showToast('Quote deleted', 'success');
+    } catch (err) {
+      showToast('Failed to delete quote', 'error');
     }
   };
 
@@ -787,6 +853,9 @@ export default function App() {
           dispatch={dispatch}
           onViewJob={handleViewQuote}
           onViewRams={handleViewRams}
+          onResendLink={handleResendLink}
+          onDeleteJob={handleDeleteJob}
+          showToast={showToast}
           isAdminPlan={isAdmin}
           viewMode={state.viewMode}
         />

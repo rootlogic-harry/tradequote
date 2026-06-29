@@ -551,6 +551,15 @@
     .kebab-menu button:hover { background: var(--tq-surface); }
     .kebab-menu button.danger { color: var(--tq-error-txt); }
     .kebab-menu button.danger:hover { background: var(--tq-error-bg); }
+    /* 2026-06-29: inline two-tap confirm for Delete. First tap "arms"
+       the button — it visually intensifies to signal that another tap
+       will fire the destructive action. Mirrors the GitHub-style
+       "Delete branch" affordance; familiar without needing a modal. */
+    .kebab-menu button.danger.armed {
+      background: var(--tq-error-bg);
+      color: var(--tq-error-txt);
+      font-weight: 700;
+    }
     .kebab-menu-div {
       height: 1px;
       background: var(--tq-border);

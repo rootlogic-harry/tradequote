@@ -268,6 +268,84 @@ describe('Dashboard does NOT ship the review-only prototype artifacts', () => {
   });
 });
 
+// ─── 2026-06-29 kebab UX follow-up ───────────────────────────────────
+describe('Dashboard kebab — Re-open routes to draft (not sent)', () => {
+  it("declined → 'reopen' opens the status modal with target='draft'", () => {
+    // 2026-06-29: server VALID_TRANSITIONS widened to allow
+    // declined → draft so the waller can edit the quote before
+    // re-sending. The "Re-open" kebab targets 'draft' accordingly.
+    expect(dashboardSrc).toMatch(
+      /case ['"]reopen['"][\s\S]{0,500}openStatusModal\(job\.id,\s*['"]draft['"]\)/
+    );
+  });
+});
+
+describe('Dashboard kebab — Delete inline two-tap confirm', () => {
+  it('KebabMenu tracks a deleteArmed state', () => {
+    expect(dashboardSrc).toMatch(/setDeleteArmed/);
+  });
+
+  it('the Delete button shows "Tap again to confirm" once armed', () => {
+    expect(dashboardSrc).toMatch(/Tap again to confirm/);
+  });
+
+  it("the danger button gains an 'armed' className when arming", () => {
+    expect(dashboardSrc).toMatch(/it\.id === ['"]delete['"]\s*&&\s*deleteArmed\s*\?\s*['"]armed['"]/);
+  });
+});
+
+describe('Dashboard kebab — Resend link copies to clipboard', () => {
+  it("'resend' action delegates to onResendLink prop", () => {
+    expect(dashboardSrc).toMatch(/case ['"]resend['"][\s\S]{0,500}onResendLink\(job\)/);
+  });
+});
+
+describe('App.jsx wires Resend/Delete kebab callbacks', () => {
+  const appSrc = readFileSync(join(__dirname, '../App.jsx'), 'utf8');
+
+  it('imports getClientStatus, generateClientToken, deleteJob from userDB', () => {
+    expect(appSrc).toMatch(/getClientStatus/);
+    expect(appSrc).toMatch(/generateClientToken/);
+    expect(appSrc).toMatch(/\bdeleteJob\b/);
+  });
+
+  it('handleResendLink copies to clipboard + toasts on success', () => {
+    expect(appSrc).toMatch(/handleResendLink/);
+    expect(appSrc).toMatch(/clipboard\.writeText/);
+    expect(appSrc).toMatch(/Link copied/);
+  });
+
+  it('handleDeleteJob calls deleteJob + refreshes the list', () => {
+    expect(appSrc).toMatch(/handleDeleteJob/);
+    expect(appSrc).toMatch(/await deleteJob\(state\.currentUserId,/);
+  });
+
+  it('Dashboard is passed onResendLink, onDeleteJob, showToast', () => {
+    const dashStart = appSrc.indexOf('<Dashboard');
+    const dashEnd = appSrc.indexOf('/>', dashStart);
+    const block = appSrc.slice(dashStart, dashEnd);
+    expect(block).toContain('onResendLink={handleResendLink}');
+    expect(block).toContain('onDeleteJob={handleDeleteJob}');
+    expect(block).toContain('showToast={showToast}');
+  });
+});
+
+describe('StatusModal supports draft target (Re-open from declined)', () => {
+  const modalSrc = readFileSync(join(__dirname, '../components/StatusModal.jsx'), 'utf8');
+
+  it("'draft' is a recognised targetStatus in handleConfirm", () => {
+    expect(modalSrc).toMatch(/targetStatus === ['"]draft['"]/);
+  });
+
+  it("draft variant clears declinedAt + declineReason in the meta payload", () => {
+    expect(modalSrc).toMatch(/onConfirm\(jobId,\s*['"]draft['"][\s\S]{0,200}declinedAt:\s*null/);
+  });
+
+  it("draft variant has a 'Re-open quote' header config", () => {
+    expect(modalSrc).toMatch(/Re-open quote/);
+  });
+});
+
 // ─── Visibility-rules sanity ──────────────────────────────────────────
 describe('Dashboard redesign passes the basic-user visibility check', () => {
   it('does not introduce banned vocabulary (AI/agent/confidence/calibration/model/prompt)', () => {

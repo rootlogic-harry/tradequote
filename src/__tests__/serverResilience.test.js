@@ -50,10 +50,15 @@ describe('Status transition validation', () => {
     expect(match[1].trim()).toBe(''); // empty array — no transitions out
   });
 
-  test('declined can transition to sent (re-send declined quote)', () => {
+  test('declined can transition to sent OR draft (re-send vs re-open for edit)', () => {
     const match = serverSource.match(/declined:\s*\[(.*?)\]/);
     expect(match).toBeTruthy();
     expect(match[1]).toContain("'sent'");
+    // 2026-06-29: dashboard redesign added a "Re-open" kebab action.
+    // The waller's mental model when a customer calls back is "edit
+    // first, then send" — declined → draft matches that, declined → sent
+    // would imply the old quote already went out again. Both allowed.
+    expect(match[1]).toContain("'draft'");
   });
 
   test('accepted can transition to completed OR declined (client back-out)', () => {

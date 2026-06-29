@@ -35,6 +35,11 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
       onConfirm(jobId, 'declined', { declinedAt: now, declineReason });
     } else if (targetStatus === 'completed') {
       onConfirm(jobId, 'completed', { completionFeedback, completionNotes: completionNotes || undefined });
+    } else if (targetStatus === 'draft') {
+      // 2026-06-29: Re-open from declined. Clears the decline timestamp +
+      // reason so the row looks like a fresh draft. Server gate at
+      // VALID_TRANSITIONS allows declined → draft (widened same day).
+      onConfirm(jobId, 'draft', { declinedAt: null, declineReason: null });
     }
   };
 
@@ -67,6 +72,13 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
       btnBg: 'var(--tq-confirmed-bd)',
       btnColor: '#ffffff',
       header: 'Mark job as completed',
+    },
+    draft: {
+      bandBg: 'var(--tq-card-alt, var(--tq-card))',
+      bandBd: 'var(--tq-border)',
+      btnBg: 'var(--tq-accent)',
+      btnColor: '#ffffff',
+      header: 'Re-open quote',
     },
   };
 
@@ -109,6 +121,14 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
             banding the page underneath when the body hits the top or
             bottom of its scroll range. */}
         <div style={{ padding: '20px', overflowY: 'auto', overscrollBehavior: 'contain', flex: '1 1 auto' }}>
+          {targetStatus === 'draft' && (
+            <p style={{ color: 'var(--tq-muted)', fontSize: 14, marginBottom: 8 }}>
+              This will move the quote back to your drafts so you can edit
+              the price or scope before sending again. The previous decline
+              note and timestamp will be cleared.
+            </p>
+          )}
+
           {targetStatus === 'sent' && (
             <>
               <p style={{ color: 'var(--tq-muted)', fontSize: 14, marginBottom: 16 }}>
@@ -296,6 +316,7 @@ export default function StatusModal({ modal, job, currentUserId, onConfirm, onCa
             {targetStatus === 'accepted' && 'CONFIRM ACCEPTED'}
             {targetStatus === 'declined' && 'CONFIRM DECLINED'}
             {targetStatus === 'completed' && 'CONFIRM COMPLETED'}
+            {targetStatus === 'draft' && 'RE-OPEN QUOTE'}
           </button>
         </div>
       </div>

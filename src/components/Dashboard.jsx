@@ -92,6 +92,12 @@ const PRIMARY_ACTION = {
 // ─────────────────────────────────────────────────────────────────────
 function KebabMenu({ job, status, isAdminPlan, onClose, onAction }) {
   const ref = useRef(null);
+  // 2026-06-29: inline two-tap confirm for destructive items (Delete).
+  // First tap arms; second tap (within the same menu open) fires the
+  // action. Menu close-on-outside-click clears the arming naturally.
+  // Mirrors the SavedQuotes confirmDeleteId pattern but scoped to a
+  // single open menu — no need for a job-id key.
+  const [deleteArmed, setDeleteArmed] = useState(false);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener('mousedown', h);
@@ -157,11 +163,21 @@ function KebabMenu({ job, status, isAdminPlan, onClose, onAction }) {
               key={it.id}
               type="button"
               role="menuitem"
-              className={`touch-44 ${it.danger ? 'danger' : ''}`}
+              className={`touch-44 ${it.danger ? 'danger' : ''} ${it.id === 'delete' && deleteArmed ? 'armed' : ''}`}
               style={{ minHeight: 44, width: '100%', justifyContent: 'flex-start' }}
-              onClick={(e) => { e.stopPropagation(); onAction(it.id, job); onClose(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Inline two-tap for Delete only — other danger items
+                // (Mark declined) route through their own modal/flow.
+                if (it.id === 'delete' && !deleteArmed) {
+                  setDeleteArmed(true);
+                  return;
+                }
+                onAction(it.id, job);
+                onClose();
+              }}
             >
-              {it.label}
+              {it.id === 'delete' && deleteArmed ? 'Tap again to confirm' : it.label}
             </button>
           )
       )}
@@ -297,6 +313,9 @@ export default function Dashboard({
   dispatch,
   onViewJob,
   onViewRams,
+  onResendLink,
+  onDeleteJob,
+  showToast,
   isAdminPlan = false,
 }) {
   // Note: `profile` is still in props for back-compat with App.jsx —
@@ -413,25 +432,27 @@ export default function Dashboard({
         openStatusModal(job.id, 'declined');
         return;
       case 'delete':
-        // Delete from kebab is destructive; let App's confirm flow
-        // handle it via a dispatch the parent can listen to. For now
-        // route through view so user goes to SavedQuotes for confirm.
-        // (Belt-and-braces — keeps Dashboard from doing destructive
-        // ops directly. Flagged in PR.)
-        onViewJob?.(job);
+        // 2026-06-29: KebabMenu enforces an inline two-tap confirm so by
+        // the time this fires the user has already confirmed. Delegates
+        // to App.handleDeleteJob which calls deleteJob + refreshes.
+        if (onDeleteJob) onDeleteJob(job.id);
+        else onViewJob?.(job); // fail-safe for callers that haven't wired it yet
         return;
       case 'resend':
-        // Resend link → open the quote, where ClientLinkBlock handles
-        // regenerate via the existing client-token endpoint.
-        onViewJob?.(job);
+        // 2026-06-29: copy the client-portal URL to clipboard so the
+        // waller can paste into WhatsApp / SMS / email without a
+        // context switch. App.handleResendLink fetches the existing
+        // token (or generates one) + copies + toasts.
+        if (onResendLink) onResendLink(job);
+        else onViewJob?.(job);
         return;
       case 'reopen':
-        // VALID_TRANSITIONS allows declined → sent only. Treat re-open
-        // as flipping the row back into the active list via the
-        // status modal so the user picks the destination consciously.
-        // (Flagged in PR — if Harry wants declined → draft, server
-        // VALID_TRANSITIONS needs a one-line widening.)
-        openStatusModal(job.id, 'sent');
+        // 2026-06-29: server VALID_TRANSITIONS widened to allow
+        // declined → draft. A customer who called back to discuss is
+        // best served by the quote being back in the waller's hands
+        // for edit, not magically marked Sent again. StatusModal
+        // renders a confirm pane for the 'draft' target.
+        openStatusModal(job.id, 'draft');
         return;
       case 'create-rams':
         onCreateRamsFromSaved?.(job);
