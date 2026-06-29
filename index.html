@@ -675,6 +675,488 @@
       }
     }
 
+    /* ── Your Quote screen redesign (2026-06-29) ──
+       /tmp/fastquote-quote-handoff/design_handoff_dashboard/FastQuote Quote Screen Spec.md
+       Replaces the PR #73 Download / Send / More 6-button layout with
+       2 split-buttons + 1 tertiary text link, a state-aware status
+       banner, and a promoted hero client-link card. Mapped onto the
+       existing --tq-* token vocabulary — no new palette. */
+    .qo-screen { display: flex; flex-direction: column; gap: 16px; }
+    .qo-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .qo-header-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .qo-back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--tq-muted);
+      background: none;
+      border: none;
+      padding: 8px 0;
+      cursor: pointer;
+      align-self: flex-start;
+      transition: color 0.15s;
+    }
+    .qo-back-link:hover { color: var(--tq-accent); }
+    .qo-title { margin: 0; }
+    .qo-ref {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--tq-muted);
+      margin-top: 8px;
+    }
+    .qo-ref-num { color: var(--tq-accent); }
+    .qo-ref-sep { color: var(--tq-muted); }
+    .qo-subtitle {
+      font-size: 14.5px;
+      color: var(--tq-muted);
+      margin: 4px 0 0;
+    }
+
+    /* Status banner — state-dependent strip above the action region.
+       Tokens reused from the existing status palette so dark/light
+       themes flip cleanly. */
+    .qo-status {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 14px 16px;
+      border-radius: 2px;
+      border: 1.5px solid var(--tq-border);
+      background: var(--tq-status-draft);
+    }
+    .qo-status-ic {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      background: var(--tq-muted);
+      flex-shrink: 0;
+    }
+    .qo-status-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .qo-status-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .qo-status-sub {
+      font-size: 13px;
+      color: var(--tq-muted);
+      line-height: 1.35;
+    }
+    .qo-status--accepted {
+      background: var(--tq-status-acc);
+      border-color: var(--tq-confirmed-bd);
+    }
+    .qo-status--accepted .qo-status-ic { background: var(--tq-confirmed-bd); }
+    .qo-status--accepted .qo-status-title { color: var(--tq-confirmed-txt); }
+    .qo-status--declined {
+      background: var(--tq-error-bg);
+      border-color: var(--tq-error-bd);
+    }
+    .qo-status--declined .qo-status-ic { background: var(--tq-err); }
+    .qo-status--declined .qo-status-title { color: var(--tq-error-txt); }
+    .qo-status--sent,
+    .qo-status--viewed {
+      background: var(--tq-status-sent);
+      border-color: var(--tq-accent-bd);
+    }
+    .qo-status--sent .qo-status-ic,
+    .qo-status--viewed .qo-status-ic { background: var(--tq-accent); }
+    .qo-status--sent .qo-status-title,
+    .qo-status--viewed .qo-status-title { color: var(--tq-status-sent-txt); }
+    .qo-status--draft .qo-status-title { color: var(--tq-muted); }
+
+    /* Action region — 2 split-buttons + 1 tertiary ghost link. */
+    .qo-actions {
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+    .qo-actions .qo-split { flex-shrink: 0; }
+    .qo-edit-link { margin-left: auto; align-self: center; }
+    @media (max-width: 899px) {
+      .qo-actions { flex-direction: column; align-items: stretch; }
+      .qo-actions .qo-split,
+      .qo-actions .qo-edit-link { width: 100%; margin-left: 0; }
+    }
+
+    /* Split-button — main click + caret dropdown. The caret only carries
+       a left border separator; the main and caret share the same
+       background/border so they read as one component. */
+    .qo-split {
+      display: inline-flex;
+      position: relative;
+      align-items: stretch;
+    }
+    .qo-split-main {
+      border-radius: 2px 0 0 2px;
+      padding-left: 18px;
+      padding-right: 16px;
+    }
+    .qo-split-caret {
+      border-radius: 0 2px 2px 0;
+      padding: 0 12px;
+      min-width: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .qo-split--secondary .qo-split-caret {
+      border-left: 1.5px solid var(--tq-border);
+    }
+    .qo-split--secondary .qo-split-main {
+      border-right: none;
+    }
+    .qo-split-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 30;
+      background: var(--tq-card);
+      border: 1.5px solid var(--tq-border);
+      border-radius: 2px;
+      box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.32);
+      min-width: 240px;
+      padding: 6px;
+    }
+    @media (max-width: 899px) {
+      .qo-split-menu {
+        position: static;
+        width: 100%;
+        margin-top: 6px;
+        box-shadow: none;
+      }
+    }
+    .qo-split-menu-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--tq-muted);
+      padding: 8px 12px 5px;
+    }
+    .qo-split-menu-item {
+      display: flex;
+      width: 100%;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 11px 12px;
+      border: none;
+      background: none;
+      color: var(--tq-text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13.5px;
+      text-align: left;
+      border-radius: 2px;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .qo-split-menu-item:hover { background: var(--tq-surface); }
+    .qo-split-menu-item svg { flex-shrink: 0; margin-top: 2px; color: var(--tq-muted); }
+    .qo-split-menu-item-text { display: flex; flex-direction: column; gap: 2px; }
+    .qo-split-menu-item-label { font-weight: 600; color: var(--tq-text); }
+    .qo-split-menu-item-sub { font-size: 11.5px; color: var(--tq-muted); }
+
+    /* Hero client-link card — promoted from the buried dark box. */
+    .qo-hero-card {
+      background: var(--tq-card);
+      border: 1.5px solid var(--tq-border);
+      border-top: 4px solid var(--tq-accent);
+      border-radius: 2px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .qo-hero-card--accepted { border-top-color: var(--tq-confirmed-bd); }
+    .qo-hero-card--declined { border-top-color: var(--tq-err); }
+    .qo-hero-card--viewed,
+    .qo-hero-card--sent { border-top-color: var(--tq-accent); }
+    .qo-hero-card--pre { border-top-color: var(--tq-border); }
+    .qo-hero-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .qo-hero-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--tq-text);
+    }
+    .qo-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 2px;
+      background: var(--tq-surface);
+      color: var(--tq-muted);
+    }
+    .qo-status-badge i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      display: inline-block;
+    }
+    .qo-status-badge--accepted { background: var(--tq-status-acc); color: var(--tq-confirmed-txt); }
+    .qo-status-badge--viewed,
+    .qo-status-badge--sent { background: var(--tq-status-sent); color: var(--tq-status-sent-txt); }
+    .qo-status-badge--declined { background: var(--tq-error-bg); color: var(--tq-error-txt); }
+    .qo-status-badge--expired { background: var(--tq-surface); color: var(--tq-muted); }
+    .qo-status-badge--draft { background: var(--tq-surface); color: var(--tq-muted); }
+    .qo-hero-sub {
+      font-size: 13px;
+      color: var(--tq-muted);
+      line-height: 1.4;
+      margin: 0;
+    }
+    .qo-link-url {
+      display: flex;
+      align-items: stretch;
+      border: 1.5px solid var(--tq-border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .qo-link-url input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: var(--tq-surface);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--tq-text);
+      padding: 11px 12px;
+      outline: none;
+    }
+    .qo-link-url-copy {
+      border: none;
+      border-left: 1.5px solid var(--tq-border);
+      background: var(--tq-card);
+      color: var(--tq-text);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0 18px;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    .qo-link-url-copy:hover { background: var(--tq-accent); color: #ffffff; }
+    .qo-link-url-copy--copied { background: var(--tq-confirmed-bg); color: var(--tq-confirmed-txt); }
+
+    /* Timeline — Sent → Viewed → Accepted, horizontal on desktop,
+       vertical stack on mobile. */
+    .qo-timeline {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .qo-tl {
+      position: relative;
+      padding-top: 22px;
+      padding-right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .qo-tl-dot {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 2px solid var(--tq-border);
+      box-shadow: 0 0 0 1px var(--tq-border);
+      z-index: 1;
+    }
+    .qo-tl::before {
+      content: "";
+      position: absolute;
+      top: 6px;
+      left: 16px;
+      right: 8px;
+      height: 2px;
+      background: var(--tq-border);
+    }
+    .qo-tl:last-child::before { display: none; }
+    .qo-tl--done .qo-tl-dot {
+      background: var(--tq-confirmed-bd);
+      border-color: var(--tq-confirmed-bd);
+      box-shadow: 0 0 0 1px var(--tq-confirmed-bd);
+    }
+    .qo-tl--done::before { background: var(--tq-confirmed-bd); }
+    .qo-tl--declined .qo-tl-dot {
+      background: var(--tq-err);
+      border-color: var(--tq-err);
+      box-shadow: 0 0 0 1px var(--tq-err);
+    }
+    .qo-tl--declined::before { background: var(--tq-err); }
+    .qo-tl-k {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--tq-text);
+    }
+    .qo-tl-t {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: var(--tq-muted);
+    }
+    .qo-tl--pending .qo-tl-k { color: var(--tq-muted); }
+    @media (max-width: 899px) {
+      .qo-timeline { grid-template-columns: 1fr; }
+      .qo-tl { padding-top: 0; padding-left: 24px; padding-bottom: 12px; }
+      .qo-tl-dot { top: 2px; left: 0; }
+      .qo-tl::before {
+        top: 16px;
+        left: 6px;
+        right: auto;
+        bottom: 0;
+        width: 2px;
+        height: auto;
+      }
+      .qo-tl:last-child::before { display: none; }
+    }
+
+    .qo-decline-reason {
+      padding: 10px 12px;
+      background: var(--tq-error-bg);
+      border: 1px solid var(--tq-error-bd);
+      color: var(--tq-text);
+      font-size: 13px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-radius: 2px;
+    }
+    .qo-decline-reason-k {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--tq-muted);
+    }
+    .qo-hero-expiry {
+      font-size: 12px;
+      color: var(--tq-muted);
+    }
+    .qo-hero-regen {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 12px;
+      border-top: 1px solid var(--tq-border-soft);
+    }
+    .qo-hero-regen-txt {
+      font-size: 12px;
+      color: var(--tq-muted);
+    }
+    .qo-hero-regen-btn {
+      background: none;
+      border: none;
+      color: var(--tq-accent);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      padding: 8px 4px;
+      min-height: 44px;
+    }
+    .qo-hero-regen-btn:hover { color: var(--tq-accent-dk); }
+    .qo-hero-regen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* "More actions" disclosure — discreet inline expansion, native
+       <details>/<summary>. Same pattern as PR #83's fix: keep
+       .btn-ghost on an inner span so the click-toggle stays reliable
+       across Chrome and Safari. */
+    .qo-extras-summary { list-style: none; }
+    .qo-extras-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    /* Slim "Full quote document" strip + Preview button. */
+    .qo-doc-strip {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--tq-card);
+      border: 1.5px solid var(--tq-border);
+      border-radius: 2px;
+      padding: 14px 16px;
+    }
+    .qo-doc-thumb {
+      width: 44px;
+      height: 56px;
+      border-radius: 2px;
+      background: #ffffff;
+      border: 1px solid var(--tq-border-soft);
+      box-shadow: 0 4px 10px -6px rgba(0, 0, 0, 0.25);
+      flex-shrink: 0;
+      padding: 7px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .qo-doc-thumb i {
+      height: 3px;
+      background: var(--tq-border);
+      border-radius: 1px;
+    }
+    .qo-doc-thumb i.a {
+      background: var(--tq-accent);
+      width: 62%;
+    }
+    .qo-doc-strip-text { flex: 1; min-width: 0; }
+    .qo-doc-strip-head {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--tq-text);
+    }
+    .qo-doc-strip-sub {
+      font-size: 12.5px;
+      color: var(--tq-muted);
+      margin-top: 2px;
+    }
+
   </style>
 
   <!-- Print stylesheet — shared between window.print() (Phase 1)

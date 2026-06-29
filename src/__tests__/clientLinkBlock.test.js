@@ -1,17 +1,22 @@
 /**
- * Trader-side Client Portal UI (TRQ-131).
+ * Trader-side Client Portal hero card (Quote Screen Redesign, 2026-06-29).
  *
  * ClientLinkBlock is the Step 5 component Mark/Paul use to generate,
- * copy, and monitor the customer-facing quote link. Five states:
+ * copy, and monitor the customer-facing quote link. The redesign
+ * promotes it from the buried bottom-of-page dark box to the hero
+ * card right under the Send / Download split-buttons.
+ *
+ * Five states, driven by `GET /api/users/:id/jobs/:jobId/client-status`:
  *
  *   1. Pre-generate        — no token yet; show CTA button
- *   2. Awaiting view       — token exists, client has not opened it
+ *   2. Sent · awaiting view — token exists, client has not opened it
  *   3. Viewed              — client opened the link
  *   4. Accepted / Declined — response recorded
  *   5. Expired             — token past its 30-day TTL, no response
  *
  * Tests cover: helper shape, state routing, copy-to-clipboard feedback
- * loop, regenerate confirm modal, URL never synthesized client-side.
+ * loop, regenerate confirm modal, URL never synthesised client-side,
+ * the three-stage Sent → Viewed → Accepted timeline.
  */
 import { jest } from '@jest/globals';
 import { readFileSync } from 'fs';
@@ -83,34 +88,37 @@ describe('userDB.js — getClientStatus + generateClientToken helpers', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// ClientLinkBlock component — source-level contract
+// ClientLinkBlock component — source-level contract (hero card variant)
 // ─────────────────────────────────────────────────────────────────────────
-describe('ClientLinkBlock.jsx — source contract for the 5 portal states', () => {
+describe('ClientLinkBlock.jsx — hero card shape', () => {
   const src = readFileSync(
     join(repoRoot, 'src/components/ClientLinkBlock.jsx'),
     'utf8'
   );
 
-  test('renders the pre-generate CTA with copy from the spec', () => {
-    // "Create client link" is the designer's exact CTA text.
+  test('renders the pre-generate CTA with the spec copy', () => {
     expect(src).toMatch(/Create client link/i);
-    expect(src).toMatch(/link-first-btn/);
   });
 
   test('wires the CTA to generateClientToken', () => {
     expect(src).toMatch(/generateClientToken\(/);
   });
 
-  test('renders the URL via a read-only element (never user-editable)', () => {
-    // URLs must come from the server, not be typed by the user. The
-    // rendered URL element has no <input> or contentEditable.
-    expect(src).toMatch(/link-url/);
+  test('hero card has a title row with "Client link" + status badge', () => {
+    expect(src).toMatch(/qo-hero-title/);
+    expect(src).toMatch(/Client link/);
+    expect(src).toMatch(/qo-status-badge/);
+  });
+
+  test('renders the URL via a read-only <input> (never user-editable)', () => {
+    expect(src).toMatch(/<input[\s\S]{0,200}readOnly/);
+    expect(src).toMatch(/qo-link-url/);
     expect(src).not.toMatch(/contentEditable/);
   });
 
   test('Copy button calls navigator.clipboard.writeText', () => {
     expect(src).toMatch(/navigator\.clipboard\.writeText/);
-    expect(src).toMatch(/link-url-copy/);
+    expect(src).toMatch(/qo-link-url-copy/);
   });
 
   test('Copy feedback reverts after 2 seconds (setTimeout 2000)', () => {
@@ -118,38 +126,46 @@ describe('ClientLinkBlock.jsx — source contract for the 5 portal states', () =
     expect(src).toMatch(/Copied/);
   });
 
-  test('derives pill-kind from the four response/view states', () => {
-    // The class is built from a template literal keyed on pillKind, so
-    // the literal class suffixes ('--viewed' etc.) don't appear in the
-    // JSX — but the pill-kind values must appear in the status-reading
-    // logic and the label map.
-    for (const variant of ['viewed', 'accepted', 'declined', 'expired']) {
-      expect(src).toMatch(new RegExp(`['"]${variant}['"]`));
-    }
-    // And the class name is built via the template literal so the
-    // suffix token is present in source.
-    expect(src).toMatch(/link-block-status--\$\{pillKind\}|link-block-status--/);
+  test('Copy also surfaces a "Link copied" toast for the trader', () => {
+    expect(src).toMatch(/Link copied — paste into WhatsApp or email/);
   });
 
-  test('regenerate button is gated by a confirm modal', () => {
+  test('derives pill-kind from the five response/view states (incl. sent default)', () => {
+    for (const variant of ['sent', 'viewed', 'accepted', 'declined', 'expired']) {
+      expect(src).toMatch(new RegExp(`['"]${variant}['"]`));
+    }
+    // The status-badge class is templated on the pillKind so the
+    // suffix token must appear in source.
+    expect(src).toMatch(/qo-status-badge--\$\{pillKind\}/);
+  });
+
+  test('renders a Sent → Viewed → Accepted timeline as a <ol> with three stages', () => {
+    expect(src).toMatch(/qo-timeline/);
+    // Three timeline rows, keyed by data-stage.
+    expect(src).toMatch(/data-stage="sent"/);
+    expect(src).toMatch(/data-stage="viewed"/);
+    expect(src).toMatch(/data-stage="accepted"/);
+  });
+
+  test('regenerate button is gated by a window.confirm', () => {
     // Design law: never silently invalidate the tradesman's link.
-    // The regenerate tap must surface "are you sure?" before any network
-    // call. Either via window.confirm (fine for v1) or a proper modal
-    // — both are acceptable; what isn't acceptable is firing the POST
-    // without any gate.
-    const hasConfirm = /window\.confirm\(|showRegenerateConfirm|setShowRegenerateConfirm/.test(src);
-    expect(hasConfirm).toBe(true);
+    expect(src).toMatch(/window\.confirm\(/);
   });
 
   test('regenerate calls generateClientToken (same endpoint, fresh token)', () => {
-    // The server route overwrites the token + resets response fields
-    // (TRQ-124), so "regenerate" is the same POST as "create".
-    // Extract the `handleRegenerate` function body specifically and
-    // assert it makes the POST — avoids matching on the literal word
-    // "regenerate" in copy / button labels.
     const handler = src.match(/(async\s+)?function\s+handleRegenerate[\s\S]*?\n\s{0,4}\}/);
     expect(handler).not.toBeNull();
     expect(handler[0]).toMatch(/generateClientToken\(/);
+  });
+
+  test('regenerate CTA copy matches the spec ("Regenerate link" / "Sending to someone else?")', () => {
+    expect(src).toMatch(/Sending to someone else/);
+    expect(src).toMatch(/Regenerate link/);
+  });
+
+  test('decline-reason block surfaces when status.response === "declined"', () => {
+    expect(src).toMatch(/Decline reason/);
+    expect(src).toMatch(/qo-decline-reason/);
   });
 });
 
@@ -172,11 +188,6 @@ describe('QuoteOutput.jsx — renders ClientLinkBlock on Step 5', () => {
   });
 
   test('renders ClientLinkBlock whenever a savedJobId exists (TRQ-139 opened it to read-only too)', () => {
-    // Originally gated on !isReadOnly so it was hidden on the
-    // saved-quote viewer. Paul asked to be able to grab the link
-    // from an already-saved quote without having to Edit & Re-generate
-    // first — the portal actions are owner-scoped on the server and
-    // safe either way, so the gate dropped to just `savedJobId`.
     expect(src).toMatch(/\{\s*savedJobId\s*&&[\s\S]{0,80}<ClientLinkBlock/);
   });
 });

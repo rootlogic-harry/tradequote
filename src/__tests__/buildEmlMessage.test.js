@@ -522,10 +522,14 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
     expect(slice).toMatch(/\.eml/);
   });
 
-  test('"Send via Outlook" button exists and is gated on profile email', () => {
-    expect(src).toMatch(/Send via Outlook/);
-    // disabled={sendingOutlook || !canSendOutlook}
-    expect(src).toMatch(/disabled=\{[^}]*!canSendOutlook[^}]*\}/);
+  test('"Send via Outlook" menu item exists and the handler is gated on profile email', () => {
+    // After the 2026-06-29 Quote Screen redesign, Outlook is a menu
+    // item inside the "Send to client" split-button rather than a
+    // standalone button — but the handler still pre-flights for
+    // profile.email (canSendOutlook flag). Pin both the menu item
+    // copy and the gate inside the handler.
+    expect(src).toMatch(/label:\s*['"]Outlook['"]/);
+    expect(src).toMatch(/canSendOutlook\s*=\s*Boolean\(profile\?\.email\)/);
   });
 
   test('handler pre-flights for profile.email', () => {
@@ -608,10 +612,16 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
     expect(outerCatch).toMatch(/setCachedPdfBlob\s*\(\s*null\s*\)/);
   });
 
-  test('button label switches to "Tap again to send" when cache is populated', () => {
-    // Source-level assertion of the ternary that drives the retry UX.
-    expect(src).toMatch(
-      /cachedPdfBlob[\s\S]{0,200}Tap again to send[\s\S]{0,200}Send via Outlook/
-    );
+  test('iPad two-tap retry path still cached via setCachedPdfBlob (NotAllowedError handler)', () => {
+    // After the 2026-06-29 Quote Screen redesign the standalone
+    // Outlook button is gone — Outlook is now a menu item inside the
+    // primary split-button. The standalone button's "Tap again to
+    // send" label was its only surface for the cached-blob retry UX.
+    // The underlying mechanism (cache on NotAllowedError, retry on
+    // next tap) is unchanged inside handleSendViaOutlook, and tests
+    // above already pin setCachedPdfBlob(pdfBlob) on NotAllowedError.
+    // This assertion just guards the toast-instruction copy so the
+    // user still knows to tap again when iPad activation expires.
+    expect(src).toMatch(/tap Send via Outlook once more to open share options/);
   });
 });

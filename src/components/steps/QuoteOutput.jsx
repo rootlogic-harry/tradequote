@@ -16,7 +16,7 @@ import { shouldUseShareSheetPath } from '../../utils/platform.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { calculateAllTotals } from '../../utils/calculations.js';
-import { saveJob as saveQuote, updateJob } from '../../utils/userDB.js';
+import { saveJob as saveQuote, updateJob, getClientStatus, generateClientToken } from '../../utils/userDB.js';
 import { exportQuoteAsDocx } from '../../utils/exportDocx.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { trackEvent } from '../../utils/trackEvent.js';
@@ -278,7 +278,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   const handleEmail = () => {
     if (!requireProfile()) return; // TRQ-94 gate
     const subject = encodeURIComponent(
-      `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`
+      `${term.title} ${jobDetails.quoteReference} — ${jobDetails.siteAddress}`
     );
     // TRQ-122 follow-up: the raw transcript is AI context only, never
     // pasted into customer-facing output (PDF, DOCX, email body).
@@ -331,7 +331,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         siteAddress: jobDetails.siteAddress,
         fallbackLabel: term.title,
       });
-      const subject = `${term.title} ${jobDetails.quoteReference} \u2014 ${jobDetails.siteAddress}`;
+      const subject = `${term.title} ${jobDetails.quoteReference} — ${jobDetails.siteAddress}`;
       const body =
         `Dear ${jobDetails.clientName},\n\n` +
         `Please find attached our ${term.lower} (ref: ${jobDetails.quoteReference}) ` +
@@ -402,7 +402,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             // here so the NEXT tap (fresh activation) shares immediately.
             setCachedPdfBlob(pdfBlob);
             showToast?.(
-              'Your PDF is ready \u2014 tap Send via Outlook once more to open share options',
+              'Your PDF is ready — tap Send via Outlook once more to open share options',
               'info'
             );
             return;
@@ -411,7 +411,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         }
         // canShare returned false (Safari refused the payload). Blob is
         // not cached — recommending Download PDF is the cleaner escape.
-        showToast?.('This browser can\u2019t open a mail draft. Use Download PDF instead.', 'error');
+        showToast?.('This browser can’t open a mail draft. Use Download PDF instead.', 'error');
         return;
       }
 
@@ -433,8 +433,8 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       if (result?.cancelled) return;
       showToast?.(
         result?.shared
-          ? 'Opening in your mail app\u2026'
-          : 'Draft saved \u2014 open it with Outlook (or Mail/Thunderbird)',
+          ? 'Opening in your mail app…'
+          : 'Draft saved — open it with Outlook (or Mail/Thunderbird)',
         'success'
       );
     } catch (err) {
@@ -540,149 +540,297 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     }
   };
 
+  // ──────────────────────────────────────────────────────────────────
+  // Quote Screen Redesign (2026-06-29) — see
+  // /tmp/fastquote-quote-handoff/design_handoff_dashboard/FastQuote Quote Screen Spec.md
+  //
+  // Replaces the PR #73 Download / Send / More 6-button layout with:
+  //   • One state-aware status banner (draft / sent / viewed / accepted / declined)
+  //   • Primary split: "Send to client" → Email / Outlook / Copy link
+  //   • Secondary split: "Download PDF" → PDF / Word / Print
+  //   • Tertiary ghost link: "Edit & re-generate"
+  //   • Hero client-link card (promoted from buried bottom block)
+  //   • Slim "Full quote document" preview strip at the bottom
+  //
+  // Live status pulled from the existing /client-status endpoint — no
+  // schema change. Status banner re-renders whenever the saved jobId
+  // surfaces a token or response transition.
+  // ──────────────────────────────────────────────────────────────────
+
+  const [clientStatus, setClientStatus] = useState(null);
+  // Pull the live portal status to drive the status banner + Copy-link
+  // split-button menu item. Fails silently — the banner just degrades
+  // to the draft state.
+  useEffect(() => {
+    const jobId = savedJobId || state.savedJobId;
+    if (!state.currentUserId || !jobId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await getClientStatus(state.currentUserId, jobId);
+        if (!cancelled) setClientStatus(s);
+      } catch {
+        // No-op — the hero card and banner will reflect the default
+        // "draft" state when the API is unreachable.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [state.currentUserId, savedJobId, state.savedJobId]);
+
+  // Derive the status banner state. Order is load-bearing:
+  // declined > accepted > viewed > sent > draft.
+  const statusBannerKind = (() => {
+    if (!clientStatus || !clientStatus.hasToken) return 'draft';
+    if (clientStatus.response === 'declined') return 'declined';
+    if (clientStatus.response === 'accepted') return 'accepted';
+    if (clientStatus.viewed) return 'viewed';
+    return 'sent';
+  })();
+
+  // Banner copy — kept small and useful, no marketing fluff.
+  const statusBannerCopy = (() => {
+    switch (statusBannerKind) {
+      case 'declined':
+        return {
+          title: 'Declined',
+          sub: clientStatus?.declineReason
+            ? `${jobDetails.clientName || 'The client'} declined — ${clientStatus.declineReason}`
+            : `${jobDetails.clientName || 'The client'} declined this quote.`,
+        };
+      case 'accepted':
+        return {
+          title: 'Accepted by the client',
+          sub: `${jobDetails.clientName || 'The client'} accepted this quote — you're good to start the job.`,
+        };
+      case 'viewed':
+        return {
+          title: 'Viewed · awaiting reply',
+          sub: 'Your client opened the link. Waiting on Accept or Decline.',
+        };
+      case 'sent':
+        return {
+          title: 'Sent · awaiting reply',
+          sub: 'Link sent — waiting for your client to open it.',
+        };
+      default:
+        return {
+          title: 'Not sent yet',
+          sub: 'Send the link to your client when you’re ready.',
+        };
+    }
+  })();
+
+  // Copy-client-link handler used by the primary split-button menu.
+  // If the quote already has a token we copy directly; otherwise we
+  // generate one first, then copy. Uses navigator.clipboard with a
+  // brief confirmation toast on success.
+  const handleCopyClientLink = async () => {
+    if (!requireProfile()) return;
+    const jobId = savedJobId || state.savedJobId;
+    if (!state.currentUserId || !jobId) {
+      showToast?.(`Save the ${term.lower} first, then copy the link.`, 'error');
+      return;
+    }
+    try {
+      let url = clientStatus?.url;
+      if (!url || !clientStatus?.hasToken) {
+        const fresh = await generateClientToken(state.currentUserId, jobId);
+        url = fresh?.url;
+        // Refresh the local copy so the hero card + banner pick up
+        // the new token without a second round-trip.
+        try {
+          const refreshed = await getClientStatus(state.currentUserId, jobId);
+          setClientStatus(refreshed);
+        } catch {}
+      }
+      if (!url) throw new Error('No link to copy');
+      await navigator.clipboard.writeText(url);
+      showToast?.('Link copied — paste into WhatsApp or email', 'success');
+    } catch (err) {
+      console.error('Copy client link failed:', err);
+      showToast?.(err.message || 'Could not copy link', 'error');
+    }
+  };
+
+  // Open the LivePreview overlay used by the bottom "Preview" strip.
+  // We dispatch the same toggle the LivePreview component listens to
+  // so the existing keyboard / overlay plumbing is unchanged.
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   return (
-    <div>
-      {/* Header with back navigation */}
-      <div className="flex items-center gap-3 mb-1">
-        {!isReadOnly && !onBack && (
+    <div className="qo-screen">
+      {/* Header — Back · title · ref · subtitle.
+           Title is the literal "Your quote is ready" per spec.
+           documentTerm() is preserved everywhere else (PDF, DOCX,
+           client portal, email subject) — this override is app-chrome
+           only. */}
+      <div className="qo-header">
+        <div className="qo-header-text">
+          {!isReadOnly && !onBack && (
+            <button
+              onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })}
+              className="qo-back-link"
+              style={{ minHeight: 44 }}
+              title="Back to Review & Edit"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              <span>Back to quote</span>
+            </button>
+          )}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="qo-back-link"
+              style={{ minHeight: 44 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              <span>Back</span>
+            </button>
+          )}
+          <h1 className="qo-title page-title">Your quote is ready</h1>
+          <div className="qo-ref">
+            <span className="qo-ref-num">{jobDetails.quoteReference || '—'}</span>
+            {jobDetails.clientName && (
+              <>
+                <span className="qo-ref-sep"> · </span>
+                <span className="qo-ref-client">{jobDetails.clientName}</span>
+              </>
+            )}
+          </div>
+          <p className="qo-subtitle">Send it straight to your client, or download a copy to keep.</p>
+        </div>
+      </div>
+
+      {/* Status banner (state-dependent). Refers to the saved quote's
+           current portal/response state. Suppressed entirely until the
+           quote has been saved so it doesn't show a misleading "Not
+           sent yet" before there's anything to send. */}
+      {savedJobId && (
+        <div
+          className={`qo-status qo-status--${statusBannerKind}`}
+          role="status"
+          data-status-kind={statusBannerKind}
+        >
+          <span className="qo-status-ic" aria-hidden>
+            {statusBannerKind === 'accepted' && (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            )}
+            {statusBannerKind === 'declined' && (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            )}
+            {(statusBannerKind === 'sent' || statusBannerKind === 'viewed') && (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
+              </svg>
+            )}
+            {statusBannerKind === 'draft' && (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+              </svg>
+            )}
+          </span>
+          <div className="qo-status-body">
+            <div className="qo-status-title">{statusBannerCopy.title}</div>
+            <div className="qo-status-sub">{statusBannerCopy.sub}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Action region — two split-buttons + one tertiary text link.
+           Replaces the PR #73 Download/Send/More layout (3 chips + a
+           disclosure). The split-buttons use a small inline state
+           component (SplitButton) — no dropdown library; native
+           markup, outside-click dismissal, ESC closes. */}
+      <div
+        className="qo-actions"
+        data-action-group="primary"
+        role="group"
+        aria-label="Quote actions"
+      >
+        <SplitButton
+          variant="primary"
+          mainLabel="Send to client"
+          mainIcon="send"
+          onMain={handleSendViaOutlook}
+          onMainLoading={sendingOutlook}
+          mainLoadingLabel="Preparing…"
+          ariaLabelMenu="Send via"
+          menuLabel="Send via"
+          items={[
+            { id: 'email', icon: 'mail', label: 'Email', sub: 'Your default mail app', onClick: handleEmail },
+            { id: 'outlook', icon: 'mail', label: 'Outlook', sub: 'Open in Outlook (or Mail.app)', onClick: handleSendViaOutlook },
+            { id: 'copy', icon: 'link', label: 'Copy client link', sub: 'Paste it anywhere', onClick: handleCopyClientLink },
+          ]}
+        />
+        <SplitButton
+          variant="secondary"
+          mainLabel="Download PDF"
+          mainIcon="download"
+          onMain={() => handleDownloadPdfServer()}
+          onMainLoading={generatingServerPdf}
+          mainLoadingLabel="Generating PDF…"
+          ariaLabelMenu="Download as"
+          menuLabel="Download as"
+          items={[
+            { id: 'pdf', icon: 'pdf', label: 'PDF', sub: 'Best for sending & printing', onClick: () => handleDownloadPdfServer() },
+            { id: 'word', icon: 'word', label: 'Word', sub: 'Edit before you send', onClick: handleDownloadDocx },
+            { id: 'print', icon: 'print', label: 'Print / Save via print', sub: 'Open the print dialog', onClick: handlePrint },
+          ]}
+        />
+        {!isReadOnly && (
           <button
+            type="button"
+            className="qo-edit-link btn-ghost"
             onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })}
-            className="flex items-center gap-1 text-sm font-heading uppercase tracking-wide hover:text-tq-accent transition-colors"
-            style={{ color: 'var(--tq-muted)', minHeight: 44, padding: '8px 0' }}
-            title="Back to Review & Edit"
+            title="Go back to Review & Edit"
+            style={{ minHeight: 44 }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6"/>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
-            <span className="hidden fq:inline">Review</span>
+            <span>Edit &amp; re-generate</span>
           </button>
         )}
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1 text-sm font-heading uppercase tracking-wide hover:text-tq-accent transition-colors"
-            style={{ color: 'var(--tq-muted)', minHeight: 44, padding: '8px 0' }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            <span className="hidden fq:inline">Back</span>
-          </button>
-        )}
-        <h2 className="page-title">
-          Your {term.title}
-        </h2>
-      </div>
-      <p className="text-tq-muted text-sm mb-6">
-        Review the final document, then download as PDF or Word, or send via email.
-      </p>
-
-      {/* PR-2 of 10 (mobile-responsive plan, audit item 2): the
-           Step 5 action bar is regrouped into three logical clusters
-           (Download / Send / More) so the mobile fold above the quote
-           preview is three primary chips instead of 12 wrapping
-           buttons. Grouping approved by Harry on 2026-06-26 (Q1).
-           Each group carries data-action-group + aria-label so
-           screen readers announce the cluster, and the assertions in
-           quoteOutputActionBar.test.js can scope to each cluster. */}
-
-      {/* Download — file-export actions the trader keeps locally. */}
-      <div
-        data-action-group="download"
-        role="group"
-        aria-label="Download"
-        className="flex flex-col fq:flex-row flex-wrap gap-3 mb-3"
-      >
-        <button
-          onClick={handleDownloadPdfServer}
-          disabled={generatingServerPdf}
-          className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-          title="Crisp PDF with selectable text, rendered server-side by Chromium"
-        >
-          {generatingServerPdf && <InlineSpinner />}
-          {generatingServerPdf ? 'Generating PDF...' : 'Download PDF'}
-        </button>
-        <button
-          onClick={handleDownloadDocx}
-          disabled={generatingDocx}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {generatingDocx && <InlineSpinner />}
-          {generatingDocx ? 'Generating Word...' : 'Download Word'}
-        </button>
-        <button
-          onClick={handlePrint}
-          disabled={printing}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed"
-          title="Uses your browser's print dialog — fallback if Download PDF fails"
-        >
-          {printing && <InlineSpinner />}
-          {printing ? 'Preparing preview...' : 'Save via print'}
-        </button>
       </div>
 
-      {/* Send — client-facing transmission. buildEmlMessage.js is
-           load-bearing (CLAUDE.md Pitfall #15); we only restructure
-           the BUTTON wiring, never the .eml builder. */}
-      <div
-        data-action-group="send"
-        role="group"
-        aria-label="Send"
-        className="flex flex-col fq:flex-row flex-wrap gap-3 mb-3"
-      >
-        <button onClick={handleEmail} className="btn-ghost">
-          Send via Email
-        </button>
-        <button
-          onClick={handleSendViaOutlook}
-          disabled={sendingOutlook || !canSendOutlook}
-          className="btn-ghost disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-          title={
-            canSendOutlook
-              ? 'Opens Outlook (or your default mail app) with the quote and PDF already attached'
-              : 'Add your email address in your profile first'
-          }
-        >
-          {sendingOutlook && <InlineSpinner />}
-          {sendingOutlook
-            ? 'Preparing email\u2026'
-            : cachedPdfBlob
-              ? 'Tap again to send'
-              : 'Send via Outlook'}
-        </button>
-      </div>
+      {/* Hero client-link card — promoted from the bottom of the page.
+           Renders whenever a savedJobId exists; ClientLinkBlock handles
+           its own pre-generate vs token-exists states internally. */}
+      {savedJobId && (
+        <ClientLinkBlock
+          currentUserId={state.currentUserId}
+          jobId={savedJobId}
+          profile={profile}
+          showToast={showToast}
+          requireProfile={requireProfile}
+        />
+      )}
 
-      {/* More \u2014 admin / occasional / non-primary actions behind a
-           native <details> disclosure. Native disclosure gives us
-           aria-expanded + keyboard + ESC handling for free; no
-           dropdown library needed. Collapsed by default on every
-           viewport (no `open` attr) so the mobile fold above the
-           quote preview stays clean. Admin-gated items (Worker copy,
-           QuickBooks, Create RAMS) stay wrapped in {isAdminPlan &&
-           ...} so basic users never see them regardless of whether
-           the disclosure is open. */}
-      <div
-        data-action-group="more"
-        role="group"
-        aria-label="More"
-        className="mb-4"
-      >
-        <details className="action-group-more">
-          {/* Native <summary> must keep its default display: list-item
-              for the click-to-toggle behaviour to fire reliably across
-              Chrome + Safari. Applying .btn-ghost (display: inline-flex)
-              directly to <summary> breaks the toggle on desktop (2026-
-              06-29 bug). Fix: keep .btn-ghost on an inner <span> for
-              the visual, suppress the native disclosure triangle with
-              list-none + ::-webkit-details-marker hidden in index.html. */}
+      {/* Admin actions kept reachable behind a discreet inline disclosure
+           — Save, Worker copy, Export for QuickBooks, Create RAMS. These
+           are non-primary, occasional actions; the Send/Download split-
+           buttons are the primary path. Native <details>/<summary>
+           keeps keyboard + ARIA for free. The summary is the inner
+           <span> so the click-toggle stays reliable (PR #83 fix). */}
+      {(!isReadOnly || isAdminPlan) && (
+        <details className="qo-extras" data-action-group="extras">
           <summary
-            className="cursor-pointer list-none inline-block"
-            style={{ width: 'fit-content' }}
+            className="cursor-pointer list-none inline-block qo-extras-summary"
+            style={{ width: 'fit-content', minHeight: 44 }}
             title="Save, send to QuickBooks, create RAMS, and other extras"
           >
-            <span className="btn-ghost">More</span>
+            <span className="btn-ghost">More actions</span>
           </summary>
-          <div className="flex flex-col fq:flex-row flex-wrap gap-3 mt-3">
+          <div className="qo-extras-row">
             {!isReadOnly && (
               <button
                 onClick={handleSave}
@@ -695,12 +843,9 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                       : ''
                 }`}
               >
-                {saving ? 'Saving...' : saved ? 'Saved \u2713' : `Save ${term.title}`}
+                {saving ? 'Saving...' : saved ? `Saved ✓` : `Save ${term.title}`}
               </button>
             )}
-            {/* Worker copy \u2014 admin-only. Same PDF, costs hidden,
-                 filename-suffixed. Mark sends this to Paul / Jordan
-                 when they do a job without him on site. */}
             {isAdminPlan && (
               <button
                 onClick={() => handleDownloadPdfServer({ hideCosts: true })}
@@ -724,7 +869,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 }
               >
                 {exportingQb && <InlineSpinner />}
-                {exportingQb ? 'Building CSV\u2026' : 'Export for QuickBooks'}
+                {exportingQb ? 'Building CSV…' : 'Export for QuickBooks'}
               </button>
             )}
             {!isReadOnly && onCreateRams && isAdminPlan && (
@@ -738,61 +883,59 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
                 Create RAMS
               </button>
             )}
+            {!isReadOnly && (
+              <button
+                onClick={handleNewQuote}
+                className="btn-ghost"
+                style={{ color: 'var(--tq-muted)' }}
+              >
+                Start New {term.title}
+              </button>
+            )}
           </div>
+          {saveError && !saving && (
+            <p className="text-xs mt-2" style={{ color: 'var(--tq-error-txt, #f87171)' }}>
+              Save failed — your work is preserved in this tab.
+            </p>
+          )}
         </details>
-        {saveError && !saving && (
-          <p className="text-xs mt-2" style={{ color: 'var(--tq-error-txt, #f87171)' }}>
-            Save failed — your work is preserved in this tab.
-          </p>
-        )}
-      </div>
-
-      {/* Secondary navigation row — these are step-traversal, not
-           action-bar actions, so they sit outside the Download/Send/More
-           grouping per the Harry-approved brief. Create RAMS moved into
-           the More group (admin-only). */}
-      <div className="flex flex-col fq:flex-row flex-wrap gap-3 mb-4">
-        {!isReadOnly && state.quoteMode === 'quick' && (
-          <button onClick={() => dispatch({ type: 'BACK_TO_REVIEW' })} className="btn-ghost text-sm">
-            Full Review & Edit
-          </button>
-        )}
-        {!isReadOnly && (
-          <button onClick={() => dispatch({ type: 'SET_STEP', step: 2 })} className="btn-ghost text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Edit Job Details
-          </button>
-        )}
-        {!isReadOnly && !onBack && (
-          <button onClick={handleNewQuote} className="btn-ghost text-sm" style={{ color: 'var(--tq-muted)' }}>
-            Start New {term.title}
-          </button>
-        )}
-      </div>
-
-      {/* Client Portal — "Create client link" block (TRQ-131, widened
-           in TRQ-139 to render on read-only saved viewers too). The
-           portal actions (Copy, Regenerate) are owner-scoped on the
-           server and safe to expose either way — the read-only mode
-           applies to the quote content (measurements, costs), not
-           the portal link management. Only gated on savedJobId so we
-           have a row to attach the token to. */}
-      {savedJobId && (
-        <ClientLinkBlock
-          currentUserId={state.currentUserId}
-          jobId={savedJobId}
-          profile={profile}
-          showToast={showToast}
-          requireProfile={requireProfile}
-        />
       )}
 
-      <p className="text-tq-muted text-xs mb-6">
-        Tip: When emailing, attach your downloaded PDF or Word document before sending.
-      </p>
+      {/* Doc strip — slim row at the bottom keeps the full quote
+           document one tap away. The PDF document itself is unchanged
+           (no edits to QuoteDocument.jsx or pdfRenderer.js). */}
+      <div className="qo-doc-strip" data-doc-strip>
+        <div className="qo-doc-thumb" aria-hidden>
+          <i className="a" />
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="qo-doc-strip-text">
+          <div className="qo-doc-strip-head">Full quote document</div>
+          <div className="qo-doc-strip-sub">
+            Description, measurements, schedule of works
+            {filteredPhotos.length > 0 && ` · ${filteredPhotos.length} photo${filteredPhotos.length === 1 ? '' : 's'}`}
+            {jobDetails.quoteReference && ` · ${jobDetails.quoteReference}`}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn-ghost qo-doc-preview"
+          onClick={() => setPreviewOpen(o => !o)}
+          aria-pressed={previewOpen}
+          style={{ minHeight: 44 }}
+        >
+          {previewOpen ? 'Hide preview' : 'Preview'}
+        </button>
+      </div>
 
-      {/* Photo selection & reorder grid */}
-      {allPhotos.length > 0 && (
-        <div className="mb-6">
+      {/* Photo selection & reorder grid — kept from the previous layout
+           since it controls which photos land in the exported PDF/DOCX.
+           Hidden behind the document preview accordion to keep the top
+           of the screen focused on Send/Download. */}
+      {previewOpen && allPhotos.length > 0 && (
+        <div className="mb-6 mt-4">
           <div className="eyebrow mb-3">
             Photos to Include ({filteredPhotos.length}/{allPhotos.length})
             <span className="font-normal text-tq-muted ml-2" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
@@ -864,10 +1007,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       )}
 
       {/* QuickBooks CSV post-download instructions modal. Three short
-           steps headline + a "Show full guide" expander on demand —
-           avoids a wall-of-text on iPad where a 9-step modal scrolls
-           off-screen. VAT line is loud so users don't pick Inclusive by
-           accident (the one setting that silently produces wrong totals). */}
+           steps headline + a "Show full guide" expander on demand. */}
       {showQbInstructions && (
         <QbInstructionsModal
           vatRegistered={profile?.vatRegistered === true}
@@ -875,41 +1015,146 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         />
       )}
 
-      {/* Quote Document — showPhotos=false to prevent white band artefact in
-           the legacy html2canvas PDF; photos are rendered separately in that
-           path's PDF/Word appendix.
-
-           Wrapped in a scoped ErrorBoundary: a crash inside QuoteDocument
-           (e.g. a malformed value coming back from a saved snapshot) used
-           to take the whole Step 5 down. Now it shows an inline
-           "couldn't load — try again" card and the download/share buttons
-           above remain usable. */}
-      <div className="bg-white shadow-lg overflow-hidden" ref={quoteRef} style={{ borderRadius: 2 }}>
-        <ErrorBoundary scope="quote-document">
-          <QuoteDocument state={state} showPhotos={false} />
-        </ErrorBoundary>
-      </div>
+      {/* Quote Document — only revealed when the user taps Preview.
+           Wrapped in a scoped ErrorBoundary so a crash inside
+           QuoteDocument doesn't take Step 5 down. */}
+      {previewOpen && (
+        <div className="bg-white shadow-lg overflow-hidden mt-4" ref={quoteRef} style={{ borderRadius: 2 }}>
+          <ErrorBoundary scope="quote-document">
+            <QuoteDocument state={state} showPhotos={false} />
+          </ErrorBoundary>
+        </div>
+      )}
 
       {/* Print-only clone — full quote + photo appendix rendered inline so
-           the browser's print engine (native page-break-inside: avoid CSS)
-           paginates cleanly. Hidden on screen via `.print-only`. */}
+           the browser's print engine paginates cleanly. Hidden on screen
+           via `.print-only`. */}
       <div className="print-root print-only" aria-hidden="true">
         <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
       </div>
 
-      {/* TRQ-94: Profile gate. Raised by requireProfile() when the user
-           tries a customer-facing action (PDF/DOCX download, email,
-           Outlook send, client link) before filling in their company
-           details. Tapping "Add details" hands off to the existing
-           profile modal at App.jsx via onRequestOpenProfile; closing
-           that modal flips profile_complete=true and they can retry
-           the action. */}
+      {/* TRQ-94: Profile gate. */}
       <ProfileGateModal
         open={showProfileGate}
         term={term}
         onClose={() => setShowProfileGate(false)}
         onOpenProfile={onRequestOpenProfile}
       />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SplitButton — small inline state component used by the two action
+// buttons. Main click runs the primary handler; the caret opens a
+// menu with secondary handlers. Outside-click + ESC close the menu.
+// On mobile (<900px) the menu expands inline below the button rather
+// than dropping down so it stays touch-reachable.
+// ─────────────────────────────────────────────────────────────────────
+
+const ICONS = {
+  send: <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+  mail: <><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></>,
+  link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>,
+  download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
+  pdf: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>,
+  word: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></>,
+  print: <><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>,
+  chev: <polyline points="6 9 12 15 18 9"/>,
+};
+
+function Icon({ name, size = 16 }) {
+  if (!ICONS[name]) return null;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {ICONS[name]}
+    </svg>
+  );
+}
+
+function SplitButton({
+  variant = 'primary',
+  mainLabel,
+  mainIcon,
+  onMain,
+  onMainLoading = false,
+  mainLoadingLabel,
+  ariaLabelMenu,
+  menuLabel,
+  items,
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const handlePointer = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    const handleKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', handlePointer);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const mainClass = variant === 'primary' ? 'btn-primary qo-split-main' : 'btn-ghost qo-split-main';
+  const caretClass = variant === 'primary' ? 'btn-primary qo-split-caret' : 'btn-ghost qo-split-caret';
+
+  return (
+    <div className={`qo-split qo-split--${variant}`} ref={wrapRef} data-split-variant={variant}>
+      <button
+        type="button"
+        className={mainClass}
+        onClick={onMain}
+        disabled={onMainLoading}
+        style={{ minHeight: 44 }}
+      >
+        {mainIcon && <Icon name={mainIcon} size={16} />}
+        <span>{onMainLoading && mainLoadingLabel ? mainLoadingLabel : mainLabel}</span>
+      </button>
+      <button
+        type="button"
+        className={caretClass}
+        onClick={() => setOpen(o => !o)}
+        aria-label={ariaLabelMenu}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={{ minHeight: 44 }}
+      >
+        <Icon name="chev" size={14} />
+      </button>
+      {open && (
+        <div className="qo-split-menu" role="menu" aria-label={ariaLabelMenu}>
+          {menuLabel && <div className="qo-split-menu-label">{menuLabel}</div>}
+          {items.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              role="menuitem"
+              className="qo-split-menu-item touch-44"
+              onClick={() => { setOpen(false); it.onClick?.(); }}
+            >
+              <Icon name={it.icon} size={17} />
+              <span className="qo-split-menu-item-text">
+                <span className="qo-split-menu-item-label">{it.label}</span>
+                {it.sub && <span className="qo-split-menu-item-sub">{it.sub}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -950,10 +1195,6 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
           <li>Review the preview, then <strong>Start import</strong></li>
         </ol>
 
-        {/* iPad Safari tip — Paul hit this: he tapped "Save to Notes"
-            from the share sheet and Notes stored the content as plain
-            text instead of a .csv file. Guide the user to Save to
-            Files (which preserves the extension) or AirDrop. */}
         <div style={{
           background: 'rgba(232, 168, 56, 0.12)',
           border: '1px solid rgba(232, 168, 56, 0.4)',
@@ -978,11 +1219,6 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
           figures will be wrong.
         </div>
 
-        {/* CIS conditional guidance. If the trader's QBO account has the
-            Construction Industry Scheme module on, QBO marks "Item CIS
-            Tax Code" as required on the mapping screen. We don't emit
-            that column yet — so the import stalls with no recovery
-            hint. Warn up front. */}
         <div style={{
           background: 'var(--tq-card-hover, rgba(255,255,255,0.04))',
           border: '1px solid var(--tq-border, #3a3630)',
@@ -1006,7 +1242,7 @@ function QbInstructionsModal({ vatRegistered, onClose }) {
           style={{
             background: 'none', border: 'none',
             color: 'var(--tq-accent, #e8a838)', cursor: 'pointer',
-            fontSize: 13, padding: 0, marginBottom: 12,
+            fontSize: 13, padding: 0, marginBottom: 12, minHeight: 44,
           }}
         >
           {expanded ? 'Hide full guide' : 'Show full guide'}
