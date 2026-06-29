@@ -14,7 +14,7 @@ export default function RamsContact({ rams, dispatch }) {
             type="text"
             value={rams.contactTitle || ''}
             onChange={e => update('contactTitle', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
         <div>
@@ -23,7 +23,7 @@ export default function RamsContact({ rams, dispatch }) {
             type="text"
             value={rams.contactName || ''}
             onChange={e => update('contactName', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
         <div>
@@ -32,7 +32,7 @@ export default function RamsContact({ rams, dispatch }) {
             type="tel"
             value={rams.contactNumber || ''}
             onChange={e => update('contactNumber', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
       </div>

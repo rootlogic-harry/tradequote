@@ -14,7 +14,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
             type="text"
             value={rams.jobNumber || ''}
             onChange={e => update('jobNumber', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm font-mono"
+            className="rams-input font-mono"
           />
         </div>
         <div>
@@ -23,7 +23,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
             type="date"
             value={rams.documentDate || ''}
             onChange={e => update('documentDate', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
       </div>
@@ -34,7 +34,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
           type="text"
           value={rams.siteAddress || ''}
           onChange={e => update('siteAddress', e.target.value)}
-          className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+          className="rams-input"
         />
       </div>
 
@@ -45,7 +45,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
             type="text"
             value={rams.company || ''}
             onChange={e => update('company', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
         <div>
@@ -54,7 +54,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
             type="text"
             value={rams.client || ''}
             onChange={e => update('client', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
       </div>
@@ -65,7 +65,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
           type="text"
           value={rams.foreman || ''}
           onChange={e => update('foreman', e.target.value)}
-          className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+          className="rams-input"
         />
       </div>
 
@@ -76,7 +76,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
             type="date"
             value={rams.commencementDate || ''}
             onChange={e => update('commencementDate', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
         <div>
@@ -85,7 +85,7 @@ export default function RamsJobDetails({ rams, dispatch }) {
             type="date"
             value={rams.projectedCompletionDate || ''}
             onChange={e => update('projectedCompletionDate', e.target.value)}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
       </div>

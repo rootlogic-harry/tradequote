@@ -59,6 +59,10 @@ const CANONICAL_44PX_CLASSES = [
   'pill',
   // Form field (48px tall — index.html:383-396)
   'nq-field',
+  // RAMS-section form field (36px desktop, 44px mobile — index.html, PR-10).
+  // Promoted from the legacy `px-2 py-1.5 text-sm` pattern repeated
+  // across all 9 src/components/rams/* sub-components.
+  'rams-input',
   // Forward-compat opt-in for future PRs to mark a sub-canonical button
   // as touch-safe with one class.
   'touch-44',
@@ -273,7 +277,7 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/AgentActivity.jsx", line: 207, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/AgentActivity.jsx", line: 285, pr: "PR-future-admin", why: "Admin-only surface" },
   // -- src/components/AutosaveStatus.jsx --
-  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\" },
+  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\" },
   // -- src/components/CalibrationManager.jsx --
   { file: "src/components/CalibrationManager.jsx", line: 78, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/CalibrationManager.jsx", line: 114, pr: "PR-future-admin", why: "Admin-only surface" },
@@ -293,10 +297,6 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/ReferralWelcome.jsx", line: 76, pr: "PR-future-polish", why: "Dismiss banner × button" },
   // -- src/components/SaveErrorBanner.jsx --
   { file: "src/components/SaveErrorBanner.jsx", line: 23, pr: "PR-future-polish", why: "Banner retry link button" },
-  // -- src/components/SavedQuotes.jsx --
-  { file: "src/components/SavedQuotes.jsx", line: 225, pr: "PR-10", why: "SavedQuotes search-clear × (audit #15)" },
-  { file: "src/components/SavedQuotes.jsx", line: 277, pr: "PR-10", why: "SavedQuotes search-clear × (audit #15)" },
-  { file: "src/components/SavedQuotes.jsx", line: 293, pr: "PR-10", why: "SavedQuotes search-clear × (audit #15)" },
   // -- src/components/Sidebar.jsx --
   { file: "src/components/Sidebar.jsx", line: 67, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   { file: "src/components/Sidebar.jsx", line: 94, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
@@ -321,66 +321,6 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/common/ErrorBoundary.jsx", line: 87, pr: "PR-future-polish", why: "ErrorBoundary recovery/reset buttons (rare path)" },
   { file: "src/components/common/ErrorBoundary.jsx", line: 129, pr: "PR-future-polish", why: "ErrorBoundary recovery/reset buttons (rare path)" },
   { file: "src/components/common/ErrorBoundary.jsx", line: 139, pr: "PR-future-polish", why: "ErrorBoundary recovery/reset buttons (rare path)" },
-  // -- src/components/rams/RamsContact.jsx --
-  { file: "src/components/rams/RamsContact.jsx", line: 13, pr: "PR-10", why: "RAMS inner input sub-44px (admin-only)" },
-  { file: "src/components/rams/RamsContact.jsx", line: 22, pr: "PR-10", why: "RAMS inner input sub-44px (admin-only)" },
-  { file: "src/components/rams/RamsContact.jsx", line: 31, pr: "PR-10", why: "RAMS inner input sub-44px (admin-only)" },
-  // -- src/components/rams/RamsEditor.jsx --
-  { file: "src/components/rams/RamsEditor.jsx", line: 53, pr: "PR-10", why: "RAMS Expand/Collapse All sub-44px (audit #12)" },
-  { file: "src/components/rams/RamsEditor.jsx", line: 59, pr: "PR-10", why: "RAMS Expand/Collapse All sub-44px (audit #12)" },
-  { file: "src/components/rams/RamsEditor.jsx", line: 112, pr: "PR-10", why: "RAMS Expand/Collapse All sub-44px (audit #12)" },
-  { file: "src/components/rams/RamsEditor.jsx", line: 134, pr: "PR-10", why: "RAMS Expand/Collapse All sub-44px (audit #12)" },
-  // -- src/components/rams/RamsHazardPicker.jsx --
-  { file: "src/components/rams/RamsHazardPicker.jsx", line: 31, pr: "PR-10", why: "RAMS hazard picker modal × + inputs (admin-only)" },
-  { file: "src/components/rams/RamsHazardPicker.jsx", line: 36, pr: "PR-10", why: "RAMS hazard picker modal × + inputs (admin-only)" },
-  { file: "src/components/rams/RamsHazardPicker.jsx", line: 52, pr: "PR-10", why: "RAMS hazard picker modal × + inputs (admin-only)" },
-  { file: "src/components/rams/RamsHazardPicker.jsx", line: 71, pr: "PR-10", why: "RAMS hazard picker modal × + inputs (admin-only)" },
-  { file: "src/components/rams/RamsHazardPicker.jsx", line: 119, pr: "PR-10", why: "RAMS hazard picker modal × + inputs (admin-only)" },
-  // -- src/components/rams/RamsJobDetails.jsx --
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 13, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 22, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 33, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 44, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 53, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 64, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 75, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  { file: "src/components/rams/RamsJobDetails.jsx", line: 84, pr: "PR-10", why: "RAMS inputs (audit #11, admin-only)" },
-  // -- src/components/rams/RamsOutput.jsx --
-  { file: "src/components/rams/RamsOutput.jsx", line: 438, pr: "PR-10", why: "RAMS export buttons (admin-only)" },
-  { file: "src/components/rams/RamsOutput.jsx", line: 445, pr: "PR-10", why: "RAMS export buttons (admin-only)" },
-  { file: "src/components/rams/RamsOutput.jsx", line: 453, pr: "PR-10", why: "RAMS export buttons (admin-only)" },
-  { file: "src/components/rams/RamsOutput.jsx", line: 461, pr: "PR-10", why: "RAMS export buttons (admin-only)" },
-  { file: "src/components/rams/RamsOutput.jsx", line: 510, pr: "PR-10", why: "RAMS export buttons (admin-only)" },
-  // -- src/components/rams/RamsPPE.jsx --
-  { file: "src/components/rams/RamsPPE.jsx", line: 19, pr: "PR-10", why: "RAMS PPE toggle button" },
-  // -- src/components/rams/RamsPersonnel.jsx --
-  { file: "src/components/rams/RamsPersonnel.jsx", line: 27, pr: "PR-10", why: "RAMS personnel row × + inputs" },
-  { file: "src/components/rams/RamsPersonnel.jsx", line: 33, pr: "PR-10", why: "RAMS personnel row × + inputs" },
-  { file: "src/components/rams/RamsPersonnel.jsx", line: 41, pr: "PR-10", why: "RAMS personnel row × + inputs" },
-  // -- src/components/rams/RamsRiskTable.jsx --
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 74, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 80, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 95, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 108, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 119, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 129, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 142, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 148, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 156, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 168, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 178, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  { file: "src/components/rams/RamsRiskTable.jsx", line: 190, pr: "PR-10", why: "RAMS risk-table inputs/selects/× (audit #11)" },
-  // -- src/components/rams/RamsSiteDetails.jsx --
-  { file: "src/components/rams/RamsSiteDetails.jsx", line: 23, pr: "PR-10", why: "RAMS site-details textarea" },
-  // -- src/components/rams/RamsWorkStages.jsx --
-  { file: "src/components/rams/RamsWorkStages.jsx", line: 54, pr: "PR-10", why: "RAMS work-stages inputs + reorder × buttons" },
-  { file: "src/components/rams/RamsWorkStages.jsx", line: 61, pr: "PR-10", why: "RAMS work-stages inputs + reorder × buttons" },
-  { file: "src/components/rams/RamsWorkStages.jsx", line: 68, pr: "PR-10", why: "RAMS work-stages inputs + reorder × buttons" },
-  { file: "src/components/rams/RamsWorkStages.jsx", line: 75, pr: "PR-10", why: "RAMS work-stages inputs + reorder × buttons" },
-  { file: "src/components/rams/RamsWorkStages.jsx", line: 94, pr: "PR-10", why: "RAMS work-stages inputs + reorder × buttons" },
-  { file: "src/components/rams/RamsWorkStages.jsx", line: 102, pr: "PR-10", why: "RAMS work-stages inputs + reorder × buttons" },
-  // -- src/components/rams/RamsWorkTypes.jsx --
-  { file: "src/components/rams/RamsWorkTypes.jsx", line: 18, pr: "PR-10", why: "RAMS work-types toggle button" },
   // -- src/components/review/LabourSection.jsx --
   { file: "src/components/review/LabourSection.jsx", line: 12, pr: "PR-future-polish", why: "Labour input (covered by 3-col flex sized by parent, audit notes OK)" },
   // -- src/components/review/LivePreview.jsx --

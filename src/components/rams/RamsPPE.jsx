@@ -19,6 +19,7 @@ export default function RamsPPE({ rams, dispatch }) {
           <button
             key={ppe.id}
             onClick={() => toggle(ppe.id)}
+            style={{ minHeight: 44 }}
             className={`flex flex-col items-center gap-1 p-3 rounded border text-sm transition-colors ${
               isSelected
                 ? 'bg-tq-accent/20 border-tq-accent text-tq-accent'

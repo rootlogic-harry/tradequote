@@ -438,6 +438,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         <button
           onClick={handleDownloadPDF}
           disabled={generatingPDF}
+          style={{ minHeight: 44 }}
           className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {generatingPDF ? 'Generating PDF...' : 'Download PDF'}
@@ -445,6 +446,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         <button
           onClick={handleDownloadDocx}
           disabled={generatingDocx}
+          style={{ minHeight: 44 }}
           className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {generatingDocx ? 'Generating Word...' : 'Download Word'}
@@ -453,6 +455,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
           <button
             onClick={handleSaveRams}
             disabled={saving}
+            style={{ minHeight: 44 }}
             className="border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
           >
             {saving ? 'Saving...' : 'Save RAMS'}
@@ -460,6 +463,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         )}
         <button
           onClick={onBackToEditor}
+          style={{ minHeight: 44 }}
           className="border border-tq-border text-tq-text hover:bg-tq-card font-heading font-bold uppercase tracking-wide px-6 py-2.5 rounded transition-colors"
         >
           Back to Editor
@@ -507,8 +511,15 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
                   <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5 rounded-b">
                     {photo.label}
                   </span>
+                  {/* Toggle is a small corner indicator overlay; the
+                      whole 80\u00d780 card is the primary tap target via
+                      the drag handle / browser tap behaviour. Marked
+                      touch-exempt so the indicator stays compact. */}
                   <button
+                    type="button"
                     onClick={() => togglePhoto(photoIdx)}
+                    data-touch-exempt="true"
+                    aria-label={isSelected ? 'Deselect photo' : 'Select photo'}
                     className={`absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold z-10 ${
                       isSelected ? 'bg-tq-confirmed text-white' : 'bg-tq-card text-tq-muted border border-tq-border'
                     }`}

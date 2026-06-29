@@ -55,27 +55,33 @@ export default function RamsWorkStages({ rams, dispatch }) {
                   type="text"
                   value={s.stage}
                   onChange={e => editStage(s.originalIndex, e.target.value)}
-                  className="flex-1 bg-tq-card border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm"
+                  className="rams-input flex-1"
                 />
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 fq:opacity-0 fq:group-hover:opacity-100 transition-opacity">
                   <button
+                    type="button"
                     onClick={() => moveStage(s.originalIndex, s.originalIndex - 1)}
-                    className="text-tq-muted hover:text-tq-accent text-xs px-1"
+                    className="touch-44 text-tq-muted hover:text-tq-accent"
                     title="Move up"
+                    aria-label="Move stage up"
                   >
                     &#9650;
                   </button>
                   <button
+                    type="button"
                     onClick={() => moveStage(s.originalIndex, s.originalIndex + 1)}
-                    className="text-tq-muted hover:text-tq-accent text-xs px-1"
+                    className="touch-44 text-tq-muted hover:text-tq-accent"
                     title="Move down"
+                    aria-label="Move stage down"
                   >
                     &#9660;
                   </button>
                   <button
+                    type="button"
                     onClick={() => removeStage(s.originalIndex)}
-                    className="text-tq-muted hover:text-red-400 text-sm px-1"
+                    className="touch-44 text-tq-muted hover:text-red-400"
                     title="Remove"
+                    aria-label="Remove stage"
                   >
                     &times;
                   </button>
@@ -97,12 +103,13 @@ export default function RamsWorkStages({ rams, dispatch }) {
           onChange={e => setNewStage(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && addStage()}
           placeholder="Add custom work stage..."
-          className="flex-1 bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+          className="rams-input flex-1"
         />
         <button
           onClick={addStage}
           disabled={!newStage.trim()}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-4 py-2 rounded transition-colors disabled:opacity-40"
+          style={{ minHeight: 44 }}
+          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-4 rounded transition-colors disabled:opacity-40"
         >
           + Add
         </button>

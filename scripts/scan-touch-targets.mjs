@@ -15,7 +15,7 @@ const COMPONENTS_DIR = join(REPO_ROOT, 'src', 'components');
 
 const CANONICAL_44PX_CLASSES = [
   'btn-primary', 'btn-ghost', 'btn-secondary', 'btn-link',
-  'row-action-btn', 'pill', 'nq-field', 'touch-44',
+  'row-action-btn', 'pill', 'nq-field', 'rams-input', 'touch-44',
   'btn-sm', 'btn-lg', 'btn-block',
 ];
 

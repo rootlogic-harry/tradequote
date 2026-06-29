@@ -24,7 +24,7 @@ export default function RamsSiteDetails({ rams, dispatch }) {
             value={rams[f.key] || ''}
             onChange={e => update(f.key, e.target.value)}
             rows={3}
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm resize-y"
+            className="rams-input"
           />
         </div>
       ))}
