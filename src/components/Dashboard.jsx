@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { formatCurrencyCompact } from '../utils/formatCurrencyCompact.js';
+import { filterAndLimitJobs, computeFilterCounts } from '../utils/dashboardFilter.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Dashboard redesign (2026-06-29) — money-first stats, one-action rows,
@@ -342,19 +343,15 @@ export default function Dashboard({
   const currentYear = new Date().getFullYear();
 
   // ── Live filter counts ──
-  const counts = useMemo(() => {
-    const c = { all: jobs.length, draft: 0, sent: 0, accepted: 0, completed: 0, declined: 0 };
-    for (const j of jobs) {
-      const s = (j.status || 'draft').toLowerCase();
-      if (c[s] !== undefined) c[s] += 1;
-    }
-    return c;
-  }, [jobs]);
-
-  const visibleJobs = useMemo(() => {
-    const fn = filter === 'all' ? () => true : (j) => (j.status || 'draft').toLowerCase() === filter;
-    return jobs.filter(fn).slice(0, 10);
-  }, [jobs, filter]);
+  // Both counts + visibleJobs delegate to pure helpers in
+  // `src/utils/dashboardFilter.js` so the wiring is unit-testable end-to-
+  // end (Harry, 2026-06-29: source-level regex tests passed while the
+  // live behaviour silently regressed). `filterAndLimitJobs` filters
+  // BEFORE slicing — slicing first would truncate to the most recent 10
+  // jobs and then filter within those 10, which on a busy account looks
+  // identical to "the filter does nothing".
+  const counts = useMemo(() => computeFilterCounts(jobs), [jobs]);
+  const visibleJobs = useMemo(() => filterAndLimitJobs(jobs, filter, 10), [jobs, filter]);
 
   // ── Money-first stats (spec §"Money-first stat hierarchy") ──
   const wonThisYear = useMemo(() => {

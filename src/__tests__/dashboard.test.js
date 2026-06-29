@@ -71,6 +71,57 @@ describe('Dashboard filter pills (6 pills with counts)', () => {
   });
 });
 
+// ─── Filter pill wiring (2026-06-29 regression — Harry, live prod) ────
+// Source-level regex tests previously passed while the behaviour
+// silently regressed. The behavioural assertions now live in
+// `dashboardFilter.test.js` (pure helper). These tests pin the WIRING
+// between the Dashboard component and the helper so a stale closure /
+// missing dep array / hard-coded handler cannot regress unnoticed.
+describe('Dashboard filter pill wiring (regression: pills did not actually filter)', () => {
+  it('imports the pure helper from utils/dashboardFilter.js', () => {
+    expect(dashboardSrc).toMatch(
+      /import\s*\{[^}]*filterAndLimitJobs[^}]*computeFilterCounts[^}]*\}\s*from\s*['"]\.\.\/utils\/dashboardFilter\.js['"]/
+    );
+  });
+
+  it('visibleJobs is computed by filterAndLimitJobs(jobs, filter, 10)', () => {
+    // The helper is the single source of truth for the filter — the
+    // mechanical bug class (slice-before-filter / stale closure) is now
+    // owned by the helper's unit tests.
+    expect(dashboardSrc).toMatch(/filterAndLimitJobs\(jobs,\s*filter,\s*10\)/);
+  });
+
+  it('useMemo for visibleJobs depends on both `jobs` AND `filter`', () => {
+    // The useMemo dep array must contain `filter` — without it, the
+    // memo would return its first-render result forever and the pills
+    // would visually flip but the list wouldn't change.
+    const visibleStart = dashboardSrc.indexOf('const visibleJobs = useMemo');
+    expect(visibleStart).toBeGreaterThan(-1);
+    const visibleEnd = dashboardSrc.indexOf(';', visibleStart);
+    const visibleBlock = dashboardSrc.slice(visibleStart, visibleEnd);
+    expect(visibleBlock).toMatch(/\[\s*jobs\s*,\s*filter\s*\]/);
+  });
+
+  it('pill counts are computed by computeFilterCounts(jobs)', () => {
+    expect(dashboardSrc).toMatch(/computeFilterCounts\(jobs\)/);
+  });
+
+  it('the pill onClick fires setFilter with the pill key', () => {
+    // Belt-and-braces: an `onClick` that doesn't call setFilter would
+    // mean the pill visually flips (aria-selected updates) but the
+    // `filter` state never moves — the bug Harry described.
+    expect(dashboardSrc).toMatch(/onClick=\{\(\)\s*=>\s*setFilter\(key\)\}/);
+  });
+
+  it('aria-selected mirrors the filter state (filter === key)', () => {
+    expect(dashboardSrc).toMatch(/aria-selected=\{filter\s*===\s*key\}/);
+  });
+
+  it('the "Chase these" link in the Awaiting cell still snaps the filter to sent', () => {
+    expect(dashboardSrc).toMatch(/setFilter\(['"]sent['"]\)/);
+  });
+});
+
 // ─── 3-tab parent REMOVED from Dashboard (kept on SavedQuotes) ────────
 describe('Dashboard no longer renders the 3-tab parent (active/completed/archive)', () => {
   it('does not dispatch SET_VIEW_MODE from Dashboard', () => {
