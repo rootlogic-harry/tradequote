@@ -403,8 +403,11 @@ describe('subscription_started — FIRST active transition only (Pitfall #17)', 
 // ─── 6. Server-side fire wiring ──────────────────────────────────────
 
 describe('server-side event fires — spec-mandated call sites', () => {
-  test('signup_completed fires in /auth/google/callback', () => {
-    const block = blockFromTo(serverJs, "app.get('/auth/google/callback'", '/**');
+  test('signup_completed fires in /auth/callback (Auth0 Universal Login)', () => {
+    // 2026-06-29: route renamed /auth/google/callback → /auth/callback
+    // with the migration to passport-auth0. The signup_completed event
+    // contract (with wasNew flag) is unchanged.
+    const block = blockFromTo(serverJs, "app.get('/auth/callback'", '/**');
     expect(block).toMatch(/recordEvent\(\s*'signup_completed'/);
     expect(block).toMatch(/wasNew/);
   });

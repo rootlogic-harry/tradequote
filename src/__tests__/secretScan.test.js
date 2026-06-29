@@ -82,7 +82,10 @@ describe('TRQ-156 — secrets policy doc', () => {
       'ANTHROPIC_API_KEY',
       'OPENAI_API_KEY',
       'SESSION_SECRET',
-      'GOOGLE_CLIENT_SECRET',
+      // GOOGLE_CLIENT_SECRET retired 2026-06-29; replaced by AUTH0_CLIENT_SECRET
+      // after the migration to Auth0 Universal Login (Google credentials now
+      // live inside the Auth0 tenant, not in our env).
+      'AUTH0_CLIENT_SECRET',
       // Stripe is post-TRQ-150 but the policy already names it
       'STRIPE_SECRET_KEY',
       // R2 is post-TRQ-147 but the policy already names it

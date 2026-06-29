@@ -131,24 +131,26 @@ describe('App.jsx — reloads when restored from bfcache', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// C.  OAuth error handling — Google's 400 never becomes Paul's problem
+// C.  OAuth error handling — Auth0's 400 never becomes Paul's problem
+//     (2026-06-29: passport-google-oauth20 → passport-auth0 / Universal
+//     Login. Route renamed /auth/google/callback → /auth/callback.)
 // ─────────────────────────────────────────────────────────────────────────
 describe('OAuth callback — failureRedirect + recovery', () => {
   const serverSrc = readFileSync(join(repoRoot, 'server.js'), 'utf8');
 
-  test('/auth/google/callback has a failureRedirect to a clean login URL', () => {
+  test('/auth/callback has a failureRedirect to a clean login URL', () => {
     expect(serverSrc).toMatch(
-      /app\.get\(\s*['"]\/auth\/google\/callback['"][\s\S]*?failureRedirect:\s*['"]\/login\?error=/
+      /app\.get\(\s*['"]\/auth\/callback['"][\s\S]*?failureRedirect:\s*['"]\/login\?error=/
     );
   });
 
-  test('/auth/google/callback has an Express error handler that catches Passport crashes', () => {
+  test('/auth/callback has an Express error handler that catches Passport crashes', () => {
     // If Passport throws (e.g., state mismatch, invalid token), the default
     // handler renders a 500 page that leaks internal details and strands
     // the user. We need a 4-arg error middleware so Express recognises it
     // as an error handler and we can redirect to /login?error=oauth_failed.
     const callbackBlock = serverSrc.match(
-      /app\.get\(\s*['"]\/auth\/google\/callback['"][\s\S]*?\n\);/
+      /app\.get\(\s*['"]\/auth\/callback['"][\s\S]*?\n\);/
     );
     expect(callbackBlock).not.toBeNull();
     // Either an inline error handler in the route chain, or a
@@ -167,7 +169,8 @@ describe('OAuth callback — failureRedirect + recovery', () => {
     expect(loginPage).not.toBeNull();
     expect(loginPage[0]).toMatch(/error/);
     // The page either hard-codes copy for these error kinds or delegates
-    // to a helper that does.
+    // to a helper that does. (The fallback HTML carries a "Try again"
+    // button that links to /auth/login.)
     expect(loginPage[0]).toMatch(/oauth_failed|session_expired|Try again/i);
   });
 });
