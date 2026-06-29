@@ -277,7 +277,7 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/AgentActivity.jsx", line: 207, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/AgentActivity.jsx", line: 285, pr: "PR-future-admin", why: "Admin-only surface" },
   // -- src/components/AutosaveStatus.jsx --
-  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\" },
+  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\" },
   // -- src/components/CalibrationManager.jsx --
   { file: "src/components/CalibrationManager.jsx", line: 78, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/CalibrationManager.jsx", line: 114, pr: "PR-future-admin", why: "Admin-only surface" },
@@ -298,10 +298,10 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/SaveErrorBanner.jsx --
   { file: "src/components/SaveErrorBanner.jsx", line: 23, pr: "PR-future-polish", why: "Banner retry link button" },
   // -- src/components/Sidebar.jsx --
-  { file: "src/components/Sidebar.jsx", line: 67, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 94, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 103, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 127, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 74, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 109, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 118, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 142, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   // -- src/components/Toast.jsx --
   { file: "src/components/Toast.jsx", line: 24, pr: "PR-future-polish", why: "Toast dismiss × button" },
   // -- src/components/UserSelector.jsx --

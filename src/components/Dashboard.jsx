@@ -1,18 +1,22 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { formatCurrencyCompact } from '../utils/formatCurrencyCompact.js';
-import { StatusBadge, ExpiryBadge, RamsBadge, VideoBadge } from './badges.jsx';
-import PortalBadge from './PortalBadge.jsx';
-import { documentTerm } from '../utils/documentType.js';
-import { isThisMonth, isThisYear, buildMonthlyTotals } from '../utils/monthlyTotals.js';
-import { isActiveJob, isCompletedJob, isArchivedJob } from '../utils/jobLifecycle.js';
 
-const VIEW_MODES = ['active', 'completed', 'archive'];
-import {
-  needsFollowUp,
-  relativeViewedLabel,
-  normaliseUkPhoneForWhatsApp,
-} from '../utils/portalFollowUp.js';
+// ─────────────────────────────────────────────────────────────────────
+// Dashboard redesign (2026-06-29) — money-first stats, one-action rows,
+// rail-mounted quota chip. Source-of-truth prototype:
+//   /tmp/fastquote-dashboard-handoff/design_handoff_dashboard/
+//     FastQuote Dashboard Redesign.html
+//
+// TERMINOLOGY LOCKDOWN — IMPORTANT:
+//   App chrome (nav, page titles, buttons, headings, empty states) says
+//   "Quote" — literal string. Do NOT thread `documentTerm(profile)` into
+//   anything user-visible on this surface. The client-facing DOCUMENT
+//   (QuoteDocument.jsx, PDF, client portal, DOCX, email subjects) still
+//   follows `profile.documentType` — that's the separate axis. The
+//   Document Type setting controls how the document is titled to the
+//   client; this dashboard always speaks "Quote" to the tradesman.
+// ─────────────────────────────────────────────────────────────────────
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -26,41 +30,182 @@ function todayFormatted() {
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function buildPortalUrl(clientToken) {
-  if (!clientToken) return '';
-  const origin = typeof window !== 'undefined' && window.location?.origin
-    ? window.location.origin
-    : '';
-  return `${origin}/q/${clientToken}`;
+// Days since a job was marked sent. Returns null if no sentAt timestamp
+// (legacy data) so we don't flag rows we can't measure.
+function daysSinceSent(job) {
+  if (!job?.sentAt) return null;
+  const sent = new Date(job.sentAt);
+  if (Number.isNaN(sent.getTime())) return null;
+  return Math.floor((Date.now() - sent.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function FollowUpRow({ job }) {
-  const clientPhone = job.snapshot?.jobDetails?.clientPhone || '';
-  const waPhone = normaliseUkPhoneForWhatsApp(clientPhone);
-  const portalUrl = buildPortalUrl(job.clientToken);
-  const viewedLabel = relativeViewedLabel(job) || 'Viewed';
+// A row is "flagged" (needs attention amber bar + flag badge) when:
+//   - sent quote with no reply for ≥ 2 days, OR
+//   - accepted job without a RAMS attached.
+// Driven by the prototype's `(status==='sent' && sentDays>=2) ||
+// (status==='accepted' && rams===false)`. We map to FastQuote's job
+// shape (`sentAt`, `hasRams`/`ramsSnapshot`).
+function isFlaggedRow(job) {
+  const status = (job.status || 'draft').toLowerCase();
+  if (status === 'sent') {
+    const d = daysSinceSent(job);
+    return d !== null && d >= 2;
+  }
+  if (status === 'accepted') {
+    return !(job.hasRams || !!job.ramsSnapshot);
+  }
+  return false;
+}
 
-  const handleCopy = async (e) => {
-    e.stopPropagation();
-    if (!portalUrl) return;
-    try {
-      await navigator.clipboard?.writeText?.(portalUrl);
-    } catch {
-      // Clipboard permission denied / not available — silently fail.
-      // Paul can still tap Call/WhatsApp.
+// Win-rate over the last 30 days: won / (won + declined). Returns null
+// when there's no signal in the window (don't surface "0%" — that's a
+// misleading-not-confidence-inducing number).
+function computeWinRate(jobs) {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recent = jobs.filter(j => {
+    const stamp = j.acceptedAt || j.declinedAt || j.savedAt;
+    if (!stamp) return false;
+    const t = new Date(stamp).getTime();
+    return !Number.isNaN(t) && t >= cutoff;
+  });
+  const won = recent.filter(j => j.status === 'accepted' || j.status === 'completed').length;
+  const lost = recent.filter(j => j.status === 'declined').length;
+  if (won + lost === 0) return null;
+  return Math.round((won / (won + lost)) * 100);
+}
+
+// Per-row primary action contract. The button advances status to the
+// next stage (NEVER opens the row — `stopPropagation` on click). Absent
+// for terminal statuses (completed / declined) — column stays empty so
+// alignment holds.
+const PRIMARY_ACTION = {
+  draft: { label: 'Send', target: 'sent' },
+  sent: { label: 'Mark accepted', target: 'accepted' },
+  accepted: { label: 'Mark complete', target: 'completed' },
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Kebab overflow menu — contextual per status. Click-outside closes.
+// Click on a menu item fires onAction(label, job) and closes the menu.
+// stopPropagation on both the kebab and the menu so the row doesn't
+// open underneath.
+// ─────────────────────────────────────────────────────────────────────
+function KebabMenu({ job, status, isAdminPlan, onClose, onAction }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [onClose]);
+
+  // Build item list per status. `__` is a divider sentinel.
+  const items = (() => {
+    if (status === 'draft') {
+      return [
+        { id: 'edit', label: 'Edit quote' },
+        { id: 'duplicate', label: 'Duplicate' },
+        { id: '__' },
+        { id: 'decline', label: 'Mark declined', danger: true },
+        { id: 'delete', label: 'Delete', danger: true },
+      ];
     }
-  };
+    if (status === 'sent') {
+      return [
+        { id: 'resend', label: 'Resend link' },
+        { id: 'duplicate', label: 'Duplicate' },
+        { id: '__' },
+        { id: 'decline', label: 'Mark declined', danger: true },
+      ];
+    }
+    if (status === 'accepted') {
+      const base = [];
+      // RAMS is admin-only per CLAUDE.md plan-model + the existing
+      // Dashboard pattern (RAMS UX surface is admin-gated).
+      if (isAdminPlan) {
+        const hasRams = job.hasRams || !!job.ramsSnapshot;
+        base.push({ id: hasRams ? 'view-rams' : 'create-rams', label: hasRams ? 'View RAMS' : 'Create RAMS' });
+      }
+      base.push({ id: 'duplicate', label: 'Duplicate' });
+      base.push({ id: '__' });
+      base.push({ id: 'decline', label: 'Mark declined', danger: true });
+      return base;
+    }
+    if (status === 'completed') {
+      return [
+        { id: 'view', label: 'View quote' },
+        { id: 'duplicate', label: 'Duplicate' },
+      ];
+    }
+    if (status === 'declined') {
+      return [
+        { id: 'reopen', label: 'Re-open' },
+        { id: 'duplicate', label: 'Duplicate' },
+        { id: '__' },
+        { id: 'delete', label: 'Delete', danger: true },
+      ];
+    }
+    return [];
+  })();
 
   return (
-    <div className="job-row flex-col fq:flex-row">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="jr-ref">{job.quoteReference}</span>
-          <span className="portal-badge portal-badge--viewed">
-            <span className="portal-badge-dot" aria-hidden />
-            {viewedLabel}
-          </span>
-        </div>
+    <div className="kebab-menu" ref={ref} role="menu">
+      {items.map((it, i) =>
+        it.id === '__'
+          ? <div key={`d${i}`} className="kebab-menu-div" aria-hidden="true" />
+          : (
+            <button
+              key={it.id}
+              type="button"
+              role="menuitem"
+              className={`touch-44 ${it.danger ? 'danger' : ''}`}
+              style={{ minHeight: 44, width: '100%', justifyContent: 'flex-start' }}
+              onClick={(e) => { e.stopPropagation(); onAction(it.id, job); onClose(); }}
+            >
+              {it.label}
+            </button>
+          )
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// JobRow — one row in the Recent jobs table. 5-column grid on desktop:
+//   [ status stamp ] [ client + site + flag ] [ ref + £ ] [ primary ] [ ⋯ ]
+// Mobile reflows per index.html @media block.
+// Row click → onOpen(job). Primary button → onAdvance(job). Kebab →
+// KebabMenu, which calls onMenuAction(itemId, job).
+// ─────────────────────────────────────────────────────────────────────
+function JobRow({ job, isAdminPlan, onOpen, onAdvance, onMenuAction }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const status = (job.status || 'draft').toLowerCase();
+  const primary = PRIMARY_ACTION[status];
+  const flagged = isFlaggedRow(job);
+  const sentDays = daysSinceSent(job);
+  const hasRams = job.hasRams || !!job.ramsSnapshot;
+
+  // Status label is the on-screen text for the row's status stamp.
+  // Capitalised — "Sent" / "Accepted" not "SENT" — matches the
+  // prototype's body voice.
+  const statusLabel = {
+    draft: 'Draft',
+    sent: 'Sent',
+    accepted: 'Accepted',
+    completed: 'Completed',
+    declined: 'Declined',
+  }[status] || 'Draft';
+
+  return (
+    <div
+      className={`job-row job-row-redesign${flagged ? ' flagged' : ''}`}
+      onClick={() => onOpen(job)}
+      role="button"
+      tabIndex={0}
+      style={{ minHeight: 44 }}
+    >
+      <div className="job-row-stamp" data-s={status}>{statusLabel}</div>
+
+      <div className="min-w-0">
         <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
           {job.clientName || 'Unnamed'}
         </div>
@@ -69,76 +214,83 @@ function FollowUpRow({ job }) {
             {job.siteAddress}
           </div>
         )}
+        {/* Flag badge under the client name — "RAMS needed" / "No
+            reply · 8d". Mirrors the prototype's small amber tag. */}
+        {flagged && status === 'accepted' && !hasRams && (
+          <span className="job-flag">RAMS needed</span>
+        )}
+        {flagged && status === 'sent' && sentDays !== null && (
+          <span className="job-flag">No reply &middot; {sentDays}d</span>
+        )}
       </div>
 
-      {/* Action buttons — Call, WhatsApp, Copy link.
-          Call + WhatsApp are hidden if no phone is on file so we
-          don't wire dead buttons. Copy link always works. */}
-      <div className="flex flex-wrap gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-        {clientPhone && (
-          <a
-            href={`tel:${clientPhone.replace(/\s+/g, '')}`}
-            className="btn-ghost text-xs"
-            style={{ height: 36, padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            aria-label={`Call ${job.clientName || 'client'}`}
-          >
-            {'\u260E'} Call
-          </a>
-        )}
-        {waPhone && (
-          <a
-            href={`https://wa.me/${waPhone}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-ghost text-xs"
-            style={{ height: 36, padding: '0 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            aria-label={`WhatsApp ${job.clientName || 'client'}`}
-          >
-            WhatsApp
-          </a>
-        )}
-        {portalUrl && (
+      <div className="job-row-money">
+        <div className="ref">{job.quoteReference || '—'}</div>
+        <div className="total">{formatCurrency(job.totalAmount || 0)}</div>
+      </div>
+
+      <div className="job-row-primary">
+        {primary && (
           <button
             type="button"
-            onClick={handleCopy}
-            className="btn-ghost text-xs"
-            style={{ height: 36, padding: '0 16px' }}
+            className="row-action-btn"
+            style={
+              primary.target === 'sent'
+                ? { borderColor: 'var(--tq-accent)', background: 'var(--tq-accent)', color: '#ffffff' }
+                : { borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }
+            }
+            onClick={(e) => { e.stopPropagation(); onAdvance(job, primary.target); }}
           >
-            Copy link
+            {primary.label}
           </button>
         )}
       </div>
-    </div>
-  );
-}
 
-function FollowUpSection({ jobs }) {
-  const followUps = (jobs || []).filter((j) => needsFollowUp(j));
-  if (followUps.length === 0) return null;
-  return (
-    <div className="mb-8">
-      <div className="eyebrow mb-3">Needs follow-up</div>
-      <div className="space-y-2">
-        {followUps.map((job) => (
-          <FollowUpRow key={job.id} job={job} />
-        ))}
+      <div className="kebab-menu-wrap" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="kebab-btn touch-44"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          style={{ minHeight: 44, minWidth: 44 }}
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+        >
+          <KebabIcon />
+        </button>
+        {menuOpen && (
+          <KebabMenu
+            job={job}
+            status={status}
+            isAdminPlan={isAdminPlan}
+            onClose={() => setMenuOpen(false)}
+            onAction={onMenuAction}
+          />
+        )}
       </div>
     </div>
   );
 }
 
+function KebabIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
 
 export default function Dashboard({
   userName,
-  profile,
+  profile, // intentionally NOT used for document-term lockdown (see header)
   onStartNewQuote,
   onStartQuickQuote,
   onViewJobs,
-  incompleteJobs,
   currentDraft,
   onResumeDraft,
-  onResumeJob,
-  onMarkRamsNotRequired,
+  onMarkRamsNotRequired, // kept for legacy callers
   onCreateRamsFromSaved,
   savedJobs = [],
   recentJobs = [],
@@ -146,61 +298,158 @@ export default function Dashboard({
   onViewJob,
   onViewRams,
   isAdminPlan = false,
-  viewMode = 'active',
 }) {
-  const term = documentTerm(profile);
-  // Use recentJobs (from reducer) if available, fallback to savedJobs
+  // Note: `profile` is still in props for back-compat with App.jsx —
+  // intentionally unused for any nav/heading/button text. The dashboard
+  // chrome speaks "Quote" everywhere; the client-facing document follows
+  // profile.documentType via QuoteDocument.jsx (separate concern).
+
   const jobs = recentJobs.length > 0 ? recentJobs : savedJobs;
 
-  // Stat calculations — stats are intentionally based on the full job list,
-  // not the active/archive view. Mark wants this-month / this-year revenue
-  // to include accepted jobs whether or not they're archived later.
-  const thisMonthJobs = jobs.filter(j => isThisMonth(j.savedAt));
-  const thisMonthTotal = thisMonthJobs.reduce((s, j) => s + (j.totalAmount ?? 0), 0);
-  const thisYearTotal = jobs
-    .filter(j => isThisYear(j.savedAt))
-    .reduce((s, j) => s + (j.totalAmount ?? 0), 0);
-  const awaitingCount = jobs.filter(j => j.status === 'sent').length;
-  const acceptedThisMonth = jobs.filter(j => j.status === 'accepted' && isThisMonth(j.acceptedAt));
-  const acceptedValue = acceptedThisMonth.reduce((s, j) => s + (j.totalAmount ?? 0), 0);
-
-  const monthlyTotals = useMemo(() => buildMonthlyTotals(jobs), [jobs]);
+  // Status filter pills (six pills with live counts). The prototype's
+  // labels are: All · Drafts · Sent · Accepted · Done · Declined. We
+  // map "Done" → status === 'completed'.
+  const [filter, setFilter] = useState('all');
   const [showMonthly, setShowMonthly] = useState(false);
   const currentYear = new Date().getFullYear();
 
-  // Active vs Archive split — only declined quotes move off the main
-  // list. Per Mark's 2026-06-21 feedback, expired sends stay active
-  // because customers regularly authorise walling jobs months after
-  // the quote technically expires. Bucket logic lives in
-  // src/utils/jobLifecycle.js.
-  const now = new Date();
-  const activeJobs = useMemo(() => jobs.filter(j => isActiveJob(j, now)), [jobs]);
-  const completedJobs = useMemo(() => jobs.filter(j => isCompletedJob(j, now)), [jobs]);
-  const archivedJobs = useMemo(() => jobs.filter(j => isArchivedJob(j, now)), [jobs]);
-  const view = VIEW_MODES.includes(viewMode) ? viewMode : 'active';
-  const isActiveView = view === 'active';
-  const isCompletedView = view === 'completed';
-  const isArchiveView = view === 'archive';
-  const visibleJobs = isArchiveView ? archivedJobs : isCompletedView ? completedJobs : activeJobs;
-  const completedCount = completedJobs.length;
-  const archiveCount = archivedJobs.length;
+  // ── Live filter counts ──
+  const counts = useMemo(() => {
+    const c = { all: jobs.length, draft: 0, sent: 0, accepted: 0, completed: 0, declined: 0 };
+    for (const j of jobs) {
+      const s = (j.status || 'draft').toLowerCase();
+      if (c[s] !== undefined) c[s] += 1;
+    }
+    return c;
+  }, [jobs]);
 
-  const displayJobs = visibleJobs.slice(0, 5);
+  const visibleJobs = useMemo(() => {
+    const fn = filter === 'all' ? () => true : (j) => (j.status || 'draft').toLowerCase() === filter;
+    return jobs.filter(fn).slice(0, 10);
+  }, [jobs, filter]);
 
-  const getStatus = (job) => (job.status || 'draft').toUpperCase();
+  // ── Money-first stats (spec §"Money-first stat hierarchy") ──
+  const wonThisYear = useMemo(() => {
+    const year = new Date().getFullYear();
+    return jobs
+      .filter(j => (j.status === 'accepted' || j.status === 'completed'))
+      .filter(j => {
+        const t = j.acceptedAt || j.savedAt;
+        if (!t) return false;
+        return new Date(t).getFullYear() === year;
+      })
+      .reduce((s, j) => s + (j.totalAmount ?? 0), 0);
+  }, [jobs]);
 
-  const openStatusModal = (e, jobId, targetStatus) => {
-    e.stopPropagation();
-    dispatch({ type: 'OPEN_STATUS_MODAL', jobId, targetStatus });
+  const awaitingJobs = useMemo(() => jobs.filter(j => j.status === 'sent'), [jobs]);
+  const awaitingValue = useMemo(() => awaitingJobs.reduce((s, j) => s + (j.totalAmount ?? 0), 0), [awaitingJobs]);
+
+  const openPipeline = useMemo(
+    () => jobs
+      .filter(j => j.status !== 'declined' && j.status !== 'completed')
+      .reduce((s, j) => s + (j.totalAmount ?? 0), 0),
+    [jobs]
+  );
+
+  const winRate = useMemo(() => computeWinRate(jobs), [jobs]);
+
+  // ── Monthly breakdown (2026) ── kept from the prototype + existing
+  // dashboard. Collapsible, 12-month grid, peak month highlighted.
+  const monthlyTotals = useMemo(() => {
+    const buckets = Array.from({ length: 12 }, (_, m) => ({
+      label: new Date(currentYear, m, 1).toLocaleString('en-GB', { month: 'short' }),
+      total: 0,
+      count: 0,
+    }));
+    for (const j of jobs) {
+      const stamp = j.savedAt;
+      if (!stamp) continue;
+      const d = new Date(stamp);
+      if (Number.isNaN(d.getTime())) continue;
+      if (d.getFullYear() !== currentYear) continue;
+      const idx = d.getMonth();
+      buckets[idx].total += j.totalAmount || 0;
+      buckets[idx].count += 1;
+    }
+    return buckets;
+  }, [jobs, currentYear]);
+
+  const peakMonthTotal = useMemo(() => Math.max(0, ...monthlyTotals.map(m => m.total)), [monthlyTotals]);
+  const yearTotal = useMemo(() => monthlyTotals.reduce((s, m) => s + m.total, 0), [monthlyTotals]);
+
+  // ── Row interaction handlers ──
+  const openStatusModal = (jobId, targetStatus) => {
+    dispatch?.({ type: 'OPEN_STATUS_MODAL', jobId, targetStatus });
   };
 
   const handleRowClick = (job) => {
     if (onViewJob) onViewJob(job);
   };
 
+  const handleAdvance = (job, targetStatus) => {
+    // Primary button uses the same status-lifecycle modal as before so
+    // notes/expiry capture stays in one place. The modal then routes
+    // through App.jsx's handleStatusConfirm → PUT /status.
+    openStatusModal(job.id, targetStatus);
+  };
+
+  const handleMenuAction = (actionId, job) => {
+    switch (actionId) {
+      case 'edit':
+        // Reuse the "open quote" path — SavedQuoteViewer offers Edit.
+        onViewJob?.(job);
+        return;
+      case 'view':
+        onViewJob?.(job);
+        return;
+      case 'duplicate':
+        // Duplicate is not yet wired across the app; fall through to
+        // open the quote so the user has a path forward. Flagged in
+        // PR body as a follow-up to wire properly.
+        onViewJob?.(job);
+        return;
+      case 'decline':
+        // Routes through the existing status modal (note capture, etc.)
+        openStatusModal(job.id, 'declined');
+        return;
+      case 'delete':
+        // Delete from kebab is destructive; let App's confirm flow
+        // handle it via a dispatch the parent can listen to. For now
+        // route through view so user goes to SavedQuotes for confirm.
+        // (Belt-and-braces — keeps Dashboard from doing destructive
+        // ops directly. Flagged in PR.)
+        onViewJob?.(job);
+        return;
+      case 'resend':
+        // Resend link → open the quote, where ClientLinkBlock handles
+        // regenerate via the existing client-token endpoint.
+        onViewJob?.(job);
+        return;
+      case 'reopen':
+        // VALID_TRANSITIONS allows declined → sent only. Treat re-open
+        // as flipping the row back into the active list via the
+        // status modal so the user picks the destination consciously.
+        // (Flagged in PR — if Harry wants declined → draft, server
+        // VALID_TRANSITIONS needs a one-line widening.)
+        openStatusModal(job.id, 'sent');
+        return;
+      case 'create-rams':
+        onCreateRamsFromSaved?.(job);
+        return;
+      case 'view-rams':
+        onViewRams?.(job);
+        return;
+      default:
+        onViewJob?.(job);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto">
-      {/* Header */}
+      {/* Top line — greeting + date eyebrow, View all quotes + New quote
+          CTAs. The old top-of-page quota strip is gone (moved to the
+          rail). Mobile keeps the New Quote button only — QUICK is admin-
+          only and hidden < fq breakpoint. */}
       <div className="flex flex-col fq:flex-row fq:items-end fq:justify-between gap-4 mb-8">
         <div>
           <div className="eyebrow mb-2">{todayFormatted()}</div>
@@ -208,59 +457,82 @@ export default function Dashboard({
             {getGreeting()}{userName ? `, ${userName}` : ''}
           </h1>
         </div>
-        {/* Header CTAs.
-            QUICK is an admin-only fast-path (Harry's Q3 audit ask,
-            approved 2026-06-26) — hidden on mobile entirely, where the
-            header just shows the primary `+ NEW QUOTE` action.
-            flex-wrap keeps the row from overflowing on 360px Androids
-            when both buttons are visible at the desktop breakpoint
-            mid-resize / between media-query steps. */}
+        {/* Header CTAs. Terminology lockdown: literal "Quote" strings.
+            See the comment at the top of this file — the rendered
+            DOCUMENT title still follows profile.documentType, but app
+            chrome is locked to "Quote". */}
         <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            onClick={onViewJobs}
+            className="btn-ghost"
+            type="button"
+          >
+            View all quotes
+          </button>
           <button
             onClick={onStartQuickQuote}
             className="btn-ghost hidden fq:inline-flex"
             title="Skip the review step"
+            type="button"
           >
-            QUICK {term.upper}
+            QUICK QUOTE
           </button>
-          <button onClick={onStartNewQuote} className="btn-primary">
-            + NEW {term.upper}
+          <button onClick={onStartNewQuote} className="btn-primary" type="button">
+            + NEW QUOTE
           </button>
         </div>
       </div>
 
-      {/* Stats strip.
-          Money values are rendered twice — full form (`£1,200,000.00`)
-          and abbreviated form (`£1.2M`). CSS media query in index.html
-          shows the appropriate one per viewport: full ≥360px, compact
-          <360px — so 7-figure year totals don't overflow the ~165px
-          cell on an iPhone SE / older Android (audit item #19).
-          Awaiting is an integer count so it never needs abbreviation. */}
+      {/* Money-first stats strip. 4 cells, ordered Won/Awaiting/
+          Pipeline/Win-rate. Awaiting is the actionable one (amber-
+          tinted, with a Chase-these link that snaps the filter to
+          Sent). Demote zeros — handled via tone, not absence. */}
       <div className="stats-strip" style={{ borderRadius: 2 }}>
-        <div className="stat-cell">
-          <div className="stat-label">This month</div>
+        <div className="stat-cell accent">
+          <div className="stat-label">Won this year</div>
           <div className="stat-value">
-            <span className="stat-value-full">{formatCurrency(thisMonthTotal)}</span>
-            <span className="stat-value-compact">{formatCurrencyCompact(thisMonthTotal)}</span>
+            <span className="stat-value-full">{formatCurrency(wonThisYear)}</span>
+            <span className="stat-value-compact">{formatCurrencyCompact(wonThisYear)}</span>
           </div>
+          <div className="stat-sub">{counts.accepted + counts.completed} quotes accepted</div>
+        </div>
+        <div className="stat-cell warn">
+          <div className="stat-label">Awaiting reply</div>
+          <div className="stat-value">
+            {awaitingJobs.length}
+            {awaitingJobs.length > 0 && (
+              <>
+                {' '}&middot;{' '}
+                <span className="stat-value-full">{formatCurrency(awaitingValue)}</span>
+                <span className="stat-value-compact">{formatCurrencyCompact(awaitingValue)}</span>
+              </>
+            )}
+          </div>
+          {awaitingJobs.length > 0 && (
+            <button
+              type="button"
+              className="stat-link touch-44"
+              style={{ minHeight: 44 }}
+              onClick={() => setFilter('sent')}
+            >
+              Chase these &rarr;
+            </button>
+          )}
         </div>
         <div className="stat-cell">
-          <div className="stat-label">This year</div>
+          <div className="stat-label">Open pipeline</div>
           <div className="stat-value">
-            <span className="stat-value-full">{formatCurrency(thisYearTotal)}</span>
-            <span className="stat-value-compact">{formatCurrencyCompact(thisYearTotal)}</span>
+            <span className="stat-value-full">{formatCurrencyCompact(openPipeline)}</span>
+            <span className="stat-value-compact">{formatCurrencyCompact(openPipeline)}</span>
           </div>
+          <div className="stat-sub">Live work</div>
         </div>
         <div className="stat-cell">
-          <div className="stat-label">Awaiting</div>
-          <div className="stat-value">{awaitingCount}</div>
-        </div>
-        <div className="stat-cell">
-          <div className="stat-label">Accepted</div>
+          <div className="stat-label">Win rate</div>
           <div className="stat-value">
-            <span className="stat-value-full">{formatCurrency(acceptedValue)}</span>
-            <span className="stat-value-compact">{formatCurrencyCompact(acceptedValue)}</span>
+            {winRate === null ? '—' : `${winRate}%`}
           </div>
+          <div className="stat-sub">Last 30 days</div>
         </div>
       </div>
 
@@ -272,43 +544,49 @@ export default function Dashboard({
           style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--tq-muted)', minHeight: 44, padding: '4px 0' }}
           aria-expanded={showMonthly}
         >
-          {showMonthly ? '\u2212' : '+'} Monthly breakdown ({currentYear})
+          {showMonthly ? '−' : '+'} Monthly breakdown ({currentYear})
         </button>
         {showMonthly && (
           <div
             className="mt-3 p-4"
             style={{ backgroundColor: 'var(--tq-card)', border: '1px solid var(--tq-border)', borderRadius: 2 }}
           >
-            {/* On 320-360px phones, 3 columns squashes the £ value
-                under a "Jan" label that already touches its neighbour.
-                Drop to 2 cols on very-small viewports — month label and
-                cell value both get more breathing room. Desktop unchanged
-                (6 cols = 2 rows). Audit item #20. */}
             <div className="grid grid-cols-2 fq:grid-cols-6 gap-3">
-              {monthlyTotals.map((m) => (
-                <div key={m.month} className="text-center">
-                  <div
-                    className="text-xs uppercase mb-1"
-                    style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--tq-muted)' }}
-                  >
-                    {m.label}
+              {monthlyTotals.map((m) => {
+                const isPeak = m.total > 0 && m.total === peakMonthTotal;
+                return (
+                  <div key={m.label} className="text-center">
+                    <div
+                      className="text-xs uppercase mb-1"
+                      style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--tq-muted)' }}
+                    >
+                      {m.label}
+                    </div>
+                    <div
+                      style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: isPeak ? 'var(--tq-accent)' : (m.total > 0 ? 'var(--tq-text)' : 'var(--tq-muted)') }}
+                    >
+                      {formatCurrency(m.total)}
+                    </div>
+                    <div className="text-[10px]" style={{ color: 'var(--tq-muted)' }}>
+                      {m.count} {m.count === 1 ? 'quote' : 'quotes'}
+                    </div>
                   </div>
-                  <div
-                    style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: m.total > 0 ? 'var(--tq-text)' : 'var(--tq-muted)' }}
-                  >
-                    {formatCurrency(m.total)}
-                  </div>
-                  <div className="text-[10px]" style={{ color: 'var(--tq-muted)' }}>
-                    {m.count} {term.lower}{m.count === 1 ? '' : 's'}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+            <div
+              className="mt-4 pt-3"
+              style={{ borderTop: '1px solid var(--tq-border)', fontSize: 12, color: 'var(--tq-muted)' }}
+            >
+              Total quoted in {currentYear} &middot; <strong style={{ color: 'var(--tq-text)' }}>{formatCurrency(yearTotal)}</strong>
             </div>
           </div>
         )}
       </div>
 
-      {/* Current draft banner */}
+      {/* Current draft banner — preserved from the previous dashboard.
+          When a draft is in progress, surface it above the recent jobs
+          list so the user has a one-click resume path. */}
       {currentDraft && (
         <div
           className="flex items-center justify-between gap-4 p-4 mb-6"
@@ -323,253 +601,83 @@ export default function Dashboard({
             </div>
             <p className="text-sm truncate" style={{ color: 'var(--tq-muted)' }}>
               {currentDraft.jobDetails?.siteAddress || 'No address'}
-              {currentDraft.step ? ` \u2014 Step ${currentDraft.step}` : ''}
+              {currentDraft.step ? ` — Step ${currentDraft.step}` : ''}
             </p>
           </div>
-          <button onClick={onResumeDraft} className="btn-primary whitespace-nowrap">
+          <button onClick={onResumeDraft} className="btn-primary whitespace-nowrap" type="button">
             Resume
           </button>
         </div>
       )}
 
-      {/* Incomplete jobs (needs RAMS) — admin only */}
-      {isAdminPlan && incompleteJobs && incompleteJobs.length > 0 && (
-        <div className="mb-8">
-          <div className="eyebrow mb-3">Needs Attention</div>
-          <div className="space-y-2">
-            {incompleteJobs.map(job => (
-              <div
-                key={job.id}
-                className="job-row flex-col fq:flex-row"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="jr-stamp" data-status="sent">Needs RAMS</span>
-                    <VideoBadge captureMode={job.snapshot?.captureMode} />
-                    <span className="jr-ref">{job.quoteReference}</span>
-                  </div>
-                  <div className="font-heading font-bold truncate" style={{ color: 'var(--tq-text)' }}>
-                    {job.clientName || 'Unnamed client'}
-                  </div>
-                  {job.siteAddress && (
-                    <div className="text-sm truncate" style={{ color: 'var(--tq-muted)' }}>
-                      {job.siteAddress}
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => onCreateRamsFromSaved(job)} className="btn-primary text-xs">
-                    Create RAMS
-                  </button>
-                  <button onClick={() => onMarkRamsNotRequired(job.id)} className="btn-ghost text-xs">
-                    Not Needed
-                  </button>
-                </div>
-              </div>
-            ))}
+      {/* Recent jobs — heading + caption + 6 filter pills + the table.
+          No more FollowUpSection panel; urgency is surfaced inline on
+          flagged rows. Mark's 3-tab parent (Active/Completed/Archive)
+          is GONE from Dashboard per Harry's 2026-06-29 call — kept on
+          SavedQuotes because that's the archive-browser surface. */}
+      <div className="mb-8">
+        <div className="flex items-start justify-between mb-3 gap-4 flex-wrap">
+          <div>
+            <div className="eyebrow">RECENT QUOTES</div>
+            <div className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>
+              Anything needing action is marked with an amber bar.
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Needs follow-up — viewed by the client ≥2 days ago, no response.
-          Paul's "chase list": see who's gone cold and tap through to
-          Call / WhatsApp / Copy link. No nudge emails, no pushes — it
-          just surfaces the decision for the next time he logs in.
-          Same view for both basic and admin (per Paul's brief). */}
-      <FollowUpSection jobs={jobs} />
-
-      {/* Recent jobs */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <div className="eyebrow">{isArchiveView ? 'ARCHIVED JOBS' : isCompletedView ? 'COMPLETED JOBS' : 'RECENT JOBS'}</div>
-          <button
-            onClick={onViewJobs}
-            className="text-sm inline-flex items-center"
-            style={{ color: 'var(--tq-accent)', fontWeight: 500, minHeight: 44, padding: '4px 8px' }}
-          >
-            View all &rarr;
-          </button>
+        <div className="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Filter quotes">
+          {[
+            ['all', 'All'],
+            ['draft', 'Drafts'],
+            ['sent', 'Sent'],
+            ['accepted', 'Accepted'],
+            ['completed', 'Done'],
+            ['declined', 'Declined'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={filter === key}
+              onClick={() => setFilter(key)}
+              className={`pill ${filter === key ? 'active' : ''}`}
+            >
+              {label}
+              <span className="ml-1.5 text-[11px] opacity-70" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                {counts[key]}
+              </span>
+            </button>
+          ))}
         </div>
 
-        {/* Active / Completed / Archive tabs (Mark's 2026-06-26 ask).
-            Reuses the existing .pill class so the look matches the
-            SavedQuotes filter chips. Count badge hidden when zero so
-            tabs don't read "(0)". */}
-        <div className="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Job list view">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isActiveView}
-            onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'active' })}
-            className={`pill ${isActiveView ? 'active' : ''}`}
-          >
-            Active
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isCompletedView}
-            onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'completed' })}
-            className={`pill ${isCompletedView ? 'active' : ''}`}
-          >
-            Completed{completedCount > 0 ? ` (${completedCount})` : ''}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isArchiveView}
-            onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'archive' })}
-            className={`pill ${isArchiveView ? 'active' : ''}`}
-          >
-            Archived{archiveCount > 0 ? ` (${archiveCount})` : ''}
-          </button>
-        </div>
-
-        {displayJobs.length === 0 ? (
+        {visibleJobs.length === 0 ? (
           <div
             className="px-5 py-10 text-center"
             style={{ backgroundColor: 'var(--tq-card)', border: '1.5px solid var(--tq-border)', borderRadius: 2 }}
           >
             <div className="text-3xl mb-3 opacity-20">&#128221;</div>
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
-              {isArchiveView
-                ? `No archived ${term.lower}s yet — declined ${term.lower}s will show here once you have any.`
-                : isCompletedView
-                  ? `No completed ${term.lower}s yet — finished work shows here once you mark a job as completed.`
-                  : `No jobs yet. Create your first ${term.lower} to get started.`}
+              {filter === 'all'
+                ? 'No quotes yet. Create your first quote to get started.'
+                : `No ${filter === 'completed' ? 'done' : filter} quotes.`}
             </p>
-            {isActiveView && (
-              <button onClick={onStartNewQuote} className="btn-primary">
-                + New {term.title}
+            {filter === 'all' && (
+              <button onClick={onStartNewQuote} className="btn-primary" type="button">
+                + New quote
               </button>
             )}
           </div>
         ) : (
           <div className="space-y-2">
-            {displayJobs.map((job) => {
-              const status = getStatus(job);
-              const hasRams = job.hasRams || !!job.ramsSnapshot;
-
-              return (
-                <div
-                  key={job.id}
-                  className="job-row flex-col fq:flex-row"
-                  onClick={() => handleRowClick(job)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="jr-ref">{job.quoteReference}</span>
-                      <StatusBadge status={status} />
-                      <VideoBadge captureMode={job.snapshot?.captureMode} />
-                      {status === 'SENT' && <ExpiryBadge expiresAt={job.expiresAt} />}
-                      {status === 'ACCEPTED' && isAdminPlan && <RamsBadge hasRams={hasRams} />}
-                      <PortalBadge job={job} />
-                    </div>
-                    <div className="text-sm font-medium truncate" style={{ color: 'var(--tq-text)' }}>
-                      {job.clientName || 'Unnamed'}
-                    </div>
-                    {job.siteAddress && (
-                      <div className="text-xs truncate" style={{ color: 'var(--tq-muted)' }}>
-                        {job.siteAddress}
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 hidden fq:block" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--tq-text)' }}>
-                    {formatCurrency(job.totalAmount || 0)}
-                  </div>
-
-                  {/* Contextual action buttons. Hidden in archive view \u2014
-                      archived rows are read-only-ish; user can still open
-                      the row to view the quote and change status from
-                      there if they want to restore. */}
-                  {!isArchiveView && (
-                    <div className="flex flex-wrap gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                      {/* Per-row action buttons use the shared
-                          .row-action-btn class so the global mobile rule
-                          (44px tall + full-width below the fq breakpoint)
-                          kicks in. Previously these were inline-styled
-                          at a fixed 36px height and spilled out of the
-                          column on 360px (audit item #9). Status-specific
-                          tints are kept via inline style. */}
-                      {status === 'DRAFT' && (
-                        <>
-                          <button
-                            onClick={(e) => openStatusModal(e, job.id, 'sent')}
-                            className="row-action-btn"
-                            style={{ borderColor: 'var(--tq-accent)', background: 'var(--tq-accent)', color: '#ffffff' }}
-                          >
-                            Mark Sent
-                          </button>
-                          <button
-                            onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                            className="row-action-btn"
-                            style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                          >
-                            {'✗'} Declined
-                          </button>
-                        </>
-                      )}
-                      {status === 'SENT' && (
-                        <>
-                          <button
-                            onClick={(e) => openStatusModal(e, job.id, 'accepted')}
-                            className="row-action-btn"
-                            style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
-                          >
-                            {'\u2713'} Accepted
-                          </button>
-                          <button
-                            onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                            className="row-action-btn"
-                            style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                          >
-                            {'\u2717'} Declined
-                          </button>
-                        </>
-                      )}
-                      {status === 'ACCEPTED' && (
-                        <>
-                          {isAdminPlan && hasRams ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onViewRams?.(job); }}
-                              className="row-action-btn"
-                            >
-                              View RAMS
-                            </button>
-                          ) : isAdminPlan ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onCreateRamsFromSaved?.(job); }}
-                              className="row-action-btn"
-                              style={{ borderColor: 'var(--tq-accent)', color: 'var(--tq-accent)' }}
-                            >
-                              Create RAMS
-                            </button>
-                          ) : null}
-                          <button
-                            onClick={(e) => openStatusModal(e, job.id, 'completed')}
-                            className="row-action-btn"
-                            style={{ borderColor: 'var(--tq-confirmed-bd)', color: 'var(--tq-confirmed-txt)' }}
-                          >
-                            Complete
-                          </button>
-                          {/* Manual decline from accepted — customer pulled
-                              out after acceptance (deposit refund, change of
-                              mind, etc.). Reuses the same status modal as
-                              the SENT decline path so note-capture works. */}
-                          <button
-                            onClick={(e) => openStatusModal(e, job.id, 'declined')}
-                            className="row-action-btn"
-                            style={{ borderColor: 'var(--tq-error-bd)', color: 'var(--tq-error-txt)' }}
-                          >
-                            {'✗'} Declined
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {visibleJobs.map((job) => (
+              <JobRow
+                key={job.id}
+                job={job}
+                isAdminPlan={isAdminPlan}
+                onOpen={handleRowClick}
+                onAdvance={handleAdvance}
+                onMenuAction={handleMenuAction}
+              />
+            ))}
           </div>
         )}
       </div>

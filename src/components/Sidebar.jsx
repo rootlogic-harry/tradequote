@@ -1,5 +1,12 @@
 import React from 'react';
-import { documentTerm } from '../utils/documentType.js';
+
+// Side rail — desktop ≥900px navigation surface. Dashboard redesign
+// (2026-06-29) lockdown: nav labels are LITERAL "Quote" strings, not
+// `documentTerm(profile)`. The Document Type setting controls the
+// client-facing document title only; app chrome speaks Quote everywhere.
+// Rail-quota chip lives above the user block (replaces the top-of-page
+// QuotaCounter banner on the Dashboard view) — driven by the billing
+// prop forwarded from App.jsx /auth/me payload.
 
 export default function Sidebar({
   currentView,
@@ -13,17 +20,17 @@ export default function Sidebar({
   theme,
   toggleTheme,
   currentUser,
-  profile,
+  profile, // intentionally unused — see header comment on term lockdown
   onSettingsClick,
   onLogout,
   isAdminPlan = false,
+  billing = null,
   className = '',
 }) {
-  const term = documentTerm(profile);
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon, action: onGoToDashboard },
-    { key: 'new', label: `New ${term.title}`, icon: PlusIcon, action: onStartNewQuote },
-    { key: 'saved', label: `My ${term.title}s`, icon: FolderIcon, action: onGoToSaved },
+    { key: 'new', label: 'New quote', icon: PlusIcon, action: onStartNewQuote },
+    { key: 'saved', label: 'My quotes', icon: FolderIcon, action: onGoToSaved },
     ...(isAdminPlan && onGoToAnalytics ? [{ key: 'analytics', label: 'Analytics', icon: TrendIcon, action: onGoToAnalytics }] : []),
     ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', icon: ChartIcon, action: onGoToLearning }] : []),
     ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', icon: CpuIcon, action: onGoToAgents }] : []),
@@ -88,6 +95,14 @@ export default function Sidebar({
         })}
       </nav>
 
+      {/* Rail quota chip (2026-06-29). Replaces the top-of-page
+          QuotaCounter on the Dashboard view. Hidden entirely for
+          subscribed / comped users — they don't need a count. Amber
+          tint (.rail-quota.low) when quota ≤ 2 so the visual nudge
+          only fires when it's useful. "Top up" reuses the existing
+          /api/billing/buy-quote-pack flow → Stripe Checkout. */}
+      <RailQuotaChip billing={billing} />
+
       {/* Bottom section: theme toggle + user */}
       <div className="px-3 pb-4 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
         <div className="pt-3 flex items-center justify-between">
@@ -137,6 +152,49 @@ export default function Sidebar({
         )}
       </div>
     </aside>
+  );
+}
+
+/* ── Rail quota chip ──
+   Reads /auth/me's billing block. Five quota states map to two
+   render outcomes:
+     - subscribed / comped  → render nothing (no useful info)
+     - free-remaining / purchased-remaining / quota_exhausted →
+       render the chip with `{N} quotes left` + Top up.
+   Amber-tint (`.rail-quota.low`) kicks in at quota ≤ 2 (or when
+   exhausted) per the prototype's `.rail-quota.low` rule. */
+function RailQuotaChip({ billing }) {
+  if (!billing) return null;
+  const { quotaState, freeQuotesUsed, freeQuotesLimit, purchasedQuotesRemaining } = billing;
+  if (quotaState === 'subscribed' || quotaState === 'comped') return null;
+
+  const freeRemaining = Math.max(0, (freeQuotesLimit || 0) - (freeQuotesUsed || 0));
+  const remaining = freeRemaining + (purchasedQuotesRemaining || 0);
+  const low = remaining <= 2 || quotaState === 'exhausted' || quotaState === 'quota_exhausted';
+
+  const handleTopUp = async () => {
+    try {
+      const r = await fetch('/api/billing/buy-quote-pack', { method: 'POST' });
+      if (!r.ok) return;
+      const { url } = await r.json();
+      if (url) window.location.href = url;
+    } catch {
+      // Best-effort — the next /auth/me refresh surfaces any state change.
+    }
+  };
+
+  return (
+    <div className={`rail-quota${low ? ' low' : ''}`}>
+      <span className="rail-quota-count">{remaining} quotes left</span>
+      <button
+        type="button"
+        className="rail-quota-topup touch-44"
+        style={{ minHeight: 44 }}
+        onClick={handleTopUp}
+      >
+        Top up
+      </button>
+    </div>
   );
 }
 

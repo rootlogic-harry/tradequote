@@ -29,7 +29,7 @@ import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import { runAnalysis } from './utils/analyseJob.js';
 import { trackEvent } from './utils/trackEvent.js';
-import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
+import { getJob, listJobs, saveJob, updateJob, saveDraft, loadDraft, clearDraft, getProfile, saveProfile, getQuoteSequence, incrementQuoteSequence, getSetting, getTheme, setTheme as setThemeDB, setRamsNotRequired, updateJobStatus, migrateFromLegacyDB, loadPhotos, deletePhotos, saveDiffs, SessionExpiredError } from './utils/userDB.js';
 import { autosaveDraft } from './utils/autosaveDraft.js';
 import { calculateExpiresAt } from './utils/quoteBuilder.js';
 import { isAdminPlan as checkAdminPlan } from './utils/isAdminPlan.js';
@@ -368,6 +368,17 @@ export default function App() {
           // First save: create new job
           jobId = await saveJob(state.currentUserId, state);
           dispatch({ type: 'QUOTE_SAVED', jobId });
+          // Reference-bug fix (2026-06-29 dashboard redesign): the SPA
+          // increments `state.quoteSequence` locally on NEW_QUOTE, but
+          // until this call the DB row was never updated — so every
+          // fresh session started from the original value and the
+          // first quote of each session got the SAME reference
+          // (QT-2026-0002 in Mark's audit). Atomically bump the DB
+          // sequence after a successful save so the next session
+          // sees the right starting point. Best-effort; a failure
+          // here doesn't roll back the save (the duplicate-ref
+          // server dedup window catches accidental repeats).
+          incrementQuoteSequence(state.currentUserId).catch(() => {});
         }
         // Always save/replace diffs
         try {
@@ -908,6 +919,7 @@ export default function App() {
         onSettingsClick={() => setShowProfileModal(true)}
         onLogout={handleLogout}
         isAdminPlan={isAdmin}
+        billing={billing}
       />
 
       {/* Main content */}
@@ -929,8 +941,13 @@ export default function App() {
           <OfflineBanner />
           {/* Persistent quotes-remaining counter (2026-06-23). Above
               SubscriptionBanner per the locked spec — smaller, always
-              visible. Self-hides if billing isn't loaded yet. */}
-          <QuotaCounter billing={billing} />
+              visible. Self-hides if billing isn't loaded yet.
+              Dashboard redesign (2026-06-29): the Dashboard view moves
+              this surface to the side rail (`RailQuotaChip` in
+              Sidebar.jsx). It STAYS mounted on Step pages + SavedQuotes
+              where the in-flow banner is still useful (you're about
+              to spend a quote / you're browsing the archive). */}
+          {currentView !== 'dashboard' && <QuotaCounter billing={billing} />}
           <SubscriptionBanner />
           {/* Referrals Phase 1 (2026-06-23) — referee welcome. Self-
               hides unless the user has bonus quotes AND has not yet

@@ -791,7 +791,7 @@ describe('Concurrent save protection', () => {
     const src = readFileSync(join(__dirname, '../App.jsx'), 'utf8');
     const autoSaveStart = src.indexOf('Auto-save job + diffs');
     expect(autoSaveStart).toBeGreaterThan(-1);
-    const autoSaveBlock = src.slice(autoSaveStart, autoSaveStart + 1500);
+    const autoSaveBlock = src.slice(autoSaveStart, autoSaveStart + 2500);
     const depMatch = autoSaveBlock.match(/\},\s*\[([^\]]+)\]\);/);
     expect(depMatch).not.toBeNull();
     if (depMatch) {

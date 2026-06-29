@@ -128,16 +128,24 @@ describe('PortalBadge — rendered markup', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Dashboard wiring
+// Dashboard wiring — REMOVED (2026-06-29 redesign).
+//
+// The dashboard redesign collapses the row's badge cluster into a single
+// status stamp + the flagged-row amber bar. PortalBadge's signal (awaiting
+// view / viewed / link expired) is still reachable via the row's ⋯ menu
+// (Resend link) and inside SavedQuoteViewer / StatusModal — i.e. one level
+// deeper, where the user has already chosen to look at the quote. The
+// component itself remains exported (and tested in the other describe()s
+// in this file); only the Dashboard-row mount goes away.
 // ─────────────────────────────────────────────────────────────────────────
-describe('Dashboard.jsx — renders PortalBadge alongside the existing status badge', () => {
+describe('Dashboard.jsx — PortalBadge no longer mounted in row (redesign 2026-06-29)', () => {
   const src = readFileSync(join(repoRoot, 'src/components/Dashboard.jsx'), 'utf8');
 
-  test('imports PortalBadge', () => {
-    expect(src).toMatch(/import\s+PortalBadge\s+from/);
+  test('Dashboard does not import PortalBadge', () => {
+    expect(src).not.toMatch(/import\s+PortalBadge\s+from/);
   });
 
-  test('renders <PortalBadge job={…} />', () => {
-    expect(src).toMatch(/<PortalBadge[^/]*job=\{/);
+  test('Dashboard does not render <PortalBadge /> in any row', () => {
+    expect(src).not.toMatch(/<PortalBadge\b/);
   });
 });

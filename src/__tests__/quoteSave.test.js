@@ -70,7 +70,7 @@ describe('auto-save dependency array safety', () => {
     // Find the auto-save useEffect
     const autoSaveStart = src.indexOf('Auto-save job + diffs');
     expect(autoSaveStart).toBeGreaterThan(-1);
-    const autoSaveBlock = src.slice(autoSaveStart, autoSaveStart + 1500);
+    const autoSaveBlock = src.slice(autoSaveStart, autoSaveStart + 2500);
     // Extract the dependency array — on its own line like }, [state.step, ...]);
     const depArrayMatch = autoSaveBlock.match(/\},\s*\[([^\]]+)\]\);/);
     expect(depArrayMatch).not.toBeNull();
