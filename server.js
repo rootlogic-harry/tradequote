@@ -685,6 +685,16 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_jobs_user_saved_at ON jobs(user_id, saved_at DESC);
       CREATE INDEX IF NOT EXISTS idx_calibration_notes_status ON calibration_notes(status);
       CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider, auth_provider_id);
+      -- Case-insensitive unique email index (2026-06-29, from auth spec).
+      -- Prevents the bug-shape behind Pitfall #17: the same human signing
+      -- up twice via different paths (e.g. Google + a future email flow,
+      -- or two Google accounts with case-variant aliases) and creating
+      -- duplicate user rows + duplicate Stripe customers. Partial WHERE
+      -- excludes legacy session-switcher accounts that predate email
+      -- (e.g. 'mark', 'harry' from the bootstrap inserts above).
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique
+        ON users (lower(email))
+        WHERE email IS NOT NULL;
     `);
 
     // Add prompt_version column to jobs

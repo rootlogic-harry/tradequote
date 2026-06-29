@@ -28,4 +28,16 @@ describe('Database indexes', () => {
   test('has composite index on users(auth_provider, auth_provider_id)', () => {
     expect(serverSource).toContain('CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON users(auth_provider, auth_provider_id)');
   });
+
+  // 2026-06-29 — from the auth spec. Prevents the bug-shape behind
+  // Pitfall #17: same human signs up twice (e.g. Google + a future
+  // email flow, or two Google accounts with case-variant aliases) →
+  // duplicate user rows + duplicate Stripe customers + billing splits.
+  // Partial WHERE excludes legacy session-switcher rows that predate
+  // the email column (e.g. 'mark', 'harry' from bootstrap inserts).
+  test('has case-insensitive partial unique index on users(lower(email))', () => {
+    expect(serverSource).toMatch(
+      /CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique\s+ON users\s*\(\s*lower\(email\)\s*\)\s+WHERE email IS NOT NULL/
+    );
+  });
 });
