@@ -195,18 +195,28 @@ describe('ProfileSetup — sticky save bar respects safe-area + BottomNav (audit
   test('non-modal save bar sits above the 64px BottomNav and respects safe-area-inset-bottom on mobile', () => {
     // Mirrors the ReviewEdit.jsx:511 pattern shipped in TRQ-172. Without
     // this offset the Save button can sit under the iOS home indicator
-    // and overlap the BottomNav on iPhone 13.
+    // and overlap the BottomNav on iPhone 13. Settings redesign
+    // (2026-06-29) consolidates the save bar inside .ps-foot; the
+    // sticky-utilities class set still applies in the !isModal branch.
     expect(componentSrc).toMatch(
       /sticky\s+bottom-\[calc\(env\(safe-area-inset-bottom\)\+64px\)\]\s+fq:bottom-0/
     );
   });
 
-  test('modal mount of the save bar does NOT apply the sticky/safe-area offset', () => {
-    // Inside the modal the parent already scrolls; sticky positioning
-    // would compete with the modal's overflow-y-auto. The class is
-    // gated behind `!isModal` via the ternary on the save-bar div.
+  test('modal mount of the save bar uses .ps-foot (the modal scrim already handles scroll containment)', () => {
+    // Settings redesign (2026-06-29): the save bar shell is now
+    // .ps-foot in index.html, which sets `position: sticky; bottom: 0`
+    // + `padding-bottom: env(safe-area-inset-bottom)` for the modal
+    // mount. The non-modal Step-1 mount layers the BottomNav-aware
+    // sticky offset on top via the conditional Tailwind class. The
+    // class ternary keys off isModal:
+    //
+    //   className={`ps-foot ${isModal ? '' : 'sticky bottom-[…] fq:bottom-0 py-4'}`}
+    //
+    // Pin both halves so a future refactor can't drop either.
+    expect(componentSrc).toMatch(/ps-foot/);
     expect(componentSrc).toMatch(
-      /isModal\s*\?\s*['"]mt-4['"]\s*:\s*['"]sticky\s+bottom-\[calc\(env\(safe-area-inset-bottom\)\+64px\)\]\s+fq:bottom-0\s+py-4['"]/
+      /isModal\s*\?\s*['"]['"]\s*:\s*['"]sticky\s+bottom-\[calc\(env\(safe-area-inset-bottom\)\+64px\)\]\s+fq:bottom-0\s+py-4['"]/
     );
   });
 });
@@ -253,28 +263,263 @@ describe('ProfileSetup — logo upload is a 44px-tall button-styled label (PR-9)
   });
 });
 
-describe('App.jsx — profile modal close-X has a 44x44 hit area (audit #14, PR-9)', () => {
-  const appSrc = readFileSync(join(repoRoot, 'src/App.jsx'), 'utf8');
+// ----------------------------------------------------------------------
+// Settings redesign (2026-06-29) — 5-section nav + sticky save bar.
+// Source-of-truth spec: /tmp/fastquote-profile-handoff/design_handoff_dashboard/
+//
+// All assertions are source-level (the rest of the suite is JSDOM-free).
+// The redesign restructures the UI ONLY — every field still writes via
+// `update(field, value)` → `dispatch('UPDATE_PROFILE', { updates })`, so
+// the existing reducer / accent / document-type / hideLabourDays tests
+// stay green untouched.
+// ----------------------------------------------------------------------
+describe('ProfileSetup — Settings redesign (2026-06-29): 5-section shell', () => {
+  test('declares all 5 sections in the local SECTIONS array', () => {
+    // Single source of truth for the left nav. If a future refactor
+    // splits this back into hand-rolled <button> calls the order/labels
+    // can drift; pin them here.
+    const sectionsBlock = componentSrc.match(
+      /const\s+SECTIONS\s*=\s*\[[\s\S]*?\];/
+    );
+    expect(sectionsBlock).not.toBeNull();
+    for (const id of ['business', 'rates', 'trade', 'quote', 'share']) {
+      expect(sectionsBlock[0]).toMatch(new RegExp(`id:\\s*['"]${id}['"]`));
+    }
+    // Labels per spec.
+    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Business['"]/);
+    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Rates & tax['"]/);
+    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Your Trade['"]/);
+    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Quote Preferences['"]/);
+    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Sharing['"]/);
+  });
 
-  test('the close button has minHeight and minWidth >= 44 (or the .touch-44 class)', () => {
-    // The Edit Profile modal close-X was previously a `text-2xl` glyph
-    // button with no padding — sub-44px hit area, audit #14. The fix
-    // wraps it in a 44x44 hit surface. Find the close button by its
-    // proximity to the "Edit Profile" header + the &times; glyph.
-    const closeButton = appSrc.match(
-      /Edit Profile[\s\S]{0,800}<button[\s\S]{0,400}&times;\s*<\/button>/
+  test('tracks an activeSection state, defaulting to "business"', () => {
+    // Local UI state — not persisted. Default to Business so the most-
+    // used identity fields are visible on first paint.
+    expect(componentSrc).toMatch(
+      /useState\s*\(\s*['"]business['"]\s*\)/
+    );
+    // The setter is called from the nav onClick — pins the wiring so
+    // a future refactor can't lose section switching.
+    expect(componentSrc).toMatch(/setActiveSection\s*\(\s*s\.id\s*\)/);
+  });
+
+  test('renders one section at a time via renderActiveSection switch', () => {
+    expect(componentSrc).toMatch(/function renderActiveSection|renderActiveSection\s*=/);
+    expect(componentSrc).toMatch(/case\s+['"]business['"]/);
+    expect(componentSrc).toMatch(/case\s+['"]rates['"]/);
+    expect(componentSrc).toMatch(/case\s+['"]trade['"]/);
+    expect(componentSrc).toMatch(/case\s+['"]quote['"]/);
+    expect(componentSrc).toMatch(/case\s+['"]share['"]/);
+  });
+
+  test('Your Trade section carries an "Optional" badge', () => {
+    // Both in the nav AND the section header per spec — the badge in
+    // the nav has the dim limestone background; the header badge sits
+    // inline with the section title.
+    expect(componentSrc).toMatch(/badge:\s*['"]Optional['"]/);
+    expect(componentSrc).toMatch(/<span\s+className="ps-opt-badge">Optional<\/span>/);
+  });
+});
+
+describe('ProfileSetup — Settings redesign: sticky save bar reachable everywhere', () => {
+  test('renders a Cancel button in the modal mount', () => {
+    // The Cancel button is gated behind `isModal` so the Step-1
+    // onboarding mount stays single-CTA (Save Profile & Continue →).
+    // Verify the source contains both the JSX text and the gate.
+    expect(componentSrc).toMatch(/isModal\s*&&\s*\(\s*<button[\s\S]*?Cancel/);
+  });
+
+  test('save bar lives outside renderActiveSection (so every section reaches it)', () => {
+    // The footer is appended AFTER the body grid in the shell — not
+    // inside any section's renderer. Source check: the .ps-foot
+    // wrapper appears below the </div> that closes .ps-body.
+    const footIdx = componentSrc.indexOf('ps-foot');
+    const bodyIdx = componentSrc.indexOf('ps-body');
+    expect(footIdx).toBeGreaterThan(-1);
+    expect(bodyIdx).toBeGreaterThan(-1);
+    expect(footIdx).toBeGreaterThan(bodyIdx);
+    // And the .ps-foot wrapper is a sibling of the body (sticky to the
+    // shell, not to a section), so it stays visible across switches.
+    expect(componentSrc).toMatch(/<div\s+className=\{`ps-foot/);
+  });
+
+  test('"Unsaved changes" indicator is gated on a dirty-state check', () => {
+    // The indicator should be visible only when the user has edits
+    // pending. A JSON-compare against the captured initial snapshot is
+    // the simplest correct check; either useMemo or a direct compare
+    // is acceptable.
+    expect(componentSrc).toMatch(/Unsaved changes/);
+    expect(componentSrc).toMatch(/isDirty/);
+    expect(componentSrc).toMatch(/initialProfileRef/);
+  });
+});
+
+describe('ProfileSetup — Settings redesign: required-field markers', () => {
+  test('renders the .ps-req asterisk for each required field', () => {
+    // Required fields per spec: Your name, Phone, Email, Business
+    // Address, Day rate, VAT number (when VAT on). The literal
+    // <Req /> JSX should appear at least 6 times.
+    const reqMatches = componentSrc.match(/<Req\s*\/>/g) || [];
+    expect(reqMatches.length).toBeGreaterThanOrEqual(6);
+    // And the underlying span uses .ps-req for the colour token.
+    expect(componentSrc).toMatch(/<span\s+className="ps-req"/);
+  });
+});
+
+describe('ProfileSetup — Settings redesign: VAT off-by-default + conditional VAT-number reveal', () => {
+  test('initial profile (in reducer) has vatRegistered=false', async () => {
+    // The redesign asserts a contract that the reducer already
+    // satisfies — keep this test in lockstep so a future reducer
+    // refactor can't quietly flip the default.
+    const { reducer, initialState } = await import('../reducer.js');
+    const state = reducer(initialState, { type: '@@INIT' });
+    expect(state.profile.vatRegistered).toBe(false);
+  });
+
+  test('VAT-number field is rendered only when vatRegistered is truthy', () => {
+    // Source-level: the {profile.vatRegistered && (...)} guard wraps
+    // the VAT-number block. Without this guard the field would always
+    // render — exactly the bug the redesign closes.
+    expect(componentSrc).toMatch(/\{profile\.vatRegistered\s*&&/);
+  });
+
+  test('VAT-number helper text says it is required when VAT is on', () => {
+    // Verbatim per spec: "Required when VAT is on so we can show it
+    // on your quotes."
+    expect(componentSrc).toMatch(
+      /Required when VAT is on so we can show it on your quotes\./
+    );
+  });
+
+  test('toggling VAT off does NOT clear the vatNumber field (preservation contract)', () => {
+    // Source-level pin: the redesign deliberately wires the VAT
+    // toggle to update('vatRegistered', e.target.checked) ONLY — no
+    // accompanying update('vatNumber', '') that would wipe a
+    // previously-saved VAT number on every flip. A regression that
+    // adds such a call would break the spec's preservation rule.
+    //
+    // Strategy: there must be exactly ONE call site that writes
+    // vatNumber in the file (the user-typed input's onChange + its
+    // onBlur companion). Any extra `update('vatNumber', '')` would
+    // raise the count.
+    expect(componentSrc).toMatch(/update\s*\(\s*['"]vatRegistered['"]\s*,/);
+    const vatNumberClearCalls = componentSrc.match(
+      /update\s*\(\s*['"]vatNumber['"]\s*,\s*['"]\s*['"]\s*\)/g
+    );
+    expect(vatNumberClearCalls).toBeNull();
+  });
+});
+
+describe('ProfileSetup — Settings redesign: Document Type names the document, not the app', () => {
+  test('label uses the spec copy verbatim: "What your client\'s document is called"', () => {
+    expect(componentSrc).toMatch(
+      /What your client(?:&apos;|'|’)s document is called/
+    );
+  });
+
+  test('helper text contains the literal "The app always says \\"Quote\\"."', () => {
+    // The other half of the PR #84/85/86 terminology lockdown. The
+    // app chrome is locked to "Quote"; only the client's document
+    // title is per-profile. The helper text nails this down so a
+    // future copy refresh can't quietly drop it.
+    expect(componentSrc).toMatch(
+      /The app always says\s+(?:&quot;|")Quote(?:&quot;|")/
+    );
+  });
+
+  test('both Quote and Estimate options exist in a single .map() over the toggle options', () => {
+    // The toggle iterates an inline [{key:'quote'}, {key:'estimate'}]
+    // array and wires every option to update('documentType', opt.key).
+    // Source-level assertions on the inline option keys + the call
+    // pattern keep the toggle wired without pinning the exact
+    // .map() literal shape.
+    expect(componentSrc).toMatch(/key:\s*['"]quote['"]/);
+    expect(componentSrc).toMatch(/key:\s*['"]estimate['"]/);
+    expect(componentSrc).toMatch(/update\s*\(\s*['"]documentType['"]\s*,\s*opt\.key/);
+  });
+});
+
+describe('ProfileSetup — Settings redesign: no stray icon inside form fields', () => {
+  // Live-app bug from the design review: "a stray icon sits inside
+  // every form input". Our markup contains no <svg> / <span> children
+  // inside the input wrapper — the input is the only child of its
+  // <div className="field"> ancestor. Source-level regex sanity-check
+  // that no input is followed by a sibling <svg> or <span> that would
+  // visually appear inside it.
+  test('no inline <svg> sits next to an input under a .nq-field-bearing field', () => {
+    // The pattern that would indicate a stray icon: <input ... /> on
+    // one line, immediately followed by <svg ... /> on the next
+    // (inside the same parent div). Search the source for that
+    // pattern and assert it's absent.
+    const strayPattern = /<input[\s\S]{0,400}?\/>\s*<svg/;
+    expect(componentSrc).not.toMatch(strayPattern);
+    // Same for a <span> placed as an input sibling (the prototype
+    // ruled this out by leaving fields child-less).
+    const straySpanPattern = /<input[\s\S]{0,400}?\/>\s*<span\b(?![^>]*\bclassName="ps-req")/;
+    // Allow the .ps-req asterisk in labels — it's the only span we
+    // intentionally place near inputs (and it lives in the <label>,
+    // not as an input sibling). The look-ahead exempts it.
+    expect(componentSrc).not.toMatch(straySpanPattern);
+  });
+});
+
+describe('ProfileSetup — Settings redesign: section labels appear in the source', () => {
+  test('Business / Rates & tax / Your Trade / Quote Preferences / Sharing labels all render', () => {
+    // Pin the visible labels — drift here would surface as a broken
+    // section nav (the labels are also the human-readable nav targets).
+    expect(componentSrc).toMatch(/Business/);
+    expect(componentSrc).toMatch(/Rates & tax|Rates &amp; tax/);
+    expect(componentSrc).toMatch(/Your Trade/);
+    expect(componentSrc).toMatch(/Quote Preferences/);
+    expect(componentSrc).toMatch(/Sharing/);
+  });
+});
+
+describe('ProfileSetup — Settings redesign: handleSave preserved (no behavioural regression)', () => {
+  test('handleSave still validates via validateProfile then dispatches the right next-step', () => {
+    expect(componentSrc).toMatch(/handleSave/);
+    expect(componentSrc).toMatch(/validateProfile\(profile\)/);
+    // The post-validate branches are unchanged: modal → onClose,
+    // onboarding → onProfileComplete, else → SET_STEP to 2.
+    expect(componentSrc).toMatch(/onClose\(\)/);
+    expect(componentSrc).toMatch(/onProfileComplete\(\)/);
+    expect(componentSrc).toMatch(/SET_STEP/);
+  });
+});
+
+describe('ProfileSetup — profile modal close-X has a 44x44 hit area (audit #14, PR-9, relocated 2026-06-29)', () => {
+  // Relocated by the Settings redesign (2026-06-29): the close-X now
+  // lives inside ProfileSetup's own .ps-head (so the 5-section nav +
+  // sticky save bar all sit in one shell). The 44×44 hit-area + aria-
+  // label contract is preserved here; App.jsx no longer renders its
+  // own "Edit Profile" header.
+  test('the close button uses .ps-head-x AND .touch-44 (both wired to >=44px)', () => {
+    // .ps-head-x sets min-width / min-height to 44px in index.html;
+    // .touch-44 is the canonical 44px utility. Either alone is enough
+    // for the touch-target lint; we pin both for resilience.
+    const closeButton = componentSrc.match(
+      /<button[\s\S]{0,400}&times;\s*<\/button>/
     );
     expect(closeButton).not.toBeNull();
-    expect(closeButton[0]).toMatch(/touch-44|minHeight:\s*44/);
-    expect(closeButton[0]).toMatch(/touch-44|minWidth:\s*44/);
+    expect(closeButton[0]).toMatch(/ps-head-x/);
+    expect(closeButton[0]).toMatch(/touch-44/);
   });
 
   test('the close button has an aria-label for screen readers', () => {
     // A glyph-only button must expose its purpose to assistive tech.
-    const closeButton = appSrc.match(
-      /Edit Profile[\s\S]{0,800}<button[\s\S]{0,400}&times;\s*<\/button>/
+    const closeButton = componentSrc.match(
+      /<button[\s\S]{0,400}&times;\s*<\/button>/
     );
     expect(closeButton).not.toBeNull();
     expect(closeButton[0]).toMatch(/aria-label="Close"/);
+  });
+
+  test('App.jsx no longer renders its own "Edit Profile" header — ProfileSetup owns the head row', () => {
+    // Source-level pin so a future refactor doesn't accidentally
+    // reintroduce the duplicate header (which would put two close-X
+    // buttons on the screen).
+    const appSrc = readFileSync(join(repoRoot, 'src/App.jsx'), 'utf8');
+    expect(appSrc).not.toMatch(/<h2[^>]*>Edit Profile<\/h2>/);
   });
 });

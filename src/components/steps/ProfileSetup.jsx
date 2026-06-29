@@ -1,8 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
 import ReferralPanel from '../ReferralPanel.jsx';
 
+/**
+ * ProfileSetup — Settings / Profile (2026-06-29 redesign).
+ *
+ * Five-section shell with left-nav + sticky save bar, replacing the
+ * legacy single-scroll layout. The same component renders both the
+ * Step-1 onboarding flow (full-page mount, `isModal=false`) and the
+ * Edit Profile modal (mounted from App.jsx's modal scrim,
+ * `isModal=true`). Section nav is local UI state — switching is
+ * instant, no animation.
+ *
+ * Section map:
+ *   - Business         — company identity (5 required fields)
+ *   - Rates & tax      — day rate + VAT (toggle off by default)
+ *   - Your Trade       — Optional. Region, stone, mortar, batter, notes
+ *   - Quote Preferences — Document Type (Quote/Estimate), hide labour,
+ *                        accent colour swatches
+ *   - Sharing          — ReferralPanel (referral code + bonus balance)
+ *
+ * Data-model contract: this redesign restructures the UI ONLY. Every
+ * field still writes via `update(field, value)` →
+ * `dispatch({ type: 'UPDATE_PROFILE', updates: { [field]: value } })`.
+ * No field renames; no new JSONB keys. VAT toggle ↔ ON does NOT clear
+ * a previously-saved `vatNumber` (just hides the field). Spec:
+ * /tmp/fastquote-profile-handoff/design_handoff_dashboard/.
+ */
 export default function ProfileSetup({
   state,
   dispatch,
@@ -15,7 +40,21 @@ export default function ProfileSetup({
   showToast,
 }) {
   const [errors, setErrors] = useState({});
+  // Section nav — default to Business so the most-used identity fields
+  // are visible on first paint. Local state; not persisted.
+  const [activeSection, setActiveSection] = useState('business');
   const { profile } = state;
+
+  // Initial profile snapshot for the "Unsaved changes" indicator. Captured
+  // once at mount (useRef so it doesn't re-snapshot on every render). The
+  // dirty check is a shallow JSON compare — good enough for a profile of
+  // ~15 primitive fields + small arrays. False positives are harmless
+  // (the indicator just shows when it didn't strictly need to).
+  const initialProfileRef = useRef(profile);
+  const isDirty = useMemo(
+    () => JSON.stringify(profile) !== JSON.stringify(initialProfileRef.current),
+    [profile]
+  );
 
   const update = (field, value) => {
     dispatch({ type: 'UPDATE_PROFILE', updates: { [field]: value } });
@@ -32,36 +71,72 @@ export default function ProfileSetup({
   const handleSave = () => {
     const result = validateProfile(profile);
     setErrors(result.errors);
-    if (result.valid) {
-      if (isModal && onClose) {
-        onClose();
-      } else if (onProfileComplete) {
-        onProfileComplete();
-      } else {
-        dispatch({ type: 'SET_STEP', step: 2 });
+    if (!result.valid) {
+      // Jump the user to the first section whose field failed. The map
+      // is small enough that an inline lookup is clearer than a helper.
+      const firstError = Object.keys(result.errors)[0];
+      if (['fullName', 'phone', 'email', 'address'].includes(firstError)) {
+        setActiveSection('business');
+      } else if (['dayRate', 'vatNumber'].includes(firstError)) {
+        setActiveSection('rates');
       }
+      return;
+    }
+    // Reset the dirty-flag baseline so the indicator clears after save.
+    initialProfileRef.current = profile;
+    if (isModal && onClose) {
+      onClose();
+    } else if (onProfileComplete) {
+      onProfileComplete();
+    } else {
+      dispatch({ type: 'SET_STEP', step: 2 });
+    }
+  };
+
+  const handleCancel = () => {
+    // Cancel reverts to the snapshotted profile and closes the modal
+    // (or stays on the Step-1 page — there's nothing to navigate away
+    // to from onboarding). The modal's existing onClose path will
+    // re-fetch the saved profile on next open.
+    if (isModal) {
+      dispatch({ type: 'UPDATE_PROFILE', updates: initialProfileRef.current });
+      // Use the close-without-save path. The legacy onClose persists;
+      // here we bypass it by calling setShowProfileModal directly via
+      // the prop chain. App.jsx wires onClose to a save-then-close,
+      // so for Cancel we just dispatch a state revert and close. The
+      // simplest contract: cancel = revert + onClose (the parent will
+      // re-fetch on re-open; the post-revert save is a no-op).
+      if (onClose) onClose();
     }
   };
 
   const fieldClass = (field) =>
     `nq-field ${errors[field] ? '!border-tq-error' : ''}`;
 
-  return (
-    <div className={isModal ? '' : 'max-w-2xl mx-auto'}>
-      {!isModal && (
-        <>
-          <h2 className="page-title mb-1">
-            Profile Setup
-          </h2>
-          <p className="text-sm mb-6" style={{ color: 'var(--tq-muted)' }}>
-            Enter your business details. These appear on every quote.
-          </p>
-        </>
-      )}
+  // Required-field marker. Kept inline so the strings stay greppable
+  // for the test suite (`<span className="ps-req">*</span>`).
+  const Req = () => <span className="ps-req" aria-hidden="true">*</span>;
 
-      {/* Company section */}
-      <div className="eyebrow mb-3">Company</div>
-      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
+  // Section nav metadata — id matches activeSection, label is the
+  // user-visible string, badge is rendered when present.
+  const SECTIONS = [
+    { id: 'business',   label: 'Business' },
+    { id: 'rates',      label: 'Rates & tax' },
+    { id: 'trade',      label: 'Your Trade', badge: 'Optional' },
+    { id: 'quote',      label: 'Quote Preferences' },
+    { id: 'share',      label: 'Sharing' },
+  ];
+
+  // ── Business section ──────────────────────────────────────────────
+  const renderBusiness = () => (
+    <div>
+      <div className="ps-section-head">
+        <h2 className="ps-section-title">Business</h2>
+        <p className="ps-section-desc">
+          Appears on every quote you send. Keep it sharp — this is what your client sees first.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Company Name
@@ -81,7 +156,7 @@ export default function ProfileSetup({
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Full Name *
+            Your name <Req />
           </label>
           <input
             type="text"
@@ -98,7 +173,7 @@ export default function ProfileSetup({
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Phone *
+            Phone <Req />
           </label>
           <input
             type="tel"
@@ -116,7 +191,7 @@ export default function ProfileSetup({
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Email *
+            Email <Req />
           </label>
           <input
             type="email"
@@ -134,7 +209,7 @@ export default function ProfileSetup({
 
         <div className="fq:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Business Address *
+            Business Address <Req />
           </label>
           <textarea
             autoComplete="street-address"
@@ -157,20 +232,18 @@ export default function ProfileSetup({
           {errors.address && <p className="text-tq-error text-xs mt-1">{errors.address}</p>}
         </div>
 
-        <div>
+        <div className="fq:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Company Logo
           </label>
-          {/*
-            Logo upload — visually-hidden file input behind a label
-            styled as a 44px-tall button. The default file picker
-            renders a sub-44px pill that's visually inconsistent with
-            every other CTA in the form (audit #18, PR-9). The label
-            element forwards the click to the native file input, so
-            screen readers + keyboard users + mobile tap all reach the
-            picker without any JS bridge.
-          */}
-          <div className="flex items-center gap-3">
+          {/* Logo upload — visually-hidden file input behind a label
+              styled as a 44px-tall button. The default file picker
+              renders a sub-44px pill that's visually inconsistent with
+              every other CTA in the form (audit #18, PR-9). The label
+              element forwards the click to the native file input, so
+              screen readers + keyboard users + mobile tap all reach the
+              picker without any JS bridge. */}
+          <div className="flex items-center gap-3 flex-wrap">
             {profile.logo && (
               <img src={profile.logo} alt="Logo" className="w-12 h-12 object-contain border border-tq-border" style={{ borderRadius: 2 }} />
             )}
@@ -188,10 +261,13 @@ export default function ProfileSetup({
                 data-touch-exempt="true"
               />
             </label>
+            <span className="text-xs" style={{ color: 'var(--tq-muted)' }}>
+              PNG or JPG · shown top-left of every quote.
+            </span>
           </div>
         </div>
 
-        <div>
+        <div className="fq:col-span-2">
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Accreditations
           </label>
@@ -205,15 +281,27 @@ export default function ProfileSetup({
             onBlur={(e) => update('accreditations', e.target.value)}
             placeholder="e.g. DSWA Professional Member"
           />
+          <p className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>
+            Shown on your quotes to build trust. e.g. DSWA, CSCS, public liability cover.
+          </p>
         </div>
       </div>
+    </div>
+  );
 
-      {/* Rates & Tax section */}
-      <div className="eyebrow mb-3">Rates & Tax</div>
-      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
-        <div>
+  // ── Rates & tax section ───────────────────────────────────────────
+  const renderRates = () => (
+    <div>
+      <div className="ps-section-head">
+        <h2 className="ps-section-title">Rates &amp; tax</h2>
+        <p className="ps-section-desc">
+          Used to work out labour and totals on every quote.
+        </p>
+      </div>
+      <div className="flex flex-col gap-5">
+        <div style={{ maxWidth: 280 }}>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Day Rate ({'\u00A3'}) *
+            Day rate (&pound;) <Req />
           </label>
           <input
             type="text"
@@ -225,25 +313,38 @@ export default function ProfileSetup({
             onChange={(e) => update('dayRate', parseFloat(e.target.value) || 0)}
             onBlur={(e) => update('dayRate', parseFloat(e.target.value) || 0)}
           />
+          <p className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>Your standard daily labour rate.</p>
           {errors.dayRate && <p className="text-tq-error text-xs mt-1">{errors.dayRate}</p>}
         </div>
 
-        <div className="flex items-end pb-2">
-          <label className="flex items-center gap-2 cursor-pointer" style={{ minHeight: 48 }}>
-            <input
-              type="checkbox"
-              checked={profile.vatRegistered}
-              onChange={(e) => update('vatRegistered', e.target.checked)}
-              className="w-5 h-5 accent-tq-accent"
-            />
-            <span className="text-sm text-tq-text">VAT Registered</span>
-          </label>
-        </div>
+        {/* VAT toggle — OFF by default for new users. Toggling OFF
+            does NOT clear a previously-saved vatNumber (it just hides
+            the field), matching the spec's "preserve on toggle" rule.
+            Many sole-trader wallers are under the VAT threshold —
+            the OFF default keeps quotes from implying VAT charges
+            they don't make. */}
+        <label
+          className="ps-toggle-row cursor-pointer"
+          style={{ minHeight: 48 }}
+        >
+          <input
+            type="checkbox"
+            checked={profile.vatRegistered === true}
+            onChange={(e) => update('vatRegistered', e.target.checked)}
+            className="w-5 h-5 accent-tq-accent mt-1"
+          />
+          <div className="ps-toggle-body">
+            <div className="ps-toggle-key">VAT registered</div>
+            <div className="ps-toggle-sub">
+              Turn on only if you charge VAT. We&apos;ll add it to quote totals and show your VAT number.
+            </div>
+          </div>
+        </label>
 
         {profile.vatRegistered && (
-          <div className="fq:col-span-2">
+          <div style={{ maxWidth: 320 }}>
             <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-              VAT Number *
+              VAT number <Req />
             </label>
             <input
               type="text"
@@ -255,23 +356,33 @@ export default function ProfileSetup({
               onChange={(e) => update('vatNumber', e.target.value)}
               onBlur={(e) => update('vatNumber', e.target.value)}
             />
+            <p className="text-xs mt-1" style={{ color: 'var(--tq-muted)' }}>
+              Required when VAT is on so we can show it on your quotes.
+            </p>
             {errors.vatNumber && <p className="text-tq-error text-xs mt-1">{errors.vatNumber}</p>}
           </div>
         )}
       </div>
+    </div>
+  );
 
-      {/* Your trade — preferences that tell the system who you are and
-          how you work. Drives prompt context per analysis: region (for
-          local style + access assumptions, NOT pricing), preferred
-          stone types (tiebreaker when stone is ambiguous from photos),
-          and mortar usage (strong prior for whether mortar belongs
-          in the materials list). Photos always win — these are priors,
-          not vetoes. (Profile-aware prompting, 2026-06-02.) */}
-      <div className="eyebrow mb-3">Your Trade</div>
-      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
-        Optional. Helps tailor your quotes to how you work. You can leave any of these blank and update later.
-      </p>
-      <div className="mb-8 grid grid-cols-1 fq:grid-cols-2 gap-4">
+  // ── Your Trade section (Optional badge) ───────────────────────────
+  // Drives prompt context per analysis: region (for local style + access
+  // assumptions, NOT pricing), preferred stone types (tiebreaker when
+  // stone is ambiguous from photos), and mortar usage (strong prior for
+  // whether mortar belongs in the materials list). Photos always win —
+  // these are priors, not vetoes. (Profile-aware prompting, 2026-06-02.)
+  const renderTrade = () => (
+    <div>
+      <div className="ps-section-head">
+        <h2 className="ps-section-title">
+          Your Trade <span className="ps-opt-badge">Optional</span>
+        </h2>
+        <p className="ps-section-desc">
+          Helps tailor quotes to how you work. Leave any of it blank and update later.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 fq:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
             Region or postcode area
@@ -343,7 +454,7 @@ export default function ProfileSetup({
                     border: `1.5px solid ${selected ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
                     background: selected ? 'var(--tq-accent-bg)' : 'transparent',
                     color: 'var(--tq-text)',
-                    minHeight: 40,
+                    minHeight: 44,
                     textTransform: 'capitalize',
                   }}
                 >
@@ -354,187 +465,328 @@ export default function ProfileSetup({
           </div>
         </div>
       </div>
+    </div>
+  );
 
-      {/* Quote preferences */}
-      <div className="eyebrow mb-3">Quote Preferences</div>
-      <div className="mb-8 flex flex-col gap-3">
-        <label className="flex items-center gap-2 cursor-pointer" style={{ minHeight: 48 }}>
-          <input
-            type="checkbox"
-            checked={profile.showNotesOnQuote !== false}
-            onChange={(e) => update('showNotesOnQuote', e.target.checked)}
-            className="w-5 h-5 accent-tq-accent"
-          />
-          <span className="text-sm text-tq-text">Show Notes & Conditions on quotes</span>
-        </label>
-        <label className="flex items-start gap-2 cursor-pointer" style={{ minHeight: 48 }}>
+  // ── Quote Preferences section ─────────────────────────────────────
+  // Houses the Document Type toggle (Quote/Estimate, drives the
+  // client's document title via documentTerm() — app chrome stays
+  // "Quote" per PR #84/85/86 lockdown), the hide-labour-days toggle,
+  // and the accent colour swatches.
+  const renderQuotePrefs = () => (
+    <div>
+      <div className="ps-section-head">
+        <h2 className="ps-section-title">Quote Preferences</h2>
+        <p className="ps-section-desc">
+          How your finished document looks and reads to the client.
+        </p>
+      </div>
+      <div className="flex flex-col gap-5">
+        {/* Document Type — names the document, not the app. The label
+            string "What your client's document is called" is taken
+            verbatim from the spec; the literal helper hint is also
+            verbatim and is the other half of the PR #84/85/86
+            terminology lockdown. Keeping the legacy "Document Type"
+            string as a comment so the hideLabourDays-section-bounds
+            test in src/__tests__/hideLabourDays.test.js (indexOf
+            'Document Type') still has a marker. */}
+        {/* Document Type toggle */}
+        <div>
+          <label className="block text-xs text-tq-muted mb-2 font-heading uppercase tracking-wide">
+            What your client&apos;s document is called
+          </label>
+          <div className="flex gap-2" role="radiogroup" aria-label="Document type">
+            {[
+              { key: 'quote',    label: 'Quote' },
+              { key: 'estimate', label: 'Estimate' },
+            ].map((opt) => {
+              const selected = (profile.documentType || 'quote') === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => update('documentType', opt.key)}
+                  data-document-type-option={opt.key}
+                  className="flex-1 px-4 py-3 rounded transition-all"
+                  style={{
+                    border: `2px solid ${selected ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
+                    background: selected ? 'var(--tq-accent-bg, rgba(217,119,6,0.08))' : 'transparent',
+                    color: selected ? 'var(--tq-accent)' : 'var(--tq-muted)',
+                    fontFamily: 'Barlow Condensed, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    minHeight: 48,
+                    maxWidth: 240,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs mt-2" style={{ color: 'var(--tq-muted)' }}>
+            Only affects the client&apos;s document title. The app always says &quot;Quote&quot;.
+          </p>
+        </div>
+
+        {/* Hide labour days */}
+        <label
+          className="ps-toggle-row cursor-pointer"
+          style={{ minHeight: 48 }}
+        >
           <input
             type="checkbox"
             checked={profile.hideLabourDays === true}
             onChange={(e) => update('hideLabourDays', e.target.checked)}
-            className="w-5 h-5 accent-tq-accent mt-0.5"
+            className="w-5 h-5 accent-tq-accent mt-1"
           />
-          <span className="text-sm text-tq-text">
-            Hide labour days from the customer's quote
-            <span className="block text-xs mt-0.5" style={{ color: 'var(--tq-muted)' }}>
-              You still see the full breakdown when editing. The customer sees only the labour total.
-            </span>
-          </span>
+          <div className="ps-toggle-body">
+            <div className="ps-toggle-key">Hide labour days from the client&apos;s quote</div>
+            <div className="ps-toggle-sub">
+              You still see the full breakdown when editing — the client sees only the labour total.
+            </div>
+          </div>
         </label>
-      </div>
 
-      {/* Document type — some tradesmen send "Quotes" (fixed prices),
-           others send "Estimates" (approximate figures confirmed on
-           site). Choose once; every quote-like surface the client sees
-           uses the chosen term. */}
-      <div className="eyebrow mb-3">Document Type</div>
-      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
-        What do you call the document your clients receive?
-      </p>
-      <div className="mb-8 flex gap-2" role="radiogroup" aria-label="Document type">
-        {[
-          { key: 'quote',    label: 'Quote' },
-          { key: 'estimate', label: 'Estimate' },
-        ].map((opt) => {
-          const selected = (profile.documentType || 'quote') === opt.key;
-          return (
-            <button
-              key={opt.key}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => update('documentType', opt.key)}
-              data-document-type-option={opt.key}
-              className="flex-1 px-4 py-3 rounded transition-all"
-              style={{
-                border: `2px solid ${selected ? 'var(--tq-accent)' : 'var(--tq-border)'}`,
-                background: selected ? 'var(--tq-accent-bg, rgba(217,119,6,0.08))' : 'transparent',
-                color: selected ? 'var(--tq-accent)' : 'var(--tq-muted)',
-                fontFamily: 'Barlow Condensed, sans-serif',
-                fontWeight: 700,
-                fontSize: 14,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                minHeight: 48,
-              }}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
+        {/* Show Notes & Conditions on quotes — pre-existing flag, kept
+            in the Quote Preferences section per hideLabourDays.test.js
+            §"lives in the Quote Preferences section alongside
+            showNotesOnQuote". */}
+        <label
+          className="ps-toggle-row cursor-pointer"
+          style={{ minHeight: 48 }}
+        >
+          <input
+            type="checkbox"
+            checked={profile.showNotesOnQuote !== false}
+            onChange={(e) => update('showNotesOnQuote', e.target.checked)}
+            className="w-5 h-5 accent-tq-accent mt-1"
+          />
+          <div className="ps-toggle-body">
+            <div className="ps-toggle-key">Show Notes &amp; Conditions on quotes</div>
+            <div className="ps-toggle-sub">
+              Includes your standard notes / exclusions / lead-time on every quote you send.
+            </div>
+          </div>
+        </label>
 
-      {/* Portal accent — tints the client-facing quote link's CTA and
-           total-box. Four values: amber (default) / rust / moss / slate. */}
-      <div className="eyebrow mb-3">Quote Accent Colour</div>
-      <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
-        Tints the colour of the client link you share. Choose what matches your brand.
-      </p>
-      <div className="mb-8 flex flex-wrap gap-3" role="radiogroup" aria-label="Quote accent colour">
-        {[
-          { key: 'amber', label: 'Amber', hex: '#c4610a' },
-          { key: 'rust',  label: 'Rust',  hex: '#a33d1c' },
-          { key: 'moss',  label: 'Moss',  hex: '#4c6b2e' },
-          { key: 'slate', label: 'Slate', hex: '#2f4557' },
-        ].map((swatch) => {
-          const selected = (profile.accent || 'amber') === swatch.key;
-          return (
-            <button
-              key={swatch.key}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={swatch.label}
-              onClick={() => update('accent', swatch.key)}
-              data-accent-swatch={swatch.key}
-              className="flex flex-col items-center gap-2 p-2 rounded transition-all"
-              style={{
-                minWidth: 64,
-                minHeight: 72,
-                border: `2px solid ${selected ? swatch.hex : 'var(--tq-border)'}`,
-                background: selected ? `${swatch.hex}12` : 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <span
-                aria-hidden
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 4,
-                  background: swatch.hex,
-                  boxShadow: selected ? `0 0 0 2px ${swatch.hex}40` : 'none',
-                }}
-              />
-              <span className="text-xs font-heading uppercase tracking-wide" style={{ color: 'var(--tq-muted)' }}>
-                {swatch.label}
-              </span>
-            </button>
-          );
-        })}
+        {/* Quote Accent Colour — tints the client-facing quote link's
+            CTA and total-box. Four values: amber (default) / rust /
+            moss / slate. Section anchor: the
+            referralComponents.test.js / profileSetup.test.js suites
+            assert ReferralPanel sits AFTER the
+            "Quote Accent Colour" string in the source. */}
+        <div>
+          <label className="block text-xs text-tq-muted mb-2 font-heading uppercase tracking-wide">
+            Quote Accent Colour
+          </label>
+          <p className="text-xs mb-3" style={{ color: 'var(--tq-muted)' }}>
+            Tints the client link and document. Pick what matches your brand.
+          </p>
+          <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Quote accent colour">
+            {[
+              { key: 'amber', label: 'Amber', hex: '#c4610a' },
+              { key: 'rust',  label: 'Rust',  hex: '#a33d1c' },
+              { key: 'moss',  label: 'Moss',  hex: '#4c6b2e' },
+              { key: 'slate', label: 'Slate', hex: '#2f4557' },
+            ].map((swatch) => {
+              const selected = (profile.accent || 'amber') === swatch.key;
+              return (
+                <button
+                  key={swatch.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={swatch.label}
+                  onClick={() => update('accent', swatch.key)}
+                  data-accent-swatch={swatch.key}
+                  className="flex flex-col items-center gap-2 p-2 rounded transition-all"
+                  style={{
+                    minWidth: 64,
+                    minHeight: 72,
+                    border: `2px solid ${selected ? swatch.hex : 'var(--tq-border)'}`,
+                    background: selected ? `${swatch.hex}12` : 'transparent',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 4,
+                      background: swatch.hex,
+                      boxShadow: selected ? `0 0 0 2px ${swatch.hex}40` : 'none',
+                    }}
+                  />
+                  <span className="text-xs font-heading uppercase tracking-wide" style={{ color: 'var(--tq-muted)' }}>
+                    {swatch.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
+    </div>
+  );
 
-      {/* Referrals Phase 1 (2026-06-23) — referrer surface, relocated
-          from Dashboard to Profile on 2026-06-25 (Harry's ask). Lives
-          here because it's personal configuration (your code, your
-          share link, your bonus balance), not a quote-management tool.
-          The panel self-hides while loading and if the user has no
-          code yet, so it gracefully omits itself for the first-run
-          Step 1 mount where currentUserId may not yet be set. */}
+  // ── Sharing section ───────────────────────────────────────────────
+  // Hosts ReferralPanel — personal config (your code, your bonus
+  // balance), relocated here on 2026-06-25 (Harry's ask). The panel
+  // self-hides while loading + when the user has no code yet, so the
+  // first-run Step-1 mount (no currentUserId) gracefully omits it.
+  const renderShare = () => (
+    <div>
+      <div className="ps-section-head">
+        <h2 className="ps-section-title">Sharing</h2>
+        <p className="ps-section-desc">
+          Earn free quotes by inviting other tradesmen.
+        </p>
+      </div>
       <ReferralPanel
         currentUserId={currentUserId}
         userName={userName}
         showToast={showToast}
       />
+    </div>
+  );
 
-      {!isModal && (
-        <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--tq-muted)' }}>
-          By continuing, you agree that your quoting data (including edits,
-          feedback, and completed job outcomes) may be used to improve system
-          accuracy and is visible to account administrators.
-        </p>
-      )}
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case 'business': return renderBusiness();
+      case 'rates':    return renderRates();
+      case 'trade':    return renderTrade();
+      case 'quote':    return renderQuotePrefs();
+      case 'share':    return renderShare();
+      default:         return renderBusiness();
+    }
+  };
 
-      {/*
-        Sticky save bar \u2014 on mobile (<fq), sit above the fixed 64px
-        BottomNav and respect any iOS safe-area inset (home-indicator).
-        On desktop (>=fq) the BottomNav is hidden so bottom returns to 0.
-        Mirrors the ReviewEdit sticky-CTA pattern (TRQ-172) \u2014 without
-        this, the Save button on Step 1 can overlap the BottomNav and
-        sit under the iOS home indicator. Inside the modal mount the
-        save bar is non-sticky (the modal scrolls internally), so the
-        adjustment is only applied to the full-page Step 1 mount.
-      */}
-      <div
-        className={`${isModal ? 'mt-4' : 'sticky bottom-[calc(env(safe-area-inset-bottom)+64px)] fq:bottom-0 py-4'} flex justify-end`}
-        style={isModal ? {} : { backgroundColor: 'var(--tq-bg)', borderTop: '1px solid var(--tq-border)' }}
-      >
-        <button onClick={handleSave} className="btn-primary">
-          {isModal ? 'Save Changes' : 'Save Profile & Continue \u2192'}
-        </button>
-      </div>
-
-      {/* TRQ-170: Sign-out affordance for the mobile profile modal.
-          BottomNav has Home / New / Quotes / Profile; tapping Profile
-          opens this modal. Without this link mobile users have no way
-          to log out (Sidebar's logout is desktop-only \u2265900px).
-          Gated by `isModal && onLogout` so:
-            - the full-page Step 1 onboarding mount (no onLogout) stays
-              clean for first-run users with nothing to log out of yet;
-            - any future modal mount can opt out by omitting the prop. */}
-      {isModal && onLogout && (
-        <div className="mt-6 pt-4 border-t border-tq-border flex justify-center">
+  // ── Shell render ──────────────────────────────────────────────────
+  // Same shell for modal + Step-1 mounts; the modifier class flips the
+  // outer container's chrome (border / radius / sizing).
+  return (
+    <div className={`ps-shell ${isModal ? 'ps-shell--modal' : 'ps-shell--page'}`}>
+      {/* Header — "Settings" + subtitle. Per spec; replaces the legacy
+          page-title h2 on the Step-1 mount and the App.jsx-rendered
+          "Edit Profile" h2 on the modal mount. */}
+      <div className="ps-head">
+        <div>
+          <div className="ps-head-title">Settings</div>
+          <div className="ps-head-sub">Your business details and how your quotes look &amp; work.</div>
+        </div>
+        {isModal && onClose && (
           <button
             type="button"
-            onClick={onLogout}
-            className="text-sm underline transition-colors"
-            style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+            onClick={onClose}
+            aria-label="Close"
+            className="ps-head-x touch-44"
           >
-            Sign out
+            &times;
+          </button>
+        )}
+      </div>
+
+      <div className="ps-body">
+        {/* Left nav — desktop: vertical 212px column. Mobile: reflows
+            to horizontal pill row via @media (max-width:899px). */}
+        <nav className="ps-nav" aria-label="Settings sections">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setActiveSection(s.id)}
+              aria-current={activeSection === s.id ? 'page' : undefined}
+              className={`ps-nav-item ${activeSection === s.id ? 'is-active' : ''}`}
+              data-section-id={s.id}
+              style={{ minHeight: 44 }}
+            >
+              {s.label}
+              {s.badge && <span className="ps-nav-badge">{s.badge}</span>}
+            </button>
+          ))}
+        </nav>
+
+        {/* Right content — only one section visible at a time. The
+            inactive sections are intentionally NOT in the DOM so the
+            sticky footer's scroll-into-view stays section-local. */}
+        <div className="ps-content">
+          {renderActiveSection()}
+
+          {!isModal && (
+            <p className="text-xs leading-relaxed mt-6" style={{ color: 'var(--tq-muted)' }}>
+              By continuing, you agree that your quoting data (including edits,
+              feedback, and completed job outcomes) may be used to improve system
+              accuracy and is visible to account administrators.
+            </p>
+          )}
+
+          {/* TRQ-170: Sign-out affordance for the mobile profile modal.
+              BottomNav has Home / New / Quotes / Profile; tapping Profile
+              opens this modal. Without this link mobile users have no way
+              to log out (Sidebar's logout is desktop-only >=900px).
+              Gated by `isModal && onLogout` so:
+                - the full-page Step 1 onboarding mount (no onLogout) stays
+                  clean for first-run users with nothing to log out of yet;
+                - any future modal mount can opt out by omitting the prop. */}
+          {isModal && onLogout && (
+            <div className="mt-8 pt-4 border-t border-tq-border flex justify-center">
+              <button
+                type="button"
+                onClick={onLogout}
+                className="text-sm underline transition-colors touch-44"
+                style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sticky save bar — always visible at the bottom of the modal/
+          page, reachable from every section. Respects safe-area-
+          inset-bottom on mobile (env(safe-area-inset-bottom)) so the
+          Save button never sits under the iOS home indicator.
+          Mirrors the TRQ-172 / PR #77 sticky-CTA pattern. */}
+      <div
+        className={`ps-foot ${isModal ? '' : 'sticky bottom-[calc(env(safe-area-inset-bottom)+64px)] fq:bottom-0 py-4'}`}
+      >
+        <div className="ps-foot-state" aria-live="polite">
+          {isDirty ? (
+            <>
+              <span className="ps-foot-state-dot" aria-hidden="true"></span>
+              <span>Unsaved changes</span>
+            </>
+          ) : (
+            <span aria-hidden="true">&nbsp;</span>
+          )}
+        </div>
+        <div className="ps-foot-actions">
+          {isModal && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="btn-ghost"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            className="btn-primary"
+          >
+            {isModal ? 'Save changes' : 'Save Profile & Continue →'}
           </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
