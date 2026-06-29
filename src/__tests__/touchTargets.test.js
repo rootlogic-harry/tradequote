@@ -277,7 +277,7 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/AgentActivity.jsx", line: 207, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/AgentActivity.jsx", line: 285, pr: "PR-future-admin", why: "Admin-only surface" },
   // -- src/components/AutosaveStatus.jsx --
-  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\\\\\\\\\\\\\" },
+  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\" },
   // -- src/components/CalibrationManager.jsx --
   { file: "src/components/CalibrationManager.jsx", line: 78, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/CalibrationManager.jsx", line: 114, pr: "PR-future-admin", why: "Admin-only surface" },
@@ -362,8 +362,8 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/ProfileSetup.jsx", line: 362, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
   { file: "src/components/steps/ProfileSetup.jsx", line: 371, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
   // -- src/components/steps/QuoteOutput.jsx --
-  { file: "src/components/steps/QuoteOutput.jsx", line: 844, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
-  { file: "src/components/steps/QuoteOutput.jsx", line: 996, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
+  { file: "src/components/steps/QuoteOutput.jsx", line: 851, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
+  { file: "src/components/steps/QuoteOutput.jsx", line: 1003, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
 
 ];
 

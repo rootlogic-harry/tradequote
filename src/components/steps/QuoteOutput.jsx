@@ -668,12 +668,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
         className="mb-4"
       >
         <details className="action-group-more">
+          {/* Native <summary> must keep its default display: list-item
+              for the click-to-toggle behaviour to fire reliably across
+              Chrome + Safari. Applying .btn-ghost (display: inline-flex)
+              directly to <summary> breaks the toggle on desktop (2026-
+              06-29 bug). Fix: keep .btn-ghost on an inner <span> for
+              the visual, suppress the native disclosure triangle with
+              list-none + ::-webkit-details-marker hidden in index.html. */}
           <summary
-            className="btn-ghost cursor-pointer list-none"
-            style={{ width: 'auto' }}
+            className="cursor-pointer list-none inline-block"
+            style={{ width: 'fit-content' }}
             title="Save, send to QuickBooks, create RAMS, and other extras"
           >
-            More
+            <span className="btn-ghost">More</span>
           </summary>
           <div className="flex flex-col fq:flex-row flex-wrap gap-3 mt-3">
             {!isReadOnly && (

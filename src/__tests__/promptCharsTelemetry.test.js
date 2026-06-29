@@ -124,11 +124,18 @@ describe('TRQ-176: /api/admin/learning surfaces prompt size data', () => {
     expect(routeBody).toContain('slice(0, 20)');
   });
 
-  test('alarm threshold is 10,000 chars per the brief', () => {
-    expect(routeBody).toMatch(/PROMPT_CHARS_ALARM_THRESHOLD\s*=\s*10000/);
+  // 2026-06-29 refit: original 10k threshold was unrealistic (base
+  // prompt alone is 20k+). Bumped to 30k for the absolute alarm and
+  // added a separate notes-share > 50% alarm as the actionable signal.
+  test('absolute alarm threshold is 30,000 chars (2026-06-29 refit)', () => {
+    expect(routeBody).toMatch(/PROMPT_CHARS_ALARM_THRESHOLD\s*=\s*30000/);
   });
 
-  test('response payload includes a promptSize block', () => {
+  test('notes-share alarm threshold is 50%', () => {
+    expect(routeBody).toMatch(/NOTES_SHARE_ALARM_THRESHOLD\s*=\s*0\.5/);
+  });
+
+  test('response payload includes a promptSize block with base/notes breakdown', () => {
     expect(routeBody).toMatch(/promptSize:\s*\{/);
     // Required keys for the dashboard contract.
     expect(routeBody).toContain('current:');
@@ -136,6 +143,13 @@ describe('TRQ-176: /api/admin/learning surfaces prompt size data', () => {
     expect(routeBody).toContain('alarm:');
     expect(routeBody).toContain('threshold:');
     expect(routeBody).toContain('history:');
+    // 2026-06-29 additions
+    expect(routeBody).toContain('basePromptChars');
+    expect(routeBody).toContain('notesChars');
+    expect(routeBody).toContain('notesCount');
+    expect(routeBody).toContain('notesShare');
+    expect(routeBody).toContain('absoluteAlarm');
+    expect(routeBody).toContain('shareAlarm');
   });
 
   test('route is gated by requireAdminPlan (Visibility Rules)', () => {
@@ -179,10 +193,23 @@ describe('TRQ-176: LearningDashboard renders prompt size + alarm', () => {
     );
   });
 
-  test('alarm banner uses the "calibration corpus" admin-only copy', () => {
-    // Per the ticket: "calibration corpus is growing — consider pruning notes".
+  test('alarm banner uses the "calibration corpus" admin-only copy (share-alarm variant)', () => {
+    // Per the original ticket: "calibration corpus is growing — consider pruning notes".
+    // 2026-06-29 refit: the phrase now only appears in the share-alarm
+    // variant (when notes are ≥50% of the prompt). Absolute alarm has
+    // separate copy. Both must still be admin-vocab.
     expect(dashboardSource).toMatch(/calibration corpus/i);
-    expect(dashboardSource).toMatch(/pruning notes/i);
+    expect(dashboardSource).toMatch(/pruning superseded notes/i);
+  });
+
+  test('alarm banner shows the base-prompt + notes breakdown (2026-06-29)', () => {
+    // Banner copy fragments — match the exact wording.
+    expect(dashboardSource).toMatch(/— base/);
+    expect(dashboardSource).toMatch(/calibration notes/i);
+    expect(dashboardSource).toMatch(/basePromptChars/);
+    expect(dashboardSource).toMatch(/notesChars/);
+    expect(dashboardSource).toMatch(/notesCount/);
+    expect(dashboardSource).toMatch(/sharePct/);
   });
 
   test('alarm banner has role="alert" for accessibility', () => {
@@ -190,52 +217,65 @@ describe('TRQ-176: LearningDashboard renders prompt size + alarm', () => {
   });
 });
 
-describe('TRQ-176: alarm threshold logic', () => {
+describe('TRQ-176: alarm threshold logic (2026-06-29 dual-condition)', () => {
   // Pure JS replica of the server's alarm rule. Asserting the rule
-  // directly so a future refactor can't silently flip the threshold.
-  function shouldAlarm(history, threshold = 10000) {
+  // directly so a future refactor can't silently flip the thresholds.
+  function shouldAlarm(history, notesChars = 0, opts = {}) {
+    const absoluteThreshold = opts.absoluteThreshold ?? 30000;
+    const shareThreshold = opts.shareThreshold ?? 0.5;
     if (!Array.isArray(history) || history.length === 0) return false;
     const last20 = history.slice(0, 20);
     const avg = last20.reduce((s, r) => s + r.promptChars, 0) / last20.length;
-    return avg > threshold;
+    const share = avg > 0 ? notesChars / avg : 0;
+    return avg > absoluteThreshold || share > shareThreshold;
   }
 
   test('returns false on empty history (no jobs yet)', () => {
-    expect(shouldAlarm([])).toBe(false);
+    expect(shouldAlarm([], 0)).toBe(false);
   });
 
-  test('returns false when avg-of-last-20 is well below threshold', () => {
-    const history = Array.from({ length: 20 }, () => ({ promptChars: 5000 }));
-    expect(shouldAlarm(history)).toBe(false);
+  test('returns false when avg-of-last-20 is well below absolute threshold and notes share is low', () => {
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 25000 }));
+    expect(shouldAlarm(history, 5000)).toBe(false); // 5k/25k = 20% share
   });
 
-  test('returns false at exactly the threshold (strict >)', () => {
-    const history = Array.from({ length: 20 }, () => ({ promptChars: 10000 }));
-    expect(shouldAlarm(history)).toBe(false);
+  test('returns false at exactly the absolute threshold (strict >)', () => {
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 30000 }));
+    expect(shouldAlarm(history, 5000)).toBe(false);
   });
 
-  test('returns true when avg-of-last-20 exceeds 10,000 chars', () => {
-    const history = Array.from({ length: 20 }, () => ({ promptChars: 10001 }));
-    expect(shouldAlarm(history)).toBe(true);
+  test('returns true when avg-of-last-20 exceeds 30,000 chars (absolute alarm)', () => {
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 30001 }));
+    expect(shouldAlarm(history, 5000)).toBe(true);
+  });
+
+  test('returns true when notes share exceeds 50% (share alarm) even if absolute is fine', () => {
+    // 25k total prompt, 13k notes = 52% share — share alarm fires
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 25000 }));
+    expect(shouldAlarm(history, 13000)).toBe(true);
+  });
+
+  test('returns false at exactly the share threshold (strict >)', () => {
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 20000 }));
+    expect(shouldAlarm(history, 10000)).toBe(false); // exactly 50%
+  });
+
+  test('returns true when both alarms fire', () => {
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 40000 }));
+    expect(shouldAlarm(history, 25000)).toBe(true);
   });
 
   test('uses only the last 20 even when more history is present', () => {
-    // First 20 jobs avg 12,000 (over threshold). Older 30 jobs are 1,000.
-    // shouldAlarm receives newest-first history, so slice(0,20) is the
-    // newest 20 — alarm fires.
-    const newest20 = Array.from({ length: 20 }, () => ({ promptChars: 12000 }));
+    const newest20 = Array.from({ length: 20 }, () => ({ promptChars: 32000 }));
     const olderTail = Array.from({ length: 30 }, () => ({ promptChars: 1000 }));
-    expect(shouldAlarm([...newest20, ...olderTail])).toBe(true);
+    expect(shouldAlarm([...newest20, ...olderTail], 5000)).toBe(true);
   });
 
-  test('alarm respects a smaller sample size (< 20 jobs)', () => {
-    // 3 jobs at 11,000 — avg is 11,000, above threshold.
-    const history = [
-      { promptChars: 11000 },
-      { promptChars: 11000 },
-      { promptChars: 11000 },
-    ];
-    expect(shouldAlarm(history)).toBe(true);
+  test('current production state (~28k total, ~7.7k notes, 27% share) does NOT alarm', () => {
+    // Regression guard for the 2026-06-29 refit — the threshold rework
+    // was prompted by the alarm firing wrongly on this exact state.
+    const history = Array.from({ length: 20 }, () => ({ promptChars: 28757 }));
+    expect(shouldAlarm(history, 7736)).toBe(false);
   });
 });
 
