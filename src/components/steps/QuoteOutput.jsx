@@ -16,12 +16,13 @@ import { shouldUseShareSheetPath } from '../../utils/platform.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
 import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { calculateAllTotals } from '../../utils/calculations.js';
-import { saveJob as saveQuote, updateJob, getClientStatus, generateClientToken } from '../../utils/userDB.js';
+import { saveJob as saveQuote, updateJob, getClientStatus, generateClientToken, updateJobStatus } from '../../utils/userDB.js';
 import { exportQuoteAsDocx } from '../../utils/exportDocx.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { trackEvent } from '../../utils/trackEvent.js';
+import { calculateExpiresAt } from '../../utils/quoteBuilder.js';
 
-export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false, onRequestOpenProfile }) {
+export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showToast, onCreateRams, onSaved, isAdminPlan = false, onRequestOpenProfile, emailIntegrationEnabled = false }) {
   // TRQ-94: profile is no longer enforced at sign-up. We block ONLY at
   // the customer-facing surfaces — Send via Outlook, the .eml mailto
   // handler, the generated client portal link, and the PDF/DOCX
@@ -652,6 +653,222 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     }
   };
 
+  // ──────────────────────────────────────────────────────────────────
+  // Send to client = status action (2026-06-29 UX call from Harry's
+  // screenshot review).
+  //
+  // Reality check: most wallers don't have Outlook configured, mobile
+  // users have no Outlook flow at all, and the .eml file path is
+  // brittle. The waller's actual workflow is: copy the client link →
+  // paste into WhatsApp / SMS / their own email → done. They want a
+  // button that RECORDS that they sent it, not one that pretends to
+  // send for them.
+  //
+  // The primary "Send to client" button now advances the job's status
+  // draft → sent (via the existing /api/users/:id/jobs/:jobId/status
+  // route — same path the dashboard's Send button uses, no new
+  // endpoint). After click it locks into a green "Sent to client"
+  // confirmation state.
+  //
+  // The caret menu carries the contextual status actions (Mark
+  // accepted / declined / complete / Re-open) + Copy link, plus the
+  // Email and Outlook entry points when EMAIL_INTEGRATION_ENABLED is
+  // on. See docs/EMAIL_FLAG.md.
+  // ──────────────────────────────────────────────────────────────────
+
+  // Local job status mirror. Source priority:
+  //   1. Local state set on Send-to-client success (most recent).
+  //   2. state.recentJobs lookup (synced via JOBS_UPDATED).
+  //   3. Default 'draft'.
+  const jobIdForStatus = savedJobId || state.savedJobId;
+  const lookupRecentStatus = () => {
+    if (!jobIdForStatus) return null;
+    const match = state.recentJobs?.find?.(j => j.id === jobIdForStatus);
+    return match?.status || null;
+  };
+  const [localStatus, setLocalStatus] = useState(() => lookupRecentStatus());
+
+  // Refresh local status when recentJobs sync (e.g. on dashboard
+  // returning, after JOBS_UPDATED dispatch). Only overrides when the
+  // user hasn't yet locally advanced — once `localStatus` reflects a
+  // user action we trust it until the next mount.
+  useEffect(() => {
+    const fromRecent = lookupRecentStatus();
+    if (fromRecent && localStatus === null) {
+      setLocalStatus(fromRecent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobIdForStatus, state.recentJobs]);
+
+  // Effective status for rendering — drafts default when nothing is
+  // known. Treat unknown statuses defensively as drafts so the button
+  // stays actionable rather than silently locked.
+  const KNOWN_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'completed'];
+  const effectiveStatus = KNOWN_STATUSES.includes(localStatus) ? localStatus : 'draft';
+
+  // The "Sent to client" green confirmation state covers any status
+  // that's already been advanced past draft. (Accepted/declined/
+  // completed all imply the link went out at some point.)
+  const sentLocked = effectiveStatus !== 'draft';
+
+  // Track in-flight state so the button shows progress and we don't
+  // double-fire on a rapid second tap.
+  const [marking, setMarking] = useState(false);
+
+  // Primary handler — record that the waller has sent the link. Uses
+  // the existing /status route + the dashboard's `updateJobStatus`
+  // helper. NO new endpoint, NO new wire-format. Sets sent_at = now,
+  // expires_at = +30d (matches dashboard Send button parity).
+  const handleSendToClient = async () => {
+    if (sentLocked || marking) return;
+    if (!requireProfile()) return;
+    const jobId = savedJobId || state.savedJobId;
+    if (!state.currentUserId || !jobId) {
+      showToast?.(`Save the ${term.lower} first, then mark as sent.`, 'error');
+      return;
+    }
+    setMarking(true);
+    try {
+      const sentAtIso = new Date().toISOString();
+      const expiresAtIso = calculateExpiresAt(sentAtIso);
+      await updateJobStatus(state.currentUserId, jobId, 'sent', {
+        sentAt: sentAtIso,
+        expiresAt: expiresAtIso,
+      });
+      // Refresh local status + downstream consumers (dashboard list,
+      // banner). The status banner derives from clientStatus (portal
+      // view/response state), not from job.status, so it doesn't need
+      // to flip — but the green button confirmation does.
+      setLocalStatus('sent');
+      dispatch({
+        type: 'JOBS_UPDATED',
+        jobs: (state.recentJobs || []).map(j =>
+          j.id === jobId
+            ? { ...j, status: 'sent', sentAt: sentAtIso, expiresAt: expiresAtIso }
+            : j
+        ),
+      });
+      showToast?.('Quote marked as sent', 'success');
+    } catch (err) {
+      console.error('Mark-as-sent failed:', err);
+      showToast?.(err?.message || 'Failed to update status', 'error');
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  // Build the caret menu items contextually. Order (top → bottom):
+  //   1. Email / Outlook (only when EMAIL_INTEGRATION_ENABLED is on)
+  //   2. divider (only when section 1 rendered AND section 3 has items)
+  //   3. Copy client link (always — the canonical "share" action)
+  //   4. Status-change actions appropriate to the current status
+  //
+  // Hide the caret entirely if there are no items (completed status
+  // with the flag off — nothing to offer).
+  const openStatusModal = (targetStatus) => {
+    const jobId = savedJobId || state.savedJobId;
+    if (!jobId) {
+      showToast?.(`Save the ${term.lower} first, then update its status.`, 'error');
+      return;
+    }
+    dispatch?.({ type: 'OPEN_STATUS_MODAL', jobId, targetStatus });
+  };
+
+  const buildSendMenuItems = () => {
+    const items = [];
+
+    // Email-integration items (flag-gated). Kept above the divider so
+    // the status actions stay grouped together below.
+    if (emailIntegrationEnabled) {
+      items.push({
+        id: 'email',
+        icon: 'mail',
+        label: 'Send via Email',
+        sub: 'Your default mail app',
+        onClick: handleEmail,
+      });
+      items.push({
+        id: 'outlook',
+        icon: 'mail',
+        label: 'Send via Outlook',
+        sub: 'Open in Outlook (or Mail.app)',
+        onClick: handleSendViaOutlook,
+      });
+    }
+
+    // Copy client link — the canonical share action across all statuses.
+    // Matches the dashboard kebab's Resend pattern (PR #86).
+    items.push({
+      id: 'copy',
+      icon: 'link',
+      label: 'Copy client link',
+      sub: 'Paste into WhatsApp, SMS, or email',
+      onClick: handleCopyClientLink,
+    });
+
+    // Status-change items per current status. Inserts a divider between
+    // the share group above and these so the visual grouping is clear.
+    const statusItems = [];
+    if (effectiveStatus === 'draft' || effectiveStatus === 'sent') {
+      statusItems.push({
+        id: 'decline',
+        icon: 'x',
+        label: 'Mark declined',
+        sub: 'Client said no',
+        danger: true,
+        onClick: () => openStatusModal('declined'),
+      });
+    }
+    if (effectiveStatus === 'sent') {
+      // Useful when the waller gets a verbal yes minutes after sending
+      // and wants to lock that in without bouncing back to the dashboard.
+      statusItems.unshift({
+        id: 'accept',
+        icon: 'check',
+        label: 'Mark accepted',
+        sub: 'Client said yes',
+        onClick: () => openStatusModal('accepted'),
+      });
+    }
+    if (effectiveStatus === 'accepted') {
+      statusItems.push({
+        id: 'complete',
+        icon: 'check',
+        label: 'Mark complete',
+        sub: 'Job finished',
+        onClick: () => openStatusModal('completed'),
+      });
+      statusItems.push({
+        id: 'decline',
+        icon: 'x',
+        label: 'Mark declined',
+        sub: 'Client backed out',
+        danger: true,
+        onClick: () => openStatusModal('declined'),
+      });
+    }
+    if (effectiveStatus === 'declined') {
+      // Uses the widened VALID_TRANSITIONS from PR #86 (declined → draft).
+      statusItems.push({
+        id: 'reopen',
+        icon: 'refresh',
+        label: 'Re-open',
+        sub: 'Back to draft for editing',
+        onClick: () => openStatusModal('draft'),
+      });
+    }
+    // 'completed' has no status-change items — terminal state.
+
+    if (statusItems.length > 0) {
+      items.push({ id: '__divider', divider: true });
+      items.push(...statusItems);
+    }
+
+    return items;
+  };
+
+  const sendMenuItems = buildSendMenuItems();
+
   // Open the LivePreview overlay used by the bottom "Preview" strip.
   // We dispatch the same toggle the LivePreview component listens to
   // so the existing keyboard / overlay plumbing is unchanged.
@@ -757,18 +974,15 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       >
         <SplitButton
           variant="primary"
-          mainLabel="Send to client"
-          mainIcon="send"
-          onMain={handleSendViaOutlook}
-          onMainLoading={sendingOutlook}
-          mainLoadingLabel="Preparing…"
-          ariaLabelMenu="Send via"
-          menuLabel="Send via"
-          items={[
-            { id: 'email', icon: 'mail', label: 'Email', sub: 'Your default mail app', onClick: handleEmail },
-            { id: 'outlook', icon: 'mail', label: 'Outlook', sub: 'Open in Outlook (or Mail.app)', onClick: handleSendViaOutlook },
-            { id: 'copy', icon: 'link', label: 'Copy client link', sub: 'Paste it anywhere', onClick: handleCopyClientLink },
-          ]}
+          mainLabel={sentLocked ? 'Sent to client' : 'Send to client'}
+          mainIcon={sentLocked ? 'check' : 'send'}
+          onMain={handleSendToClient}
+          onMainLoading={marking}
+          mainLoadingLabel="Marking as sent…"
+          mainConfirmed={sentLocked}
+          ariaLabelMenu="More actions"
+          menuLabel="More actions"
+          items={sendMenuItems}
         />
         <SplitButton
           variant="secondary"
@@ -1061,6 +1275,9 @@ const ICONS = {
   word: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></>,
   print: <><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>,
   chev: <polyline points="6 9 12 15 18 9"/>,
+  check: <polyline points="20 6 9 17 4 12"/>,
+  x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+  refresh: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></>,
 };
 
 function Icon({ name, size = 16 }) {
@@ -1089,6 +1306,7 @@ function SplitButton({
   onMain,
   onMainLoading = false,
   mainLoadingLabel,
+  mainConfirmed = false,
   ariaLabelMenu,
   menuLabel,
   items,
@@ -1109,49 +1327,73 @@ function SplitButton({
     };
   }, [open]);
 
-  const mainClass = variant === 'primary' ? 'btn-primary qo-split-main' : 'btn-ghost qo-split-main';
+  // Confirmed (locked-green) state uses a separate class so we can
+  // theme it against --tq-confirmed-* tokens without disturbing the
+  // amber primary or ghost-bordered secondary variants. The button
+  // is rendered with aria-disabled=true and a no-op onClick so it
+  // stays focusable for the visually-impaired but doesn't fire.
+  const mainClass = mainConfirmed
+    ? 'qo-split-main qo-split-main--confirmed'
+    : (variant === 'primary' ? 'btn-primary qo-split-main' : 'btn-ghost qo-split-main');
   const caretClass = variant === 'primary' ? 'btn-primary qo-split-caret' : 'btn-ghost qo-split-caret';
 
+  // Hide the caret entirely when there are no menu items. Avoids the
+  // dangling "click me" affordance on terminal-status quotes where the
+  // menu has nothing meaningful to offer.
+  const hasItems = Array.isArray(items) && items.length > 0;
+
   return (
-    <div className={`qo-split qo-split--${variant}`} ref={wrapRef} data-split-variant={variant}>
+    <div
+      className={`qo-split qo-split--${variant}${mainConfirmed ? ' qo-split--confirmed' : ''}${hasItems ? '' : ' qo-split--solo'}`}
+      ref={wrapRef}
+      data-split-variant={variant}
+      data-confirmed={mainConfirmed ? 'true' : 'false'}
+    >
       <button
         type="button"
         className={mainClass}
-        onClick={onMain}
+        onClick={mainConfirmed ? undefined : onMain}
         disabled={onMainLoading}
+        aria-disabled={mainConfirmed ? 'true' : undefined}
         style={{ minHeight: 44 }}
       >
         {mainIcon && <Icon name={mainIcon} size={16} />}
         <span>{onMainLoading && mainLoadingLabel ? mainLoadingLabel : mainLabel}</span>
       </button>
-      <button
-        type="button"
-        className={caretClass}
-        onClick={() => setOpen(o => !o)}
-        aria-label={ariaLabelMenu}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        style={{ minHeight: 44 }}
-      >
-        <Icon name="chev" size={14} />
-      </button>
-      {open && (
+      {hasItems && (
+        <button
+          type="button"
+          className={caretClass}
+          onClick={() => setOpen(o => !o)}
+          aria-label={ariaLabelMenu}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          style={{ minHeight: 44 }}
+        >
+          <Icon name="chev" size={14} />
+        </button>
+      )}
+      {open && hasItems && (
         <div className="qo-split-menu" role="menu" aria-label={ariaLabelMenu}>
           {menuLabel && <div className="qo-split-menu-label">{menuLabel}</div>}
-          {items.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              role="menuitem"
-              className="qo-split-menu-item touch-44"
-              onClick={() => { setOpen(false); it.onClick?.(); }}
-            >
-              <Icon name={it.icon} size={17} />
-              <span className="qo-split-menu-item-text">
-                <span className="qo-split-menu-item-label">{it.label}</span>
-                {it.sub && <span className="qo-split-menu-item-sub">{it.sub}</span>}
-              </span>
-            </button>
+          {items.map((it, i) => (
+            it.divider
+              ? <div key={`d-${i}`} className="qo-split-menu-div" aria-hidden="true" />
+              : (
+                <button
+                  key={it.id}
+                  type="button"
+                  role="menuitem"
+                  className={`qo-split-menu-item touch-44 ${it.danger ? 'qo-split-menu-item--danger' : ''}`}
+                  onClick={() => { setOpen(false); it.onClick?.(); }}
+                >
+                  <Icon name={it.icon} size={17} />
+                  <span className="qo-split-menu-item-text">
+                    <span className="qo-split-menu-item-label">{it.label}</span>
+                    {it.sub && <span className="qo-split-menu-item-sub">{it.sub}</span>}
+                  </span>
+                </button>
+              )
           ))}
         </div>
       )}

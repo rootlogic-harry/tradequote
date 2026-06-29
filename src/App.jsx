@@ -68,6 +68,12 @@ export default function App() {
   // flag the client keeps the safer state and basic users don't see a
   // dead video upload button. See docs/VIDEO_FLAG.md.
   const [videoAnalysisEnabled, setVideoAnalysisEnabled] = useState(false);
+  // Feature flag: email integration (Send via Email + Send via Outlook
+  // in QuoteOutput's caret menu). Server-driven via /auth/me → features.
+  // Defaults to false so if /auth/me fails to return the flag the client
+  // keeps the safer state — the Email/Outlook entry points stay hidden
+  // until the server explicitly says they're on. See docs/EMAIL_FLAG.md.
+  const [emailIntegrationEnabled, setEmailIntegrationEnabled] = useState(false);
   // Quota state (2026-06-22) — populated from /auth/me's billing block.
   // Drives the "block New Quote button on exhausted" guard below so the
   // user never enters the flow only to be blocked at /analyse. Null
@@ -102,6 +108,7 @@ export default function App() {
         // disabled-state UI is correct even on an authed bounce-out.
         if (data?.features) {
           setVideoAnalysisEnabled(!!data.features.videoAnalysisEnabled);
+          setEmailIntegrationEnabled(!!data.features.emailIntegrationEnabled);
         }
         if (data?.billing) {
           setBilling(data.billing);
@@ -960,6 +967,7 @@ export default function App() {
               onSaved={() => fetchIncompleteJobs(state.currentUserId)}
               isAdminPlan={isAdmin}
               onRequestOpenProfile={() => setShowProfileModal(true)}
+              emailIntegrationEnabled={emailIntegrationEnabled}
             />
           </ErrorBoundary>
         );

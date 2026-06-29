@@ -1127,6 +1127,56 @@
     .qo-split-menu-item-text { display: flex; flex-direction: column; gap: 2px; }
     .qo-split-menu-item-label { font-weight: 600; color: var(--tq-text); }
     .qo-split-menu-item-sub { font-size: 11.5px; color: var(--tq-muted); }
+    /* Danger items (Mark declined). Matches the dashboard kebab's
+       .danger styling — red label, otherwise structurally identical. */
+    .qo-split-menu-item--danger .qo-split-menu-item-label { color: #c0392b; }
+    /* Section divider inside the caret menu — separates the share
+       group (Email / Outlook / Copy link) from the status-change
+       group. Visually equivalent to the dashboard kebab's `__` divider. */
+    .qo-split-menu-div {
+      height: 1px;
+      background: var(--tq-border);
+      margin: 4px 4px;
+    }
+
+    /* "Sent to client" green confirmation state — applied to the
+       primary SplitButton's main button after the waller advances
+       the quote from draft → sent. Reuses the existing --tq-confirmed-*
+       token family (no new variables introduced). Button stays
+       focusable but aria-disabled so the visually-impaired aren't
+       hunting for a non-existent action. */
+    .qo-split-main--confirmed {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 48px;
+      padding: 0 24px;
+      border-radius: 2px 0 0 2px;
+      padding-left: 18px;
+      padding-right: 16px;
+      border: 1.5px solid var(--tq-confirmed-bd);
+      background: var(--tq-confirmed-bg);
+      color: var(--tq-confirmed-txt);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: default;
+    }
+    /* When the confirmed main button stands alone (no caret) the
+       right side should round cleanly too. */
+    .qo-split--solo .qo-split-main--confirmed { border-radius: 2px; }
+    /* In the confirmed state the caret carries the confirmed
+       border + tint too so the pair reads as a single locked card. */
+    .qo-split--confirmed .qo-split-caret {
+      background: var(--tq-confirmed-bg);
+      color: var(--tq-confirmed-txt);
+      border: 1.5px solid var(--tq-confirmed-bd);
+      border-left: 1.5px solid var(--tq-confirmed-bd);
+    }
+    .qo-split--confirmed .qo-split-caret:hover { background: var(--tq-confirmed-bg); }
 
     /* Hero client-link card — promoted from the buried dark box. */
     .qo-hero-card {

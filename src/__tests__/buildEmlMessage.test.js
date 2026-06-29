@@ -528,7 +528,12 @@ describe('Send via Outlook — QuoteOutput wiring', () => {
     // standalone button — but the handler still pre-flights for
     // profile.email (canSendOutlook flag). Pin both the menu item
     // copy and the gate inside the handler.
-    expect(src).toMatch(/label:\s*['"]Outlook['"]/);
+    //
+    // 2026-06-29 follow-up (Send-to-client status rewire): the menu
+    // item label was promoted from "Outlook" to the more explicit
+    // "Send via Outlook" so it reads cleanly in the caret menu next
+    // to the new "Mark accepted / declined / complete" status items.
+    expect(src).toMatch(/label:\s*['"]Send via Outlook['"]/);
     expect(src).toMatch(/canSendOutlook\s*=\s*Boolean\(profile\?\.email\)/);
   });
 
