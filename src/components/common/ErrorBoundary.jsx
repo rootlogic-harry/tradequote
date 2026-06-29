@@ -87,15 +87,20 @@ class ErrorBoundary extends React.Component {
           <button
             type="button"
             onClick={this.reset}
+            className="touch-44"
             style={{
               color: 'var(--tq-bg, #1a1714)',
               background: 'var(--tq-accent, #e8a838)',
               border: 'none',
               borderRadius: 6,
-              padding: '8px 16px',
+              padding: '0 20px',
+              minHeight: 44,
               fontSize: 13,
               cursor: 'pointer',
               fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             Try again
@@ -128,20 +133,24 @@ class ErrorBoundary extends React.Component {
         <div style={{ display: 'flex', gap: 12 }}>
           <button
             onClick={() => window.location.reload()}
+            className="touch-44"
             style={{
               color: '#1a1714', background: '#e8a838', border: 'none',
-              borderRadius: 8, padding: '10px 24px', fontSize: 14, cursor: 'pointer',
+              borderRadius: 8, padding: '0 24px', minHeight: 44, fontSize: 14, cursor: 'pointer',
               fontFamily: 'Inter, sans-serif', fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
             Refresh
           </button>
           <button
             onClick={() => { window.location.hash = ''; window.location.reload(); }}
+            className="touch-44"
             style={{
               color: '#e8a838', background: 'none', border: '1px solid #3a3630',
-              borderRadius: 8, padding: '10px 24px', fontSize: 14, cursor: 'pointer',
+              borderRadius: 8, padding: '0 24px', minHeight: 44, fontSize: 14, cursor: 'pointer',
               fontFamily: 'Inter, sans-serif',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
             Go to Dashboard

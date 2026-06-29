@@ -99,14 +99,18 @@ export default function AutosaveStatus({ autosave, onRetry }) {
           <button
             type="button"
             onClick={onRetry}
+            className="touch-44"
             style={{
               background: 'none',
               border: 'none',
               color: 'var(--tq-accent)',
               fontSize: 12,
               cursor: 'pointer',
-              padding: 0,
+              padding: '0 8px',
               textDecoration: 'underline',
+              minHeight: 44,
+              display: 'inline-flex',
+              alignItems: 'center',
             }}
           >
             retry

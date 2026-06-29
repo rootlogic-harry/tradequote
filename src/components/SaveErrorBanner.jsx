@@ -21,9 +21,10 @@ export default function SaveErrorBanner({ error, onDismiss, onRetry }) {
         </p>
         {onRetry && (
           <button
+            type="button"
             onClick={onRetry}
-            className="mt-2 text-xs font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors"
-            style={{ border: '1px solid rgba(248, 113, 113, 0.4)', color: '#f87171' }}
+            className="touch-44 mt-2 text-xs font-heading font-bold uppercase tracking-wide px-4 rounded transition-colors inline-flex items-center justify-center"
+            style={{ minHeight: 44, border: '1px solid rgba(248, 113, 113, 0.4)', color: '#f87171', background: 'transparent' }}
           >
             Try Again
           </button>

@@ -21,7 +21,15 @@ export default function Toast({ message, type = 'info', onDismiss }) {
     <div className={`fixed bottom-6 left-4 right-4 fq:left-auto fq:right-6 z-50 border rounded px-4 py-3 shadow-lg max-w-sm text-sm font-body animate-[slideUp_0.3s_ease-out] flex items-center justify-between gap-2 ${TYPE_STYLES[type] || TYPE_STYLES.info}`}>
       <span>{message}</span>
       {type === 'error' && (
-        <button onClick={onDismiss} className="shrink-0 text-lg leading-none opacity-70 hover:opacity-100">&times;</button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="touch-44 shrink-0 text-lg leading-none opacity-70 hover:opacity-100 flex items-center justify-center"
+          style={{ minHeight: 44, minWidth: 44, background: 'transparent', border: 'none' }}
+        >
+          &times;
+        </button>
       )}
     </div>
   );
