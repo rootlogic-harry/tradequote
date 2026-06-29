@@ -231,6 +231,85 @@ describe('SubscriptionBanner.jsx — wiring contract', () => {
   });
 });
 
+// ─────────────────── PR-4 mobile stacking ───────────────────
+//
+// Mirrors the QuotaCounter pattern (2026-06-25): mobile stacks the
+// body + CTA vertically, desktop sits them inline. Pinning these
+// classes at the source level so a future refactor can't silently
+// regress the mobile layout. See /tmp/mobile-responsive-plan.md
+// audit item #4.
+
+describe('SubscriptionBanner.jsx — mobile stacking (PR-4)', () => {
+  test('Strip wrapper uses `flex flex-col fq:flex-row` so the body + CTA stack on mobile and sit inline on desktop', () => {
+    // Pull out the Strip function definition + className.
+    const stripMatch = bannerSrc.match(
+      /function\s+Strip\s*\([\s\S]*?className\s*=\s*["']([^"']+)["']/
+    );
+    expect(stripMatch).not.toBeNull();
+    const classes = stripMatch[1];
+
+    // Mobile-first: base class is `flex-col` (no `fq:` prefix).
+    expect(classes).toMatch(/\bflex-col\b/);
+    // Desktop: `fq:flex-row` flips back to inline at >=900px.
+    expect(classes).toMatch(/\bfq:flex-row\b/);
+    // Same alignment pattern as QuotaCounter — items-stretch on mobile
+    // so the CTA fills the row width; items-center on desktop.
+    expect(classes).toMatch(/\bitems-stretch\b/);
+    expect(classes).toMatch(/\bfq:items-center\b/);
+  });
+
+  test('CTA min-height is 44 (mobile touch-target floor — was 36 pre-PR-4)', () => {
+    // The button inside Cta — single source of truth for tap height.
+    const ctaButton = bannerSrc.match(
+      /function\s+Cta\s*\([\s\S]*?<button[\s\S]*?<\/button>/
+    );
+    expect(ctaButton).not.toBeNull();
+    expect(ctaButton[0]).toMatch(/minHeight\s*:\s*44\b/);
+    // And explicitly that the old 36 value is gone.
+    expect(ctaButton[0]).not.toMatch(/minHeight\s*:\s*36\b/);
+  });
+
+  test('CTA `shrink-0` only applies on desktop (so the CTA can stretch full-width on mobile)', () => {
+    const ctaButton = bannerSrc.match(
+      /function\s+Cta\s*\([\s\S]*?<button[\s\S]*?<\/button>/
+    );
+    expect(ctaButton).not.toBeNull();
+    // Desktop pins the CTA right via `fq:shrink-0`.
+    expect(ctaButton[0]).toMatch(/\bfq:shrink-0\b/);
+    // No bare (always-on) `shrink-0` — that would prevent mobile stretch.
+    expect(ctaButton[0]).not.toMatch(/(?<!fq:)\bshrink-0\b/);
+  });
+
+  test('every Cta call-site carries data-touch-exempt="true" (the inner button is 44px-safe; lint scanner can\'t see through the wrapper)', () => {
+    // Count Cta invocations and assert they're all exempted. This
+    // keeps the touch-target lint allow-list shrinkage honest — if
+    // someone removes the attribute, the lint scanner immediately
+    // re-flags the line as a NEW sub-44px violation.
+    //
+    // The regex grabs the whole `<Cta ...>` opening tag (greedy up to
+    // the first `>`); `[^>]*` so we don't run past the tag.
+    const ctaInvocations = bannerSrc.match(/<Cta\b[^>]*>/g) || [];
+    // Filter to invocations carrying onClick (skip the function-def line
+    // `function Cta(...)` which isn't a JSX element — it's the function
+    // signature; the regex above already excludes it because `(` not `>`).
+    const withOnClick = ctaInvocations.filter(inv => /\bonClick\b/.test(inv));
+    expect(withOnClick.length).toBeGreaterThanOrEqual(4);
+    for (const inv of withOnClick) {
+      expect(inv).toMatch(/data-touch-exempt\s*=\s*["']true["']/);
+    }
+  });
+
+  test('Body uses `min-w-0` so long copy can shrink inside a flex column without forcing horizontal overflow', () => {
+    const bodyMatch = bannerSrc.match(
+      /function\s+Body\s*\([\s\S]*?className\s*=\s*["']([^"']+)["']/
+    );
+    expect(bodyMatch).not.toBeNull();
+    expect(bodyMatch[1]).toMatch(/\bmin-w-0\b/);
+    // flex-1 stays so the text takes the available width on desktop.
+    expect(bodyMatch[1]).toMatch(/\bflex-1\b/);
+  });
+});
+
 // ─────────────────── App.jsx integration ───────────────────
 
 describe('SubscriptionBanner — App.jsx wiring', () => {

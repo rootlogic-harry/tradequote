@@ -89,7 +89,7 @@ export default function SubscriptionBanner({ enabled = true }) {
         <Body>
           <strong>Payment failed.</strong> Update your card to keep using FastQuote.
         </Body>
-        <Cta onClick={openPortal} disabled={busy}>Update payment</Cta>
+        <Cta onClick={openPortal} disabled={busy} data-touch-exempt="true">Update payment</Cta>
       </Strip>
     );
   }
@@ -100,7 +100,7 @@ export default function SubscriptionBanner({ enabled = true }) {
         <Body>
           <strong>Your subscription has ended.</strong> Resubscribe to keep using FastQuote.
         </Body>
-        <Cta onClick={openCheckout} disabled={busy}>Resubscribe</Cta>
+        <Cta onClick={openCheckout} disabled={busy} data-touch-exempt="true">Resubscribe</Cta>
       </Strip>
     );
   }
@@ -111,7 +111,7 @@ export default function SubscriptionBanner({ enabled = true }) {
         <Body>
           <strong>Your free trial has ended.</strong> Add a payment method to keep using FastQuote.
         </Body>
-        <Cta onClick={openCheckout} disabled={busy}>Subscribe — £{status.pricing?.gbpPerMonth?.toFixed(2) || '19.99'}/month</Cta>
+        <Cta onClick={openCheckout} disabled={busy} data-touch-exempt="true">Subscribe — £{status.pricing?.gbpPerMonth?.toFixed(2) || '19.99'}/month</Cta>
       </Strip>
     );
   }
@@ -133,7 +133,7 @@ export default function SubscriptionBanner({ enabled = true }) {
         <Body>
           <strong>Your free trial ends in {dayCopy(status.daysOfTrialRemaining)}.</strong> Add a payment method to keep using FastQuote when it does.
         </Body>
-        <Cta onClick={openCheckout} disabled={busy}>Add payment method</Cta>
+        <Cta onClick={openCheckout} disabled={busy} data-touch-exempt="true">Add payment method</Cta>
       </Strip>
     );
   }
@@ -150,12 +150,17 @@ export default function SubscriptionBanner({ enabled = true }) {
 
 // ─────────────────── presentational ───────────────────
 
+// Strip layout mirrors QuotaCounter (2026-06-25 unified-banner pattern):
+// mobile stacks the body + CTA vertically (text on top, CTA full-width
+// underneath); desktop sits inline with the CTA pinned right. The `fq:`
+// breakpoint mirrors the rest of the app (900px). This is PR-4 of the
+// mobile-responsive plan — audit item #4.
 function Strip({ tone, testId, children }) {
   const styles = TONE_STYLES[tone] || TONE_STYLES.muted;
   return (
     <div
       data-testid={testId}
-      className="rounded px-4 py-3 mb-4 flex items-center justify-between gap-3"
+      className="rounded px-4 py-3 mb-4 flex fq:flex-row flex-col fq:items-center items-stretch fq:gap-3 gap-2 justify-between"
       style={styles}
     >
       {children}
@@ -165,21 +170,24 @@ function Strip({ tone, testId, children }) {
 
 function Body({ children }) {
   return (
-    <p className="text-sm font-body flex-1" style={{ margin: 0 }}>
+    <p className="text-sm font-body flex-1 min-w-0" style={{ margin: 0 }}>
       {children}
     </p>
   );
 }
 
+// CTA bumped to minHeight: 44 (mobile touch-target floor) — was 36 pre-PR-4.
+// On mobile the parent Strip stacks the CTA underneath the body and the
+// CTA stretches via `items-stretch`, so it becomes full-width too.
 function Cta({ onClick, disabled, children }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className="text-xs font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors shrink-0"
+      className="text-xs font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors fq:shrink-0"
       style={{
         border: '1px solid currentColor',
-        minHeight: 36,
+        minHeight: 44,
         opacity: disabled ? 0.6 : 1,
         cursor: disabled ? 'wait' : 'pointer',
         background: 'transparent',
