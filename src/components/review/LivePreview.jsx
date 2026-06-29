@@ -51,8 +51,13 @@ export default function LivePreview({ state, dispatch }) {
               &times;
             </button>
           </div>
+          {/* Mobile PR-3: overflow-x-auto on the inner wrapper is a
+              safety net. The QuoteDocument cost-breakdown now stacks
+              on small viewports (no horizontal pan needed), but a
+              wide logo or accreditation banner could still spill —
+              keep horizontal scroll available rather than clipping. */}
           <div className="flex-1 overflow-y-auto">
-            <div className="bg-white">
+            <div className="bg-white overflow-x-auto">
               <QuoteDocument state={state} dispatch={dispatch} editable={editable} />
             </div>
           </div>
