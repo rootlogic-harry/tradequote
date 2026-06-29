@@ -271,7 +271,7 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/AgentActivity.jsx", line: 207, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/AgentActivity.jsx", line: 285, pr: "PR-future-admin", why: "Admin-only surface" },
   // -- src/components/AutosaveStatus.jsx --
-  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \"Retry\" save-error link button" },
+  { file: "src/components/AutosaveStatus.jsx", line: 99, pr: "PR-future-polish", why: "Inline \\" },
   // -- src/components/CalibrationManager.jsx --
   { file: "src/components/CalibrationManager.jsx", line: 78, pr: "PR-future-admin", why: "Admin-only surface" },
   { file: "src/components/CalibrationManager.jsx", line: 114, pr: "PR-future-admin", why: "Admin-only surface" },
@@ -282,8 +282,8 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/ClientLinkBlock.jsx", line: 165, pr: "PR-future-polish", why: "Inline copy/regenerate buttons" },
   { file: "src/components/ClientLinkBlock.jsx", line: 223, pr: "PR-future-polish", why: "Inline copy/regenerate buttons" },
   // -- src/components/Dashboard.jsx --
-  { file: "src/components/Dashboard.jsx", line: 241, pr: "PR-8", why: "Dashboard \"View all\" + status filter sub-44px (audit #8/#9)" },
-  { file: "src/components/Dashboard.jsx", line: 353, pr: "PR-8", why: "Dashboard \"View all\" + status filter sub-44px (audit #8/#9)" },
+  { file: "src/components/Dashboard.jsx", line: 241, pr: "PR-8", why: "Dashboard \\" },
+  { file: "src/components/Dashboard.jsx", line: 353, pr: "PR-8", why: "Dashboard \\" },
   // -- src/components/LandingPage.jsx --
   { file: "src/components/LandingPage.jsx", line: 37, pr: "PR-future-polish", why: "React LandingPage fallback (production landing is server-rendered HTML)" },
   { file: "src/components/LandingPage.jsx", line: 180, pr: "PR-future-polish", why: "React LandingPage fallback (production landing is server-rendered HTML)" },
@@ -303,9 +303,6 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/Sidebar.jsx", line: 94, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   { file: "src/components/Sidebar.jsx", line: 103, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   { file: "src/components/Sidebar.jsx", line: 127, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  // -- src/components/StatusModal.jsx --
-  // (PR-7 cleared all 7 entries — audit items 7 + 21 closed 2026-06-29.)
-  // (PR-4 cleared all 5 SubscriptionBanner entries — audit #4 closed 2026-06-29.)
   // -- src/components/Toast.jsx --
   { file: "src/components/Toast.jsx", line: 24, pr: "PR-future-polish", why: "Toast dismiss × button" },
   // -- src/components/UserSelector.jsx --
@@ -427,20 +424,19 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/JobDetails.jsx", line: 972, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   { file: "src/components/steps/JobDetails.jsx", line: 987, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   // -- src/components/steps/ProfileSetup.jsx --
-  { file: "src/components/steps/ProfileSetup.jsx", line: 69, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 86, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 103, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 121, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 139, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 168, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 182, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 202, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 217, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 232, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 263, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 315, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 346, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 355, pr: "PR-9", why: "ProfileSetup auxiliary inputs / nested form fields (audit #4)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 69, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 86, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 103, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 121, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 139, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 198, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 218, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 233, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 248, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 279, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 331, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 362, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 371, pr: "PR-future-polish", why: "fieldClass() helper hides nq-field from the line-scanner" },
   // -- src/components/steps/QuoteOutput.jsx --
   { file: "src/components/steps/QuoteOutput.jsx", line: 838, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
   { file: "src/components/steps/QuoteOutput.jsx", line: 990, pr: "PR-2", why: "QuoteOutput action-bar restructure (audit #2)" },
@@ -457,6 +453,7 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/ReviewEdit.jsx", line: 349, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
   { file: "src/components/steps/ReviewEdit.jsx", line: 359, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
   { file: "src/components/steps/ReviewEdit.jsx", line: 371, pr: "PR-5", why: "ReviewEdit accordion + small action buttons (audit #5)" },
+
 ];
 
 function isAllowed(violation, allowList) {
