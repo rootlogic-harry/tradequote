@@ -51,14 +51,16 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
         </div>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={expandAll}
-            className="text-tq-muted hover:text-tq-accent text-xs font-heading uppercase"
+            className="touch-44 text-tq-muted hover:text-tq-accent text-xs font-heading uppercase px-3"
           >
             Expand All
           </button>
           <button
+            type="button"
             onClick={collapseAll}
-            className="text-tq-muted hover:text-tq-accent text-xs font-heading uppercase"
+            className="touch-44 text-tq-muted hover:text-tq-accent text-xs font-heading uppercase px-3"
           >
             Collapse All
           </button>
@@ -111,6 +113,7 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
             <div key={id} id={`rams-${id}`} className="bg-tq-surface border border-tq-border overflow-hidden" style={{ borderRadius: 2 }}>
               <button
                 onClick={() => toggleSection(id)}
+                style={{ minHeight: 44 }}
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-tq-card transition-colors"
               >
                 <span className="font-heading font-bold text-sm text-tq-text uppercase tracking-wide">
@@ -133,6 +136,7 @@ export default function RamsEditor({ rams, dispatch, onPreview }) {
       {/* Preview button */}
       <button
         onClick={onPreview}
+        style={{ minHeight: 48 }}
         className="w-full bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide py-3 rounded transition-colors text-sm"
       >
         Preview &amp; Export RAMS

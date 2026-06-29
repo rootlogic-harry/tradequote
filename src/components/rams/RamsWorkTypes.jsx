@@ -18,6 +18,7 @@ export default function RamsWorkTypes({ rams, dispatch }) {
           <button
             key={wt}
             onClick={() => toggle(wt)}
+            style={{ minHeight: 44 }}
             className={`text-left px-3 py-2 rounded border text-sm font-heading transition-colors ${
               selected
                 ? 'bg-tq-accent/20 border-tq-accent text-tq-accent font-bold'

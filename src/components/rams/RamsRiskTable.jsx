@@ -73,13 +73,15 @@ export default function RamsRiskTable({ rams, dispatch }) {
       <div className="flex flex-wrap gap-2 mb-2">
         <button
           onClick={addBlankRisk}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-4 py-2 rounded transition-colors"
+          style={{ minHeight: 44 }}
+          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-4 rounded transition-colors"
         >
           + Add Risk
         </button>
         <button
           onClick={() => setShowPicker(true)}
-          className="border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide text-xs px-4 py-2 rounded transition-colors"
+          style={{ minHeight: 44 }}
+          className="border border-tq-accent text-tq-accent hover:bg-tq-accent/10 font-heading font-bold uppercase tracking-wide text-xs px-4 rounded transition-colors"
         >
           + Add from Database
         </button>
@@ -97,7 +99,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
                   value={risk.task}
                   onChange={e => updateRisk(risk.id, { task: e.target.value })}
                   placeholder="Task / Activity"
-                  className="flex-1 bg-tq-surface border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm font-bold"
+                  className="rams-input flex-1 font-bold"
                 />
                 <span
                   className="px-2 py-1 rounded text-xs font-bold font-mono whitespace-nowrap"
@@ -106,8 +108,10 @@ export default function RamsRiskTable({ rams, dispatch }) {
                   {risk.riskRating} {level.label}
                 </span>
                 <button
+                  type="button"
                   onClick={() => removeRisk(risk.id)}
-                  className="text-tq-muted hover:text-red-400 text-lg flex-shrink-0"
+                  className="touch-44 text-tq-muted hover:text-red-400 flex-shrink-0"
+                  aria-label="Remove risk"
                 >
                   &times;
                 </button>
@@ -120,7 +124,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
                     value={risk.hazardDescription}
                     onChange={e => updateRisk(risk.id, { hazardDescription: e.target.value })}
                     rows={2}
-                    className="w-full bg-tq-surface border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm resize-none"
+                    className="rams-input resize-none"
                   />
                 </div>
 
@@ -130,7 +134,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
                     type="text"
                     value={risk.whoMightBeHarmed}
                     onChange={e => updateRisk(risk.id, { whoMightBeHarmed: e.target.value })}
-                    className="w-full bg-tq-surface border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm"
+                    className="rams-input"
                   />
                 </div>
 
@@ -138,24 +142,28 @@ export default function RamsRiskTable({ rams, dispatch }) {
                   <label className="block text-[10px] font-heading text-tq-muted uppercase tracking-wide mb-0.5">Existing Controls</label>
                   <div className="space-y-1">
                     {(risk.existingControls || []).map((ctrl, ci) => (
-                      <div key={ci} className="flex gap-1">
+                      <div key={ci} className="flex gap-1 items-center">
                         <input
                           type="text"
                           value={ctrl}
                           onChange={e => updateControl(risk.id, ci, e.target.value)}
-                          className="flex-1 bg-tq-surface border border-tq-border rounded px-2 py-1 text-tq-text text-xs"
+                          className="rams-input flex-1"
                         />
                         <button
+                          type="button"
                           onClick={() => removeControl(risk.id, ci)}
-                          className="text-tq-muted hover:text-red-400 text-sm px-1"
+                          className="touch-44 text-tq-muted hover:text-red-400"
+                          aria-label="Remove control"
                         >
                           &times;
                         </button>
                       </div>
                     ))}
                     <button
+                      type="button"
                       onClick={() => addControl(risk.id)}
-                      className="text-tq-accent text-xs hover:underline"
+                      className="touch-44 text-tq-accent text-xs hover:underline"
+                      style={{ justifyContent: 'flex-start' }}
                     >
                       + Add control
                     </button>
@@ -168,7 +176,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
                     <select
                       value={risk.likelihood}
                       onChange={e => updateRisk(risk.id, { likelihood: Number(e.target.value) })}
-                      className="w-full bg-tq-surface border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm"
+                      className="rams-input"
                     >
                       {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
@@ -178,7 +186,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
                     <select
                       value={risk.consequence}
                       onChange={e => updateRisk(risk.id, { consequence: Number(e.target.value) })}
-                      className="w-full bg-tq-surface border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm"
+                      className="rams-input"
                     >
                       {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
@@ -191,7 +199,7 @@ export default function RamsRiskTable({ rams, dispatch }) {
                     type="text"
                     value={risk.furtherActionRequired}
                     onChange={e => updateRisk(risk.id, { furtherActionRequired: e.target.value })}
-                    className="w-full bg-tq-surface border border-tq-border rounded px-2 py-1.5 text-tq-text text-sm"
+                    className="rams-input"
                   />
                 </div>
               </div>

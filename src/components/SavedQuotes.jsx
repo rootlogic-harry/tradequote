@@ -223,8 +223,10 @@ export default function SavedQuotes({
           </svg>
           {searchTerm && (
             <button
+              type="button"
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-sm"
+              aria-label="Clear search"
+              className="touch-44 absolute right-0 top-1/2 -translate-y-1/2"
               style={{ color: 'var(--tq-muted)', lineHeight: 1 }}
             >
               &times;
@@ -275,8 +277,9 @@ export default function SavedQuotes({
               : `No ${activeFilter.toLowerCase()} jobs.`}
           </p>
           <button
+            type="button"
             onClick={() => { setActiveFilter('All'); setSearchTerm(''); }}
-            className="mt-2 text-xs"
+            className="touch-44 mt-2 text-xs px-3"
             style={{ color: 'var(--tq-accent)' }}
           >
             Clear filters
@@ -291,8 +294,9 @@ export default function SavedQuotes({
             No {isArchiveView ? 'archived' : 'completed'} jobs matching "{searchTerm.trim()}"
           </p>
           <button
+            type="button"
             onClick={() => setSearchTerm('')}
-            className="mt-2 text-xs"
+            className="touch-44 mt-2 text-xs px-3"
             style={{ color: 'var(--tq-accent)' }}
           >
             Clear search

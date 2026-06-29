@@ -28,7 +28,14 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-tq-border">
           <h2 className="text-lg font-heading font-bold text-tq-accent">Construction Hazard Database</h2>
-          <button onClick={onClose} className="text-tq-muted hover:text-tq-text text-2xl">&times;</button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close hazard picker"
+            className="touch-44 text-tq-muted hover:text-tq-text text-2xl"
+          >
+            &times;
+          </button>
         </div>
 
         {/* Search */}
@@ -38,7 +45,7 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search hazards..."
-            className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+            className="rams-input"
           />
         </div>
 
@@ -52,6 +59,7 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
+                    style={{ minHeight: 44 }}
                     className={`w-full text-left px-3 py-2 text-xs font-heading transition-colors ${
                       activeCategory === cat
                         ? 'bg-tq-accent/20 text-tq-accent font-bold'
@@ -71,7 +79,7 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
               <select
                 value={activeCategory}
                 onChange={e => setActiveCategory(e.target.value)}
-                className="w-full bg-tq-card border border-tq-border rounded px-3 py-2 text-tq-text text-sm"
+                className="rams-input"
               >
                 {HAZARD_CATEGORIES.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -118,7 +126,8 @@ export default function RamsHazardPicker({ onAdd, onClose }) {
                     </span>
                     <button
                       onClick={() => onAdd(hazard)}
-                      className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-[10px] px-3 py-1 rounded transition-colors"
+                      style={{ minHeight: 44 }}
+                      className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-[10px] px-3 rounded transition-colors"
                     >
                       Add to RAMS
                     </button>

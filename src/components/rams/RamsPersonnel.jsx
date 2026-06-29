@@ -22,9 +22,16 @@ function PersonList({ label, items, field, dispatch, rams }) {
       </label>
       <div className="flex flex-wrap gap-1 mb-2">
         {items.map((name, i) => (
-          <span key={i} className="bg-tq-card border border-tq-border rounded px-2 py-1 text-sm text-tq-text flex items-center gap-1">
+          <span key={i} className="bg-tq-card border border-tq-border rounded pl-2 pr-1 py-1 text-sm text-tq-text flex items-center gap-1">
             {name}
-            <button onClick={() => remove(i)} className="text-tq-muted hover:text-red-400 text-xs ml-1">&times;</button>
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              aria-label={`Remove ${name}`}
+              className="touch-44 text-tq-muted hover:text-red-400"
+            >
+              &times;
+            </button>
           </span>
         ))}
         {items.length === 0 && <span className="text-tq-muted text-sm italic">None added</span>}
@@ -36,12 +43,13 @@ function PersonList({ label, items, field, dispatch, rams }) {
           onChange={e => setNewItem(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && add()}
           placeholder="Add name..."
-          className="flex-1 bg-tq-card border border-tq-border rounded px-3 py-1.5 text-tq-text text-sm"
+          className="rams-input flex-1"
         />
         <button
           onClick={add}
           disabled={!newItem.trim()}
-          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-3 py-1.5 rounded transition-colors disabled:opacity-40"
+          className="bg-tq-accent hover:bg-tq-accent-dark text-tq-bg font-heading font-bold uppercase tracking-wide text-xs px-3 rounded transition-colors disabled:opacity-40"
+          style={{ minHeight: 44 }}
         >
           Add
         </button>
