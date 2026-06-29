@@ -1,6 +1,7 @@
 /**
- * Tests for the SavedQuotes screen — Active vs Archive view split
- * (Mark's ask, 2026-06-21).
+ * Tests for the SavedQuotes screen — Active / Completed / Archive tab
+ * split (Mark's original ask 2026-06-21, extended to 3 tabs 2026-06-26
+ * because completed jobs were crowding the active list).
  *
  * Source-level checks. Node test env, no JSDOM, so this mirrors the
  * pattern used in dashboard.test.js / savedQuoteViewer.test.js.
@@ -16,10 +17,11 @@ const src = readFileSync(
   'utf8'
 );
 
-describe('SavedQuotes active/archive tab UI', () => {
-  it('imports the jobLifecycle helpers', () => {
+describe('SavedQuotes three-tab UI (active / completed / archive)', () => {
+  it('imports the jobLifecycle helpers including isCompletedJob', () => {
     expect(src).toMatch(/from\s+['"]\.\.\/utils\/jobLifecycle\.js['"]/);
     expect(src).toContain('isActiveJob');
+    expect(src).toContain('isCompletedJob');
     expect(src).toContain('isArchivedJob');
   });
 
@@ -27,41 +29,48 @@ describe('SavedQuotes active/archive tab UI', () => {
     expect(src).toMatch(/viewMode\s*=\s*['"]active['"]/);
   });
 
-  it('renders Active and Archive tabs', () => {
+  it('renders Active, Completed, and Archived tabs', () => {
     expect(src).toMatch(/>\s*Active\s*</);
-    expect(src).toMatch(/>\s*Archive/);
+    expect(src).toMatch(/>\s*Completed/);
+    expect(src).toMatch(/>\s*Archived/);
   });
 
-  it('dispatches SET_VIEW_MODE on tab click', () => {
+  it('dispatches SET_VIEW_MODE for all three view modes on tab click', () => {
     expect(src).toMatch(/SET_VIEW_MODE.*active/);
+    expect(src).toMatch(/SET_VIEW_MODE.*completed/);
     expect(src).toMatch(/SET_VIEW_MODE.*archive/);
   });
 
   it('hides per-status action buttons in archive view', () => {
     // Each of Mark Sent / Accepted / Declined / Complete is gated on
-    // !isArchiveView so archive rows are read-only-ish.
+    // !isArchiveView so archive rows are read-only-ish. Completed view
+    // naturally renders no per-status actions because no row there
+    // matches DRAFT/SENT/ACCEPTED (status === 'COMPLETED').
     expect(src).toMatch(/!isArchiveView\s*&&\s*status\s*===\s*['"]DRAFT['"]/);
     expect(src).toMatch(/!isArchiveView\s*&&\s*status\s*===\s*['"]SENT['"]/);
     expect(src).toMatch(/!isArchiveView\s*&&\s*status\s*===\s*['"]ACCEPTED['"]/);
   });
 
-  it('count badge is omitted when archive is empty (no "(0)")', () => {
+  it('count badges omitted when buckets are empty (no "(0)")', () => {
+    expect(src).toMatch(/completedCount\s*>\s*0/);
     expect(src).toMatch(/archiveCount\s*>\s*0/);
   });
 
-  it('drops "Declined" from the status filter pills in active view', () => {
-    // Declined jobs live in the archive bucket — exposing a Declined
-    // pill inside Active would let users filter to a guaranteed-empty
-    // list, which is confusing.
+  it('drops Declined AND Completed from the status filter pills', () => {
+    // Declined lives in Archive, Completed lives in its own tab.
+    // Exposing either as a filter pill inside Active would produce a
+    // guaranteed-empty list when tapped.
     const filtersMatch = src.match(/ACTIVE_FILTERS\s*=\s*\[([^\]]*)\]/);
     expect(filtersMatch).not.toBeNull();
     expect(filtersMatch[1]).not.toMatch(/Declined/);
+    expect(filtersMatch[1]).not.toMatch(/Completed/);
     expect(filtersMatch[1]).toMatch(/Accepted/);
   });
 
-  it('archive view does not render the status-filter pills', () => {
-    // Pills wrapped in `!isArchiveView && (...)`
-    expect(src).toMatch(/!isArchiveView\s*&&\s*\([\s\S]{0,200}ACTIVE_FILTERS/);
+  it('status-filter pills render in Active view only', () => {
+    // Pills wrapped in `isActiveView && (...)` — Completed + Archive
+    // are single-status buckets so the filter axis would be noise.
+    expect(src).toMatch(/isActiveView\s*&&\s*\([\s\S]{0,200}ACTIVE_FILTERS/);
   });
 
   it('has an archive-specific empty-state copy', () => {
@@ -115,11 +124,12 @@ describe('SavedQuotes decline-from-other-statuses', () => {
 });
 
 describe('SavedQuotes archive view copy passes the visibility-rules check', () => {
-  it('does not introduce AI/agent/confidence vocabulary in archive copy', () => {
-    // Find the archive-empty-state and tab labels block
-    const archiveStart = src.indexOf('Active / Archive');
-    expect(archiveStart).toBeGreaterThan(-1);
-    const archiveBlock = src.slice(archiveStart);
-    expect(archiveBlock).not.toMatch(/\b(AI|agent|confidence|calibration|model|prompt)\b/i);
+  it('does not introduce AI/agent/confidence vocabulary in tab/empty-state block', () => {
+    // Anchor on the 3-tab comment block ("Active / Completed / Archive
+    // tabs (Mark's 2026-06-26 ask)...") and scan everything below it.
+    const tabBlockStart = src.indexOf('Active / Completed / Archive');
+    expect(tabBlockStart).toBeGreaterThan(-1);
+    const tabBlock = src.slice(tabBlockStart);
+    expect(tabBlock).not.toMatch(/\b(AI|agent|confidence|calibration|model|prompt)\b/i);
   });
 });

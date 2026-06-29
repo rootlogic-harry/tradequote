@@ -12,7 +12,7 @@
  *     un-responded sends.
  */
 
-import { isActiveJob, isArchivedJob, isExpired } from '../utils/jobLifecycle.js';
+import { isActiveJob, isCompletedJob, isArchivedJob, isExpired } from '../utils/jobLifecycle.js';
 
 const NOW = new Date('2026-06-21T12:00:00Z');
 const PAST = new Date('2026-06-01T12:00:00Z').toISOString();
@@ -61,7 +61,7 @@ describe('isActiveJob', () => {
     ['draft', true],
     ['sent', true],
     ['accepted', true],
-    ['completed', true],
+    ['completed', false], // Mark 2026-06-26: completed has its own tab
     ['declined', false],
   ])('status "%s" without expiry → %s', (status, expected) => {
     expect(isActiveJob({ status }, NOW)).toBe(expected);
@@ -85,8 +85,10 @@ describe('isActiveJob', () => {
     expect(isActiveJob({ status: 'accepted', expiresAt: PAST }, NOW)).toBe(true);
   });
 
-  test('completed + past expiry → still active', () => {
-    expect(isActiveJob({ status: 'completed', expiresAt: PAST }, NOW)).toBe(true);
+  // 2026-06-26: completed jobs moved to their own tab (Mark — hundred-quote
+  // pile-up was crowding the active list).
+  test('completed + past expiry → NOT active (lives in Completed bucket)', () => {
+    expect(isActiveJob({ status: 'completed', expiresAt: PAST }, NOW)).toBe(false);
   });
 
   test('missing status defaults to draft → active', () => {
@@ -100,6 +102,33 @@ describe('isActiveJob', () => {
   test('null / undefined → false (safe)', () => {
     expect(isActiveJob(null, NOW)).toBe(false);
     expect(isActiveJob(undefined, NOW)).toBe(false);
+  });
+});
+
+describe('isCompletedJob', () => {
+  test.each([
+    ['draft', false],
+    ['sent', false],
+    ['accepted', false],
+    ['completed', true],
+    ['declined', false],
+  ])('status "%s" → %s', (status, expected) => {
+    expect(isCompletedJob({ status }, NOW)).toBe(expected);
+  });
+
+  test('completed + any expiry → completed (expiry irrelevant)', () => {
+    expect(isCompletedJob({ status: 'completed', expiresAt: PAST }, NOW)).toBe(true);
+    expect(isCompletedJob({ status: 'completed', expiresAt: FUTURE }, NOW)).toBe(true);
+    expect(isCompletedJob({ status: 'completed' }, NOW)).toBe(true);
+  });
+
+  test('unknown status → not completed (only literal "completed" counts)', () => {
+    expect(isCompletedJob({ status: 'invoiced' }, NOW)).toBe(false);
+  });
+
+  test('null / undefined → false', () => {
+    expect(isCompletedJob(null, NOW)).toBe(false);
+    expect(isCompletedJob(undefined, NOW)).toBe(false);
   });
 });
 
@@ -144,8 +173,8 @@ describe('isArchivedJob', () => {
 
 describe('mutually exclusive + total invariant', () => {
   // The whole point of the split: every job lands in exactly one bucket.
-  // If both return true or both return false for some shape, the dashboard
-  // would either double-count or silently drop jobs.
+  // If two return true or all three return false for some shape, the
+  // dashboard would either double-count or silently drop jobs.
   const sample = (status, expiresAt) => ({ status, expiresAt });
   const expiries = [undefined, PAST, FUTURE];
 
@@ -154,16 +183,18 @@ describe('mutually exclusive + total invariant', () => {
       for (const expiresAt of expiries) {
         const job = sample(status, expiresAt);
         const active = isActiveJob(job, NOW);
+        const completed = isCompletedJob(job, NOW);
         const archived = isArchivedJob(job, NOW);
-        // XOR: exactly one must be true
-        expect(active || archived).toBe(true);
-        expect(active && archived).toBe(false);
+        // Exactly one must be true
+        const trueCount = [active, completed, archived].filter(Boolean).length;
+        expect(trueCount).toBe(1);
       }
     }
   });
 
-  test('missing-status job (defaults to draft) is active, not archived', () => {
+  test('missing-status job (defaults to draft) is active, not completed or archived', () => {
     expect(isActiveJob({}, NOW)).toBe(true);
+    expect(isCompletedJob({}, NOW)).toBe(false);
     expect(isArchivedJob({}, NOW)).toBe(false);
   });
 });

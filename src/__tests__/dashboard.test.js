@@ -59,47 +59,51 @@ describe('Dashboard currentDraft prop guards empty content', () => {
 });
 
 // Mark's ask (2026-06-21 WhatsApp): "What about an archive option?"
-// Only declined quotes move out of the main jobs list — Mark's
-// follow-up feedback was that expired sends must stay active because
-// customers regularly authorise walling jobs months after expiry.
+// Extended 2026-06-26 to 3 tabs (Active / Completed / Archive) because
+// completed jobs were piling up in the active list.
 // Source-level checks — full DOM rendering of Dashboard isn't part
 // of the test stack (node env, no JSDOM).
-describe('Dashboard active/archive tab UI', () => {
+describe('Dashboard three-tab UI (active / completed / archive)', () => {
   const src = readFileSync(
     join(__dirname, '../components/Dashboard.jsx'), 'utf8'
   );
 
-  it('imports the jobLifecycle helpers', () => {
+  it('imports the jobLifecycle helpers including isCompletedJob', () => {
     expect(src).toMatch(/from\s+['"]\.\.\/utils\/jobLifecycle\.js['"]/);
     expect(src).toContain('isActiveJob');
+    expect(src).toContain('isCompletedJob');
     expect(src).toContain('isArchivedJob');
   });
 
   it('accepts a viewMode prop with a fail-safe default of "active"', () => {
     // Default must be 'active' so a parent that forgets the prop still
-    // renders the main list, not an empty archive view.
+    // renders the main list, not an empty archive/completed view.
     expect(src).toMatch(/viewMode\s*=\s*['"]active['"]/);
   });
 
-  it('renders both Active and Archive tab buttons', () => {
+  it('renders Active, Completed, and Archived tab buttons', () => {
     // Tab labels exist as literal JSX text
     expect(src).toMatch(/>\s*Active\s*</);
-    expect(src).toMatch(/>\s*Archive/);
+    expect(src).toMatch(/>\s*Completed/);
+    expect(src).toMatch(/>\s*Archived/);
   });
 
-  it('dispatches SET_VIEW_MODE on tab click', () => {
+  it('dispatches SET_VIEW_MODE for all three view modes on tab click', () => {
     expect(src).toMatch(/SET_VIEW_MODE.*active/);
+    expect(src).toMatch(/SET_VIEW_MODE.*completed/);
     expect(src).toMatch(/SET_VIEW_MODE.*archive/);
   });
 
   it('hides per-status action buttons in archive view', () => {
     // The action-button block is wrapped in `!isArchiveView && (...)`
-    // so archive rows are read-only-ish.
+    // so archive rows are read-only-ish. Completed view naturally renders
+    // no per-status actions because no row there matches DRAFT/SENT/ACCEPTED.
     expect(src).toMatch(/!isArchiveView\s*&&\s*\(/);
   });
 
-  it('count badge is omitted when archive is empty (no "(0)")', () => {
+  it('count badges omitted when buckets are empty (no "(0)")', () => {
     // Guard pattern: only render the parenthesised count when > 0
+    expect(src).toMatch(/completedCount\s*>\s*0/);
     expect(src).toMatch(/archiveCount\s*>\s*0/);
   });
 
