@@ -76,10 +76,10 @@ export default function ReferralWelcome({ billing, currentUserId }) {
       <button
         type="button"
         onClick={handleDismiss}
-        className="text-xs font-heading font-bold uppercase tracking-wide px-3 py-1.5 rounded transition-colors shrink-0"
+        className="touch-44 text-xs font-heading font-bold uppercase tracking-wide px-4 rounded transition-colors shrink-0 inline-flex items-center justify-center"
         style={{
           border: '1px solid currentColor',
-          minHeight: 36,
+          minHeight: 44,
           background: 'transparent',
           color: 'inherit',
           cursor: 'pointer',
