@@ -55,7 +55,7 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
               <input
                 value={step.title}
                 onChange={(e) => updateStep(i, 'title', e.target.value)}
-                className="w-full bg-transparent text-tq-text font-heading font-bold text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none mb-1"
+                className="w-full bg-transparent text-tq-text font-heading font-bold text-sm border-b border-transparent hover:border-tq-border focus:border-tq-accent outline-none mb-1 min-h-[44px]"
                 placeholder="Step title"
               />
               <AutoGrowTextarea
@@ -71,7 +71,8 @@ export default function ScheduleList({ scheduleOfWorks = [], dispatch }) {
             </div>
             <button
               onClick={() => removeStep(i)}
-              className="text-tq-muted hover:text-tq-error text-sm flex-shrink-0"
+              className="touch-44 text-tq-muted hover:text-tq-error text-sm flex-shrink-0"
+              aria-label="Remove step"
             >
               {'\u00D7'}
             </button>
