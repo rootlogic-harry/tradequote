@@ -69,6 +69,22 @@ describe('RedeemReferralBanner — contract', () => {
     expect(SRC).toMatch(/not recognised/i);
   });
 
+  test('shows a specific message when the server rejects the code as self-referral', () => {
+    // Server protection is validateRedemption() in src/utils/referrals.js
+    // — it returns { reason: 'self' } when codeRow.user_id === userId.
+    // The /auth/redeem-referral handler forwards that reason to the
+    // client, and the UI surfaces a friendly hint so the user
+    // understands WHY their attempt was rejected (rather than
+    // suspecting a bug).
+    expect(SRC).toMatch(/reason\s*===\s*['"]self['"]/);
+    expect(SRC).toMatch(/your own code/i);
+  });
+
+  test('shows a specific message when the server rejects as already-redeemed', () => {
+    expect(SRC).toMatch(/reason\s*===\s*['"]already-redeemed['"]/);
+    expect(SRC).toMatch(/already redeemed/i);
+  });
+
   test('calls onRedeemed callback with the fresh billing block on success', () => {
     expect(SRC).toMatch(/onRedeemed\s*\(\s*j\.billing/);
   });

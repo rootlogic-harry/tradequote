@@ -45,7 +45,26 @@ export default function RedeemReferralBanner({ billing, onRedeemed }) {
         if (typeof onRedeemed === 'function') onRedeemed(j.billing || null);
         return;
       }
-      setMessage({ kind: 'info', text: "Code not recognised — check it and try again." });
+      // applied:false carries a `reason` so we can give a more useful
+      // message than "Code not recognised" for cases the user would
+      // otherwise misread as a bug:
+      //   - 'self'             → That's the user's OWN code. Server
+      //                          rejects via validateRedemption
+      //                          (referrals.js); the bonus never lands.
+      //   - 'already-redeemed' → They already used a code; we shouldn't
+      //                          even show the form, but defend anyway.
+      //   - 'unknown' / other  → Genuinely unrecognised code.
+      // Server enforcement is the load-bearing layer here — this UI
+      // message just helps a confused user understand WHY the
+      // legitimate server reject fired.
+      const reason = j?.reason;
+      if (reason === 'self') {
+        setMessage({ kind: 'info', text: "That's your own code — share it with a friend instead." });
+      } else if (reason === 'already-redeemed') {
+        setMessage({ kind: 'info', text: "You've already redeemed a referral code." });
+      } else {
+        setMessage({ kind: 'info', text: "Code not recognised — check it and try again." });
+      }
     } catch {
       setMessage({ kind: 'info', text: 'Could not reach the server. Try again in a moment.' });
     } finally {
