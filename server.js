@@ -1987,10 +1987,18 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta name="theme-color" content="#f4eee2" />
   <meta property="og:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
   <meta property="og:description" content="Photograph the wall. Get measurements, materials and a polished quote in five minutes." />
-  <meta property="og:image" content="/og.png" />
+  <meta property="og:image" content="https://fastquote.uk/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:alt" content="FastQuote — From quote to customer, ready in five minutes." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fastquote.uk/" />
+  <meta property="og:site_name" content="FastQuote" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
+  <meta name="twitter:description" content="Photograph the wall. Get measurements, materials and a polished quote in five minutes." />
+  <meta name="twitter:image" content="https://fastquote.uk/og.png" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/landing/landing.css?v=3" />

@@ -56,8 +56,16 @@ describe('LANDING_PAGE_HTML — head + meta', () => {
   test('Open Graph tags present (title, description, image, type)', () => {
     expect(html).toMatch(/<meta property="og:title"/);
     expect(html).toMatch(/<meta property="og:description"/);
-    expect(html).toMatch(/<meta property="og:image" content="\/og\.png"/);
+    // 2026-06-30: absolute URL for the og:image. LinkedIn / Twitter
+    // crawlers handle absolute more reliably than root-relative, and
+    // the og:image:width + og:image:height + og:image:type quartet is
+    // the standard hint set crawlers prefer for sizing decisions.
+    expect(html).toMatch(/<meta property="og:image" content="https:\/\/fastquote\.uk\/og\.png"/);
+    expect(html).toMatch(/<meta property="og:image:width" content="1200"/);
+    expect(html).toMatch(/<meta property="og:image:height" content="630"/);
+    expect(html).toMatch(/<meta property="og:image:type" content="image\/png"/);
     expect(html).toMatch(/<meta property="og:type" content="website"/);
+    expect(html).toMatch(/<meta name="twitter:image" content="https:\/\/fastquote\.uk\/og\.png"/);
   });
 
   test('OG description honours the no-video honesty guardrail', () => {
