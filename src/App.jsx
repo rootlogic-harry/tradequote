@@ -25,7 +25,8 @@ import SubscriptionBanner from './components/SubscriptionBanner.jsx';
 import QuotaExhaustedModal from './components/QuotaExhaustedModal.jsx';
 import HelpModal from './components/HelpModal.jsx';
 import ReferralWelcome from './components/ReferralWelcome.jsx';
-import RedeemReferralBanner from './components/RedeemReferralBanner.jsx';
+// RedeemReferralBanner moved to Profile → Bonus quotes on 2026-06-30
+// (no longer a Dashboard banner). Import lives in ProfileSetup.jsx.
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
@@ -944,6 +945,11 @@ export default function App() {
             currentUserId={state.currentUserId}
             userName={state.currentUser?.name}
             showToast={showToast}
+            billing={billing}
+            onBillingRefresh={(nextBilling) => {
+              if (nextBilling) setBilling(nextBilling);
+              else refreshBilling();
+            }}
           />
         );
       case 2:
@@ -1042,14 +1048,13 @@ export default function App() {
               hides unless the user has bonus quotes AND has not yet
               used any (signals a fresh referred signup). */}
           <ReferralWelcome billing={billing} currentUserId={state.currentUserId} />
-          {/* Referrals Phase 1 (2026-06-30 fix) — manual code entry
-              for users who signed up without `?ref=`. Self-hides
-              unless eligible (zero bonus quotes + on free tier). The
-              original 2026-06-23 spec put this on the login page;
-              Auth0's Universal Login (2026-06-29) made that
-              impossible without custom hosting, so it lives here
-              instead — same effect, post-signup. */}
-          <RedeemReferralBanner billing={billing} onRedeemed={refreshBilling} />
+          {/* RedeemReferralBanner used to live here as a Dashboard
+              banner (Auth0 lost the original login-page field). On
+              2026-06-30 Harry moved the redeem form into Profile →
+              Bonus quotes, alongside the share panel. The form is
+              still rendered by RedeemReferralBanner.jsx — it just
+              gets mounted inside ProfileSetup's renderShare() now,
+              not here. */}
           <SaveErrorBanner
             error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}
             onDismiss={() => setDismissedSaveErrorKey(state.quoteSaveErrorKey || 0)}
@@ -1102,6 +1107,11 @@ export default function App() {
               currentUserId={state.currentUserId}
               userName={state.currentUser?.name}
               showToast={showToast}
+              billing={billing}
+              onBillingRefresh={(nextBilling) => {
+                if (nextBilling) setBilling(nextBilling);
+                else refreshBilling();
+              }}
               onCancel={() => {
                 // 2026-06-29 — close-only path. ProfileSetup has already
                 // reverted local state to the snapshot, so we just dismiss
