@@ -26,7 +26,7 @@ Self-employed and small-business dry stone wallers working in the UK, particular
 - Live tracking — see when the client opens the quote
 - Voice notes during photo capture (hands-free on site)
 - RAMS (Risk Assessment & Method Statement) document generation
-- Per-job dedupe — re-running a quote on the same job does not burn an extra free credit
+- Per-job dedupe — re-running a quote on the same job does not burn an extra free quote
 
 ## Docs and guides
 

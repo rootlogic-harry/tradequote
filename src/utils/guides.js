@@ -61,6 +61,10 @@ export function listGuides(guidesDir) {
     if (!name.endsWith('.md')) continue;
     const slug = name.slice(0, -3);
     if (!isValidSlug(slug)) continue;
+    // Skip the pillar: it renders at `/guides/` itself, so listing it
+    // here would put a card on the hub linking back to the hub.
+    // Bug-hunt 2026-06-30 #3.
+    if (slug === 'index') continue;
     const full = join(guidesDir, name);
     let stat;
     try {
@@ -578,8 +582,8 @@ function shell({
   <meta property="og:title" content="${safeTitle}" />
   <meta property="og:description" content="${safeDesc}" />
   <meta property="og:image" content="https://fastquote.uk/og.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+  <meta property="og:image:width" content="2400" />
+  <meta property="og:image:height" content="1260" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:type" content="${isIndex ? 'website' : 'article'}" />
   <meta property="og:url" content="${safeCanonical}" />

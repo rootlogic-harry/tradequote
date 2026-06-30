@@ -10,6 +10,7 @@
  * HTTP — so the contract is pinned at the rendering boundary regardless
  * of how the Express route wires it in.
  */
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -239,6 +240,34 @@ describe('renderGuidesIndex — JSON-LD @graph', () => {
     expect(crumbs).toBeDefined();
     expect(crumbs.itemListElement).toHaveLength(2);
     expect(crumbs.itemListElement[1].item).toBe('https://fastquote.uk/guides/');
+  });
+
+  // Bug-hunt 2026-06-30 #3 — index.md is the pillar; it renders at
+  // /guides/ itself, so listGuides must not surface it as a child.
+  test('listGuides excludes the pillar (index)', () => {
+    const guides = listGuides(guidesDir);
+    expect(guides.length).toBeGreaterThan(0);
+    for (const g of guides) {
+      expect(g.slug).not.toBe('index');
+    }
+  });
+
+  test('/guides/index.md exists on disk (pillar source)', () => {
+    // Sanity check — the skip in listGuides is only meaningful while
+    // the pillar source itself remains in place.
+    expect(existsSync(join(guidesDir, 'index.md'))).toBe(true);
+  });
+
+  // Belt-and-braces server check: the route /guides/:slug must 301
+  // /guides/index → /guides/ so a stray link can't dilute SEO.
+  test('server.js /guides/:slug handler 301s on slug "index"', () => {
+    const serverPath = join(__dirname, '..', '..', 'server.js');
+    const serverSrc = readFileSync(serverPath, 'utf8');
+    const start = serverSrc.indexOf("app.get('/guides/:slug'");
+    expect(start).toBeGreaterThan(-1);
+    const block = serverSrc.slice(start, start + 700);
+    expect(block).toMatch(/req\.params\.slug\s*===\s*['"]index['"]/);
+    expect(block).toMatch(/res\.redirect\(\s*301\s*,\s*['"]\/guides\/['"]\s*\)/);
   });
 
   test('index page Organization is a reference, not a redefinition', () => {

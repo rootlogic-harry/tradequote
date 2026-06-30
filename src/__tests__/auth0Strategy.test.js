@@ -405,3 +405,35 @@ describe('idx_users_email_unique guarantees no dupe-row risk on linking', () => 
     expect(serverSrc).toMatch(/ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider_id TEXT/);
   });
 });
+
+// ─── 14. Bug-hunt 2026-06-30 #1 — email_verified guard ──────────────────
+//
+// The verify callback must reject any Auth0 login whose email_verified
+// claim is not explicitly true (when an email is present). Without this
+// guard, a single Auth0 dashboard misclick (adding an unverified IdP)
+// would open silent account-takeover by lower(email) match.
+describe('email_verified guard (bug-hunt 2026-06-30 #1)', () => {
+  test('verify callback extracts email_verified from claims', () => {
+    expect(serverSrc).toMatch(/const emailVerified\s*=\s*claims\.email_verified\s*===\s*true/);
+  });
+
+  test('rejects login when email is present but email_verified !== true', () => {
+    expect(serverSrc).toMatch(
+      /if \(email && !emailVerified\)\s*\{[\s\S]{0,400}?done\(new Error\(['"]email not verified['"]\),\s*null\)/
+    );
+  });
+
+  test('rejection logs a warning to server-side console for audit', () => {
+    expect(serverSrc).toMatch(
+      /\[Auth0\] Rejecting login: email=\$\{email\}[\s\S]*?email_verified is not true/
+    );
+  });
+
+  test('guard sits BEFORE the lower(email) match path', () => {
+    const guardIdx = serverSrc.indexOf('email not verified');
+    const matchIdx = serverSrc.indexOf("'SELECT * FROM users WHERE lower(email)");
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(matchIdx).toBeGreaterThan(-1);
+    expect(guardIdx).toBeLessThan(matchIdx);
+  });
+});
