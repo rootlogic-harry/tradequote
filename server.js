@@ -23,6 +23,8 @@ import {
   applyQuotePackEventToDb,
   currentSubscriptionState,
   daysOfTrialRemaining,
+  listCustomerInvoices,
+  formatPurchaseDescription,
 } from './billing.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
@@ -588,6 +590,13 @@ async function initDB() {
         created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_quote_purchases_user ON quote_purchases(user_id);
+      -- Hosted Stripe invoice URL (2026-06-30 launch checklist).
+      -- Nullable: the webhook may resolve it later via Stripe API, or
+      -- it may genuinely never resolve (rare edge case). The Settings
+      -- → Billing UI hides the "Download invoice" link when null and
+      -- the on-demand list endpoint can refetch from Stripe by
+      -- payment_id.
+      ALTER TABLE quote_purchases ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT;
     `);
 
     await client.query(`
@@ -5540,6 +5549,104 @@ app.post(
     }
   }
 );
+
+// ───── Per-purchase invoices for accounting (2026-06-30) ─────
+//
+// Wallers running their own business need a downloadable invoice/
+// receipt for each FastQuote payment — pack purchases AND monthly
+// subscription cycles. We use Stripe's hosted invoice pages
+// (hosted_invoice_url) so there's no custom rendering on our side:
+// Stripe handles branding, VAT lines, language, etc. (Harry can
+// theme via Dashboard → Settings → Branding.)
+//
+// Pack purchases:  quote_purchases.hosted_invoice_url is populated
+//                  by the webhook (applyQuotePackEventToDb). Captured
+//                  via invoice_creation: { enabled: true } on the
+//                  Checkout Session.
+//
+// Subscriptions:   Stripe invoices natively per billing cycle —
+//                  fetched on-demand via stripe.invoices.list at
+//                  request time (no schema needed). Last 24 invoices
+//                  is enough for ~2 years of monthly billing + the
+//                  occasional pack.
+//
+// The route is GET (read-only), auth-gated, and silently degrades if
+// Stripe isn't configured — staging without a key returns an empty
+// list rather than 503. The UI hides "Download invoice" links when
+// hostedInvoiceUrl is null so a stale row never points at a broken
+// link.
+
+app.get('/api/billing/purchases', requireAuth, billingRateLimit, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'not authenticated' });
+
+    // 1. One-time pack purchases — straight from our audit table.
+    //    No Stripe round-trip required; hosted_invoice_url was
+    //    captured by the webhook (nullable).
+    const { rows: packRows } = await pool.query(
+      `SELECT id, stripe_payment_id, quotes_added, amount_paid_pence,
+              hosted_invoice_url, created_at
+         FROM quote_purchases
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 24`,
+      [userId]
+    );
+    const packPurchases = packRows.map((row) => ({
+      id: row.id,
+      date: row.created_at,
+      kind: 'pack',
+      description: formatPurchaseDescription({ kind: 'pack', amountPence: row.amount_paid_pence }),
+      amountPence: row.amount_paid_pence,
+      hostedInvoiceUrl: row.hosted_invoice_url || null,
+    }));
+
+    // 2. Subscription invoices — on-demand from Stripe. Only relevant
+    //    if the user has ever started a subscription (Stripe
+    //    customer id present). We don't persist these; the source of
+    //    truth is Stripe.
+    let subscriptionPurchases = [];
+    if (hasStripeKey()) {
+      const { rows: userRows } = await pool.query(
+        'SELECT stripe_customer_id FROM users WHERE id = $1',
+        [userId]
+      );
+      const stripeCustomerId = userRows[0]?.stripe_customer_id;
+      if (stripeCustomerId) {
+        const invoices = await listCustomerInvoices(stripeCustomerId, 24);
+        subscriptionPurchases = invoices
+          // Exclude invoices that originated from a one-time pack
+          // payment — those are already in our pack list (avoids
+          // double-counting when invoice_creation is on the pack
+          // checkout). Subscription invoices have `subscription`
+          // set; pack invoices don't.
+          .filter((inv) => Boolean(inv.subscription))
+          .map((inv) => ({
+            id: inv.id,
+            date: inv.created ? new Date(inv.created * 1000).toISOString() : null,
+            kind: 'subscription',
+            description: formatPurchaseDescription({
+              kind: 'subscription',
+              amountPence: inv.amount_paid ?? inv.total ?? 0,
+            }),
+            amountPence: inv.amount_paid ?? inv.total ?? 0,
+            hostedInvoiceUrl: inv.hosted_invoice_url || null,
+          }));
+      }
+    }
+
+    // 3. Combine, sort by date descending, cap at 24.
+    const combined = [...packPurchases, ...subscriptionPurchases]
+      .filter((p) => p.date)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 24);
+
+    res.json({ purchases: combined });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
 
 // ───── End pay-as-you-go quote pack routes ─────
 
