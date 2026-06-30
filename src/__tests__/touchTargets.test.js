@@ -288,10 +288,13 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/QuoteDocument.jsx", line: 28, pr: "PR-future-polish", why: "Quote-document inline editor (em-based, by design)" },
   { file: "src/components/QuoteDocument.jsx", line: 39, pr: "PR-future-polish", why: "Quote-document inline editor (em-based, by design)" },
   // -- src/components/Sidebar.jsx --
-  { file: "src/components/Sidebar.jsx", line: 74, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 109, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 118, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 142, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  // Lines shifted by the HelpModal entry-point block (launch
+  // checklist 2026-06-30) — added the onHelpClick prop and the
+  // rail Help link between RailQuotaChip and the bottom section.
+  { file: "src/components/Sidebar.jsx", line: 75, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 132, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 141, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 165, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   // -- src/components/UserSelector.jsx --
   { file: "src/components/UserSelector.jsx", line: 18, pr: "PR-future-polish", why: "Legacy user-selector list (admin/dev)" },
   // -- src/components/UserSwitcher.jsx --
@@ -329,18 +332,20 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/JobDetails.jsx", line: 981, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   { file: "src/components/steps/JobDetails.jsx", line: 996, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   // -- src/components/steps/ProfileSetup.jsx --
-  { file: "src/components/steps/ProfileSetup.jsx", line: 165, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 182, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 199, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 217, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 235, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 295, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 327, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 351, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 370, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 411, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 563, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
-  { file: "src/components/steps/ProfileSetup.jsx", line: 585, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  // Lines shifted by +1 for the onHelpClick prop added to the
+  // signature (HelpModal launch checklist 2026-06-30).
+  { file: "src/components/steps/ProfileSetup.jsx", line: 166, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 183, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 200, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 218, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 236, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 296, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 328, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 352, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 371, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 412, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 564, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
+  { file: "src/components/steps/ProfileSetup.jsx", line: 586, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
   // -- src/components/steps/QuoteOutput.jsx --
   { file: "src/components/steps/QuoteOutput.jsx", line: 1208, pr: "PR-future-polish", why: "Photo selection toggle (20×20 by design, inside Preview overlay)" },
 
