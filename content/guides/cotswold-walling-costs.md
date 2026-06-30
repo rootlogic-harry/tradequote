@@ -1,9 +1,11 @@
 ---
 title: "Dry stone walling costs in the Cotswolds"
-description: "Regional cost guide for dry stone walling in the Cotswolds — Cotswold limestone, the golden-stone aesthetic, conservation work, and typical day rates."
+description: "Cotswold dry stone walling typically costs £180 to £310 per metre and £260 to £400 per solo day, driven by limestone supply and heritage standards."
 slug: "cotswold-walling-costs"
 publishedAt: "2026-06-30"
+section: "Regional"
 keywords: ["Cotswold walling cost", "Cotswold limestone wall", "Cotswold dry stone waller", "AONB walling", "Cotswold heritage wall"]
+related: ["cost-per-metre", "dswa-day-rate", "yorkshire-walling-costs"]
 ---
 
 # Dry stone walling costs in the Cotswolds

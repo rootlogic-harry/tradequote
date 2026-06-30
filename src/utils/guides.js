@@ -6,10 +6,14 @@
  * individual guide pages get the same OG meta + typography as the
  * marketing surface.
  *
- * The content agent ships the actual markdown in a separate PR. This
- * module gracefully handles an empty content directory ("Coming soon").
+ * Each rendered page also embeds a schema.org `@graph` of structured
+ * data (Article / BlogPosting + Person + BreadcrumbList + Organization
+ * reference + optional FAQPage) so LLM crawlers can answer "how do I
+ * quote for a dry stone wall?" with FastQuote in the result set. The
+ * landing's existing Organization `@id` is referenced rather than
+ * redefined so the graph composes cleanly.
  *
- * Discoverability — Wave 1.
+ * Discoverability — Wave 1 (route) + per-guide structured data.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
@@ -21,6 +25,16 @@ marked.setOptions({
   gfm: true,
   breaks: false,
 });
+
+/**
+ * The landing's Organization @id. Per-guide @graph nodes reference this
+ * rather than redefining the organisation, so the structured-data
+ * graph composes cleanly when a crawler stitches the pages together.
+ */
+const ORG_ID = 'https://fastquote.uk/#organization';
+const PERSON_ID = 'https://fastquote.uk/#harry';
+const SITE_BASE = 'https://fastquote.uk';
+const OG_IMAGE = 'https://fastquote.uk/og.png';
 
 /**
  * Whitelist a slug: lowercase alphanumeric + hyphen only. Defends
@@ -86,26 +100,48 @@ export function loadGuide(guidesDir, slug) {
 }
 
 /**
- * Tiny frontmatter parser. Recognises a leading YAML-ish block of
- * `key: value` lines between `---` fences. No nesting, no arrays —
- * exactly what a guide needs (title, description, date).
+ * Tiny frontmatter parser. Handles:
+ *   - scalar `key: value` lines (with optional surrounding quotes)
+ *   - inline array `keywords: ["a", "b"]`
+ *
+ * Recognised keys: title, description, slug, date, publishedAt,
+ * modifiedAt, keywords, section, related.
  */
 function parseFrontmatter(raw) {
   let title = '';
   let description = '';
   let date = '';
+  let publishedAt = '';
+  let modifiedAt = '';
+  let section = '';
+  let slug = '';
+  let keywords = [];
+  let related = [];
   let body = raw;
   const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (m) {
     body = m[2];
     for (const line of m[1].split('\n')) {
-      const kv = line.match(/^(\w+):\s*(.+?)\s*$/);
+      // Match `key: rest-of-line`. The value is taken verbatim — quote
+      // stripping happens later for scalars, and arrays parse separately.
+      const kv = line.match(/^(\w+):\s*(.*?)\s*$/);
       if (!kv) continue;
       const key = kv[1].toLowerCase();
-      const val = kv[2].replace(/^["']|["']$/g, '');
+      const rawVal = kv[2];
+      if (key === 'keywords' || key === 'related') {
+        const arr = parseInlineArray(rawVal);
+        if (key === 'keywords') keywords = arr;
+        else related = arr;
+        continue;
+      }
+      const val = rawVal.replace(/^["']|["']$/g, '');
       if (key === 'title') title = val;
       else if (key === 'description') description = val;
       else if (key === 'date') date = val;
+      else if (key === 'publishedat') publishedAt = val;
+      else if (key === 'modifiedat') modifiedAt = val;
+      else if (key === 'section') section = val;
+      else if (key === 'slug') slug = val;
     }
   }
   if (!title) {
@@ -113,7 +149,33 @@ function parseFrontmatter(raw) {
     const h1 = body.match(/^#\s+(.+?)\s*$/m);
     if (h1) title = h1[1];
   }
-  return { title, description, date, body };
+  return {
+    title,
+    description,
+    date,
+    publishedAt,
+    modifiedAt,
+    section,
+    slugFromFm: slug,
+    keywords,
+    related,
+    body,
+  };
+}
+
+/**
+ * Parse a YAML-ish inline array like `["a", "b", "c"]` or `[a, b]` into
+ * a string array. Returns `[]` on anything unparseable so a typo in the
+ * front-matter does not blow up rendering.
+ */
+function parseInlineArray(raw) {
+  if (!raw) return [];
+  const inner = raw.replace(/^\s*\[/, '').replace(/\]\s*$/, '');
+  if (!inner.trim()) return [];
+  return inner
+    .split(',')
+    .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean);
 }
 
 /**
@@ -133,6 +195,229 @@ function esc(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * Strip markdown formatting from an inline string so it can be embedded
+ * in JSON-LD as plain text. Conservative — only handles the inline marks
+ * that show up in guide H2s and the first answer paragraph.
+ */
+function stripInlineMd(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links → label
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+    .replace(/\*([^*]+)\*/g, '$1') // italic
+    .replace(/`([^`]+)`/g, '$1') // inline code
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Pick a deterministic-but-shuffled set of `n` related guide slugs from
+ * the full list, excluding the current slug. Deterministic seed is the
+ * sum of char codes of the slug so each guide always gets the same
+ * "related" set when no explicit `related` front-matter is set.
+ */
+function pickDeterministicRelated(allSlugs, currentSlug, n) {
+  const pool = allSlugs.filter((s) => s !== currentSlug);
+  if (pool.length <= n) return pool;
+  let seed = 0;
+  for (let i = 0; i < currentSlug.length; i++) {
+    seed = (seed + currentSlug.charCodeAt(i)) | 0;
+  }
+  // Sort by (seedHash, slug) which is deterministic for the same seed.
+  const ranked = pool
+    .map((s, i) => {
+      let h = seed;
+      for (let j = 0; j < s.length; j++) h = (h * 31 + s.charCodeAt(j)) | 0;
+      return { s, key: Math.abs(h) };
+    })
+    .sort((a, b) => a.key - b.key);
+  return ranked.slice(0, n).map((r) => r.s);
+}
+
+/**
+ * Extract `H2-shaped-as-question + next paragraph` pairs from a markdown
+ * body. Used to feed the FAQPage node. Returns `[]` when no H2 ends with
+ * a `?` — the spec is explicit that we should not fabricate Q&A.
+ */
+function extractFaqPairs(body) {
+  if (!body) return [];
+  const lines = body.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const h2 = lines[i].match(/^##\s+(.+?)\s*$/);
+    if (!h2) continue;
+    const q = stripInlineMd(h2[1]);
+    if (!q.endsWith('?')) continue;
+    // Find the first non-empty paragraph after this H2 that isn't another
+    // heading or a list item — that's our answer paragraph.
+    const buf = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j];
+      if (/^#{1,6}\s/.test(l)) break; // next heading ends the answer
+      if (l.trim() === '') {
+        if (buf.length > 0) break;
+        continue;
+      }
+      if (/^[-*]\s/.test(l) || /^\d+\.\s/.test(l) || /^>/.test(l)) {
+        if (buf.length > 0) break;
+        continue;
+      }
+      buf.push(l.trim());
+      // First paragraph only.
+      if (
+        j + 1 < lines.length &&
+        (lines[j + 1].trim() === '' || /^#{1,6}\s/.test(lines[j + 1]))
+      ) {
+        break;
+      }
+    }
+    const answer = stripInlineMd(buf.join(' '));
+    if (answer.length > 20) out.push({ q, a: answer });
+  }
+  return out;
+}
+
+/**
+ * Build the @graph for an individual guide page. `kind` is "pillar" for
+ * the index.md (Article) or "cluster" for every other slug (BlogPosting).
+ */
+function buildArticleGraph({ guide, slug, kind, faqPairs }) {
+  const canonical = `${SITE_BASE}/guides/${slug}`;
+  const datePublished = guide.publishedAt || guide.date || '2026-06-30';
+  const dateModified = guide.modifiedAt || datePublished;
+  const articleType = kind === 'pillar' ? 'Article' : 'BlogPosting';
+
+  const article = {
+    '@type': articleType,
+    '@id': `${canonical}#article`,
+    headline: guide.title,
+    description: guide.description,
+    keywords: (guide.keywords || []).join(', '),
+    datePublished,
+    dateModified,
+    author: { '@id': PERSON_ID },
+    publisher: { '@id': ORG_ID },
+    mainEntityOfPage: canonical,
+    image: OG_IMAGE,
+    articleSection: guide.section || 'Guides',
+    inLanguage: 'en-GB',
+  };
+
+  const person = {
+    '@type': 'Person',
+    '@id': PERSON_ID,
+    name: 'Harry Doyle',
+    jobTitle: 'Founder, FastQuote',
+    url: SITE_BASE,
+    sameAs: [],
+    worksFor: { '@id': ORG_ID },
+  };
+
+  const breadcrumbs = {
+    '@type': 'BreadcrumbList',
+    '@id': `${canonical}#breadcrumbs`,
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'FastQuote',
+        item: `${SITE_BASE}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Guides',
+        item: `${SITE_BASE}/guides/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: guide.title,
+        item: canonical,
+      },
+    ],
+  };
+
+  const orgRef = { '@type': 'Organization', '@id': ORG_ID };
+
+  const graph = [article, person, breadcrumbs, orgRef];
+
+  if (faqPairs && faqPairs.length > 0) {
+    graph.push({
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: faqPairs.map((pair) => ({
+        '@type': 'Question',
+        name: pair.q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: pair.a,
+        },
+      })),
+    });
+  }
+
+  return graph;
+}
+
+/**
+ * Build the @graph for the /guides/ index page. CollectionPage with a
+ * hasPart array of every guide's Article @id, plus a 2-level breadcrumb.
+ */
+function buildIndexGraph(guides) {
+  const canonical = `${SITE_BASE}/guides/`;
+  const collection = {
+    '@type': 'CollectionPage',
+    '@id': `${canonical}#collection`,
+    url: canonical,
+    name: 'Dry stone walling guides',
+    description:
+      'Practical guides for UK dry stone wallers — pricing per metre, day rates, measurement, RAMS, regional rate notes and quoting conventions.',
+    inLanguage: 'en-GB',
+    isPartOf: { '@id': `${SITE_BASE}/#website` },
+    hasPart: guides.map((g) => ({
+      '@id': `${SITE_BASE}/guides/${g.slug}#article`,
+    })),
+  };
+
+  const breadcrumbs = {
+    '@type': 'BreadcrumbList',
+    '@id': `${canonical}#breadcrumbs`,
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'FastQuote',
+        item: `${SITE_BASE}/`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Guides',
+        item: canonical,
+      },
+    ],
+  };
+
+  const orgRef = { '@type': 'Organization', '@id': ORG_ID };
+
+  return [collection, breadcrumbs, orgRef];
+}
+
+/**
+ * Serialize a @graph to a JSON-LD script tag.
+ */
+function jsonLdBlock(graph) {
+  const payload = {
+    '@context': 'https://schema.org',
+    '@graph': graph,
+  };
+  // Escape `</` to prevent early script-tag closure in HTML embedding.
+  const json = JSON.stringify(payload, null, 2).replace(/<\//g, '<\\/');
+  return `<script type="application/ld+json">\n${json}\n</script>`;
 }
 
 /**
@@ -244,17 +529,42 @@ const GUIDES_CSS = `
     font-family: var(--display); color: var(--ink);
     text-transform: uppercase; margin: 0 0 12px;
   }
+  .g-author {
+    margin-top: 40px; padding: 18px 22px;
+    background: var(--bg-card); border: 1px solid var(--rule);
+    border-radius: 4px; color: var(--ink-2); font-size: 15px;
+  }
+  .g-author-name {
+    font-weight: 600; color: var(--ink);
+  }
+  .g-related {
+    margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--rule);
+  }
+  .g-related h2 {
+    font-family: var(--display); font-size: 20px;
+    text-transform: uppercase; margin: 0 0 12px;
+  }
+  .g-related ul { list-style: none; padding: 0; margin: 0; }
+  .g-related li { margin: 0 0 8px; font-size: 15px; }
 `;
 
 /**
  * Build the HTML shell shared by both the index and individual guide
  * pages. Includes the same OG meta pattern as the landing so individual
- * guides get the OG image.
+ * guides get the OG image, plus a per-page JSON-LD @graph block.
  */
-function shell({ title, description, canonical, bodyHtml, isIndex = false }) {
+function shell({
+  title,
+  description,
+  canonical,
+  bodyHtml,
+  isIndex = false,
+  jsonLdGraph = null,
+}) {
   const safeTitle = esc(title);
   const safeDesc = esc(description);
   const safeCanonical = esc(canonical);
+  const ldBlock = jsonLdGraph ? jsonLdBlock(jsonLdGraph) : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -281,6 +591,7 @@ function shell({ title, description, canonical, bodyHtml, isIndex = false }) {
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>${GUIDES_CSS}</style>
+  ${ldBlock}
 </head>
 <body>
   <header class="g-nav">
@@ -335,7 +646,79 @@ export function renderGuidesIndex(guidesDir) {
     <p>Practical, no-jargon guides for UK dry stone wallers &mdash; pricing, measurement methodology, regional rate notes and quoting conventions.</p>
 ${listHtml}`;
 
-  return shell({ title, description, canonical, bodyHtml, isIndex: true });
+  const jsonLdGraph = guides.length > 0 ? buildIndexGraph(guides) : null;
+
+  return shell({
+    title,
+    description,
+    canonical,
+    bodyHtml,
+    isIndex: true,
+    jsonLdGraph,
+  });
+}
+
+/**
+ * Build the visible "Related guides" footer for an individual article.
+ * Returns an empty string when there are fewer than 2 other guides.
+ */
+function renderRelatedNav({ guide, slug, allGuides }) {
+  const allSlugs = allGuides.map((g) => g.slug);
+  const otherSlugs = allSlugs.filter((s) => s !== slug);
+  if (otherSlugs.length < 2) return '';
+
+  // Prefer front-matter `related`; fall back to deterministic pick.
+  const fmRelated = (guide.related || []).filter(
+    (s) => isValidSlug(s) && otherSlugs.includes(s),
+  );
+  let chosen;
+  if (fmRelated.length >= 3) {
+    chosen = fmRelated.slice(0, 3);
+  } else if (fmRelated.length > 0) {
+    // Top up from deterministic pool excluding already-chosen.
+    const fill = pickDeterministicRelated(
+      otherSlugs.filter((s) => !fmRelated.includes(s)),
+      slug,
+      3 - fmRelated.length,
+    );
+    chosen = [...fmRelated, ...fill];
+  } else {
+    chosen = pickDeterministicRelated(otherSlugs, slug, 3);
+  }
+
+  const items = chosen
+    .map((s) => {
+      const g = allGuides.find((x) => x.slug === s);
+      if (!g) return '';
+      const t = g.title || s;
+      return `        <li><a href="/guides/${esc(s)}">${esc(t)}</a></li>`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  return `    <nav class="g-related" aria-label="Related guides">
+      <h2>Read next</h2>
+      <ul>
+${items}
+      </ul>
+    </nav>`;
+}
+
+/**
+ * Render the small author bio block. Marked up with itemtype="…/Person"
+ * so the microdata maps to the same Person node as the JSON-LD @graph.
+ * Honesty guardrail: "Founder of FastQuote" only — no expert/master
+ * claims. The methodology comes from working with Yorkshire wallers.
+ */
+function renderAuthorBio() {
+  return `    <aside class="g-author" itemscope itemtype="https://schema.org/Person">
+      <p>
+        Written by
+        <a href="${SITE_BASE}" itemprop="url"><span class="g-author-name" itemprop="name">Harry Doyle</span></a>,
+        <span itemprop="jobTitle">Founder of FastQuote</span>.
+        We work with dry stone wallers across Yorkshire and the Cotswolds to help them quote faster.
+      </p>
+    </aside>`;
 }
 
 /**
@@ -348,7 +731,25 @@ export function renderGuidePage(guidesDir, slug) {
   const title = `${guide.title || slug} — FastQuote`;
   const description = guide.description || `FastQuote guide: ${guide.title || slug}.`;
   const canonical = `https://fastquote.uk/guides/${slug}`;
+
+  const isPillar = slug === 'index';
+  const faqPairs = extractFaqPairs(guide.body);
+  const jsonLdGraph = buildArticleGraph({
+    guide,
+    slug,
+    kind: isPillar ? 'pillar' : 'cluster',
+    faqPairs,
+  });
+
+  const allGuides = listGuides(guidesDir);
+  const relatedHtml = isPillar
+    ? ''
+    : renderRelatedNav({ guide, slug, allGuides });
+  const authorHtml = renderAuthorBio();
+
   const bodyHtml = `    <p class="g-eyebrow">Guide</p>
-${renderGuideBodyHtml(guide.body)}`;
-  return shell({ title, description, canonical, bodyHtml });
+${renderGuideBodyHtml(guide.body)}
+${authorHtml}
+${relatedHtml}`;
+  return shell({ title, description, canonical, bodyHtml, jsonLdGraph });
 }

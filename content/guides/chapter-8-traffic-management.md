@@ -1,9 +1,11 @@
 ---
 title: "Do I need Chapter 8 traffic management for roadside walls?"
-description: "When Chapter 8 traffic management applies to dry stone walling work, what kit is needed, typical costs, and how to price it on a quote."
+description: "Chapter 8 traffic management is required for dry stone walling on adopted UK highways. Sign sets cost £400 to £700 to buy or £80 to £160 per day to hire."
 slug: "chapter-8-traffic-management"
 publishedAt: "2026-06-30"
+section: "Methodology"
 keywords: ["Chapter 8 traffic management", "roadside walling", "TM for walling", "Chapter 8 signs cost", "dry stone wall highway"]
+related: ["whats-in-a-quote", "dswa-day-rate", "cost-per-metre"]
 ---
 
 # Do I need Chapter 8 traffic management for roadside walls?
