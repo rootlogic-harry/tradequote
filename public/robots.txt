@@ -1,106 +1,368 @@
 # FastQuote robots.txt
-# Discoverability — Wave 1 (2026-06-30)
+# Discoverability — Wave 1 (2026-06-30) + bug-hunt fix #4 (2026-06-30)
+#
 # We WANT to be crawled and cited. Reputable search and AI crawlers are
 # explicitly allowed. Authenticated and non-public surfaces are disallowed.
-# Consensus AI-crawler list sourced from the ai-robots-txt project on GitHub.
+#
+# IMPORTANT (bug-hunt 2026-06-30 #4): per the robots.txt spec, a crawler
+# that matches a named User-agent block IGNORES the wildcard `*` block
+# entirely — only the named block's rules apply. So every named-bot
+# section below carries the SAME Disallow stanza as the wildcard. If
+# you add a new private path, add it to ALL the Disallow groups below
+# (or move private paths under a single prefix like /private/* and add
+# one rule per group).
+#
+# Consensus AI-crawler list sourced from the ai-robots-txt project.
 
 # ─── Standard search crawlers ──────────────────────────────────────────
 User-agent: Googlebot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Bingbot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: DuckDuckBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Slurp
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Baiduspider
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: YandexBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # ─── AI / LLM crawlers (training + retrieval) ──────────────────────────
 # OpenAI
 User-agent: GPTBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: ChatGPT-User
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: OAI-SearchBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Anthropic
 User-agent: ClaudeBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Claude-Web
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Claude-User
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Claude-SearchBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: anthropic-ai
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Google AI training (separate opt-in from Googlebot)
 User-agent: Google-Extended
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Perplexity
 User-agent: PerplexityBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Perplexity-User
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Apple AI training
 User-agent: Applebot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: Applebot-Extended
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Cohere
 User-agent: cohere-ai
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: cohere-training-data-crawler
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Meta
 User-agent: Meta-ExternalAgent
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 User-agent: FacebookBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # ByteDance / TikTok
 User-agent: Bytespider
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Common Crawl (powers many AI training sets)
 User-agent: CCBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Mistral
 User-agent: MistralAI-User
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # Diffbot
 User-agent: Diffbot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # You.com
 User-agent: YouBot
 Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
 
 # ─── Wildcard rules for everyone else ──────────────────────────────────
 User-agent: *

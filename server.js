@@ -949,11 +949,34 @@ async (_accessToken, _refreshToken, _extraParams, profile, done) => {
     const claims = (profile && profile._json) || {};
     const sub = claims.sub || profile?.id || null;
     const email = claims.email || profile?.emails?.[0]?.value || null;
+    const emailVerified = claims.email_verified === true;
     const name = claims.name || profile?.displayName || email || 'User';
     const avatar = claims.picture || profile?.picture || null;
 
     if (!sub) {
       return done(new Error('Auth0 callback returned no subject identifier'), null);
+    }
+
+    // CRITICAL — Email-verification guard (bug-hunt 2026-06-30 #1).
+    //
+    // The Auth0 tenant is currently configured to only allow Google
+    // social + Email Passwordless, both of which return
+    // email_verified: true. So in production this branch is unreachable.
+    // But: a single dashboard misclick adding an unverified IdP (custom
+    // DB connection, SAML federation, social provider with no email
+    // verification, or even a Magic Link change) would silently open
+    // a textbook account-takeover vector. The lower(email) match below
+    // would attach the attacker's Auth0 sub to ANY existing user's
+    // session, with full Stripe (`client_reference_id`) privileges.
+    //
+    // This guard makes the verification check a server-side invariant
+    // independent of the tenant config. Reject ANY login whose
+    // email_verified claim is not explicitly true when an email is
+    // present. The legacy connectionless rows with no email on file
+    // still flow through the (sub-based) fallback below.
+    if (email && !emailVerified) {
+      console.warn(`[Auth0] Rejecting login: email=${email} sub=${sub} — email_verified is not true`);
+      return done(new Error('email not verified'), null);
     }
 
     // 1. Match existing user by lower(email). This covers BOTH the legacy
@@ -1748,9 +1771,23 @@ function escapeHtml(s) {
 const LEGAL_VERSIONS = Object.freeze({
   // privacy bumped 2026-06-29 — Auth0 (Okta Inc.) added as sub-processor
   // for authentication (replaces direct Google OAuth). DPA bumped same
-  // day to add Auth0 to the sub-processor list. Existing users (Mark,
-  // Paul, Harry) re-accept on next login via the standard
-  // version-bump re-acceptance mechanism.
+  // day to add Auth0 to the sub-processor list.
+  //
+  // RE-ACCEPTANCE STATE (bug-hunt 2026-06-30 #2):
+  // There is NO in-app re-acceptance mechanism today. New signups get
+  // the current LEGAL_VERSIONS stamped on INSERT in the verify callback
+  // (server.js:~1033). Existing users keep whatever version was current
+  // when they signed up — including stale 2026-06-15 values for Mark,
+  // Paul, and Harry, all of whom predate the Auth0 sub-processor
+  // disclosure.
+  //
+  // Pre-launch the affected set is 3 users; Harry is handling re-
+  // acceptance via a one-off email to each on 2026-06-30 (see
+  // docs/legal/2026-06-30-dpa-reacceptance-email.md for the email +
+  // audit-trail template). When the user base grows past hand-emailable
+  // size, ship the in-app gate: compare user.dpa_accepted_version to
+  // LEGAL_VERSIONS.dpa post-login; if stale, block the SPA behind an
+  // accept modal that UPDATEs on confirm.
   privacy: '2026-06-29',
   terms: '2026-06-15',
   dpa: '2026-06-29',
@@ -1998,6 +2035,11 @@ app.get('/guides/', (req, res) => {
 app.get('/guides', (req, res) => res.redirect(301, '/guides/'));
 
 app.get('/guides/:slug', (req, res) => {
+  // The pillar lives at /guides/ as the index page; /guides/index
+  // is a duplicate URL pointing at the same content. 301 to the
+  // canonical so Google never indexes two of them (bug-hunt
+  // 2026-06-30 #3).
+  if (req.params.slug === 'index') return res.redirect(301, '/guides/');
   const html = renderGuidePage(GUIDES_DIR, req.params.slug);
   if (!html) return res.status(404).send('Guide not found');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -2028,8 +2070,8 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta property="og:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
   <meta property="og:description" content="Photograph the wall. Get measurements, materials and a polished quote in five minutes." />
   <meta property="og:image" content="https://fastquote.uk/og.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+  <meta property="og:image:width" content="2400" />
+  <meta property="og:image:height" content="1260" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:alt" content="FastQuote — From quote to customer, ready in five minutes." />
   <meta property="og:type" content="website" />
@@ -2644,7 +2686,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     </div>
   </footer>
 
-  <script src="/landing/landing.js?v=2" defer></script>
+  <script src="/landing/landing.js?v=3" defer></script>
 </body>
 </html>`;
 
@@ -4585,7 +4627,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
 
       console.log(`[Video] SUCCESS user=${userId} job=${jobId} frames=${result.frames.length} transcript=${result.transcript.length}chars`);
 
-      videoProgress.emit(jobId, { stage: 'analysing', progress: 50, message: 'Analysing with AI...' });
+      videoProgress.emit(jobId, { stage: 'analysing', progress: 50, message: 'Analysing footage...' });
 
       // Build imageContent array in the same format as the photo analysis pipeline.
       // Job context goes FIRST so Claude knows location + scale references before
@@ -5972,7 +6014,7 @@ app.get('/api/users/:id/referrals', async (req, res) => {
   }
 });
 
-app.post('/auth/redeem-referral', requireAuth, async (req, res) => {
+app.post('/auth/redeem-referral', requireAuth, billingRateLimit, async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'auth required' });

@@ -18,8 +18,13 @@ import React, { useState, useCallback } from 'react';
  *
  * Gating (caller-side via the `billing` prop):
  *   - bonus_free_quotes === 0 (haven't already redeemed)
- *   - quotaState === 'free-remaining' (still on free tier — no point
- *     showing once subscribed / comped / packed)
+ *   - quotaState in {'free-remaining', 'quota_exhausted'} (still on the
+ *     free tier — bug-hunt 2026-06-30 #5 added 'quota_exhausted' to the
+ *     gate because an exhausted user is exactly who'd benefit most from
+ *     redeeming a code: +2 bonus quotes bumps effectiveLimit past
+ *     freeQuotesUsed, making them spendable again. Subscribed / comped
+ *     / purchased-remaining users still don't see the banner — they'd
+ *     get no immediate value from a code redeem.)
  *
  * Banned-vocab safe (referral / code / bonus all allowed per the
  * locked spec).
@@ -33,7 +38,7 @@ export default function RedeemReferralBanner({ billing, onRedeemed }) {
   const shouldShow =
     billing
     && Number(billing.bonusFreeQuotes) === 0
-    && billing.quotaState === 'free-remaining';
+    && (billing.quotaState === 'free-remaining' || billing.quotaState === 'quota_exhausted');
 
   const handleSubmit = useCallback(async (e) => {
     e?.preventDefault?.();

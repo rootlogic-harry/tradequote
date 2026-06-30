@@ -54,7 +54,9 @@ describe('TRQ-151 — LEGAL_VERSIONS constant', () => {
   });
 
   test('covers all three documents', () => {
-    const block = serverJs.match(/const LEGAL_VERSIONS = Object\.freeze\([\s\S]{0,400}\);/);
+    // Bound widened 2026-06-30 (bug-hunt #2) — the LEGAL_VERSIONS
+    // comment block grew with the re-acceptance audit-trail note.
+    const block = serverJs.match(/const LEGAL_VERSIONS = Object\.freeze\([\s\S]{0,2000}\);/);
     expect(block).not.toBeNull();
     expect(block[0]).toMatch(/privacy:/);
     expect(block[0]).toMatch(/terms:/);

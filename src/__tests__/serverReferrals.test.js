@@ -217,6 +217,22 @@ describe('Sanity: no banned vocabulary in user-facing referral copy', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────
+// Bug-hunt 2026-06-30 #9 — rate limit on /auth/redeem-referral
+// ───────────────────────────────────────────────────────────────────────
+//
+// Originally `requireAuth` only; a logged-in user could brute-force
+// 4-char-suffix codes (32^4 ≈ 1M search space per known prefix).
+// Now mounted with billingRateLimit alongside the other money-adjacent
+// endpoints.
+describe('/auth/redeem-referral has a rate limiter', () => {
+  test('mounted with billingRateLimit (matches other money-adjacent endpoints)', () => {
+    expect(serverSrc).toMatch(
+      /app\.post\(\s*['"]\/auth\/redeem-referral['"]\s*,\s*requireAuth\s*,\s*billingRateLimit\s*,/
+    );
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────
 // /signup ?ref= preservation (2026-06-30 fix)
 // ───────────────────────────────────────────────────────────────────────
 //

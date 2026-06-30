@@ -21,9 +21,13 @@ describe('RedeemReferralBanner — source-level contract', () => {
     expect(SRC).toMatch(/export default function RedeemReferralBanner/);
   });
 
-  test('gates on bonusFreeQuotes === 0 AND quotaState === "free-remaining"', () => {
+  test('gates on bonusFreeQuotes === 0 AND quotaState in {free-remaining, quota_exhausted}', () => {
+    // Bug-hunt 2026-06-30 #5: exhausted users need to see the banner
+    // because redeeming a code immediately makes 2 previously-burned
+    // quotes spendable (effectiveLimit jumps 3 → 5).
     expect(SRC).toMatch(/Number\(billing\.bonusFreeQuotes\)\s*===\s*0/);
     expect(SRC).toMatch(/billing\.quotaState\s*===\s*['"]free-remaining['"]/);
+    expect(SRC).toMatch(/billing\.quotaState\s*===\s*['"]quota_exhausted['"]/);
   });
 
   test('POSTs to /auth/redeem-referral with a JSON body', () => {
