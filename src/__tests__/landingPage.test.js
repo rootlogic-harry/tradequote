@@ -61,8 +61,12 @@ describe('LANDING_PAGE_HTML — head + meta', () => {
     // the og:image:width + og:image:height + og:image:type quartet is
     // the standard hint set crawlers prefer for sizing decisions.
     expect(html).toMatch(/<meta property="og:image" content="https:\/\/fastquote\.uk\/og\.png"/);
-    expect(html).toMatch(/<meta property="og:image:width" content="1200"/);
-    expect(html).toMatch(/<meta property="og:image:height" content="630"/);
+    // 2026-06-30 bug-hunt #11: file is 2400×1260 (deviceScaleFactor: 2
+    // in generate-og-image.mjs). Meta tags must match the file so
+    // crawlers (especially Slack) don't crop based on the declared
+    // aspect ratio.
+    expect(html).toMatch(/<meta property="og:image:width" content="2400"/);
+    expect(html).toMatch(/<meta property="og:image:height" content="1260"/);
     expect(html).toMatch(/<meta property="og:image:type" content="image\/png"/);
     expect(html).toMatch(/<meta property="og:type" content="website"/);
     expect(html).toMatch(/<meta name="twitter:image" content="https:\/\/fastquote\.uk\/og\.png"/);
