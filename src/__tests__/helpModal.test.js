@@ -97,9 +97,10 @@ describe('HelpModal component', () => {
   });
 
   test('FAQ covers the four canonical questions', () => {
-    // Stuck on AI Analysis (UI label the user has actually seen — fine
-    // inside the FAQ even though "AI" is banned elsewhere).
-    expect(modalSrc).toMatch(/stuck on AI Analysis/i);
+    // Stuck on the analysis loading screen — described by what the
+    // user sees ("loading screen"), not by the internal "AI Analysis"
+    // component name (which would violate the banned-vocab rule).
+    expect(modalSrc).toMatch(/taking ages on the loading screen/i);
     // Change logo / day rate.
     expect(modalSrc).toMatch(/logo/i);
     expect(modalSrc).toMatch(/day rate/i);

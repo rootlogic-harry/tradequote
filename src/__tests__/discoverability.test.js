@@ -114,6 +114,27 @@ describe('public/sitemap.xml', () => {
     }
   });
 
+  test('contains all 8 guide URLs (wave 2 content)', () => {
+    // Mirrors the 8 markdown files in content/guides/ (minus index.md
+    // which is the /guides/ hub already asserted above). Adding a new
+    // guide means: write the .md AND add the URL here.
+    const guides = [
+      'cost-per-metre',
+      'how-long-to-rebuild',
+      'stone-tonnage',
+      'whats-in-a-quote',
+      'dswa-day-rate',
+      'yorkshire-walling-costs',
+      'cotswold-walling-costs',
+      'chapter-8-traffic-management',
+    ];
+    for (const slug of guides) {
+      expect(xml).toMatch(
+        new RegExp(`<loc>https:\\/\\/fastquote\\.uk\\/guides\\/${slug}<\\/loc>`)
+      );
+    }
+  });
+
   test('every <url> has a <lastmod>', () => {
     const urlBlocks = xml.match(/<url>[\s\S]*?<\/url>/g) || [];
     expect(urlBlocks.length).toBeGreaterThanOrEqual(5);
