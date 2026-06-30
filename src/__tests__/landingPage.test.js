@@ -284,6 +284,27 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
     expect(block).toMatch(/don't expire/);
   });
 
+  test('visible FAQ section present between data-trust and pricing', () => {
+    // Discoverability — Wave 1. The FAQ is a sibling section that lives
+    // between the data-trust band and the pricing block.
+    expect(html).toMatch(/<section class="faq" id="faq">/);
+    expect(html).toMatch(/Questions wallers actually ask\./);
+    // Source ordering: data-trust, then faq, then pricing.
+    const dataIdx = html.indexOf('<section class="data"');
+    const faqIdx = html.indexOf('<section class="faq"');
+    const pricingIdx = html.indexOf('<section class="pricing"');
+    expect(dataIdx).toBeGreaterThan(-1);
+    expect(faqIdx).toBeGreaterThan(dataIdx);
+    expect(pricingIdx).toBeGreaterThan(faqIdx);
+  });
+
+  test('FAQ renders at least 8 question/answer pairs as <details>', () => {
+    const faq = html.match(/<section class="faq"[\s\S]*?<\/section>/);
+    expect(faq).not.toBeNull();
+    const details = faq[0].match(/<details class="faq-item">/g) || [];
+    expect(details.length).toBeGreaterThanOrEqual(8);
+  });
+
   test('footer present with brand lockup, links, and built-in mention', () => {
     expect(html).toMatch(/<footer class="foot">/);
     expect(html).toMatch(/Quoting tools for tradesmen/);

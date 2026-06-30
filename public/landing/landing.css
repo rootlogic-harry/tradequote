@@ -816,6 +816,81 @@ img { display: block; max-width: 100%; }
   margin-top: 10px !important;
 }
 
+/* ─── FAQ ───────────────────────────────────────────────────────── */
+/* Visible Q+A section paired with the FAQPage JSON-LD above. Each
+   <details> collapses on mobile to keep the section scannable. */
+.faq {
+  background: var(--bg);
+  border-top: 1px solid var(--rule);
+}
+.faq-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 100px 28px;
+}
+.faq-head {
+  text-align: center;
+  margin-bottom: 48px;
+}
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.faq-item {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 18px 22px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.faq-item[open] {
+  border-color: var(--rule-2);
+  box-shadow: 0 12px 32px -22px rgba(60, 40, 15, 0.30);
+}
+.faq-q {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.25;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+  padding-right: 32px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.faq-q::-webkit-details-marker { display: none; }
+.faq-q::after {
+  content: "+";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--brand);
+  line-height: 1;
+  transition: transform 0.2s;
+}
+.faq-item[open] .faq-q::after {
+  content: "−";
+}
+.faq-a {
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  margin-top: 14px;
+  color: var(--ink-2);
+}
+.faq-a p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
 /* ─── Pricing ───────────────────────────────────────────────────── */
 .pricing {
   background: var(--bg-2);
@@ -1056,6 +1131,7 @@ img { display: block; max-width: 100%; }
   .trust-cell + .trust-cell::before { display: none; }
   .data-inner { padding: 80px 24px; }
   .data-grid { grid-template-columns: repeat(2, 1fr); }
+  .faq-inner { padding: 80px 24px; }
   .pricing-inner { padding: 80px 24px; }
   .pricing-card {
     grid-template-columns: 1fr;
@@ -1089,6 +1165,8 @@ img { display: block; max-width: 100%; }
   .how-inner { padding: 56px 20px; }
   .data-inner { padding: 56px 20px; }
   .data-grid { grid-template-columns: 1fr; }
+  .faq-inner { padding: 56px 20px; }
+  .faq-q { font-size: 17px; }
   .pricing-inner { padding: 56px 20px; }
   .pricing-figure { font-size: 52px; }
   .demo-stage { min-height: 320px; padding: 22px 18px; }
