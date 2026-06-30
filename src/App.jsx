@@ -25,6 +25,7 @@ import SubscriptionBanner from './components/SubscriptionBanner.jsx';
 import QuotaExhaustedModal from './components/QuotaExhaustedModal.jsx';
 import HelpModal from './components/HelpModal.jsx';
 import ReferralWelcome from './components/ReferralWelcome.jsx';
+import RedeemReferralBanner from './components/RedeemReferralBanner.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import ErrorBoundary from './components/common/ErrorBoundary.jsx';
@@ -1039,6 +1040,14 @@ export default function App() {
               hides unless the user has bonus quotes AND has not yet
               used any (signals a fresh referred signup). */}
           <ReferralWelcome billing={billing} currentUserId={state.currentUserId} />
+          {/* Referrals Phase 1 (2026-06-30 fix) — manual code entry
+              for users who signed up without `?ref=`. Self-hides
+              unless eligible (zero bonus quotes + on free tier). The
+              original 2026-06-23 spec put this on the login page;
+              Auth0's Universal Login (2026-06-29) made that
+              impossible without custom hosting, so it lives here
+              instead — same effect, post-signup. */}
+          <RedeemReferralBanner billing={billing} onRedeemed={refreshBilling} />
           <SaveErrorBanner
             error={state.quoteSaveError && (state.quoteSaveErrorKey || 0) !== dismissedSaveErrorKey ? state.quoteSaveError : null}
             onDismiss={() => setDismissedSaveErrorKey(state.quoteSaveErrorKey || 0)}
