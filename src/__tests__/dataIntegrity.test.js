@@ -42,10 +42,13 @@ describe('Allowlist consistency: client vs server', () => {
   test('SERVER_SAVE_ALLOWLIST extra keys are documented and intentional', async () => {
     const { SERVER_SAVE_ALLOWLIST } = await import('../../serverSaveAllowlist.js');
     const serverOnly = SERVER_SAVE_ALLOWLIST.filter(k => !SAVE_ALLOWLIST.includes(k));
-    // aiRawResponse is the only key the server accepts that the client does not send.
-    // This is harmless (dead key) but should be documented.
-    // If new server-only keys appear, this test forces a review.
-    expect(serverOnly).toEqual(['aiRawResponse']);
+    // Bug-hunt 2026-06-30 #5: the dead `aiRawResponse` server-only key
+    // was removed when we discovered it was a snapshot-bloat liability
+    // (the SPA never sent it top-level; only the nested
+    // quotePayload.quote.aiRawResponse was leaking through, and that's
+    // now also stripped in buildQuotePayload). Server allowlist is now
+    // a strict superset-of-zero over the client allowlist.
+    expect(serverOnly).toEqual([]);
   });
 });
 
@@ -956,12 +959,13 @@ describe('pickAllowedKeys behavioral tests', () => {
       captureMode: 'video',
       diffs: [{ e: 6 }],
       transcript: 'Wall description from video',
-      aiRawResponse: 'raw',
+      aiRawResponse: 'raw', // should be stripped — server allowlist no longer includes it (bug-hunt #5)
     };
     const result = pickAllowedKeys(input);
     expect(Object.keys(result).sort()).toEqual(
-      ['aiRawResponse', 'captureMode', 'diffs', 'jobDetails', 'profile', 'quoteMode', 'quotePayload', 'quoteSequence', 'reviewData', 'transcript']
+      ['captureMode', 'diffs', 'jobDetails', 'profile', 'quoteMode', 'quotePayload', 'quoteSequence', 'reviewData', 'transcript']
     );
+    expect(result.aiRawResponse).toBeUndefined();
   });
 
   test('handles deeply nested objects without mutation', () => {
