@@ -1,0 +1,49 @@
+# FastQuote
+
+> AI-assisted quoting tool for UK dry stone wallers. Photograph the wall, get measurements, materials and a professional, editable quote in under 5 minutes.
+
+## What FastQuote does
+
+FastQuote turns a few photos of a damaged or new-build dry stone wall into a complete, professionally formatted quote. It estimates wall measurements, reclaimable stone, new stone tonnage, labour days and materials cost, then produces a branded PDF or Word document the tradesman can edit and send to their client. Every number is editable before send — the tool helps the waller quote faster, it does not replace their judgement.
+
+## Who it's for
+
+Self-employed and small-business dry stone wallers working in the UK, particularly the Yorkshire Dales, Lake District, Cotswolds, Peak District and Scottish Borders. Built alongside working West Yorkshire wallers, with input from members of the Dry Stone Walling Association (DSWA).
+
+## Pricing
+
+- Free: first 3 quotes, no card required
+- Pay-as-you-go: GBP 9.99 for a 5-quote pack, no expiry
+- Subscription: GBP 19.99 per month, unlimited quotes, cancel anytime
+
+## Key features
+
+- Stone-type-aware costing (sandstone, gritstone, limestone, slate, Yorkstone)
+- Measurement methodology aligned with DSWA pricing conventions
+- Editable line items — tonnage, labour days, materials, day rate, VAT
+- Branded PDF and Word export, print-ready
+- Client portal: each quote gets a private link your client can view, accept or decline on their phone
+- Live tracking — see when the client opens the quote
+- Voice notes during photo capture (hands-free on site)
+- RAMS (Risk Assessment & Method Statement) document generation
+- Per-job dedupe — re-running a quote on the same job does not burn an extra free credit
+
+## Docs and guides
+
+- [/guides/](https://fastquote.uk/guides/) — guide index (UK dry stone wall pricing, quoting conventions, regional rate notes)
+
+## Trust and compliance
+
+- Registered with the UK Information Commissioner's Office, registration number ZC178109
+- UK GDPR compliant
+- Hosted in Railway's EU West region (Amsterdam, Netherlands)
+- No third-party tracking or analytics SDK on the app
+- Backups encrypted at rest, stored in Cloudflare R2 (EU jurisdiction)
+
+## Contact
+
+Email: fastquote@harrydoyle.uk
+
+## Operator
+
+Built and operated by Harry Doyle (sole trader, t/a FastQuote), United Kingdom. Working with West Yorkshire wallers.

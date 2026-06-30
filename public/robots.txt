@@ -1,0 +1,119 @@
+# FastQuote robots.txt
+# Discoverability — Wave 1 (2026-06-30)
+# We WANT to be crawled and cited. Reputable search and AI crawlers are
+# explicitly allowed. Authenticated and non-public surfaces are disallowed.
+# Consensus AI-crawler list sourced from the ai-robots-txt project on GitHub.
+
+# ─── Standard search crawlers ──────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
+# ─── AI / LLM crawlers (training + retrieval) ──────────────────────────
+# OpenAI
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+# Anthropic
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+# Google AI training (separate opt-in from Googlebot)
+User-agent: Google-Extended
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+# Apple AI training
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Cohere
+User-agent: cohere-ai
+Allow: /
+
+User-agent: cohere-training-data-crawler
+Allow: /
+
+# Meta
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+# ByteDance / TikTok
+User-agent: Bytespider
+Allow: /
+
+# Common Crawl (powers many AI training sets)
+User-agent: CCBot
+Allow: /
+
+# Mistral
+User-agent: MistralAI-User
+Allow: /
+
+# Diffbot
+User-agent: Diffbot
+Allow: /
+
+# You.com
+User-agent: YouBot
+Allow: /
+
+# ─── Wildcard rules for everyone else ──────────────────────────────────
+User-agent: *
+Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /q/
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /quote-output
+Disallow: /login
+Disallow: /signup
+
+# ─── Sitemap ───────────────────────────────────────────────────────────
+Sitemap: https://fastquote.uk/sitemap.xml
