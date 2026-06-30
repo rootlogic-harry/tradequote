@@ -156,8 +156,13 @@ ONE stylesheet:
 
 - **`LANDING_PAGE_HTML`** in `server.js` (~line 1758) — server-rendered HTML
   string. Sections in order: nav, hero (with live demo strip), trust strip,
-  how-it-works, data-trust band, pricing (£19.99/mo subscription card +
-  £9.99 pay-as-you-go pack panel), footer.
+  how-it-works, data-trust band, FAQ (8 questions, discoverability
+  wave 1), pricing (£19.99/mo subscription card + £9.99 pay-as-you-go
+  pack panel), footer. JSON-LD is a schema.org `@graph` containing
+  `Organization` + `WebSite` + `SoftwareApplication` + two `Offer`s
+  + `HowTo` (3-step Snap/Check/Send) + `FAQPage` (mirrors the visible
+  FAQ verbatim for LLM retrieval). The honesty guardrails still apply
+  — no video phrasing, no accuracy percentages.
 - **`public/landing/landing.css`** — single stylesheet, Daylight palette
   (warm limestone `#f4eee2` bg, cream `#fffdf8` cards, ink `#211a10` text,
   amber `#bd5e09` brand). Re-themed on 2026-06-26 from "Dark Refined"; the
@@ -181,6 +186,27 @@ Honesty guardrails enforced in the copy (asserted by `landingPage.test.js`):
 - Footer email is `fastquote@harrydoyle.uk` — the working inbox. The
   `fastquote.uk` MX does NOT accept `hello@`.
 - ICO `ZC178109` cited in the data-trust band AND the footer.
+
+### Discoverability — Wave 1 (2026-06-30)
+
+Technical plumbing for Google + AI-crawler discoverability. Asserted by
+`discoverability.test.js`.
+
+- **`public/robots.txt`** — explicitly allows the major AI crawlers
+  (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Applebot-Extended,
+  CCBot, etc., per the `ai-robots-txt` GitHub project consensus list).
+  Disallows `/api/`, `/auth/`, `/q/`, `/admin/`, `/dashboard`,
+  `/login`, `/signup`. References `Sitemap: https://fastquote.uk/sitemap.xml`.
+- **`public/sitemap.xml`** — five URLs today: `/`, `/guides/`, `/privacy`,
+  `/terms`, `/dpa`. Individual guide URLs are added as content ships.
+- **`public/llms.txt`** — markdown per `llmstxt.org`. Single source of
+  truth for "what FastQuote is" at LLM training and retrieval time.
+- **`GET /guides/` + `GET /guides/:slug`** — content hub. Reads markdown
+  from `content/guides/*.md` (slug-validated against `^[a-z0-9][a-z0-9-]{0,80}$`
+  to defeat path traversal), renders with `marked`, wraps in a
+  stripped-down landing-style HTML shell with the same OG meta pattern
+  so individual guides get the OG image preview. Renders a "Coming soon"
+  panel when the directory is empty. Helper lives in `src/utils/guides.js`.
 
 ---
 
