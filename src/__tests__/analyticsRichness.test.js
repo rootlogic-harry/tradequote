@@ -222,10 +222,12 @@ describe('client — trackPageview utility', () => {
 
 describe('landing — inline beacon in LANDING_PAGE_HTML', () => {
   test('beacon script is present in the landing page HTML template', () => {
-    // Anchor near the LANDING_PAGE_HTML template literal.
+    // Anchor near the LANDING_PAGE_HTML template literal. The slice
+    // window has to be wide enough to capture the inline beacon, which
+    // sits after the (now much richer) JSON-LD @graph block.
     const idx = serverSrc.indexOf('const LANDING_PAGE_HTML');
     expect(idx).toBeGreaterThan(-1);
-    const block = serverSrc.slice(idx, idx + 10_000);
+    const block = serverSrc.slice(idx, idx + 30_000);
     expect(block).toMatch(/POST['"]?[\s\S]{0,500}\/api\/track|fetch\(['"]\/api\/track['"]/);
     expect(block).toMatch(/doNotTrack/);
     expect(block).toMatch(/fq_session_id/);

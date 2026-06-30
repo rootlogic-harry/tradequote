@@ -80,6 +80,10 @@ import {
   REFERRAL_REFEREE_BONUS,
   REFERRAL_REFERRER_REWARD,
 } from './src/utils/referrals.js';
+import {
+  renderGuidesIndex,
+  renderGuidePage,
+} from './src/utils/guides.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1965,6 +1969,33 @@ app.get('/terms', (req, res) => {
   </div></body></html>`);
 });
 
+// --- /guides/ content hub (discoverability wave 1) ---
+//
+// Reads markdown files from content/guides/*.md and renders them with
+// `marked`. The content agent ships the actual markdown in a separate
+// PR; this route renders a "Coming soon" placeholder gracefully when
+// the directory is empty. Each guide page is wrapped in a stripped-down
+// landing-style HTML shell with the same OG meta pattern so individual
+// guide URLs get the OG image preview.
+const GUIDES_DIR = join(__dirname, 'content', 'guides');
+
+app.get('/guides/', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.send(renderGuidesIndex(GUIDES_DIR));
+});
+
+// Mirror without trailing slash so /guides resolves cleanly too.
+app.get('/guides', (req, res) => res.redirect(301, '/guides/'));
+
+app.get('/guides/:slug', (req, res) => {
+  const html = renderGuidePage(GUIDES_DIR, req.params.slug);
+  if (!html) return res.status(404).send('Guide not found');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.send(html);
+});
+
 // --- Landing page for unauthenticated visitors at / ---
 //
 // New conversion-focused landing (2026-05-18 spec): hero + live demo
@@ -2001,16 +2032,187 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta name="twitter:image" content="https://fastquote.uk/og.png" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/landing/landing.css?v=3" />
+  <link rel="stylesheet" href="/landing/landing.css?v=4" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "FastQuote",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Web",
-    "url": "https://fastquote.uk/",
-    "description": "Quoting tools for dry stone wallers — photos in, professional quote out, in under five minutes."
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://fastquote.uk/#organization",
+        "name": "FastQuote",
+        "url": "https://fastquote.uk/",
+        "email": "fastquote@harrydoyle.uk",
+        "description": "FastQuote is operated by Harry Doyle (sole trader), United Kingdom. Quoting tools for dry stone wallers.",
+        "areaServed": {
+          "@type": "Country",
+          "name": "United Kingdom"
+        },
+        "identifier": [
+          {
+            "@type": "PropertyValue",
+            "name": "ICO Registration",
+            "value": "ZC178109"
+          }
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://fastquote.uk/#website",
+        "url": "https://fastquote.uk/",
+        "name": "FastQuote",
+        "publisher": { "@id": "https://fastquote.uk/#organization" },
+        "inLanguage": "en-GB"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://fastquote.uk/#software",
+        "name": "FastQuote",
+        "applicationCategory": "BusinessApplication",
+        "applicationSubCategory": "Quoting and estimating software",
+        "operatingSystem": "Web",
+        "url": "https://fastquote.uk/",
+        "description": "Quoting tools for dry stone wallers — photos in, professional quote out, in under five minutes.",
+        "publisher": { "@id": "https://fastquote.uk/#organization" },
+        "audience": {
+          "@type": "Audience",
+          "audienceType": "UK dry stone wallers"
+        },
+        "offers": [
+          { "@id": "https://fastquote.uk/#offer-subscription" },
+          { "@id": "https://fastquote.uk/#offer-pack" }
+        ]
+      },
+      {
+        "@type": "Offer",
+        "@id": "https://fastquote.uk/#offer-subscription",
+        "name": "Monthly subscription",
+        "description": "Unlimited quotes, client portal, branded PDF and Word export.",
+        "price": "19.99",
+        "priceCurrency": "GBP",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "19.99",
+          "priceCurrency": "GBP",
+          "billingDuration": "P1M",
+          "unitText": "MONTH"
+        },
+        "availability": "https://schema.org/InStock",
+        "url": "https://fastquote.uk/#pricing"
+      },
+      {
+        "@type": "Offer",
+        "@id": "https://fastquote.uk/#offer-pack",
+        "name": "5 quote pack",
+        "description": "Pay-as-you-go pack of 5 quotes. No expiry. Sign in to buy.",
+        "price": "9.99",
+        "priceCurrency": "GBP",
+        "eligibleQuantity": {
+          "@type": "QuantitativeValue",
+          "value": 5,
+          "unitText": "quotes"
+        },
+        "availability": "https://schema.org/InStock",
+        "url": "https://fastquote.uk/#pricing"
+      },
+      {
+        "@type": "HowTo",
+        "@id": "https://fastquote.uk/#howto",
+        "name": "How to build a dry stone wall quote with FastQuote",
+        "description": "From photos to a professional quote in roughly five minutes.",
+        "totalTime": "PT5M",
+        "step": [
+          {
+            "@type": "HowToStep",
+            "position": 1,
+            "name": "Snap the wall",
+            "text": "Take a few photos — overview, close-up, side profile. Add voice notes if your hands are full."
+          },
+          {
+            "@type": "HowToStep",
+            "position": 2,
+            "name": "Check the numbers",
+            "text": "Review the wall measurements, stone tonnage, materials and labour days. Every figure is editable — confirm what looks right, tweak what does not."
+          },
+          {
+            "@type": "HowToStep",
+            "position": 3,
+            "name": "Send to client",
+            "text": "Send a polished, branded quote. Your client views it on their phone. You see when they open it and whether they accept."
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://fastquote.uk/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How much does a dry stone wall cost to rebuild per metre?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "UK dry stone wall rebuild rates typically run between £100 and £250 per metre depending on region, stone type, reclaimable stone percentage and access. Yorkshire and the Peak District sit at the lower end, the Cotswolds at the higher end. FastQuote builds a per-job figure from your photos in roughly five minutes so you can quote with real numbers rather than a regional average."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How long does it take to rebuild a dry stone wall?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A skilled waller typically rebuilds two to three metres of single-skin wall per day. A 20 m rebuild with one waller plus a labourer is usually a 6 to 8 day job, more if the stone is heavily fragmented or access is difficult."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What should a dry stone walling quote include?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A professional quote should list wall length and height, reclaimable stone percentage, new stone tonnage, day rate, labour days, materials (stone, hearting, coping), VAT status, validity window, and a clear quote reference. FastQuote includes all of these by default and lets you edit any line item before you send."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need to be a DSWA member to use FastQuote?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. FastQuote is open to any UK dry stone waller. The tool follows measurement and pricing conventions aligned with DSWA practice, and we work alongside West Yorkshire wallers, but no DSWA membership is required."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I use FastQuote on my phone on site?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. FastQuote is mobile-first. You can take photos with your phone, edit numbers in the field, and send the finished quote — all without leaving the layby. PDF and Word export work the same on phone, tablet and desktop."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What stone types does FastQuote handle?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "FastQuote is tuned for the stone types UK wallers actually use — sandstone, gritstone, limestone, Yorkstone and slate. Costing adjusts based on the stone you tell it the wall is built from."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How accurate are the measurements from photos?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Measurements from photos are a fast first pass, not a survey. They are good enough to quote from, but every figure is editable so you can correct anything that does not match what you saw on site. The first numbers are a starting point — your judgement is the final say."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What if I don't agree with the first numbers?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Every measurement, tonnage figure, materials cost and labour day is editable in the review step. You can tweak each line, change the day rate, switch VAT on or off and adjust the contingency before the quote is sent. The first pass is a starting point, not a fixed output."
+            }
+          }
+        ]
+      }
+    ]
   }
   </script>
   <!-- TRQ-15: landing pageview beacon. Fires one anonymous POST to
@@ -2275,6 +2477,65 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
           <h3>Your data stays yours</h3>
           <p>We never sell it or share it. Export or delete everything whenever you like.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq" id="faq">
+    <div class="faq-inner">
+      <div class="faq-head">
+        <span class="eyebrow section-eyebrow">Common questions</span>
+        <h2 class="section-title">Questions wallers actually ask.</h2>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary class="faq-q">How much does a dry stone wall cost to rebuild per metre?</summary>
+          <div class="faq-a">
+            <p>UK rebuild rates typically sit between &pound;100 and &pound;250 per metre. Yorkshire and the Peak District tend to come in lower, the Cotswolds higher. The honest answer is that the right number depends on stone type, reclaimable percentage, height, access and your day rate. FastQuote works it out from your photos rather than guessing from a regional average.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">How long does it take to rebuild a dry stone wall?</summary>
+          <div class="faq-a">
+            <p>A skilled waller usually rebuilds two to three metres of single-skin wall per day. A 20 m rebuild with one waller plus a labourer is typically a 6 to 8 day job &mdash; more if the stone is heavily fragmented or access is awkward.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">What should a dry stone walling quote include?</summary>
+          <div class="faq-a">
+            <p>Wall length and height, reclaimable stone percentage, new stone tonnage, day rate, labour days, materials, VAT status, validity window and a quote reference. FastQuote includes all of those by default and lets you edit any line before you send.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">Do I need to be a DSWA member to use FastQuote?</summary>
+          <div class="faq-a">
+            <p>No. FastQuote is open to any UK waller. The tool follows measurement and pricing conventions aligned with DSWA practice and we work alongside West Yorkshire wallers, but membership is not required.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">Can I use FastQuote on my phone on site?</summary>
+          <div class="faq-a">
+            <p>Yes. The whole flow is mobile-first &mdash; take photos with your phone, edit numbers in the field, send the finished quote. PDF and Word export work the same on phone, tablet and desktop.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">What stone types does FastQuote handle?</summary>
+          <div class="faq-a">
+            <p>The stones UK wallers actually use &mdash; sandstone, gritstone, limestone, Yorkstone and slate. Costing adjusts based on the stone you tell it the wall is built from.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">How accurate are the measurements from photos?</summary>
+          <div class="faq-a">
+            <p>The first numbers are a starting point, not a survey. They are good enough to quote from, and every figure is editable so you can correct anything that does not match what you saw on site. Your judgement is the final say.</p>
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-q">What if I don't agree with the first numbers?</summary>
+          <div class="faq-a">
+            <p>Every measurement, tonnage figure, materials cost and labour day is editable in the review step. Tweak each line, change the day rate, switch VAT on or off, adjust the contingency, then send.</p>
+          </div>
+        </details>
       </div>
     </div>
   </section>
