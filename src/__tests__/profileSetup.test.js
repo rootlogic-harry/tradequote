@@ -290,7 +290,11 @@ describe('ProfileSetup — Settings redesign (2026-06-29): 5-section shell', () 
     expect(sectionsBlock[0]).toMatch(/label:\s*['"]Rates & tax['"]/);
     expect(sectionsBlock[0]).toMatch(/label:\s*['"]Your Trade['"]/);
     expect(sectionsBlock[0]).toMatch(/label:\s*['"]Quote Preferences['"]/);
-    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Sharing['"]/);
+    // 2026-06-30: the 'share' section was renamed "Bonus quotes" when
+    // redeem moved out of the Dashboard banner into a settings home
+    // alongside the share panel. The internal id stays 'share' so
+    // navigation links + the touch-target allow-list don't churn.
+    expect(sectionsBlock[0]).toMatch(/label:\s*['"]Bonus quotes['"]/);
   });
 
   test('tracks an activeSection state, defaulting to "business"', () => {

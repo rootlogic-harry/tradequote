@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
 import ReferralPanel from '../ReferralPanel.jsx';
+import RedeemReferralBanner from '../RedeemReferralBanner.jsx';
 import BillingSection from '../BillingSection.jsx';
 
 /**
@@ -41,6 +42,8 @@ export default function ProfileSetup({
   currentUserId,
   userName,
   showToast,
+  billing,
+  onBillingRefresh,
 }) {
   const [errors, setErrors] = useState({});
   // Section nav — default to Business so the most-used identity fields
@@ -128,7 +131,11 @@ export default function ProfileSetup({
     { id: 'rates',      label: 'Rates & tax' },
     { id: 'trade',      label: 'Your Trade', badge: 'Optional' },
     { id: 'quote',      label: 'Quote Preferences' },
-    { id: 'share',      label: 'Sharing' },
+    // 2026-06-30 (later): renamed "Sharing" → "Bonus quotes" and split
+    // into Redeem + Sharing sub-headings. Section id stays 'share' so
+    // existing navigation links + the touch-target allow-list don't
+    // churn — only the visible label changed.
+    { id: 'share',      label: 'Bonus quotes' },
     // Billing section (2026-06-30 launch checklist) — surfaces the
     // user's subscription state + a downloadable invoice for every
     // payment. Read-only; no save bar interaction. Hosted on Stripe
@@ -664,24 +671,52 @@ export default function ProfileSetup({
     </div>
   );
 
-  // ── Sharing section ───────────────────────────────────────────────
-  // Hosts ReferralPanel — personal config (your code, your bonus
-  // balance), relocated here on 2026-06-25 (Harry's ask). The panel
-  // self-hides while loading + when the user has no code yet, so the
-  // first-run Step-1 mount (no currentUserId) gracefully omits it.
+  // ── Bonus quotes section ──────────────────────────────────────────
+  // Two sub-headings: Redeem (enter someone else's code) + Sharing
+  // (share your own). Harry's 2026-06-30 ask was to bring redeem out
+  // of the Dashboard and into the same place a waller would naturally
+  // look — alongside the share panel. RedeemReferralBanner renders a
+  // form when bonus_free_quotes === 0 and a "you've redeemed" confirm
+  // when > 0; ReferralPanel renders the share UI once a code exists.
   const renderShare = () => (
     <div>
       <div className="ps-section-head">
-        <h2 className="ps-section-title">Sharing</h2>
+        <h2 className="ps-section-title">Bonus quotes</h2>
         <p className="ps-section-desc">
-          Earn free quotes by inviting other tradesmen.
+          Redeem a friend's referral code, or share your own to earn more.
         </p>
       </div>
-      <ReferralPanel
-        currentUserId={currentUserId}
-        userName={userName}
-        showToast={showToast}
-      />
+
+      <section className="mb-6" aria-labelledby="ps-redeem-heading">
+        <h3
+          id="ps-redeem-heading"
+          className="eyebrow mb-2"
+          style={{ color: 'var(--tq-muted)' }}
+        >
+          Redeem
+        </h3>
+        <RedeemReferralBanner
+          billing={billing}
+          onRedeemed={(nextBilling) => {
+            if (typeof onBillingRefresh === 'function') onBillingRefresh(nextBilling);
+          }}
+        />
+      </section>
+
+      <section aria-labelledby="ps-sharing-heading">
+        <h3
+          id="ps-sharing-heading"
+          className="eyebrow mb-2"
+          style={{ color: 'var(--tq-muted)' }}
+        >
+          Sharing
+        </h3>
+        <ReferralPanel
+          currentUserId={currentUserId}
+          userName={userName}
+          showToast={showToast}
+        />
+      </section>
     </div>
   );
 
