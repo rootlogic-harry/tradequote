@@ -3255,6 +3255,10 @@ app.put('/api/users/:id/jobs/:jobId', async (req, res) => {
   }
 });
 
+// PATCH /api/users/:id/jobs/:jobId/details is defined LOWER in this file
+// (search for "Paul Clough's real-user feedback") so it can reference
+// `billingRateLimit`, which sits with the rest of the billing primitives.
+
 app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -5733,6 +5737,103 @@ function requireStripe(_req, res, next) {
   next();
 }
 
+// PATCH /api/users/:id/jobs/:jobId/details — metadata-only edit (2026-06-30).
+//
+// Paul Clough's real-user feedback: "Is there any way I could edit job
+// details without having to regenerate. The address is wrong and if I
+// regenerate it might alter details or figures which are spot on".
+// The existing PUT path requires the SPA to round-trip through the
+// editor (and a tradesman who's spent time confirming figures rightly
+// fears the re-analyse button). This route lets a saved quote's
+// metadata (client name, site address, phone, quote date, brief notes)
+// be edited without touching reviewData, quotePayload, or quote_diffs.
+//
+// Mounted next to the billing primitives (rather than near the PUT)
+// because it consumes `billingRateLimit` which is declared in this
+// section. A breadcrumb up top points future readers here.
+//
+// Contract:
+//   - Whitelisted body keys only. Anything else is silently dropped.
+//   - Length caps applied server-side regardless of UI validation.
+//   - Reads current quote_snapshot, mutates only jobDetails, writes back
+//     in a single atomic UPDATE (no read-then-write race window).
+//   - Denormalised indexed columns (client_name, site_address, quote_date)
+//     stay in lockstep with the JSONB jobDetails.
+//   - client_snapshot stays frozen — by design (Pitfall #14). The client
+//     portal shows the version that was originally sent; the UI surfaces
+//     this in the modal.
+app.patch('/api/users/:id/jobs/:jobId/details', billingRateLimit, async (req, res) => {
+  try {
+    const raw = req.body || {};
+    // Length caps — siteAddress and briefNotes are the only fields with
+    // realistic novel-paste risk. The rest are short by domain.
+    const clamp = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+    const patch = {
+      clientName:    raw.clientName    !== undefined ? clamp(raw.clientName, 200)     : undefined,
+      siteAddress:   raw.siteAddress   !== undefined ? clamp(raw.siteAddress, 300)    : undefined,
+      clientPhone:   raw.clientPhone   !== undefined ? clamp(raw.clientPhone, 40)     : undefined,
+      quoteDate:     raw.quoteDate     !== undefined ? clamp(raw.quoteDate, 24)       : undefined,
+      briefNotes:    raw.briefNotes    !== undefined ? clamp(raw.briefNotes, 2000)    : undefined,
+    };
+    // Drop undefined so we only patch fields the caller actually sent —
+    // a client that sends just { siteAddress } shouldn't blank out
+    // clientName etc.
+    const fieldsToPatch = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== undefined)
+    );
+    if (Object.keys(fieldsToPatch).length === 0) {
+      return res.status(400).json({ error: 'No editable fields supplied' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT quote_snapshot FROM jobs WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+      [req.params.jobId, req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Job not found' });
+
+    const snapshot = rows[0].quote_snapshot || {};
+    const prevDetails = snapshot.jobDetails || {};
+    const newDetails = { ...prevDetails, ...fieldsToPatch };
+    const newSnapshot = { ...snapshot, jobDetails: newDetails };
+
+    // Denormalised columns track the JSONB. quote_reference stays
+    // untouched (tied to the dedup window + sequence allocation).
+    await pool.query(
+      `UPDATE jobs
+          SET quote_snapshot = $1,
+              client_name    = $2,
+              site_address   = $3,
+              quote_date     = $4,
+              saved_at       = NOW()
+        WHERE id = $5 AND user_id = $6`,
+      [
+        JSON.stringify(newSnapshot),
+        newDetails.clientName  || '',
+        newDetails.siteAddress || '',
+        newDetails.quoteDate   || '',
+        req.params.jobId,
+        req.params.id,
+      ]
+    );
+
+    // Audit log — server-side console only, so a future "the address
+    // changed without me knowing" question is answerable from the
+    // Railway log without a DB column add.
+    const editedKeys = Object.keys(fieldsToPatch).join(',');
+    console.log(`[Quote] details edited: user=${req.params.id} job=${req.params.jobId} fields=${editedKeys}`);
+
+    // Analytics — best-effort fire. event name is on the allowlist.
+    recordEvent('quote_details_edited', req.params.id, {
+      jobId: req.params.jobId,
+      fieldsEdited: editedKeys,
+    }).catch(() => {});
+
+    res.json({ ok: true, jobDetails: newDetails });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
 app.get('/api/billing/status', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -6734,6 +6835,7 @@ const EVENT_NAME_ALLOWLIST = new Set([
   'pack_purchased',       // applyQuotePackEventToDb success
   'subscription_started', // applySubscriptionEventToDb first→active
   'pdf_downloaded',       // QuoteOutput PDF button
+  'quote_details_edited', // PATCH /jobs/:id/details — Paul's metadata-only edit
   'landing_viewed',       // reserved
   'client_link_copied',   // reserved
   'step_entered',         // reserved
