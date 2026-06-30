@@ -23,6 +23,7 @@ import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import SubscriptionBanner from './components/SubscriptionBanner.jsx';
 import QuotaExhaustedModal from './components/QuotaExhaustedModal.jsx';
+import HelpModal from './components/HelpModal.jsx';
 import ReferralWelcome from './components/ReferralWelcome.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -44,6 +45,9 @@ function getStoredTheme(userId) {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  // In-app help/contact modal (Harry's launch checklist 2026-06-30).
+  // Reachable from Sidebar (desktop) + ProfileSetup modal (mobile).
+  const [showHelp, setShowHelp] = useState(false);
   const [theme, setTheme] = useState(() => getStoredTheme(null));
   const [currentView, setCurrentView] = useState('dashboard');
   const [viewingQuote, setViewingQuote] = useState(null);
@@ -994,6 +998,7 @@ export default function App() {
         currentUser={state.currentUser}
         profile={state.profile}
         onSettingsClick={() => setShowProfileModal(true)}
+        onHelpClick={() => setShowHelp(true)}
         onLogout={handleLogout}
         isAdminPlan={isAdmin}
         billing={billing}
@@ -1082,6 +1087,7 @@ export default function App() {
               dispatch={dispatch}
               isModal
               onLogout={handleLogout}
+              onHelpClick={() => setShowHelp(true)}
               currentUserId={state.currentUserId}
               userName={state.currentUser?.name}
               showToast={showToast}
@@ -1144,6 +1150,17 @@ export default function App() {
           onDismiss={() => dispatch({ type: 'CLEAR_QUOTA_LOCKOUT' })}
         />
       )}
+
+      {/* In-app Help / contact modal (launch checklist 2026-06-30).
+          Single source of truth for the email + micro-FAQ surface.
+          Entry points: Sidebar's Help link (desktop) and the Need
+          help? link inside ProfileSetup (mobile, opened via the
+          BottomNav profile button). */}
+      <HelpModal
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        showToast={showToast}
+      />
 
       {/* WS6: Toast */}
       {toast && (

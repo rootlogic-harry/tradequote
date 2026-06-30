@@ -36,6 +36,7 @@ export default function ProfileSetup({
   onCancel,
   onProfileComplete,
   onLogout,
+  onHelpClick,
   currentUserId,
   userName,
   showToast,
@@ -756,16 +757,33 @@ export default function ProfileSetup({
                 - the full-page Step 1 onboarding mount (no onLogout) stays
                   clean for first-run users with nothing to log out of yet;
                 - any future modal mount can opt out by omitting the prop. */}
-          {isModal && onLogout && (
-            <div className="mt-8 pt-4 border-t border-tq-border flex justify-center">
-              <button
-                type="button"
-                onClick={onLogout}
-                className="text-sm underline transition-colors touch-44"
-                style={{ color: 'var(--tq-muted)', minHeight: 44 }}
-              >
-                Sign out
-              </button>
+          {isModal && (onLogout || onHelpClick) && (
+            <div className="mt-8 pt-4 border-t border-tq-border flex justify-center gap-6">
+              {/* Mobile help entry point (launch checklist 2026-06-30).
+                  BottomNav has Home / New / Quotes / Profile; tapping
+                  Profile opens this modal. Without this link mobile
+                  users have no in-app help path (Sidebar's Help link
+                  is desktop-only >=900px). */}
+              {onHelpClick && (
+                <button
+                  type="button"
+                  onClick={onHelpClick}
+                  className="text-sm underline transition-colors touch-44"
+                  style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+                >
+                  Need help?
+                </button>
+              )}
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="text-sm underline transition-colors touch-44"
+                  style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+                >
+                  Sign out
+                </button>
+              )}
             </div>
           )}
         </div>
