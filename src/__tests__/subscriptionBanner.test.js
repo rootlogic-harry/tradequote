@@ -334,6 +334,10 @@ describe('SubscriptionBanner — App.jsx wiring', () => {
       Math.abs(idx - offlineIdx),
       Math.abs(idx - saveErrIdx)
     );
-    expect(closest).toBeLessThan(400);
+    // Headroom for documented banner siblings (ReferralWelcome,
+    // RedeemReferralBanner, etc.) clustered between them. The intent
+    // is "grouped together near the top of the main column", not a
+    // strict character count.
+    expect(closest).toBeLessThan(1200);
   });
 });

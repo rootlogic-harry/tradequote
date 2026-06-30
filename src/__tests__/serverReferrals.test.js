@@ -215,3 +215,31 @@ describe('Sanity: no banned vocabulary in user-facing referral copy', () => {
     expect(html).not.toMatch(rx);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────
+// /signup ?ref= preservation (2026-06-30 fix)
+// ───────────────────────────────────────────────────────────────────────
+//
+// The share-URL flow lands on `/?ref=CODE` (landing) → user clicks
+// "Get started" → /signup → /login → /auth/login. Until this fix the
+// /signup route was a bare `res.redirect(302, '/login')` that dropped
+// the query string, severing the chain before /auth/login's
+// session-stash could see it.
+describe('/signup route preserves ?ref= across the redirect', () => {
+  test('reads req.query.ref and forwards it normalised', () => {
+    const start = serverSrc.indexOf("app.get('/signup',");
+    expect(start).toBeGreaterThan(-1);
+    const block = serverSrc.slice(start, start + 600);
+    expect(block).toMatch(/normaliseReferralCode\(\s*req\.query\.ref\s*\)/);
+    expect(block).toMatch(/res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`/);
+    expect(block).toMatch(/ref=\$\{encodeURIComponent\(ref\)\}/);
+  });
+
+  test('falls back to bare /login when no ref present (no breaking change)', () => {
+    const start = serverSrc.indexOf("app.get('/signup',");
+    const block = serverSrc.slice(start, start + 600);
+    // `?ref=` is empty string when normaliseReferralCode returns null,
+    // so the redirect collapses to bare `/login`.
+    expect(block).toMatch(/const qs = ref \? `\?ref=/);
+  });
+});

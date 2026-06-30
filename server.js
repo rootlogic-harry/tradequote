@@ -2662,7 +2662,16 @@ app.get('/', (req, res, next) => {
 // signup and login are the same flow. 302 redirect preserves the URL the
 // user landed on for analytics + lets us swap the destination later
 // without changing the landing copy.
-app.get('/signup', (req, res) => res.redirect(302, '/login'));
+app.get('/signup', (req, res) => {
+  // Referrals Phase 1 (2026-06-30 fix): preserve `?ref=` across the
+  // /signup → /login → /auth/login redirect chain. Without this the
+  // share-URL flow (landing → "Get started" → /signup) silently drops
+  // the ref before /auth/login's session-stash sees it. Normalised
+  // here so a malformed value never reaches downstream routes.
+  const ref = normaliseReferralCode(req.query.ref);
+  const qs = ref ? `?ref=${encodeURIComponent(ref)}` : '';
+  res.redirect(302, `/login${qs}`);
+});
 
 // --- Auth Middleware ---
 
