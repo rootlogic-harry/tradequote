@@ -207,6 +207,23 @@ Technical plumbing for Google + AI-crawler discoverability. Asserted by
   stripped-down landing-style HTML shell with the same OG meta pattern
   so individual guides get the OG image preview. Renders a "Coming soon"
   panel when the directory is empty. Helper lives in `src/utils/guides.js`.
+- **Per-guide JSON-LD `@graph`** (2026-06-30) — every individual guide
+  page emits a schema.org `@graph` containing `Article` (pillar) or
+  `BlogPosting` (cluster) + `Person` (Harry Doyle, Founder, FastQuote —
+  `@id` `https://fastquote.uk/#harry`) + `BreadcrumbList` (3 levels) +
+  an `Organization` reference to the landing's `@id`
+  (`https://fastquote.uk/#organization`, never redefined). When a guide
+  body has H2 headings shaped as questions (ends with `?`), an extra
+  `FAQPage` node is emitted using the H2 + the next paragraph as the
+  Q/A pair — never fabricated. The `/guides/` index emits a
+  `CollectionPage` with `hasPart` referencing every guide's article
+  `@id`, and a 2-level breadcrumb. Each guide page also renders a
+  visible "Read next" `<nav aria-label="Related guides">` (3 links,
+  driven by front-matter `related` with deterministic fallback) and an
+  honest author bio (Person microdata, "Founder of FastQuote" — no
+  expert/master claims). Asserted by `guidesJsonLd.test.js`. Front-
+  matter keys supported: `title`, `description`, `slug`, `publishedAt`,
+  `modifiedAt`, `section`, `keywords` (array), `related` (array).
 
 ---
 
@@ -502,7 +519,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,466 tests across ~156 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~3,990 tests across ~171 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -561,6 +578,7 @@ Test files live in `src/__tests__/`. Key test suites:
 - `regressionReporter.test.js` — markdown reporter (per-field pass rate, raw-on-failure, baseline deltas, prompt-version stamp)
 - `regressionBaseline.test.js` — baseline payload shape, load/write/overwrite, delta computation
 - `regressionRun.test.js` — CLI flag parsing + exit-code rules (`--strict`, `--require-min-fixtures`, `--bless`)
+- `guidesJsonLd.test.js` — per-guide JSON-LD `@graph` (Article/BlogPosting + Person + BreadcrumbList + Organization ref + optional FAQPage), internal-linking "Read next" block, honest author bio microdata
 
 ---
 

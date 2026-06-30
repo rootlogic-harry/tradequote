@@ -1,9 +1,11 @@
 ---
 title: "DSWA-style day rates — what to charge and when to flex"
-description: "What dry stone wallers typically charge as a day rate in the UK, how DSWA grading affects rate, and when to price per-day vs per-metre."
+description: "UK dry stone wallers typically charge £220 to £360 per day solo, depending on DSWA grading and job type. Master Craftsman work runs £320 to £450+ per day."
 slug: "dswa-day-rate"
 publishedAt: "2026-06-30"
+section: "Pricing"
 keywords: ["DSWA day rate", "dry stone waller day rate UK", "waller pricing", "DSWA grading", "professional waller rate"]
+related: ["cost-per-metre", "how-long-to-rebuild", "whats-in-a-quote"]
 ---
 
 # DSWA-style day rates — what to charge and when to flex

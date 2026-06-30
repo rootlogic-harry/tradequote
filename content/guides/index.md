@@ -3,7 +3,9 @@ title: "Quoting for dry stone wallers — the FastQuote guide"
 description: "A practical guide to quoting dry stone walling jobs in the UK — day rates, per-metre pricing, stone tonnage, RAMS, VAT, and what a good quote should contain."
 slug: "index"
 publishedAt: "2026-06-30"
+section: "Methodology"
 keywords: ["dry stone walling quotes", "dry stone wall pricing UK", "waller day rate", "stone tonnage", "RAMS", "quote template waller"]
+related: ["cost-per-metre", "dswa-day-rate", "whats-in-a-quote"]
 ---
 
 # Quoting for dry stone wallers — the FastQuote guide

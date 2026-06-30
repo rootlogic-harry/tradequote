@@ -1,9 +1,11 @@
 ---
 title: "How much stone do I need? Estimating tonnage for a dry stone wall rebuild"
-description: "Practical tonnage estimates for dry stone walling — the 1-tonne-per-square-metre rule, single-skin vs double-faced, and how to handle reclaim ratios."
+description: "A UK double-faced dry stone wall needs about 1 tonne of stone per square metre of face — order 1.1 to 1.2 tonnes to cover breakage and mis-fit."
 slug: "stone-tonnage"
 publishedAt: "2026-06-30"
+section: "Methodology"
 keywords: ["dry stone wall tonnage", "stone per metre walling", "walling stone calculator", "reclaimed walling stone", "dry stone wall calculation"]
+related: ["cost-per-metre", "whats-in-a-quote", "yorkshire-walling-costs"]
 ---
 
 # How much stone do I need? Estimating tonnage for a dry stone wall rebuild
