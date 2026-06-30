@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
 import ReferralPanel from '../ReferralPanel.jsx';
+import BillingSection from '../BillingSection.jsx';
 
 /**
  * ProfileSetup — Settings / Profile (2026-06-29 redesign).
@@ -36,6 +37,7 @@ export default function ProfileSetup({
   onCancel,
   onProfileComplete,
   onLogout,
+  onHelpClick,
   currentUserId,
   userName,
   showToast,
@@ -127,6 +129,11 @@ export default function ProfileSetup({
     { id: 'trade',      label: 'Your Trade', badge: 'Optional' },
     { id: 'quote',      label: 'Quote Preferences' },
     { id: 'share',      label: 'Sharing' },
+    // Billing section (2026-06-30 launch checklist) — surfaces the
+    // user's subscription state + a downloadable invoice for every
+    // payment. Read-only; no save bar interaction. Hosted on Stripe
+    // (hosted_invoice_url) — no custom rendering.
+    { id: 'billing',    label: 'Billing' },
   ];
 
   // ── Business section ──────────────────────────────────────────────
@@ -678,6 +685,15 @@ export default function ProfileSetup({
     </div>
   );
 
+  // ── Billing section ───────────────────────────────────────────────
+  // Read-only. Pulls from /api/billing/purchases (combined pack +
+  // subscription invoices, sorted desc) and /api/billing/status (plan
+  // name / next billing date / manage button). All invoices are
+  // Stripe-hosted pages — we just surface the URL.
+  const renderBilling = () => (
+    <BillingSection />
+  );
+
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'business': return renderBusiness();
@@ -685,6 +701,7 @@ export default function ProfileSetup({
       case 'trade':    return renderTrade();
       case 'quote':    return renderQuotePrefs();
       case 'share':    return renderShare();
+      case 'billing':  return renderBilling();
       default:         return renderBusiness();
     }
   };
@@ -756,16 +773,33 @@ export default function ProfileSetup({
                 - the full-page Step 1 onboarding mount (no onLogout) stays
                   clean for first-run users with nothing to log out of yet;
                 - any future modal mount can opt out by omitting the prop. */}
-          {isModal && onLogout && (
-            <div className="mt-8 pt-4 border-t border-tq-border flex justify-center">
-              <button
-                type="button"
-                onClick={onLogout}
-                className="text-sm underline transition-colors touch-44"
-                style={{ color: 'var(--tq-muted)', minHeight: 44 }}
-              >
-                Sign out
-              </button>
+          {isModal && (onLogout || onHelpClick) && (
+            <div className="mt-8 pt-4 border-t border-tq-border flex justify-center gap-6">
+              {/* Mobile help entry point (launch checklist 2026-06-30).
+                  BottomNav has Home / New / Quotes / Profile; tapping
+                  Profile opens this modal. Without this link mobile
+                  users have no in-app help path (Sidebar's Help link
+                  is desktop-only >=900px). */}
+              {onHelpClick && (
+                <button
+                  type="button"
+                  onClick={onHelpClick}
+                  className="text-sm underline transition-colors touch-44"
+                  style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+                >
+                  Need help?
+                </button>
+              )}
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="text-sm underline transition-colors touch-44"
+                  style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+                >
+                  Sign out
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -99,8 +99,11 @@ describe('applyQuotePackEventToDb — webhook handler', () => {
     expect(pool.client.query.mock.calls[1][0]).toMatch(/UPDATE users[\s\S]*purchased_quotes = purchased_quotes \+ \$3/);
     expect(pool.client.query.mock.calls[2][0]).toMatch(/COMMIT/);
     expect(pool.client.release).toHaveBeenCalled();
-    // Params: [userId, stripePaymentId, QUOTE_PACK_SIZE, amount]
-    expect(pool.client.query.mock.calls[1][1]).toEqual(['user_abc', 'pi_123', 5, 999]);
+    // Params: [userId, stripePaymentId, QUOTE_PACK_SIZE, amount, hostedInvoiceUrl]
+    // The 5th param (hostedInvoiceUrl) was added 2026-06-30 (launch
+    // checklist: per-purchase invoices). It's null in tests because no
+    // Stripe key is configured; the helper is best-effort.
+    expect(pool.client.query.mock.calls[1][1]).toEqual(['user_abc', 'pi_123', 5, 999, null]);
   });
 
   test('payment_intent.succeeded (quote_pack) credits pack', async () => {

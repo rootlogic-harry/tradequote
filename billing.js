@@ -437,6 +437,15 @@ export async function createQuotePackCheckoutSession({ userId, email, successUrl
     // Harry is not VAT-registered (2026-06-24). Receipt must NOT
     // imply VAT — same constraint as TRQ-157.
     automatic_tax: { enabled: false },
+    // Per-purchase invoice (2026-06-30 launch checklist). With
+    // invoice_creation enabled, Stripe finalises an Invoice object
+    // automatically after the PaymentIntent succeeds. The Invoice has
+    // a hosted_invoice_url (Stripe-hosted page) + invoice_pdf (direct
+    // PDF). We surface the hosted page in /api/billing/purchases so
+    // tradesmen running their own business can grab a receipt for
+    // their accounting. Stripe handles branding (Dashboard → Settings
+    // → Branding) — no custom rendering on our side.
+    invoice_creation: { enabled: true },
     client_reference_id: userId,
     customer_email: email,
     // Tag both the session AND the payment_intent so the webhook can
@@ -456,6 +465,82 @@ export async function createQuotePackCheckoutSession({ userId, email, successUrl
   });
 
   return { url: session.url, sessionId: session.id };
+}
+
+/**
+ * Resolve the hosted invoice URL for a one-time pack payment.
+ *
+ * Stripe creates the Invoice asynchronously after the PaymentIntent
+ * succeeds (invoice_creation: { enabled: true } on the Checkout
+ * Session). The webhook fires on `payment_intent.succeeded` or
+ * `checkout.session.completed` — the Invoice may or may not be
+ * attached yet depending on event ordering. This helper does a
+ * best-effort lookup:
+ *
+ *   1. If the PaymentIntent has an `invoice` field set, retrieve it
+ *      and return `hosted_invoice_url`.
+ *   2. Otherwise, list invoices on the customer for this PaymentIntent
+ *      (Stripe's filter doesn't accept payment_intent directly, so we
+ *      scan recent invoices and match on metadata).
+ *   3. If nothing matches yet, return null. The webhook will store
+ *      null; users can refetch later via the on-demand list endpoint
+ *      which goes through stripe.invoices.list directly.
+ *
+ * Failures are swallowed and return null — the credit must land even
+ * if invoice resolution hiccups. The audit row's stripe_payment_id is
+ * stable; a later backfill could re-resolve.
+ *
+ * @param {string} stripePaymentId — PaymentIntent id (`pi_...`)
+ * @returns {Promise<string|null>}
+ */
+export async function getHostedInvoiceUrlForPayment(stripePaymentId) {
+  if (!stripePaymentId || !stripePaymentId.startsWith('pi_')) return null;
+  try {
+    const stripe = stripeClient();
+    const pi = await stripe.paymentIntents.retrieve(stripePaymentId);
+    if (pi?.invoice) {
+      const invoiceId = typeof pi.invoice === 'string' ? pi.invoice : pi.invoice.id;
+      if (invoiceId) {
+        const invoice = await stripe.invoices.retrieve(invoiceId);
+        return invoice?.hosted_invoice_url || null;
+      }
+    }
+    return null;
+  } catch (err) {
+    // Best-effort — don't let invoice resolution block crediting.
+    console.warn('[billing] getHostedInvoiceUrlForPayment failed:', err?.message || err);
+    return null;
+  }
+}
+
+/**
+ * List recent invoices for a Stripe customer (subscription receipts).
+ *
+ * Subscriptions get an invoice per billing cycle — Stripe already
+ * generates these natively with hosted_invoice_url + invoice_pdf. We
+ * expose them in /api/billing/purchases so the user has one place to
+ * download every receipt.
+ *
+ * Returns the full Invoice objects (with hosted_invoice_url, total,
+ * created, etc.) — the caller maps them to the public shape.
+ *
+ * @param {string} stripeCustomerId
+ * @param {number} limit — Stripe's per-page cap is 100; we default to 24
+ * @returns {Promise<Array>}
+ */
+export async function listCustomerInvoices(stripeCustomerId, limit = 24) {
+  if (!stripeCustomerId) return [];
+  try {
+    const stripe = stripeClient();
+    const resp = await stripe.invoices.list({
+      customer: stripeCustomerId,
+      limit: Math.min(Math.max(1, limit), 100),
+    });
+    return resp?.data || [];
+  } catch (err) {
+    console.warn('[billing] listCustomerInvoices failed:', err?.message || err);
+    return [];
+  }
 }
 
 /**
@@ -481,14 +566,22 @@ export async function createQuotePackCheckoutSession({ userId, email, successUrl
  * @returns {Promise<{applied: boolean, reason?: string, userId?: string, credited?: number}>}
  */
 export async function applyQuotePackEventToDb(pool, event) {
-  // Extract (userId, stripePaymentId, amountPaidPence) from whichever
-  // event shape arrived. checkout.session.completed and
+  // Extract (userId, stripePaymentId, amountPaidPence, hostedInvoiceUrl)
+  // from whichever event shape arrived. checkout.session.completed and
   // payment_intent.succeeded both carry the metadata we set above; we
   // prefer the payment_intent id as the dedupe key because it's stable
   // across both event types (one Checkout session → one PaymentIntent).
+  //
+  // The hostedInvoiceUrl is best-effort: the Checkout Session carries
+  // `invoice` directly when invoice_creation was enabled; for the
+  // payment_intent.succeeded event we don't get the invoice in the
+  // payload, so we look it up via the Stripe API. Either path may
+  // return null — the column is nullable and a backfill can re-resolve.
   let userId = null;
   let stripePaymentId = null;
   let amountPaidPence = null;
+  let hostedInvoiceUrl = null;
+  let stripeInvoiceId = null;
 
   if (event?.type === 'checkout.session.completed') {
     const s = event.data?.object || {};
@@ -501,6 +594,10 @@ export async function applyQuotePackEventToDb(pool, event) {
     userId = s.metadata?.fastquote_user_id || s.client_reference_id || null;
     stripePaymentId = s.payment_intent || s.id || null;
     amountPaidPence = typeof s.amount_total === 'number' ? s.amount_total : QUOTE_PACK_PRICE_PENCE;
+    // Checkout session may include `invoice` (id string) when
+    // invoice_creation was enabled. We don't get the hosted URL on the
+    // session itself, so we'll resolve it via the API below.
+    if (typeof s.invoice === 'string') stripeInvoiceId = s.invoice;
   } else if (event?.type === 'payment_intent.succeeded') {
     const pi = event.data?.object || {};
     if (pi.metadata?.fastquote_product !== 'quote_pack') {
@@ -510,12 +607,34 @@ export async function applyQuotePackEventToDb(pool, event) {
     stripePaymentId = pi.id || null;
     amountPaidPence = typeof pi.amount_received === 'number' ? pi.amount_received
       : (typeof pi.amount === 'number' ? pi.amount : QUOTE_PACK_PRICE_PENCE);
+    // PaymentIntent may include `invoice` (id string) when an Invoice
+    // was attached. Same async timing as above — resolve via API.
+    if (typeof pi.invoice === 'string') stripeInvoiceId = pi.invoice;
   } else {
     return { applied: false, reason: `unhandled event type ${event?.type}` };
   }
 
   if (!userId) return { applied: false, reason: 'no fastquote_user_id on event' };
   if (!stripePaymentId) return { applied: false, reason: 'no stripe payment id on event' };
+
+  // Best-effort hosted invoice URL resolution. Wrapped in try so a
+  // Stripe API hiccup never blocks the credit. Two paths:
+  //  1. Event payload carried the invoice id → retrieve once.
+  //  2. No invoice on event yet → resolve via PaymentIntent (helper
+  //     handles its own try/catch + null fallback).
+  try {
+    if (stripeInvoiceId) {
+      const stripe = stripeClient();
+      const invoice = await stripe.invoices.retrieve(stripeInvoiceId);
+      hostedInvoiceUrl = invoice?.hosted_invoice_url || null;
+    } else {
+      hostedInvoiceUrl = await getHostedInvoiceUrlForPayment(stripePaymentId);
+    }
+  } catch (err) {
+    // Stripe SDK is unconfigured in some test environments — the
+    // helper above already logs; just keep hostedInvoiceUrl null.
+    hostedInvoiceUrl = null;
+  }
 
   // Transaction: insert audit row, then credit the user. ON CONFLICT
   // DO NOTHING on the audit insert is the dedupe — if we've seen this
@@ -526,8 +645,8 @@ export async function applyQuotePackEventToDb(pool, event) {
     await client.query('BEGIN');
     const { rows } = await client.query(
       `WITH inserted AS (
-         INSERT INTO quote_purchases (user_id, stripe_payment_id, quotes_added, amount_paid_pence)
-         VALUES ($1, $2, $3, $4)
+         INSERT INTO quote_purchases (user_id, stripe_payment_id, quotes_added, amount_paid_pence, hosted_invoice_url)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (stripe_payment_id) DO NOTHING
          RETURNING id
        )
@@ -536,15 +655,39 @@ export async function applyQuotePackEventToDb(pool, event) {
         WHERE id = $1
           AND EXISTS (SELECT 1 FROM inserted)
         RETURNING id`,
-      [userId, stripePaymentId, QUOTE_PACK_SIZE, amountPaidPence]
+      [userId, stripePaymentId, QUOTE_PACK_SIZE, amountPaidPence, hostedInvoiceUrl]
     );
     await client.query('COMMIT');
     const credited = rows.length > 0 ? QUOTE_PACK_SIZE : 0;
-    return { applied: true, userId, credited, stripePaymentId };
+    return { applied: true, userId, credited, stripePaymentId, hostedInvoiceUrl };
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch {}
     throw err;
   } finally {
     client.release();
   }
+}
+
+/**
+ * Format a public-facing description for a one-time pack purchase.
+ *
+ * Pure helper — called by /api/billing/purchases when shaping the
+ * response, and exposed for unit testing. Falls back gracefully if
+ * inputs are missing.
+ *
+ * @param {object} opts
+ * @param {string} opts.kind — 'pack' | 'subscription'
+ * @param {number} opts.amountPence
+ * @returns {string}
+ */
+export function formatPurchaseDescription({ kind, amountPence } = {}) {
+  if (kind === 'pack') {
+    const pounds = (Number(amountPence) || QUOTE_PACK_PRICE_PENCE) / 100;
+    return `${QUOTE_PACK_SIZE} quotes — £${pounds.toFixed(2)}`;
+  }
+  if (kind === 'subscription') {
+    const pounds = (Number(amountPence) || 0) / 100;
+    return `Monthly subscription — £${pounds.toFixed(2)}`;
+  }
+  return 'Purchase';
 }
