@@ -1,5 +1,61 @@
 import { VALID_STONE_TYPES, VALID_CONFIDENCE_LEVELS } from '../constants.js';
 
+// ─────────────────────────────────────────────────────────────────────
+// stripMathFromDescriptions (Paul Clough, 2026-06-30)
+//
+// Belt-and-braces server-side strip of AI math walkthroughs from
+// client-facing schedule-of-works step descriptions. The AI sometimes
+// emits things like:
+//
+//   "Rebuild 50m × 1.2m field wall... (50m × 1.2m = 60m² single face =
+//    120m² both faces combined; ~3m²/day/2 wallers = 40 operative-days
+//    ÷ 2 = 20 days, reduced to 10 days accounting for prepared
+//    foundations and on-site stone)."
+//
+// PR #97 tried to fix this via prompt guidance ("CLIENT-FACING
+// DESCRIPTIONS — NO INTERNAL MATH"). The AI sometimes ignored the
+// rule, so we reverted and built this deterministic layer instead:
+// prompts are probabilistic, regex is not.
+//
+// Removes (preserving the rest of the description):
+//   - Parenthetical math blocks containing "= …m²" or "= … days" or
+//     "operative-days" or "÷"
+//   - Standalone "~Nm²/day/N wallers" benchmark fragments
+//   - "reduced to N days for [reason]" tails
+//   - "accounting for [reason]" justifications appended to figures
+//
+// Preserves plain labour figures like "Estimated 2 days for 2 operatives"
+// — only the working-out math gets stripped. Run as the LAST step in
+// normalizeAIResponse so any upstream changes still flow through.
+// ─────────────────────────────────────────────────────────────────────
+
+const MATH_PARENS_RE =
+  /\s*\([^()]*?(?:=\s*\d|operative-days|÷|m²\/day)[^()]*?\)/g;
+const BENCHMARK_FRAGMENT_RE =
+  /\s*[~≈]?\d+(?:\.\d+)?\s*m²\/day(?:\/\d+\s*wallers?)?[,;.]?/gi;
+const REDUCED_TAIL_RE =
+  /[,;]?\s*reduced to \d+(?:\.\d+)?\s*days?\s+(?:for|because of|due to)\s+[^.;]+/gi;
+const ACCOUNTING_TAIL_RE =
+  /[,;]?\s*accounting for [^.;]+/gi;
+const ORPHAN_DIVISION_RE =
+  /\s*\d+(?:\.\d+)?\s*operative-days?\s*÷\s*\d+\s*=\s*\d+(?:\.\d+)?\s*days?/gi;
+
+export function stripMathFromDescription(description) {
+  if (typeof description !== 'string' || !description) return description;
+  return description
+    .replace(MATH_PARENS_RE, '')
+    .replace(BENCHMARK_FRAGMENT_RE, '')
+    .replace(REDUCED_TAIL_RE, '')
+    .replace(ACCOUNTING_TAIL_RE, '')
+    .replace(ORPHAN_DIVISION_RE, '')
+    // Collapse double-spaces + space-before-punct that the strips can produce
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;:])/g, '$1')
+    // Tidy trailing whitespace + dangling ". ."
+    .replace(/\.\s*\.\s*/g, '. ')
+    .trim();
+}
+
 export function parseAIResponse(raw) {
   if (raw == null || raw === '') return null;
 
@@ -192,10 +248,13 @@ export function normalizeAIResponse(parsed) {
     aiQuantity: m.quantity,
   }));
 
-  // Schedule of works: add id
+  // Schedule of works: add id + strip any AI math walkthrough from the
+  // client-facing description (Paul Clough bug, 2026-06-30). See
+  // stripMathFromDescription above for the regex contract.
   data.scheduleOfWorks = data.scheduleOfWorks.map((s, i) => ({
     ...s,
     id: `sow-${i}`,
+    description: stripMathFromDescription(s.description),
   }));
 
   // Labour: add aiEstimatedDays
