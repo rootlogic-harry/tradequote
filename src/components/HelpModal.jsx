@@ -20,9 +20,10 @@ import React, { useEffect } from 'react';
  * (fastquote@harrydoyle.uk) + a tight micro-FAQ for the four most
  * likely real questions. No "Send" button, no message textarea.
  *
- * Visibility: basic-user surface. No banned vocab in copy (the FAQ
- * summary "Why is my quote stuck on AI Analysis?" is fine — it
- * mirrors the actual UI label the user has seen).
+ * Visibility: basic-user surface. No banned vocab in copy — the
+ * micro-FAQ describes the loading screen by what the user actually
+ * sees on it ("Analysing photographs..." / "Reviewing analysis..."),
+ * never by the internal "AI Analysis" component name.
  */
 const HELP_EMAIL = 'fastquote@harrydoyle.uk';
 
@@ -178,10 +179,11 @@ export default function HelpModal({ open, onClose, showToast }) {
             </ul>
           </section>
 
-          {/* Section 3 — Quick answers (micro-FAQ accordion). The
-              "AI Analysis" mention inside the first summary is fine
-              because it mirrors the actual UI label the user has
-              seen on Step 3 (loading screen). */}
+          {/* Section 3 — Quick answers (micro-FAQ accordion). Copy
+              describes the loading screen by what the user sees on
+              it (the "Analysing photographs..." / "Reviewing
+              analysis..." stages), never by the internal
+              "AI Analysis" component name. */}
           <section>
             <h4
               style={{
@@ -206,7 +208,7 @@ export default function HelpModal({ open, onClose, showToast }) {
                     color: 'var(--tq-text)',
                   }}
                 >
-                  Why is my quote stuck on AI Analysis?
+                  Why is my quote taking ages on the loading screen?
                 </summary>
                 <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--tq-muted)', lineHeight: 1.5 }}>
                   Usually a slow network or a very large photo. Refresh — your draft is saved. If it persists, email us.
