@@ -701,10 +701,18 @@ function reducerCore(state, action) {
       return { ...state, recentJobs: state.recentJobs.filter(j => j.id !== action.id) };
 
     case 'SET_VIEW_MODE': {
-      // Per-session UI toggle between 'active' and 'archive'. Unknown
+      // Per-session UI toggle between the SavedQuotes tabs. Unknown
       // values are ignored so a stray dispatch can't put the dashboard
-      // in a phantom mode that renders nothing.
-      if (action.mode !== 'active' && action.mode !== 'archive') return state;
+      // in a phantom mode that renders nothing. Keep this list in
+      // lockstep with VIEW_MODES in `src/components/SavedQuotes.jsx`
+      // and with the three buckets in `src/utils/jobLifecycle.js`.
+      //
+      // Bug 2026-06-30 (Harry): the 'completed' tab silently did
+      // nothing because this guard predated Mark's 2026-06-26
+      // three-tab split (Active | Completed | Archive) and was
+      // never extended past the original two-tab allow-list.
+      const ALLOWED = ['active', 'completed', 'archive'];
+      if (!ALLOWED.includes(action.mode)) return state;
       return { ...state, viewMode: action.mode };
     }
 
