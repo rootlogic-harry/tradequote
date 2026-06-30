@@ -52,9 +52,15 @@ async function createAgentRun(pool, { userId, jobId, agentType, inputSummary }) 
 
 /**
  * Mark an agent_run as completed with output summary and timing.
+ *
+ * Lifecycle bug-hunt 2026-06-30 #4: WHERE includes `status = 'running'`
+ * so a row already stamped 'failed' by reapOrphanedRuns (60-min
+ * threshold) is NOT silently overwritten back to 'completed' when a
+ * slow agent finally returns. The analytics queries that count
+ * `failed` runs rely on the reaper stamp being durable.
  */
 async function completeAgentRun(pool, runId, { output, model, promptTokens, completionTokens, durationMs }) {
-  await pool.query(
+  const { rowCount } = await pool.query(
     `UPDATE agent_runs
      SET status = 'completed',
          output_summary = $1,
@@ -62,7 +68,7 @@ async function completeAgentRun(pool, runId, { output, model, promptTokens, comp
          prompt_tokens = $3,
          completion_tokens = $4,
          duration_ms = $5
-     WHERE id = $6`,
+     WHERE id = $6 AND status = 'running'`,
     [
       output ? JSON.stringify(output) : null,
       model || null,
@@ -72,18 +78,30 @@ async function completeAgentRun(pool, runId, { output, model, promptTokens, comp
       runId,
     ]
   );
+  if (rowCount === 0) {
+    // Almost certainly reaped — log so the audit trail is visible
+    // without throwing (the agent did finish; the work was real).
+    console.warn(`[Agent] completeAgentRun no-op: runId=${runId} was no longer 'running' (likely reaped). Audit row stays 'failed' to preserve analytics integrity.`);
+  }
 }
 
 /**
  * Mark an agent_run as failed with error message.
+ *
+ * Same WHERE guard as completeAgentRun — if the reaper has already
+ * stamped this row 'failed', leave the reaper's marker in `error`
+ * intact rather than overwriting with the in-process error.
  */
 async function failAgentRun(pool, runId, errorMessage, durationMs) {
-  await pool.query(
+  const { rowCount } = await pool.query(
     `UPDATE agent_runs
      SET status = 'failed', error = $1, duration_ms = $2
-     WHERE id = $3`,
+     WHERE id = $3 AND status = 'running'`,
     [errorMessage, durationMs || null, runId]
   );
+  if (rowCount === 0) {
+    console.warn(`[Agent] failAgentRun no-op: runId=${runId} was no longer 'running' (likely reaped). Original reaper marker preserved.`);
+  }
 }
 
 /**

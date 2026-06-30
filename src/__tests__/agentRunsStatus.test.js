@@ -44,12 +44,29 @@ describe('TRQ-140 — exported canonical enum', () => {
 describe('TRQ-140 — server.js /analyse path now writes "completed"', () => {
   test('the success-path UPDATE on agent_runs writes status = \'completed\'', () => {
     // Anchor on the analyse success path. The UPDATE must use 'completed'.
+    // Bound widened 2026-06-30 (bug-hunt #4) — the WHERE clause grew
+    // an `AND status = 'running'` guard so the regex needs to reach
+    // past the row-status filter.
     const successBlock = serverJs.match(
-      /TRQ-173: success-path agent_runs completion[\s\S]{0,800}WHERE id = \$4/
+      /TRQ-173: success-path agent_runs completion[\s\S]{0,1000}WHERE id = \$4\s+AND status = 'running'/
     );
     expect(successBlock).not.toBeNull();
     expect(successBlock[0]).toMatch(/status = 'completed'/);
     expect(successBlock[0]).not.toMatch(/status = 'ok'/);
+  });
+
+  test('the success-path UPDATE guards on status=\'running\' (bug-hunt #4)', () => {
+    // Reaper-stamped rows must NOT be overwritten back to completed
+    // when a slow agent finally returns.
+    expect(serverJs).toMatch(
+      /UPDATE agent_runs SET status = 'completed'[\s\S]{0,400}WHERE id = \$4\s+AND status = 'running'/
+    );
+  });
+
+  test('the failure-path UPDATE guards on status=\'running\' (bug-hunt #4)', () => {
+    expect(serverJs).toMatch(
+      /UPDATE agent_runs SET status = 'failed'[\s\S]{0,300}WHERE id = \$3\s+AND status = 'running'/
+    );
   });
 
   test('no remaining `status = \'ok\'` writes anywhere in the codebase', () => {

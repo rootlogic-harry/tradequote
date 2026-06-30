@@ -147,10 +147,16 @@ export async function saveJob(userId, state) {
     // dedup window (TRQ-137). Without the retry, a single transient
     // 5xx during the Step-5 save burned the only attempt and the user
     // saw "Save failed".
+    //
+    // Lifecycle bug-hunt 2026-06-30 #1: send the per-draft quoteToken
+    // alongside the snapshot. Server uses it to disambiguate two-tab
+    // races on quote_reference — different tokens with same ref means
+    // sibling drafts, and tab B must INSERT a fresh row (not inherit
+    // tab A's job_id and DELETE-INSERT over tab A's quote_diffs).
     const res = await fetchWithRetry(`/api/users/${userId}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(snapshot),
+      body: JSON.stringify({ ...snapshot, quoteToken: state.quoteToken || null }),
       signal: controller.signal,
     });
     if (!res.ok) {

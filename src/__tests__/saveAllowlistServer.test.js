@@ -8,12 +8,20 @@ describe('SERVER_SAVE_ALLOWLIST', () => {
     expect(SERVER_SAVE_ALLOWLIST).toContain('quotePayload');
     expect(SERVER_SAVE_ALLOWLIST).toContain('quoteSequence');
     expect(SERVER_SAVE_ALLOWLIST).toContain('diffs');
-    expect(SERVER_SAVE_ALLOWLIST).toContain('aiRawResponse');
   });
 
   test('excludes photos and blobs', () => {
     expect(SERVER_SAVE_ALLOWLIST).not.toContain('photos');
     expect(SERVER_SAVE_ALLOWLIST).not.toContain('extraPhotos');
+  });
+
+  test('excludes aiRawResponse (lifecycle bug-hunt 2026-06-30 #5)', () => {
+    // aiRawResponse is transient (CLAUDE.md Pitfall #3). The SPA's
+    // client SAVE_ALLOWLIST never sent it at top-level — only the
+    // nested quotePayload.quote.aiRawResponse was leaking through
+    // (also stripped in quoteBuilder.js). This server entry was
+    // dead code carrying a GDPR + snapshot-bloat liability.
+    expect(SERVER_SAVE_ALLOWLIST).not.toContain('aiRawResponse');
   });
 });
 

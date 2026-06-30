@@ -532,6 +532,11 @@ function reducerCore(state, action) {
         quoteSaveErrorKey: 0,
         retryCount: 0,
         rams: null,
+        // Lifecycle bug-hunt 2026-06-30 #11 — clear any stale 402
+        // lockout from a prior session so the modal doesn't outlive
+        // a billing-state change (subscription activated, pack bought,
+        // comp ticked over) that's already reflected in /auth/me.
+        quotaLockout: null,
       };
     }
 

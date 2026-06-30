@@ -198,6 +198,19 @@ describe('NEW_QUOTE resets transient fields', () => {
     const result = reducer(state, { type: 'NEW_QUOTE' });
     expect(result.jobDetails.clientPhone).toBe('');
   });
+
+  test('resets quotaLockout to null (lifecycle bug-hunt 2026-06-30 #11)', () => {
+    // A stale lockout from a prior 402 must not survive into a fresh
+    // draft — billing state has potentially changed (subscription
+    // activated, pack bought, comp ticked over).
+    const state = {
+      ...initialState,
+      quotaLockout: { reason: 'free-exhausted', limit: 3 },
+      quoteSequence: 1,
+    };
+    const result = reducer(state, { type: 'NEW_QUOTE' });
+    expect(result.quotaLockout).toBeNull();
+  });
 });
 
 // ======================================================================

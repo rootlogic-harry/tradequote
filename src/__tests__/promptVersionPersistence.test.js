@@ -88,12 +88,15 @@ describe('prompt_version persistence on job save', () => {
   test('INSERT statement binds prompt_version as a parameter', () => {
     // Belt-and-braces: confirm the INSERT references prompt_version
     // as a column AND the values list includes the computed value.
+    // Lifecycle bug-hunt 2026-06-30 #1 appended `quoteToken` after
+    // promptVersion in the params list — relaxed the closing-bracket
+    // assertion so a future addition doesn't break this guard.
     const routeStart = serverSource.indexOf("app.post('/api/users/:id/jobs',");
     const routeEnd = serverSource.indexOf("app.put('/api/users/:id/jobs/:jobId',");
     const routeBody = serverSource.slice(routeStart, routeEnd);
 
     expect(routeBody).toMatch(/INSERT INTO jobs[^;]*prompt_version/);
-    expect(routeBody).toMatch(/promptVersion,?\s*\]/);
+    expect(routeBody).toMatch(/promptVersion,/);
   });
 
   test('photo path /analyse still computes prompt_version (unchanged)', () => {

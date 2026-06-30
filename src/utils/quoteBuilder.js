@@ -92,7 +92,12 @@ export function buildQuotePayload(profile, jobDetails, reviewData, diffs) {
       additionalCosts: reviewData.additionalCosts || [],
       siteConditions: reviewData.siteConditions,
       validUntil: calculateValidUntil(jobDetails.quoteDate),
-      aiRawResponse: reviewData.aiRawResponse,
+      // Lifecycle bug-hunt 2026-06-30 #5: aiRawResponse is transient
+      // (per CLAUDE.md Pitfall #3 / SAVE_ALLOWLIST). It was leaking
+      // through this nested key into JSONB on every save — 5-20 KB
+      // per row, plus a GDPR surface for verbatim user brief notes.
+      // Stripped here so the snapshot stays the size the allowlist
+      // design intended.
     },
     totals,
     diffs: enrichedDiffs,
