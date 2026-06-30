@@ -668,6 +668,8 @@ These apply to every task, every time:
 3. **Build before you push.** `npx vite build` must succeed.
 4. **One concern per commit.** Atomic commits with Linear ticket prefix.
 5. **Update this file.** If your change affects documented architecture, update CLAUDE.md in the same commit.
+6. **Behavioural reducer tests for every state transition.** Adding a `case 'X':` to `src/reducer.js` requires at least one test in `src/__tests__/` that dispatches `{ type: 'X' }` against a representative state and asserts the resulting shape. The `reducerCoverageGate.test.js` suite fails CI if any case has zero `type: 'X'` references in test files — see the SET_VIEW_MODE bug (2026-06-30, Harry: *"selecting completed still does nothing — why didn't you catch this in testing?"*) for the four-day regression this rule exists to prevent. Source-level shape tests do NOT count toward this rule; the reducer is pure logic and pure logic gets behavioural tests.
+7. **PR test plans are honest.** Don't write a "Test plan" section where every item is "After deploy, manually verify X" — that's a confession that no automated test was added, dressed up as a checklist. Mark each item as `[x] Automated (test file)` or `[ ] Manual smoke` so the reader knows which is which.
 
 ---
 
