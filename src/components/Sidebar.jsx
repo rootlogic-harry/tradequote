@@ -22,6 +22,7 @@ export default function Sidebar({
   currentUser,
   profile, // intentionally unused — see header comment on term lockdown
   onSettingsClick,
+  onHelpClick,
   onLogout,
   isAdminPlan = false,
   billing = null,
@@ -102,6 +103,28 @@ export default function Sidebar({
           only fires when it's useful. "Top up" reuses the existing
           /api/billing/buy-quote-pack flow → Stripe Checkout. */}
       <RailQuotaChip billing={billing} />
+
+      {/* Help link (launch checklist 2026-06-30) — sits below the
+          rail-quota chip and above the avatar block. Lower visual
+          weight than the nav items: text-sm muted link, no icon.
+          Opens the global HelpModal (App.jsx). Hidden if the parent
+          didn't wire onHelpClick so the rail stays clean. */}
+      {onHelpClick && (
+        <div className="px-3 pb-2">
+          <button
+            type="button"
+            onClick={onHelpClick}
+            className="text-sm transition-colors hover:underline w-full text-left px-3 py-1.5"
+            style={{
+              color: 'var(--tq-nav-muted)',
+              fontFamily: 'Inter, sans-serif',
+              minHeight: 44,
+            }}
+          >
+            Help
+          </button>
+        </div>
+      )}
 
       {/* Bottom section: theme toggle + user */}
       <div className="px-3 pb-4 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
