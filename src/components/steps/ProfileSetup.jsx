@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { validateProfile } from '../../utils/validators.js';
 import { DEFAULT_DAY_RATE } from '../../constants.js';
 import ReferralPanel from '../ReferralPanel.jsx';
+import BillingSection from '../BillingSection.jsx';
 
 /**
  * ProfileSetup — Settings / Profile (2026-06-29 redesign).
@@ -128,6 +129,11 @@ export default function ProfileSetup({
     { id: 'trade',      label: 'Your Trade', badge: 'Optional' },
     { id: 'quote',      label: 'Quote Preferences' },
     { id: 'share',      label: 'Sharing' },
+    // Billing section (2026-06-30 launch checklist) — surfaces the
+    // user's subscription state + a downloadable invoice for every
+    // payment. Read-only; no save bar interaction. Hosted on Stripe
+    // (hosted_invoice_url) — no custom rendering.
+    { id: 'billing',    label: 'Billing' },
   ];
 
   // ── Business section ──────────────────────────────────────────────
@@ -679,6 +685,15 @@ export default function ProfileSetup({
     </div>
   );
 
+  // ── Billing section ───────────────────────────────────────────────
+  // Read-only. Pulls from /api/billing/purchases (combined pack +
+  // subscription invoices, sorted desc) and /api/billing/status (plan
+  // name / next billing date / manage button). All invoices are
+  // Stripe-hosted pages — we just surface the URL.
+  const renderBilling = () => (
+    <BillingSection />
+  );
+
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'business': return renderBusiness();
@@ -686,6 +701,7 @@ export default function ProfileSetup({
       case 'trade':    return renderTrade();
       case 'quote':    return renderQuotePrefs();
       case 'share':    return renderShare();
+      case 'billing':  return renderBilling();
       default:         return renderBusiness();
     }
   };
