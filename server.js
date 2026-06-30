@@ -425,6 +425,17 @@ async function initDB() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS decline_reason TEXT;
     `);
 
+    // Lifecycle bug-hunt 2026-06-30 #1 — per-draft client token used to
+    // disambiguate two tabs that race-incremented quoteSequence to the
+    // same quote_reference. The dedup at POST /api/users/:id/jobs now
+    // refuses to return an existing job_id when the incoming
+    // quote_token differs from the stored one — that's the signal that
+    // tab B is a sibling draft, not a re-save of tab A. Nullable so
+    // legacy rows continue to work.
+    await client.query(`
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS quote_token TEXT;
+    `);
+
     // TRQ-124: Client Portal columns — all additive. Once written,
     // client_snapshot + client_snapshot_profile are frozen (Do-Not-Touch).
     await client.query(`
@@ -3123,6 +3134,13 @@ app.post('/api/users/:id/jobs', async (req, res) => {
     const { jobDetails, quotePayload } = allowed;
 
     const quoteRef = jobDetails?.quoteReference || '';
+    // Lifecycle bug-hunt 2026-06-30 #1: per-draft token sent alongside
+    // the snapshot. Disambiguates two tabs that both incremented to the
+    // same quote_reference (the race the diff DELETE-INSERT pattern
+    // wipes silently). Length-capped + alphanumeric-only so a hostile
+    // body can't break the dedup query.
+    const rawToken = typeof req.body?.quoteToken === 'string' ? req.body.quoteToken : null;
+    const quoteToken = rawToken && /^[a-zA-Z0-9-]{1,64}$/.test(rawToken) ? rawToken : null;
 
     // TRQ-137: Dedup window widened from 30s → 10 minutes.
     // Why: Paul's edit-regenerate-save cycle is slower than 30s (he
@@ -3134,16 +3152,31 @@ app.post('/api/users/:id/jobs', async (req, res) => {
     // POST within 10 minutes, return the existing id — the client then
     // holds that id and switches to PUT for any subsequent saves,
     // closing the loop.
+    //
+    // Bug-hunt 2026-06-30 #1: token-aware dedup. Only return the
+    // existing id when the stored quote_token matches the incoming
+    // one (or either is NULL — legacy/unknown). Different tokens with
+    // the same quote_reference means two browser tabs raced — fall
+    // through to INSERT a fresh row so tab B doesn't inherit tab A's
+    // job_id and silently DELETE-INSERT over tab A's quote_diffs.
     if (quoteRef) {
       const { rows: existing } = await pool.query(
-        `SELECT id FROM jobs
+        `SELECT id, quote_token FROM jobs
          WHERE user_id = $1 AND quote_reference = $2
            AND saved_at > NOW() - INTERVAL '10 minutes'
          ORDER BY saved_at DESC LIMIT 1`,
         [req.params.id, quoteRef]
       );
       if (existing.length > 0) {
-        return res.json({ id: existing[0].id });
+        const existingToken = existing[0].quote_token;
+        const tokensMatch =
+          !existingToken || !quoteToken || existingToken === quoteToken;
+        if (tokensMatch) {
+          return res.json({ id: existing[0].id });
+        }
+        console.warn(
+          `[Save] quote_reference collision: user=${req.params.id} ref=${quoteRef} existingToken=${existingToken} incomingToken=${quoteToken} — skipping dedup, inserting fresh row`
+        );
       }
     }
 
@@ -3171,8 +3204,8 @@ app.post('/api/users/:id/jobs', async (req, res) => {
 
     await pool.query(
       `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
-        quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_chars, prompt_version)
-       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9, $10)`,
+        quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_chars, prompt_version, quote_token)
+       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11)`,
       [
         id,
         req.params.id,
@@ -3184,6 +3217,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         JSON.stringify(quoteSnapshot),
         promptChars,
         promptVersion,
+        quoteToken,
       ]
     );
     res.json({ id });
@@ -6362,9 +6396,14 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
     // Anthropic spend invisible to the calibration agent.
     if (analyseRunId) {
       const usage = analysisResponse.usage || {};
+      // Lifecycle bug-hunt 2026-06-30 #4: AND status='running' guard
+      // so a reaper-stamped 'failed' row isn't silently rewritten back
+      // to 'completed' when an analyse that exceeded the 60-min reap
+      // threshold finally returns.
       pool.query(
         `UPDATE agent_runs SET status = 'completed', prompt_tokens = $1,
-                 completion_tokens = $2, duration_ms = $3 WHERE id = $4`,
+                 completion_tokens = $2, duration_ms = $3
+           WHERE id = $4 AND status = 'running'`,
         [
           Number(usage.input_tokens) || 0,
           Number(usage.output_tokens) || 0,
@@ -6376,10 +6415,12 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   } catch (err) {
     // TRQ-173: failure-path agent_runs completion. Best-effort, fire
     // before safeError responds. Captures error message (truncated) so
-    // Analytics can show recent failures.
+    // Analytics can show recent failures. Same status='running' guard
+    // as the success path (bug-hunt 2026-06-30 #4).
     if (analyseRunId) {
       pool.query(
-        `UPDATE agent_runs SET status = 'failed', duration_ms = $1, error = $2 WHERE id = $3`,
+        `UPDATE agent_runs SET status = 'failed', duration_ms = $1, error = $2
+           WHERE id = $3 AND status = 'running'`,
         [Date.now() - analyseStart, String(err?.message || 'unknown').slice(0, 500), analyseRunId]
       ).catch(() => {});
     }
@@ -6544,15 +6585,19 @@ app.post('/q/:token/respond', async (req, res) => {
        WHERE client_token = $5
          AND client_token_expires_at > NOW()
          AND client_response IS NULL
+         AND status NOT IN ('completed')
        RETURNING id, user_id`,
       [response, reason, req.ip, ua || null, token]
     );
 
     if (rows.length === 0) {
-      // Either the token is unknown/expired OR the client_response is
-      // already set. 409 Conflict in both cases — the request was valid
-      // but conflicts with the resource's current state.
-      return res.status(409).json({ error: 'Response already recorded or link expired' });
+      // Either the token is unknown/expired, the client_response is
+      // already set, OR the job is in terminal status 'completed'.
+      // Lifecycle bug-hunt 2026-06-30 #2: the 'completed' guard prevents
+      // a regenerated-then-clicked link from dragging status backwards
+      // out of the terminal state — VALID_TRANSITIONS treats 'completed'
+      // as a sink and this respond UPDATE used to bypass it.
+      return res.status(409).json({ error: 'Response already recorded, link expired, or job already completed' });
     }
 
     // Analytics Phase 1 — fire client_responded attributed to the

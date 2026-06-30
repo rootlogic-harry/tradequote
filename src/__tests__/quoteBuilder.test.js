@@ -314,9 +314,14 @@ describe('buildQuotePayload', () => {
     expect(result.quote.validUntil).toBe('2026-04-12');
   });
 
-  test('includes aiRawResponse', () => {
+  test('does NOT persist aiRawResponse (bug-hunt 2026-06-30 #5)', () => {
+    // Was previously copied through to result.quote.aiRawResponse,
+    // leaking 5-20 KB of raw Claude text into JSONB on every save.
+    // CLAUDE.md Pitfall #3 (Snapshot bloat) called this excluded;
+    // reality was the nested key was still flowing through. Now
+    // stripped at the payload boundary so the snapshot stays lean.
     const result = buildQuotePayload(profile, jobDetails, reviewData, diffs);
-    expect(result.quote.aiRawResponse).toBe('{"test":"raw"}');
+    expect(result.quote.aiRawResponse).toBeUndefined();
   });
 
   test('calculates aiAccuracyScore', () => {

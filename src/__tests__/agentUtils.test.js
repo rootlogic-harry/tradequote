@@ -99,6 +99,16 @@ describe('completeAgentRun', () => {
     expect(call.params[3]).toBeNull(); // completionTokens
     expect(call.params[4]).toBeNull(); // durationMs
   });
+
+  test("guards UPDATE on status='running' (bug-hunt 2026-06-30 #4)", () => {
+    // Reaper-stamped 'failed' rows must NOT be overwritten back to
+    // completed when a slow agent finally returns.
+    const pool = mockPool();
+    return completeAgentRun(pool, 'run-x', {}).then(() => {
+      const call = pool._calls[0];
+      expect(call.sql).toMatch(/AND status = 'running'/);
+    });
+  });
 });
 
 describe('failAgentRun', () => {
@@ -108,6 +118,7 @@ describe('failAgentRun', () => {
     expect(pool._calls).toHaveLength(1);
     const call = pool._calls[0];
     expect(call.sql).toContain("status = 'failed'");
+    expect(call.sql).toMatch(/AND status = 'running'/);
     expect(call.params[0]).toBe('API timeout');
     expect(call.params[1]).toBe(5000);
     expect(call.params[2]).toBe('run-4');
