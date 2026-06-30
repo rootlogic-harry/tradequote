@@ -1,9 +1,11 @@
 ---
 title: "What does a dry stone wall cost to rebuild per metre in the UK?"
-description: "UK per-metre costs for dry stone wall rebuilds, broken down by stone type, region, height and whether the wall is dry-laid or mortared."
+description: "A UK dry stone wall rebuild typically costs £140 to £260 per metre for a standard 1.2m wall, with Yorkshire gritstone lowest and Cotswold limestone highest."
 slug: "cost-per-metre"
 publishedAt: "2026-06-30"
+section: "Pricing"
 keywords: ["dry stone wall cost per metre", "dry stone walling prices UK", "wall rebuild cost", "Yorkshire walling rate", "Cotswold walling rate"]
+related: ["how-long-to-rebuild", "yorkshire-walling-costs", "stone-tonnage"]
 ---
 
 # What does a dry stone wall cost to rebuild per metre in the UK?

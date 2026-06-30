@@ -1,9 +1,11 @@
 ---
 title: "How long does it take to rebuild a dry stone wall?"
-description: "Operative-day-per-metre benchmarks for dry stone wall rebuilds, with the variables that speed jobs up or slow them down."
+description: "A solo dry stone waller rebuilds 2 to 3.5 metres of standard double-faced wall per day. Two-man teams reach 4 to 6 metres a day combined on easy stone."
 slug: "how-long-to-rebuild"
 publishedAt: "2026-06-30"
+section: "Methodology"
 keywords: ["dry stone wall rebuild time", "how long to build dry stone wall", "wall metres per day", "DSWA day rate", "waller productivity"]
+related: ["cost-per-metre", "dswa-day-rate", "stone-tonnage"]
 ---
 
 # How long does it take to rebuild a dry stone wall?

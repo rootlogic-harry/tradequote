@@ -332,9 +332,14 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
 });
 
 describe('/signup route', () => {
-  test('server registers a GET /signup that 302s to /login', () => {
+  test('server registers a GET /signup that 302s to /login (preserving ?ref=)', () => {
+    // The handler reads req.query.ref via normaliseReferralCode and
+    // forwards it through a template-literal redirect target. Bare
+    // /signup (no ref) still resolves to /login because qs collapses
+    // to empty string. 2026-06-30 fix — see serverReferrals.test.js
+    // for the share-URL preservation detail.
     expect(serverSrc).toMatch(
-      /app\.get\(\s*['"]\/signup['"][\s\S]{0,200}?res\.redirect\(\s*302\s*,\s*['"]\/login['"]\s*\)/
+      /app\.get\(\s*['"]\/signup['"][\s\S]{0,600}?res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`\s*\)/
     );
   });
 });

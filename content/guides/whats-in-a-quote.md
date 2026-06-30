@@ -1,9 +1,11 @@
 ---
 title: "What should a dry stone walling quote include?"
-description: "A checklist of what a professional dry stone walling quote should contain — measurements, tonnage, labour days, materials, VAT, payment terms, RAMS."
+description: "A professional dry stone walling quote should list scope, measurements, tonnage, labour days, materials, VAT, payment terms, RAMS and insurance details."
 slug: "whats-in-a-quote"
 publishedAt: "2026-06-30"
+section: "Methodology"
 keywords: ["dry stone walling quote template", "what to include in a walling quote", "waller quote checklist", "professional walling quote", "RAMS quote"]
+related: ["cost-per-metre", "dswa-day-rate", "chapter-8-traffic-management"]
 ---
 
 # What should a dry stone walling quote include?

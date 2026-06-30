@@ -1,9 +1,11 @@
 ---
 title: "Dry stone walling costs in Yorkshire"
-description: "Regional cost guide for dry stone walling in Yorkshire — gritstone, sandstone, typical day rates, and the boundary-wall convention."
+description: "Yorkshire dry stone walling typically costs £140 to £230 per metre and £220 to £340 per solo day, with gritstone and sandstone as the dominant local stones."
 slug: "yorkshire-walling-costs"
 publishedAt: "2026-06-30"
+section: "Regional"
 keywords: ["Yorkshire walling cost", "dry stone wall West Yorkshire", "gritstone walling", "Yorkshire Dales walling rate", "Pennine wall rebuild"]
+related: ["cost-per-metre", "cotswold-walling-costs", "dswa-day-rate"]
 ---
 
 # Dry stone walling costs in Yorkshire

@@ -35,6 +35,21 @@ describe('ReferralPanel', () => {
     expect(panelSrc).toMatch(/\?ref=/);
   });
 
+  test('share text computes total quotes from FREE_QUOTES_LIMIT + REFERRAL_REFEREE_BONUS', () => {
+    // 2026-06-30 fix: was hardcoded `for 5 free quotes`. Now sourced
+    // from constants so a tweak to either flows through.
+    expect(panelSrc).toMatch(
+      /import\s+\{\s*FREE_QUOTES_LIMIT\s*\}\s+from\s+['"]\.\.\/utils\/quotaGate\.js['"]/
+    );
+    expect(panelSrc).toMatch(
+      /import\s+\{\s*REFERRAL_REFEREE_BONUS\s*\}\s+from\s+['"]\.\.\/utils\/referrals\.js['"]/
+    );
+    expect(panelSrc).toMatch(/FREE_QUOTES_LIMIT\s*\+\s*REFERRAL_REFEREE_BONUS/);
+    expect(panelSrc).toMatch(/for \$\{totalQuotes\} free quotes/);
+    // Must NOT hardcode the value any more.
+    expect(panelSrc).not.toMatch(/for 5 free quotes/);
+  });
+
   test('prefers Web Share API on mobile, falls back to clipboard', () => {
     expect(panelSrc).toMatch(/navigator\.share/);
     expect(panelSrc).toMatch(/navigator\.clipboard/);

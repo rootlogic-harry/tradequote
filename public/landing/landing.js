@@ -1,5 +1,5 @@
 /*
- * FastQuote landing — live demo controller.
+ * FastQuote landing — live demo controller + referral-link preserver.
  *
  * Three stages rotate on a fixed timing: 2.4s, 2.8s, 3.2s. Each stage:
  *   1. Hides the previous stage, shows the new one.
@@ -13,6 +13,43 @@
  *
  * Vanilla — no framework, no deps.
  */
+
+// Referrals Phase 1 (2026-06-30 fix). The ReferralPanel shares URLs of
+// shape `https://fastquote.uk/?ref=CODE`. When the recipient lands here
+// and clicks "Get started" or "Log in", the static template's hardcoded
+// /signup and /login hrefs drop the `?ref=` query — the referral is
+// silently lost. This IIFE rewrites the 5 auth-bound CTAs to preserve
+// the ref so the OAuth callback's session-stash receives it.
+// Mirrors the validation in src/utils/referrals.js normaliseReferralCode().
+(function preserveReferralCode() {
+  'use strict';
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var ref = params.get('ref');
+    if (!ref) return;
+    ref = ref.trim().toUpperCase();
+    if (ref.length === 0 || ref.length > 64) return;
+    if (!/^[A-Z0-9-]+$/.test(ref)) return;
+    // Only rewrite hrefs that hit /login or /signup — privacy/terms/DPA
+    // and external links stay untouched. Encoded so a malformed code
+    // can't break the URL.
+    var anchors = document.querySelectorAll(
+      'a[href="/login"], a[href="/signup"], a[href^="/login?"], a[href^="/signup?"]'
+    );
+    var encoded = encodeURIComponent(ref);
+    for (var i = 0; i < anchors.length; i++) {
+      var a = anchors[i];
+      var hrefAttr = a.getAttribute('href') || '';
+      var sep = hrefAttr.indexOf('?') === -1 ? '?' : '&';
+      // Skip if the anchor already carries a ref (e.g. server-rendered).
+      if (/[?&]ref=/.test(hrefAttr)) continue;
+      a.setAttribute('href', hrefAttr + sep + 'ref=' + encoded);
+    }
+  } catch (e) {
+    // Best-effort — preserving ref must never break the landing page.
+  }
+})();
+
 (function () {
   'use strict';
 
