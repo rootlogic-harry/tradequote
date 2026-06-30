@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import QuoteOutput from './steps/QuoteOutput.jsx';
+import EditDetailsModal from './EditDetailsModal.jsx';
 import { loadPhotos, getProfile } from '../utils/userDB.js';
 
-export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId, liveProfile }) {
+export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId, liveProfile, showToast }) {
   const snapshot = quote?.snapshot || {};
   const [restoredPhotos, setRestoredPhotos] = useState(null);
   const [restoredLogo, setRestoredLogo] = useState(null);
+  // Local overlay so the user sees their edits land without a Dashboard
+  // round-trip. The PATCH result is the canonical post-edit jobDetails;
+  // we merge it over the snapshot's read-only copy for display.
+  const [editedDetails, setEditedDetails] = useState(null);
+  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
 
   // Load photos from server on mount
   useEffect(() => {
@@ -48,7 +54,9 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
     profile: profileLogoIsStripped
       ? { ...baseProfile, logo: baseProfile.logo || restoredLogo || null }
       : baseProfile,
-    jobDetails: snapshot.jobDetails || {},
+    jobDetails: editedDetails
+      ? { ...(snapshot.jobDetails || {}), ...editedDetails }
+      : (snapshot.jobDetails || {}),
     photos: restoredPhotos?.photos || {},
     extraPhotos: restoredPhotos?.extraPhotos?.length ? restoredPhotos.extraPhotos : (snapshot.extraPhotos || []),
     reviewData: snapshot.reviewData || null,
@@ -73,14 +81,37 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
 
   return (
     <div>
-      {onEditQuote && (
-        <div className="mb-4">
-          <button
-            onClick={() => onEditQuote(virtualState)}
-            className="btn-primary"
-          >
-            Edit &amp; Re-generate
-          </button>
+      {/* Two-button row (2026-06-30, Paul's request).
+          - Edit details: metadata-only PATCH, no re-analyse. Safe.
+          - Re-analyse and edit quote: the old "Edit & Re-generate"
+            path, renamed for clarity. */}
+      {(onEditQuote || currentUserId) && (
+        <div
+          className="mb-4 flex flex-col fq:flex-row gap-2"
+          data-testid="saved-quote-action-row"
+        >
+          {currentUserId && (
+            <button
+              type="button"
+              onClick={() => setEditDetailsOpen(true)}
+              className="btn-primary w-full fq:w-auto"
+              style={{ minHeight: 44, padding: '0 18px' }}
+              data-testid="saved-quote-edit-details"
+            >
+              Edit details
+            </button>
+          )}
+          {onEditQuote && (
+            <button
+              type="button"
+              onClick={() => onEditQuote(virtualState)}
+              className="btn-ghost w-full fq:w-auto"
+              style={{ minHeight: 44, padding: '0 18px' }}
+              data-testid="saved-quote-reanalyse"
+            >
+              Re-analyse and edit quote
+            </button>
+          )}
         </div>
       )}
       {/* Remount when restored photos arrive so QuoteOutput's photo-selection
@@ -95,6 +126,16 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
         dispatch={() => {}}
         onBack={onBack}
         isReadOnly
+      />
+      <EditDetailsModal
+        open={editDetailsOpen}
+        onClose={() => setEditDetailsOpen(false)}
+        userId={currentUserId}
+        jobId={quote?.id}
+        initialDetails={virtualState.jobDetails}
+        hasClientToken={!!quote?.clientToken}
+        onSaved={(nextDetails) => setEditedDetails(nextDetails)}
+        showToast={showToast}
       />
     </div>
   );

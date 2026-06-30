@@ -119,7 +119,7 @@ Single Express server with PostgreSQL. Schema is self-initialising (CREATE TABLE
 
 - **Auth**: Google OAuth via Passport, legacy session switcher, `/auth/me` for current user
 - **Users**: CRUD, profile (JSONB), settings (key-value), theme
-- **Jobs**: CRUD with JSONB `quote_snapshot` and `rams_snapshot`, status lifecycle (draft → sent → accepted/declined → completed)
+- **Jobs**: CRUD with JSONB `quote_snapshot` and `rams_snapshot`, status lifecycle (draft → sent → accepted/declined → completed). The metadata-only `PATCH /api/users/:id/jobs/:jobId/details` (Paul Clough, 2026-06-30) lets a saved quote's `clientName`, `siteAddress`, `clientPhone`, `quoteDate`, `briefNotes` be updated without re-running the AI — touches `quote_snapshot.jobDetails` + the three denormalised columns (`client_name`, `site_address`, `quote_date`) only. `reviewData`, `quotePayload`, `diffs`, `quote_diffs`, `status`, and the frozen `client_snapshot` are NEVER touched by this route. Whitelist-keys-only, server-side length caps, billingRateLimit, FOR UPDATE on the SELECT before the rewrite so two concurrent edits don't race. Fires `quote_details_edited` analytics on success and logs the edited keys to stdout for an audit trail. **The frozen-snapshot contract for the client portal still applies (Pitfall #14)** — a tradesman editing details on an already-sent quote does NOT change what the customer's `/q/:token` link displays; the modal surfaces this with a "regenerate the link from the Sharing tab" hint.
 - **Diffs**: Learning data stored in `quote_diffs` per job
 - **Photos**: Slot-based upload (overview, closeup, sideProfile, referenceCard, access) stored as TEXT in `user_photos`
 - **Drafts**: Auto-save/restore via `drafts` table

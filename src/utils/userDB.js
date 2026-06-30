@@ -174,6 +174,28 @@ export async function saveJob(userId, state) {
   }
 }
 
+/**
+ * Patch metadata-only fields on a saved job — no AI re-analysis.
+ * Paul's request 2026-06-30: edit address without risking the numbers.
+ * Body shape: { clientName?, siteAddress?, clientPhone?, quoteDate?,
+ * briefNotes? } — only the fields supplied get patched; the rest stay
+ * as they were. Server enforces the whitelist + length caps; this
+ * helper just opens the wire.
+ */
+export async function patchJobDetails(userId, jobId, fields) {
+  const res = await fetch(`/api/users/${userId}/jobs/${jobId}/details`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields || {}),
+  });
+  if (!res.ok) {
+    let msg = `Update failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function updateJob(userId, jobId, state) {
   const snapshot = buildSaveSnapshot(state);
   const controller = new AbortController();

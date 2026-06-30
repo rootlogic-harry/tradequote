@@ -838,6 +838,7 @@ export default function App() {
             onEditQuote={handleEditQuote}
             currentUserId={state.currentUserId}
             liveProfile={state.profile}
+            showToast={showToast}
           />
         );
       }
@@ -908,6 +909,7 @@ export default function App() {
             onEditQuote={handleEditQuote}
             currentUserId={state.currentUserId}
             liveProfile={state.profile}
+            showToast={showToast}
           />
         );
       }
