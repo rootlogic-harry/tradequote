@@ -1034,7 +1034,10 @@ describe('reducer', () => {
       expect(labourDiff.referenceCardUsed).toBe(true);
     });
 
-    test('includes aiRawResponse in quotePayload', () => {
+    test('omits aiRawResponse from quotePayload (bug-hunt 2026-06-30 #5)', () => {
+      // Was previously propagated through to quotePayload.quote.aiRawResponse
+      // and then to JSONB on save (5-20 KB/row). Now stripped at the
+      // payload boundary — CLAUDE.md Pitfall #3 intent restored.
       const state = makeReviewState({
         reviewData: {
           ...makeReviewState().reviewData,
@@ -1042,7 +1045,7 @@ describe('reducer', () => {
         },
       });
       const result = reducer(state, { type: 'GENERATE_QUOTE' });
-      expect(result.quotePayload.quote.aiRawResponse).toBe('{"raw":"response"}');
+      expect(result.quotePayload.quote.aiRawResponse).toBeUndefined();
     });
   });
 

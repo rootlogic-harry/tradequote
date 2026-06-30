@@ -2,11 +2,17 @@
  * Server-side save allowlist. Controls which keys from req.body
  * are stored in quote_snapshot JSONB. Prevents photos/blobs from
  * being saved in the snapshot column.
+ *
+ * Lifecycle bug-hunt 2026-06-30 #5: `aiRawResponse` removed from this
+ * list. The SPA's client-side SAVE_ALLOWLIST never included it at top
+ * level — only the nested copy at `quotePayload.quote.aiRawResponse`
+ * was leaking through (also stripped now, see quoteBuilder.js). The
+ * server-side entry was dead code.
  */
 export const SERVER_SAVE_ALLOWLIST = [
   'profile', 'jobDetails', 'reviewData',
   'quotePayload', 'quoteSequence', 'quoteMode', 'captureMode', 'diffs',
-  'transcript', 'aiRawResponse',
+  'transcript',
 ];
 
 /**
