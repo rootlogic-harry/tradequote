@@ -61,10 +61,11 @@ to a PR (Railway env change, Auth0 tenant edit, DNS blip).
 Every one of these tests would have caught a regression Harry actually
 reported in the last week.
 
-## Phase 2 — auth-gated journeys (next PR)
+## Phase 2 — auth-gated journeys (shipped 2026-07-01)
 
 Adds a controlled auth bypass so we can drive Dashboard / Edit details /
-Redeem flows. Requires two pieces of Railway config:
+Redeem flows. Requires three pieces of setup — until they're in place,
+Phase 2 tests **auto-skip** with a clear message so Phase 1 still passes:
 
 ### 1. Environment variable
 
@@ -101,7 +102,7 @@ ON CONFLICT (user_id) DO NOTHING;
 The smoke user has `plan: 'basic'` so it can only exercise the
 customer-facing product — never the admin dashboard.
 
-### 3. Server endpoint (shipped with Phase 2 PR)
+### 3. Server endpoint (shipped)
 
 ```
 POST /test/agent-login
@@ -113,23 +114,44 @@ POST /test/agent-login
   → Returns 404 if AGENT_SMOKE_SECRET is unset (production default
     when the feature is disabled).
   → Returns 401 if the secret header is missing or wrong.
+  → Returns 404 with a "smoke user not seeded" message if the
+    tq_agent_smoke row doesn't exist yet.
+
+Constant-time header comparison via crypto.timingSafeEqual. Session
+regenerates on login (sec-audit L-4 fixation defence).
 ```
 
 ### 4. GitHub Actions secret
 
-Add `AGENT_SMOKE_SECRET` to the repo Actions secrets so CI can read it.
+Add `AGENT_SMOKE_SECRET` to the repo Actions secrets so CI can read
+it. The workflow reads it as `secrets.AGENT_SMOKE_SECRET` and passes
+it to Playwright via env var. If unset, Phase 2 tests auto-skip.
 
-## Phase 2 journeys (planned)
+### 5. Local dev
 
-- **Dashboard tabs** — click Active → Completed → Archived, verify
-  visible row count changes. **This is the SET_VIEW_MODE killer.**
-- **Edit details** — open a saved smoke quote, click Edit details,
-  change the site address, save, verify the address text updated.
-  **This is the "did Paul's ask actually ship correctly?" killer.**
-- **Redeem self-message** — paste the smoke user's own referral code,
-  verify the "That's your own code" message renders and bonus stays 0.
-- **Re-analyse and edit quote** — click the destructive button, verify
-  it lands on Step 2 rather than nowhere.
+Export the same secret when running smoke locally:
+
+```bash
+export AGENT_SMOKE_SECRET="<same value as Railway>"
+npm run smoke
+```
+
+## Phase 2 journeys (shipped)
+
+Files under `tests/e2e/`:
+
+- **`dashboard-tabs.spec.js`** — Sign in, click Active → Completed →
+  Archived, assert `aria-selected` moves. **The SET_VIEW_MODE killer.**
+- **`edit-details.spec.js`** — Seed a job, PATCH just the siteAddress,
+  verify reviewData / totals / diffs are byte-identical after. Plus
+  hostile-body rejection (reviewData in body must be silently dropped).
+  **The "did Paul's ask actually ship correctly?" killer.**
+- **`redeem-self.spec.js`** — Fetch the smoke user's own code, submit
+  it, assert applied:false + reason:'self' + bonus counter unchanged.
+  **The self-referral protection killer.**
+
+Each spec auto-skips when `AGENT_SMOKE_SECRET` is unset — Phase 1
+public-surface specs continue to run.
 
 ## Adding a new journey
 
