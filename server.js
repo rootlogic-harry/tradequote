@@ -7104,6 +7104,66 @@ const dbReady = initDB()
         console.error('[RetryQueue] Startup sweep failed:', err.message);
       }
     }
+
+    // Playwright smoke — auto-seed the dedicated smoke user when
+    // AGENT_SMOKE_SECRET is set (2026-07-01). Idempotent (ON CONFLICT
+    // DO NOTHING) so re-running on every boot is a no-op after the
+    // first time. Fail-quiet — a seeding error should never block
+    // production startup; the /test/agent-login endpoint already
+    // returns a clear "smoke user not seeded" 404 if the row is
+    // missing when the endpoint is invoked.
+    if (process.env.AGENT_SMOKE_SECRET && process.env.NODE_ENV !== 'test') {
+      try {
+        await pool.query('BEGIN');
+        await pool.query(
+          `INSERT INTO users (
+             id, email, name, plan, profile_complete, created_at,
+             auth_provider, auth_provider_id
+           )
+           VALUES (
+             'tq_agent_smoke',
+             'smoke+agent@fastquote.uk',
+             'Agent Smoke',
+             'basic',
+             TRUE,
+             NOW(),
+             'agent-smoke',
+             'agent-smoke'
+           )
+           ON CONFLICT (id) DO NOTHING`
+        );
+        await pool.query(
+          `INSERT INTO profiles (user_id, data)
+           VALUES (
+             'tq_agent_smoke',
+             $1::jsonb
+           )
+           ON CONFLICT (user_id) DO NOTHING`,
+          [JSON.stringify({
+            companyName: 'Smoke Co',
+            fullName: 'Agent Smoke',
+            phone: '01234 567890',
+            email: 'smoke+agent@fastquote.uk',
+            address: 'Smoke Test, YO1 1AA',
+            dayRate: 300,
+            vatRegistered: false,
+            accreditations: '',
+            showNotesOnQuote: true,
+            hideLabourDays: false,
+            region: 'West Yorkshire',
+            preferredStoneTypes: [],
+            mortarUsage: null,
+            accent: 'amber',
+            documentType: 'quote',
+          })]
+        );
+        await pool.query('COMMIT');
+        console.log('[Smoke] tq_agent_smoke user + profile ensured (idempotent)');
+      } catch (err) {
+        try { await pool.query('ROLLBACK'); } catch { /* ignore */ }
+        console.warn('[Smoke] bootstrap failed (endpoint will still return 404 with clear message):', err.message);
+      }
+    }
   })
   .catch((err) => {
     console.error('Failed to initialise database:', err);
