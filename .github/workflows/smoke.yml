@@ -68,6 +68,11 @@ jobs:
       - name: Run smoke suite
         env:
           SMOKE_URL: ${{ github.event.inputs.smoke_url || 'https://fastquote.uk' }}
+          # Optional — when set (repo secret AGENT_SMOKE_SECRET),
+          # auth-gated journeys (dashboard-tabs, edit-details,
+          # redeem-self) run; when unset, they auto-skip with a clear
+          # message. Fail-closed default.
+          AGENT_SMOKE_SECRET: ${{ secrets.AGENT_SMOKE_SECRET }}
           CI: 'true'
         run: npm run smoke
 
