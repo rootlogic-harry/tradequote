@@ -1,0 +1,84 @@
+# Playwright smoke suite — Phase 1 (2026-06-30).
+#
+# Purpose: end-to-end behavioural coverage of public surfaces on every
+# PR. Answers Harry's "why didn't you catch this in testing?" question
+# by putting a real browser between me and "ready" — the SET_VIEW_MODE
+# / cache-buster / sitemap-drift class of bug now dies in CI rather
+# than in Harry's inbox.
+#
+# Runs against https://fastquote.uk by default. Phase 2 will add
+# auth-gated journeys via a /test/agent-login endpoint + a dedicated
+# smoke user — see docs/SMOKE.md for that roadmap.
+#
+# Scope: Public surfaces only right now (no auth, no side-effects).
+# Cost: ~10-15s CI time per run.
+
+name: smoke
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Daily cron catches production drift (Railway env change, Auth0
+  # tenant edit, DNS blip) even when no PRs are landing.
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      smoke_url:
+        description: 'URL to smoke (default: production)'
+        default: 'https://fastquote.uk'
+        required: false
+
+concurrency:
+  group: smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Chromium is ~90 MiB. Cache the Playwright browser store so we
+      # only pay for the download when the pinned version changes.
+      - name: Restore Playwright browsers cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Run smoke suite
+        env:
+          SMOKE_URL: ${{ github.event.inputs.smoke_url || 'https://fastquote.uk' }}
+          CI: 'true'
+        run: npm run smoke
+
+      # If the suite fails, keep the HTML report + traces around for 7
+      # days so the PR author can see exactly what the browser saw at
+      # the moment things broke.
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -53,3 +53,8 @@ regression/pdf-fixtures/*/private/
 # committed: they're the audit trail of "what passing looked like
 # when we accepted it".
 regression/reports/*.md
+
+# Playwright smoke — HTML reports + traces are per-run artifacts,
+# uploaded to CI on failure. Nothing to commit.
+playwright-report/
+test-results/
