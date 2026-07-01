@@ -13,100 +13,123 @@ import { test, expect, SMOKE_USER_ID } from './auth-fixture.js';
  * pill and observing aria-selected moving is a real end-to-end
  * guarantee.
  *
- * We assert the ARIA state on the pill buttons rather than counting
- * rendered jobs so the test is deterministic regardless of whatever
- * quotes happen to be in the smoke user's DB.
+ * Note on seed: the SavedQuotes component short-circuits with an
+ * empty-state message when the user has no jobs — no bucket tabs
+ * are rendered. This spec seeds one minimal job before every test
+ * so the tab surface is guaranteed to render, then deletes it in
+ * afterEach.
  */
 
+const MINIMAL_JOB = {
+  profile: { companyName: 'Smoke Co', fullName: 'Agent Smoke', phone: '01234 567890', address: 'Smoke Test, YO1 1AA', dayRate: 300 },
+  jobDetails: {
+    clientName: 'Tab Test',
+    siteAddress: 'Tab test site',
+    quoteReference: 'QT-2026-TABTEST',
+    quoteDate: '2026-07-01',
+    briefNotes: '',
+  },
+  reviewData: {
+    measurements: [{ id: 'm1', item: 'Wall length', valueMm: 1000, aiValue: '1000', value: '1000', confirmed: true }],
+    materials: [{ id: 'mat1', description: 'Stone', quantity: 1, unit: 't', unitCost: 100, totalCost: 100, aiUnitCost: 100, aiTotalCost: 100, aiQuantity: 1 }],
+    labourEstimate: { estimatedDays: 1, numberOfWorkers: 1, dayRate: 300, aiEstimatedDays: 1 },
+    scheduleOfWorks: [{ stepNumber: 1, title: 'Build', description: 'Build wall' }],
+    damageDescription: 'Tab test',
+  },
+  quotePayload: { totals: { total: 400 } },
+  diffs: [],
+  quoteSequence: 9998,
+  quoteMode: 'standard',
+  captureMode: 'photos',
+  quoteToken: 'smoke-token-tab-test',
+};
+
+async function navigateToSavedJobs(page) {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+
+  // Sidebar "My quotes" (always present) → SavedQuotes surface.
+  await page.getByRole('button', { name: /^my quotes$/i }).click();
+  // Wait for the tablist to render — that's the surest signal that
+  // SavedQuotes with bucket tabs (not the empty-state) is showing.
+  await expect(page.getByRole('tablist', { name: /job list view/i })).toBeVisible({ timeout: 15_000 });
+}
+
 test.describe('Saved Jobs tab switching', () => {
+  let seededJobId = null;
+
   test.beforeEach(async ({ authedPage: page }) => {
-    // Navigate to the SavedQuotes surface. The SPA's initial paint
-    // lands on the Dashboard; we navigate via the "Saved jobs" nav
-    // link rather than assuming a URL shape.
-    await page.goto('/');
-    // Some Dashboard renders take a moment for /auth/me + jobs to
-    // paint. Wait for a stable marker before asserting on the tabs.
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
-    // Prefer clicking a labelled link over guessing routes.
-    const savedLink = page.getByRole('link', { name: /saved jobs/i }).or(
-      page.getByRole('button', { name: /saved jobs/i })
-    );
-    if (await savedLink.count()) {
-      await savedLink.first().click();
-    } else {
-      // Fallback: some navigation surfaces expose "View all" —
-      // whichever appears is fine.
-      await page.getByText(/view all/i).first().click();
+    // Seed one job so SavedQuotes renders bucket tabs (empty state
+    // short-circuits before them).
+    const res = await page.request.post(`/api/users/${SMOKE_USER_ID}/jobs`, {
+      data: MINIMAL_JOB,
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    seededJobId = body.id;
+
+    await navigateToSavedJobs(page);
+  });
+
+  test.afterEach(async ({ authedPage: page }) => {
+    if (seededJobId) {
+      await page.request.delete(`/api/users/${SMOKE_USER_ID}/jobs/${seededJobId}`).catch(() => {});
+      seededJobId = null;
     }
-    // The SavedQuotes page has a "Saved jobs" H1 or eyebrow.
-    await expect(page.getByRole('heading', { name: /saved jobs/i })).toBeVisible({ timeout: 10_000 });
   });
 
   test('Active is the initial view (aria-selected)', async ({ authedPage: page }) => {
-    const activeTab = page.getByRole('tab', { name: /active/i })
-      .or(page.locator('.pill', { hasText: /active/i }));
-    await expect(activeTab.first()).toHaveAttribute('aria-selected', 'true');
+    const activeTab = page.getByRole('tab', { name: /^active$/i });
+    await expect(activeTab).toHaveAttribute('aria-selected', 'true');
   });
 
   test('clicking Completed moves aria-selected to Completed (SET_VIEW_MODE regression)', async ({ authedPage: page }) => {
-    const completedTab = page.getByRole('tab', { name: /completed/i })
-      .or(page.locator('.pill', { hasText: /completed/i }));
-    await completedTab.first().click();
-    // The real regression assertion — the reducer's SET_VIEW_MODE
-    // guard must accept 'completed' or this stays 'false' and the
-    // Completed pill never highlights.
-    await expect(completedTab.first()).toHaveAttribute('aria-selected', 'true');
+    // Match by "Completed" prefix — the button text may include a
+    // "(N)" count when there are completed jobs.
+    const completedTab = page.getByRole('tab', { name: /^completed/i });
+    await completedTab.click();
+    // The regression assertion — reducer's SET_VIEW_MODE guard must
+    // accept 'completed' or this stays false.
+    await expect(completedTab).toHaveAttribute('aria-selected', 'true');
   });
 
   test('clicking Archived moves aria-selected to Archived', async ({ authedPage: page }) => {
-    const archiveTab = page.getByRole('tab', { name: /archiv/i })
-      .or(page.locator('.pill', { hasText: /archiv/i }));
-    await archiveTab.first().click();
-    await expect(archiveTab.first()).toHaveAttribute('aria-selected', 'true');
+    const archiveTab = page.getByRole('tab', { name: /^archived/i });
+    await archiveTab.click();
+    await expect(archiveTab).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('clicking Active returns aria-selected to Active', async ({ authedPage: page }) => {
-    // Move away first so we're actually testing a transition.
-    const completedTab = page.getByRole('tab', { name: /completed/i })
-      .or(page.locator('.pill', { hasText: /completed/i }));
-    await completedTab.first().click();
-    await expect(completedTab.first()).toHaveAttribute('aria-selected', 'true');
+  test('clicking Active returns aria-selected to Active after a detour', async ({ authedPage: page }) => {
+    const completedTab = page.getByRole('tab', { name: /^completed/i });
+    const activeTab = page.getByRole('tab', { name: /^active$/i });
 
-    const activeTab = page.getByRole('tab', { name: /active/i })
-      .or(page.locator('.pill', { hasText: /active/i }));
-    await activeTab.first().click();
-    await expect(activeTab.first()).toHaveAttribute('aria-selected', 'true');
-    await expect(completedTab.first()).toHaveAttribute('aria-selected', 'false');
+    await completedTab.click();
+    await expect(completedTab).toHaveAttribute('aria-selected', 'true');
+
+    await activeTab.click();
+    await expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    await expect(completedTab).toHaveAttribute('aria-selected', 'false');
   });
 });
 
 /**
- * Belt-and-braces API check — the reducer test in Jest covers the
- * pure transition, but only the smoke test can catch a Dashboard
- * render regression that de-syncs the pill aria-state from the
- * viewMode reducer state.
+ * Sanity check that all three bucket tabs render together — mirrors
+ * the VIEW_MODES lockstep test in Jest so a UI drift can't silently
+ * remove a tab without the smoke suite noticing.
  */
-test('SavedQuotes tab element count matches VIEW_MODES (3 tabs)', async ({ authedPage: page }) => {
-  await page.goto('/');
-  const savedLink = page.getByRole('link', { name: /saved jobs/i }).or(
-    page.getByRole('button', { name: /saved jobs/i })
-  );
-  if (await savedLink.count()) await savedLink.first().click();
-  else await page.getByText(/view all/i).first().click();
+test('SavedQuotes bucket-tab count matches VIEW_MODES (3 tabs)', async ({ authedPage: page }) => {
+  // Seed + cleanup inline since this test lives outside the describe.
+  const seedRes = await page.request.post(`/api/users/${SMOKE_USER_ID}/jobs`, {
+    data: { ...MINIMAL_JOB, jobDetails: { ...MINIMAL_JOB.jobDetails, quoteReference: 'QT-2026-COUNTTEST' } },
+  });
+  expect(seedRes.status()).toBe(200);
+  const seededId = (await seedRes.json()).id;
 
-  await expect(page.getByRole('heading', { name: /saved jobs/i })).toBeVisible({ timeout: 10_000 });
-
-  // Regardless of markup style (tab role vs pill class), the total
-  // count should be 3 — Active, Completed, Archive.
-  const activeTab = page.locator('[role="tab"], .pill').filter({ hasText: /active/i });
-  const completedTab = page.locator('[role="tab"], .pill').filter({ hasText: /completed/i });
-  const archiveTab = page.locator('[role="tab"], .pill').filter({ hasText: /archiv/i });
-
-  await expect(activeTab.first()).toBeVisible();
-  await expect(completedTab.first()).toBeVisible();
-  await expect(archiveTab.first()).toBeVisible();
-
-  // The smoke user id is used only as a hook so future test-account
-  // filters can grep server logs by this identifier.
-  expect(SMOKE_USER_ID).toBe('tq_agent_smoke');
+  try {
+    await navigateToSavedJobs(page);
+    const tabs = page.getByRole('tab', { name: /^(active|completed|archived)/i });
+    await expect(tabs).toHaveCount(3);
+  } finally {
+    await page.request.delete(`/api/users/${SMOKE_USER_ID}/jobs/${seededId}`).catch(() => {});
+  }
 });

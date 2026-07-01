@@ -6,6 +6,18 @@ import { test as base, expect } from '@playwright/test';
  * via POST /test/agent-login. Any spec that needs an authenticated
  * session imports { test } from this file instead of @playwright/test.
  *
+ * Fixture design: `smokeContext` is WORKER-SCOPED — the browser
+ * context is created once per worker and reused across all tests in
+ * that worker. This matters because every rate-limited endpoint
+ * (/test/agent-login itself, PATCH /details, /auth/redeem-referral)
+ * shares the same 10/min/IP `billingRateLimit`. A per-test login
+ * would burn ~half that budget on nothing but authentication and
+ * trip 429s well before the suite finishes. One login per worker
+ * keeps the whole suite under the limit and runs faster too.
+ *
+ * The `authedPage` fixture opens a fresh page inside the shared
+ * context per test so state (URL, dialogs) is per-test-isolated.
+ *
  * Gating:
  *   - process.env.AGENT_SMOKE_SECRET must be set (Playwright process
  *     env — sourced from GitHub Actions secret in CI, or exported
@@ -24,34 +36,44 @@ export const SMOKE_ENABLED = Boolean(SMOKE_SECRET);
 
 export const test = base.extend({
   /**
-   * @type {import('@playwright/test').Page}
-   *
-   * Authenticated Playwright page for the smoke user. Cookies from
-   * the login POST are shared with subsequent page.goto/request calls
-   * because both use the same browser context.
+   * Worker-scoped shared browser context, authenticated once.
+   * @type {import('@playwright/test').BrowserContext}
    */
-  authedPage: async ({ browser }, use) => {
+  smokeContext: [async ({ browser }, use) => {
+    const context = await browser.newContext();
+    if (SMOKE_ENABLED) {
+      // Login via the controlled auth bypass. We do the login on a
+      // one-off request page and let cookies land in the context.
+      const bootstrapPage = await context.newPage();
+      const res = await bootstrapPage.request.post('/test/agent-login', {
+        headers: { 'X-Agent-Secret': SMOKE_SECRET },
+      });
+      if (res.status() !== 200) {
+        throw new Error(
+          `POST /test/agent-login failed at worker startup (${res.status()}). ` +
+          `Check that AGENT_SMOKE_SECRET matches Railway env AND the smoke user ` +
+          `row exists in the DB. See docs/SMOKE.md.`
+        );
+      }
+      await bootstrapPage.close();
+    }
+    await use(context);
+    await context.close();
+  }, { scope: 'worker' }],
+
+  /**
+   * Per-test authenticated page. Fresh navigation state; shared cookies.
+   * Auto-skips when AGENT_SMOKE_SECRET is unset.
+   * @type {import('@playwright/test').Page}
+   */
+  authedPage: async ({ smokeContext }, use) => {
     test.skip(
       !SMOKE_ENABLED,
       'AGENT_SMOKE_SECRET not set — set it locally or wire the GitHub Actions secret to enable auth-gated smoke journeys.'
     );
-
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
-    // Login via the controlled auth bypass. Fixture asserts a 200 —
-    // if the endpoint returns 404 (secret not configured server-side)
-    // or 401 (mismatch), fail loud so the smoke user setup is visible.
-    const res = await page.request.post('/test/agent-login', {
-      headers: { 'X-Agent-Secret': SMOKE_SECRET },
-    });
-    expect(
-      res.status(),
-      `POST /test/agent-login failed (${res.status()}). Check that AGENT_SMOKE_SECRET matches Railway env AND the smoke user row exists in the DB. See docs/SMOKE.md.`
-    ).toBe(200);
-
+    const page = await smokeContext.newPage();
     await use(page);
-    await context.close();
+    await page.close();
   },
 });
 
