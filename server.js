@@ -5727,6 +5727,83 @@ const billingRateLimit = rateLimit({
   message: { error: 'Too many billing requests — wait a moment.' },
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Playwright smoke — /test/agent-login (Phase 2, 2026-07-01).
+//
+// Controlled auth bypass for the dedicated `tq_agent_smoke` user.
+// Gated by AGENT_SMOKE_SECRET env var + matching X-Agent-Secret
+// header. When AGENT_SMOKE_SECRET is unset, the endpoint returns 404
+// (fail-closed) so any environment without the feature enabled looks
+// identical to any other 404.
+//
+// Blast radius: this is a hardcoded shortcut for ONE user with
+// plan='basic'. An attacker with the secret can create/manipulate
+// smoke-user quotes; they cannot escalate to admin, touch other
+// accounts, or reach the billing routes' write side (Stripe key
+// still gates buy-quote-pack + checkout). The secret lives only in
+// Railway env vars + GitHub Actions secrets — never in code.
+//
+// Rate limit shared with billing endpoints (10/min/IP). Constant-time
+// header comparison via timingSafeEqual to keep timing attacks out.
+//
+// Runbook: docs/SMOKE.md § Phase 2.
+// ─────────────────────────────────────────────────────────────────────
+import { timingSafeEqual } from 'node:crypto';
+
+app.post('/test/agent-login', billingRateLimit, async (req, res) => {
+  const configured = process.env.AGENT_SMOKE_SECRET;
+  if (!configured) return res.status(404).json({ error: 'Not found' });
+
+  const supplied = String(req.get('X-Agent-Secret') || '');
+  // Constant-time compare requires equal-length buffers. Pad the
+  // supplied value to match the configured length before comparing
+  // (padding never changes the "mismatch" outcome when lengths
+  // differ — just avoids the length-based early return).
+  const configuredBuf = Buffer.from(configured, 'utf8');
+  const suppliedBuf = Buffer.from(
+    supplied.padEnd(configuredBuf.length, '\0').slice(0, configuredBuf.length),
+    'utf8'
+  );
+  const secretOk =
+    supplied.length === configured.length &&
+    timingSafeEqual(configuredBuf, suppliedBuf);
+  if (!secretOk) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email, plan, profile_complete, avatar_url,
+              auth_provider, auth_provider_id
+         FROM users
+        WHERE id = 'tq_agent_smoke'
+        LIMIT 1`
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: 'Smoke user not seeded — see docs/SMOKE.md § Phase 2 setup.',
+      });
+    }
+    const user = rows[0];
+    // Regenerate the session on login to avoid fixation (sec-audit L-4),
+    // then hand control to passport's req.login which stashes user.id
+    // for deserializeUser to pick up on subsequent requests.
+    req.session.regenerate((regenErr) => {
+      if (regenErr) return res.status(500).json({ error: 'Session error' });
+      req.login(user, (loginErr) => {
+        if (loginErr) return res.status(500).json({ error: 'Login error' });
+        // Server-side audit line — the smoke user's traffic is easy to
+        // grep out of Railway logs when investigating a real incident.
+        console.log(`[Smoke] agent-login → user=${user.id} plan=${user.plan}`);
+        res.json({
+          ok: true,
+          user: { id: user.id, plan: user.plan, name: user.name },
+        });
+      });
+    });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
 function requireStripe(_req, res, next) {
   if (!hasStripeKey()) {
     return res.status(503).json({
