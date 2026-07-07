@@ -20,6 +20,14 @@
  * Order of evaluation is load-bearing — change it and you change
  * who pays. Test coverage is in src/__tests__/quotaGate.test.js.
  *
+ *   0. isAdminPlan(user) → ALLOW with reason='admin' (Harry + Mark;
+ *      unlimited analyses, never charged. Sits BEFORE the subscription
+ *      check so an admin who happens to have a Stripe sub still
+ *      registers as 'admin' in the reason field — the /auth/me billing
+ *      block and the SPA's QuotaCounter both key off this to hide
+ *      any billing UI. The plan gate does NOT stop Stripe from
+ *      charging a card that already exists — cancelling the customer's
+ *      subscription in Stripe is a separate concern.)
  *   1. Active Stripe subscription → ALLOW (paid customer; never read
  *      the comp clock or the free-quote counter).
  *   2. Active comp (comp_until > now) → ALLOW (trusted users — Paul
@@ -36,6 +44,8 @@
  *      the free one first — friendly AND correct.
  *   5. Otherwise → DENY with reason='quota_exhausted'.
  */
+
+import { isAdminPlan } from './isAdminPlan.js';
 
 export const FREE_QUOTES_LIMIT = 3;
 
@@ -73,6 +83,16 @@ export const FREE_QUOTES_LIMIT = 3;
 export function quotaGate(user, ctx) {
   const hasActiveSubscription = Boolean(ctx?.hasActiveSubscription);
   const now = ctx?.now ?? new Date();
+
+  // 0. Admin plan — Harry + Mark. Sits BEFORE the subscription check so
+  //    the reason field reads 'admin' even for an admin who happens to
+  //    have an active Stripe sub (Mark's markdoyle account carried an
+  //    active subscription right up until we cancelled it 2026-07-07).
+  //    The SPA's QuotaCounter treats 'admin' the same as 'subscribed'
+  //    for banner-hiding purposes.
+  if (isAdminPlan(user)) {
+    return { allowed: true, reason: 'admin' };
+  }
 
   if (hasActiveSubscription) {
     return { allowed: true, reason: 'subscribed' };
@@ -136,8 +156,13 @@ export function resolveQuotaState(user, ctx) {
   // The gate's reason already tells us which bucket the user is in.
   // Map it 1:1 except for 'quota_exhausted' (which downstream banner
   // code expects as the legacy 'exhausted' string).
+  //
+  // Admin lands in the 'admin' state so QuotaCounter can hide the
+  // counter entirely — it's not a paid plan, it's not comped, it's
+  // "the person running the tool doesn't have quotas".
   let quotaState;
-  if (hasActiveSubscription) quotaState = 'subscribed';
+  if (decision.reason === 'admin') quotaState = 'admin';
+  else if (hasActiveSubscription) quotaState = 'subscribed';
   else if (isComped) quotaState = 'comped';
   else if (decision.reason === 'free-remaining') quotaState = 'free-remaining';
   else if (decision.reason === 'purchased-remaining') quotaState = 'purchased-remaining';
