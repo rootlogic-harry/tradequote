@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
 import { runAnalysis } from '../../utils/analyseJob.js';
-import { savePhoto, deletePhoto, saveDraft, loadPhotos } from '../../utils/userDB.js';
+import { savePhoto, deletePhoto, saveDraft, loadPhotos, listClients, getClient } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
@@ -90,6 +90,12 @@ export default function JobDetails({
   // notification; never called on failure. Defaults to a no-op so
   // isolated unit tests don't need to inject it.
   onAnalysisSuccess = () => {},
+  // Clients feature flag (2026-07-07). When true AND the user has any
+  // saved clients, the ClientPicker component surfaces above the name
+  // field so the user can pick from existing rather than retype.
+  // Typing still wins — the picker is optional.
+  clientsEnabled = false,
+  currentUserId = null,
 }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
@@ -358,6 +364,18 @@ export default function JobDetails({
       </p>
 
       <div className="eyebrow mb-3">Client & Site</div>
+      {clientsEnabled && currentUserId && (
+        <ClientSitePicker
+          currentUserId={currentUserId}
+          onPickClient={(client) => {
+            updateJob('clientName', client.name || '');
+            if (client.phone) updateJob('clientPhone', client.phone);
+          }}
+          onPickSite={(site) => {
+            updateJob('siteAddress', site.address || '');
+          }}
+        />
+      )}
       <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
@@ -1023,6 +1041,182 @@ export default function JobDetails({
         </button>
       </div>
       </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ClientSitePicker — collapsed strip above the Client Name field.
+ *
+ * Clicking "Pick from existing" opens a small dropdown of the user's
+ * clients (>=3 threshold enforced client-side — under that the strip
+ * self-hides). Picking a client fills clientName + clientPhone via
+ * onPickClient. If the client has ≥1 site, a second row appears
+ * offering sites for selection.
+ *
+ * Typing wins — the picker is a shortcut, not a requirement. Nothing
+ * here forces a dropdown open on load.
+ */
+function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
+  const [clients, setClients] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [sites, setSites] = useState([]);
+  const [loadingSites, setLoadingSites] = useState(false);
+
+  useEffect(() => {
+    if (!currentUserId || loaded) return;
+    let alive = true;
+    listClients(currentUserId, { limit: 200 })
+      .then((r) => {
+        if (!alive) return;
+        setClients(r?.clients || []);
+        setLoaded(true);
+      })
+      .catch(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [currentUserId, loaded]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return clients.slice(0, 8);
+    return clients
+      .filter((c) => (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [clients, search]);
+
+  const handlePickClient = async (client) => {
+    onPickClient?.(client);
+    setSelectedClient(client);
+    setOpen(false);
+    setSearch('');
+    // Fetch the client's sites so the Site picker can render.
+    setLoadingSites(true);
+    try {
+      const detail = await getClient(currentUserId, client.id);
+      setSites(detail?.sites || []);
+      // If exactly one site, auto-fill and skip the picker.
+      if (detail?.sites?.length === 1) {
+        onPickSite?.(detail.sites[0]);
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingSites(false); }
+  };
+
+  const handlePickSite = (site) => {
+    onPickSite?.(site);
+    setSites([]); // collapse after pick
+  };
+
+  // Threshold — under 3 clients this strip is more noise than value.
+  if (loaded && clients.length < 3) return null;
+  if (!loaded) return null;
+
+  return (
+    <div
+      className="mb-4"
+      style={{
+        border: '1px dashed var(--tq-border)',
+        borderRadius: 6,
+        padding: '10px 14px',
+      }}
+    >
+      {!open && !selectedClient && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="btn-link text-sm"
+          style={{ padding: 0, minHeight: 44, textAlign: 'left' }}
+          data-testid="jobdetails-pick-existing"
+        >
+          Pick from existing clients ({clients.length}) →
+        </button>
+      )}
+
+      {open && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="search"
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search clients…"
+              className="nq-field flex-1"
+              data-testid="jobdetails-picker-search"
+            />
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setSearch(''); }}
+              className="btn-ghost text-xs"
+              style={{ minHeight: 44, padding: '0 12px' }}
+            >
+              Cancel
+            </button>
+          </div>
+          {filtered.length === 0 ? (
+            <div className="text-xs" style={{ color: 'var(--tq-muted)', padding: '8px 4px' }}>
+              No matches. Keep typing in Client Name below to create a new one.
+            </div>
+          ) : (
+            <div className="flex flex-col" style={{ border: '1px solid var(--tq-border)', borderRadius: 4, overflow: 'hidden' }}>
+              {filtered.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => handlePickClient(c)}
+                  className="w-full text-left"
+                  style={{
+                    padding: '10px 12px', minHeight: 44,
+                    borderBottom: '1px solid var(--tq-border)',
+                    background: 'transparent', cursor: 'pointer',
+                  }}
+                  data-testid="jobdetails-picker-client"
+                >
+                  <div className="text-sm font-heading font-bold" style={{ color: 'var(--tq-text)' }}>
+                    {c.name || '(unnamed)'}
+                  </div>
+                  {c.phone && (
+                    <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>{c.phone}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedClient && sites.length >= 2 && (
+        <div className="mt-2">
+          <div className="eyebrow mb-1" style={{ color: 'var(--tq-muted)' }}>
+            Which site for {selectedClient.name}?
+          </div>
+          {loadingSites ? (
+            <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>Loading sites…</div>
+          ) : (
+            <div className="flex flex-col" style={{ border: '1px solid var(--tq-border)', borderRadius: 4, overflow: 'hidden' }}>
+              {sites.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handlePickSite(s)}
+                  className="w-full text-left"
+                  style={{
+                    padding: '10px 12px', minHeight: 44,
+                    borderBottom: '1px solid var(--tq-border)',
+                    background: 'transparent', cursor: 'pointer',
+                  }}
+                  data-testid="jobdetails-picker-site"
+                >
+                  <div className="text-sm truncate" style={{ color: 'var(--tq-text)' }}>{s.address}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
