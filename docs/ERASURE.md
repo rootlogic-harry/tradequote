@@ -54,6 +54,8 @@ a "we deleted you" promise that's untrue.
 | `referrals` | referrer_user_id, referee_user_id, code_used, timestamps — no end-client PII (waller↔waller relationship only) | CASCADE on either side — deleting either party CASCADE-removes the referral row |
 | `quote_purchases` | user_id, stripe_payment_id (Stripe-issued, no PII), quotes_added, amount_paid_pence, created_at — no end-client PII | CASCADE — billing audit row goes with the user; refund accounting is manual (docs/REFUNDS.md) |
 | `events` | user_id (FastQuote id only, no PII), event_name (server-side allowlist of ~15 names), session_id, path (Referer pathname only), props JSONB (event-specific metadata — slot key, price id, duration, etc., no client PII) — Analytics Phase 1 first-party event log | CASCADE on user deletion (`ON DELETE CASCADE` on user_id). No end-client PII to scrub. |
+| `clients` | user_id, name, phone, email, notes, status — first-class end-client PII rows (2026-07-07 Clients feature, spec: `docs/CLIENTS_SPEC_v3.md`) | CASCADE on user deletion (`user_id` FK is `ON DELETE CASCADE`). Homeowner-erasure path uses soft-delete + scheduled hard-purge (scrub name/phone/email/notes, preserve row for FK integrity). |
+| `sites` | user_id, client_id, address, site_contact_name, site_contact_phone, notes — property location + arrange-access contact (2026-07-07 Clients feature). Sites belong to exactly one Client. | CASCADE on user deletion. `client_id` FK is deliberately NOT `ON DELETE CASCADE` so soft-delete via the app path preserves referential integrity while the moat scrub runs on schedule. Homeowner-erasure path scrubs address + contact fields. |
 
 **CASCADE summary** — most child tables have
 `user_id TEXT REFERENCES users(id) ON DELETE CASCADE`, so a single
