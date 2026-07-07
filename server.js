@@ -3294,14 +3294,14 @@ app.post('/api/users/:id/jobs', async (req, res) => {
       const enteredPhone = (jobDetails?.clientPhone || '').trim() || null;
       const enteredAddress = (jobDetails?.siteAddress || '').trim() || 'Address not set';
 
-      const dbClient = await pool.connect();
+      const client = await pool.connect();
       try {
-        await dbClient.query('BEGIN');
+        await client.query('BEGIN');
         let clientId = null;
         let clientCreated = false;
         if (enteredName) {
           // Case-insensitive lookup by name for the caller's owned clients.
-          const { rows } = await dbClient.query(
+          const { rows } = await client.query(
             `SELECT id FROM clients
               WHERE user_id = $1 AND lower(name) = lower($2) AND deleted_at IS NULL
               LIMIT 1`,
@@ -3311,7 +3311,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         }
         if (!clientId) {
           const placeholder = enteredName || ('Draft — ' + new Date().toISOString().slice(0, 10));
-          const { rows: created } = await dbClient.query(
+          const { rows: created } = await client.query(
             `INSERT INTO clients (user_id, name, phone, status)
              VALUES ($1, $2, $3, $4)
              RETURNING id`,
@@ -3321,7 +3321,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
           clientCreated = true;
         }
         // Site: match by (client_id, lower(address)) else create.
-        const { rows: siteMatch } = await dbClient.query(
+        const { rows: siteMatch } = await client.query(
           `SELECT id FROM sites
             WHERE user_id = $1 AND client_id = $2
               AND lower(address) = lower($3) AND deleted_at IS NULL
@@ -3331,7 +3331,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         if (siteMatch.length > 0) {
           attachedSiteId = siteMatch[0].id;
         } else {
-          const { rows: siteRows } = await dbClient.query(
+          const { rows: siteRows } = await client.query(
             `INSERT INTO sites (user_id, client_id, address)
              VALUES ($1, $2, $3)
              RETURNING id`,
@@ -3343,7 +3343,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
         // Insert the job with the site attachment in the SAME
         // transaction so a failure leaves no dangling client/site row
         // without a job.
-        await dbClient.query(
+        await client.query(
           `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
             quote_reference, quote_date, total_amount, has_rams, quote_snapshot,
             prompt_chars, prompt_version, quote_token, site_id)
@@ -3362,7 +3362,7 @@ app.post('/api/users/:id/jobs', async (req, res) => {
             attachedSiteId,
           ]
         );
-        await dbClient.query('COMMIT');
+        await client.query('COMMIT');
         if (clientCreated) {
           recordEvent('client_created', userId, {
             via: 'quote_save',
@@ -3370,10 +3370,10 @@ app.post('/api/users/:id/jobs', async (req, res) => {
           }).catch(() => {});
         }
       } catch (err) {
-        try { await dbClient.query('ROLLBACK'); } catch { /* swallow */ }
+        try { await client.query('ROLLBACK'); } catch { /* swallow */ }
         throw err;
       } finally {
-        dbClient.release();
+        client.release();
       }
     } else {
       // Flag off — pre-Clients behaviour, byte-identical to before.
@@ -6946,10 +6946,10 @@ app.patch('/api/users/:id/sites/:siteId', billingRateLimit, guardClientsFlag, as
     if (set.length === 0) return res.status(400).json({ error: 'No editable fields supplied' });
     params.push(siteId, userId);
 
-    const dbClient = await pool.connect();
+    const client = await pool.connect();
     try {
-      await dbClient.query('BEGIN');
-      const { rows } = await dbClient.query(
+      await client.query('BEGIN');
+      const { rows } = await client.query(
         `UPDATE sites
             SET ${set.join(', ')}, updated_at = NOW()
           WHERE id = $${params.length - 1}
@@ -6962,14 +6962,14 @@ app.patch('/api/users/:id/sites/:siteId', billingRateLimit, guardClientsFlag, as
         params
       );
       if (rows.length === 0) {
-        await dbClient.query('ROLLBACK');
+        await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Site not found' });
       }
 
       // Draft-job propagation for address changes. Historical jobs
       // (status ≠ 'draft') keep their frozen snapshot copies.
       if (patch.address !== undefined) {
-        await dbClient.query(
+        await client.query(
           `UPDATE jobs
               SET site_address = $1,
                   quote_snapshot = jsonb_set(quote_snapshot, '{jobDetails,siteAddress}', to_jsonb($1::text), true),
@@ -6978,13 +6978,13 @@ app.patch('/api/users/:id/sites/:siteId', billingRateLimit, guardClientsFlag, as
           [patch.address, siteId]
         );
       }
-      await dbClient.query('COMMIT');
+      await client.query('COMMIT');
       res.json({ site: rows[0] });
     } catch (err) {
-      try { await dbClient.query('ROLLBACK'); } catch { /* swallow */ }
+      try { await client.query('ROLLBACK'); } catch { /* swallow */ }
       throw err;
     } finally {
-      dbClient.release();
+      client.release();
     }
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
