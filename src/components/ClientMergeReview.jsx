@@ -1,24 +1,31 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { mergeClients } from '../utils/userDB.js';
+import { computeDuplicateGroups } from '../utils/mergeGroups.js';
 
 /**
  * Duplicate-review modal — opened from the banner on ClientsList.
  *
- * Shows every candidate pair from GET /clients/duplicates side-by-side
- * so the user picks which client to KEEP (the target) and which to
- * remove (the source). Merge reparents the source's sites onto the
- * target and soft-deletes the source. Transactional server-side.
+ * The server returns candidate PAIRS (2-tuples). For a group of N
+ * genuine duplicates the server emits N-choose-2 pairs — three
+ * "Yorkshire Estates" become three pairs (AB, AC, BC). Rendering
+ * those pairs verbatim (as we did initially) is confusing: the user
+ * sees the same client on multiple rows and can't tell whether they
+ * need to merge one, two, or three times.
  *
- * Confidence order: name+phone matches first, then name/phone, then
- * email-only. Each pair gets its own row so a user with many
- * duplicates can work through them in one sitting.
+ * This modal now GROUPS by transitive closure (see mergeGroups.js) —
+ * three duplicates render as one card with three "Keep this one"
+ * buttons. Picking a target performs N-1 sequential merges into that
+ * client in a single confirmation, so a group of 3 collapses to 1 in
+ * one action.
+ *
+ * Confidence order: high first, then medium, then low. Within a
+ * confidence bucket, larger groups first (the "biggest win" merges
+ * rise to the top).
  */
 
 const currency = new Intl.NumberFormat('en-GB', {
   style: 'currency', currency: 'GBP', maximumFractionDigits: 0,
 });
-
-const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
 
 export default function ClientMergeReview({
   currentUserId,
@@ -28,34 +35,53 @@ export default function ClientMergeReview({
   onMerged,
   showToast,
 }) {
-  const [busyPairKey, setBusyPairKey] = useState(null);
+  const [busyGroupKey, setBusyGroupKey] = useState(null);
 
-  // Sort by confidence (high first), then by whichever pair has the
-  // most site+quote data on the "kept" side so the productive merges
-  // rise to the top.
-  const sortedPairs = [...duplicates].sort((a, b) => {
-    const ra = CONFIDENCE_RANK[a.confidence] ?? 3;
-    const rb = CONFIDENCE_RANK[b.confidence] ?? 3;
-    return ra - rb;
-  });
+  const groups = useMemo(
+    () => computeDuplicateGroups(duplicates, clientsById),
+    [duplicates, clientsById],
+  );
 
-  const handleMerge = async (sourceId, intoId, pairKey) => {
-    const src = clientsById.get(sourceId);
-    const tgt = clientsById.get(intoId);
-    if (!confirm(
-      `Merge "${src?.name || sourceId}" INTO "${tgt?.name || intoId}"?\n\n` +
-      `All sites and quotes from the source move to the target. ` +
-      `The source client is soft-deleted (recoverable for 30 days).`
-    )) return;
-    setBusyPairKey(pairKey);
+  const totalDuplicateClients = groups.reduce((sum, g) => sum + g.clients.length, 0);
+
+  const handleGroupMerge = async (group, targetId, groupKey) => {
+    const target = group.clients.find((c) => c.id === targetId);
+    const sources = group.clients.filter((c) => c.id !== targetId);
+    if (sources.length === 0) return;
+
+    const sourceNames = sources.map((c) => `"${c.name || c.id}"`).join(', ');
+    const confirmMsg =
+      `Merge ${sources.length} duplicate${sources.length === 1 ? '' : 's'} INTO ` +
+      `"${target?.name || targetId}"?\n\n` +
+      `All sites and quotes from ${sourceNames} move to "${target?.name || targetId}". ` +
+      `${sources.length === 1 ? 'That client' : 'Those clients'} will be soft-deleted ` +
+      `(recoverable for 30 days).`;
+    if (!confirm(confirmMsg)) return;
+
+    setBusyGroupKey(groupKey);
     try {
-      await mergeClients(currentUserId, sourceId, intoId);
-      showToast?.('Merged', 'success');
+      // Sequential — server-side merge is a single-target transaction
+      // and locks the target row. Running in parallel would risk FK
+      // conflicts and interleaved audit rows.
+      for (const src of sources) {
+        // Skip if source is missing (defensive — e.g. server-side merge
+        // already reparented it in a previous attempt).
+        if (!src?.id) continue;
+        await mergeClients(currentUserId, src.id, targetId);
+      }
+      showToast?.(
+        `Merged ${sources.length} duplicate${sources.length === 1 ? '' : 's'}`,
+        'success',
+      );
       await onMerged?.();
     } catch (e) {
+      // Partial failure is possible — some merges succeeded, one failed.
+      // onMerged refetches so the modal renders whatever state is now
+      // canonical on the server. No client-side rollback.
       showToast?.(e?.message || 'Merge failed', 'error');
+      await onMerged?.();
     } finally {
-      setBusyPairKey(null);
+      setBusyGroupKey(null);
     }
   };
 
@@ -93,29 +119,24 @@ export default function ClientMergeReview({
             Review duplicates
           </h3>
           <p style={{ margin: '4px 0 0', color: 'var(--tq-muted)', fontSize: 13.5 }}>
-            {sortedPairs.length} pair{sortedPairs.length === 1 ? '' : 's'} found. Pick which one to keep.
+            {groupsHeadline(groups.length, totalDuplicateClients)}
           </p>
         </div>
 
         <div style={{ padding: '20px 22px', overflowY: 'auto', flex: '1 1 auto' }}>
-          {sortedPairs.length === 0 && (
+          {groups.length === 0 && (
             <div style={{ color: 'var(--tq-muted)', textAlign: 'center', padding: '32px 0' }}>
               No duplicates.
             </div>
           )}
           <div className="flex flex-col gap-4">
-            {sortedPairs.map((pair, idx) => {
-              const [aId, bId] = pair.candidateClientIds;
-              const a = clientsById.get(aId);
-              const b = clientsById.get(bId);
-              const pairKey = `${aId}-${bId}`;
-              // Only render the pair if we have BOTH clients cached —
-              // if a merge earlier in this session removed one, skip.
-              if (!a || !b) return null;
+            {groups.map((group, idx) => {
+              const groupKey = group.clients.map((c) => c.id).sort().join('|');
+              const busy = busyGroupKey === groupKey;
               return (
                 <div
-                  key={pairKey}
-                  data-testid="client-merge-review-pair"
+                  key={groupKey}
+                  data-testid="client-merge-review-group"
                   style={{
                     border: '1px solid var(--tq-border)',
                     borderRadius: 6,
@@ -124,20 +145,27 @@ export default function ClientMergeReview({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="eyebrow" style={{ color: 'var(--tq-muted)' }}>
-                      {matchTypeLabel(pair.matchType)} · {pair.confidence} confidence
+                      {group.clients.length} clients ·{' '}
+                      {group.matchTypes.map(matchTypeLabel).join(' / ')} ·{' '}
+                      {group.confidences.join('/')} confidence
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 fq:grid-cols-2 gap-3">
-                    <ClientCard
-                      client={a}
-                      onKeep={() => handleMerge(bId, aId, pairKey)}
-                      busy={busyPairKey === pairKey}
-                    />
-                    <ClientCard
-                      client={b}
-                      onKeep={() => handleMerge(aId, bId, pairKey)}
-                      busy={busyPairKey === pairKey}
-                    />
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 12,
+                    }}
+                  >
+                    {group.clients.map((c) => (
+                      <ClientCard
+                        key={c.id}
+                        client={c}
+                        onKeep={() => handleGroupMerge(group, c.id, groupKey)}
+                        busy={busy}
+                        otherCount={group.clients.length - 1}
+                      />
+                    ))}
                   </div>
                 </div>
               );
@@ -164,7 +192,7 @@ export default function ClientMergeReview({
   );
 }
 
-function ClientCard({ client, onKeep, busy }) {
+function ClientCard({ client, onKeep, busy, otherCount }) {
   return (
     <div
       style={{
@@ -197,6 +225,11 @@ function ClientCard({ client, onKeep, busy }) {
         className="btn-primary text-xs mt-2 w-full"
         style={{ minHeight: 44 }}
         data-testid="client-merge-review-keep"
+        title={
+          otherCount === 1
+            ? 'Keep this client — the other one will be merged in'
+            : `Keep this client — the other ${otherCount} will be merged in`
+        }
       >
         {busy ? 'Merging…' : 'Keep this one'}
       </button>
@@ -204,12 +237,20 @@ function ClientCard({ client, onKeep, busy }) {
   );
 }
 
+function groupsHeadline(groupCount, totalClients) {
+  if (groupCount === 0) return 'No duplicates found.';
+  if (groupCount === 1) {
+    return `1 duplicate group across ${totalClients} clients. Pick which to keep — the rest merge in.`;
+  }
+  return `${groupCount} duplicate groups across ${totalClients} clients. Pick which to keep in each.`;
+}
+
 function matchTypeLabel(type) {
   switch (type) {
-    case 'name+phone': return 'Same name AND phone';
-    case 'name':       return 'Same name';
-    case 'phone':      return 'Same phone';
-    case 'email':      return 'Same email';
-    default:           return type || 'Match';
+    case 'name+phone': return 'same name AND phone';
+    case 'name':       return 'same name';
+    case 'phone':      return 'same phone';
+    case 'email':      return 'same email';
+    default:           return type || 'match';
   }
 }
