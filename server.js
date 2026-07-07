@@ -6691,11 +6691,16 @@ app.get('/api/users/:id/clients/:clientId', guardClientsFlag, async (req, res) =
       [clientId]
     );
 
+    // NB: `jobs` has no `completed_at` column — completion is signalled
+    // by `status = 'completed'` alone (see PR #123 schema §). The rollup
+    // treats a missing `completedAt` field as "not yet completed", which
+    // is the correct semantics: an 'accepted' job is live-pipeline until
+    // it transitions to 'completed'.
     const { rows: jobs } = await pool.query(
       `SELECT j.id, j.saved_at AS "savedAt", j.client_name AS "clientName",
               j.site_address AS "siteAddress", j.quote_reference AS "quoteReference",
               j.quote_date AS "quoteDate", j.total_amount AS "totalAmount",
-              j.status, j.completed_at AS "completedAt", j.site_id AS "siteId"
+              j.status, j.site_id AS "siteId"
          FROM jobs j
          JOIN sites s ON s.id = j.site_id
         WHERE s.client_id = $1 AND s.deleted_at IS NULL
