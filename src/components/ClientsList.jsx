@@ -2,8 +2,8 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   listClients,
   getClientDuplicates,
-  mergeClients,
 } from '../utils/userDB.js';
+import ClientMergeReview from './ClientMergeReview.jsx';
 
 /**
  * Clients list — Paul's pipeline surface (CLIENTS_SPEC_v3, 2026-07-07).
@@ -36,7 +36,7 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
   const [search, setSearch] = useState('');
   const [activeStatus, setActiveStatus] = useState('all');
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [merging, setMerging] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const currentFilter = STATUS_FILTERS.find((f) => f.key === activeStatus) || STATUS_FILTERS[0];
 
@@ -63,13 +63,6 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Compute a lightweight "high-confidence duplicate names" list for
-  // the banner copy. Show at most 3 in the banner text; the modal
-  // shows the full list.
-  const highConfPairs = useMemo(
-    () => duplicates.filter((d) => d.confidence === 'high').slice(0, 3),
-    [duplicates]
-  );
   const bannerVisible = !bannerDismissed && duplicates.length > 0;
 
   const clientById = useMemo(() => {
@@ -78,20 +71,10 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
     return m;
   }, [clients]);
 
-  const handleMergePair = useCallback(async (sourceId, intoId) => {
-    if (!confirm('Merge these two clients?\n\nThe first (source) will be removed. All their sites and quotes move to the second (target).')) return;
-    setMerging(true);
-    try {
-      await mergeClients(currentUserId, sourceId, intoId);
-      showToast?.('Clients merged', 'success');
-      setBannerDismissed(false);
-      await refresh();
-    } catch (e) {
-      showToast?.(e?.message || 'Merge failed', 'error');
-    } finally {
-      setMerging(false);
-    }
-  }, [currentUserId, refresh, showToast]);
+  const handleMerged = useCallback(async () => {
+    setBannerDismissed(false);
+    await refresh();
+  }, [refresh]);
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -102,7 +85,10 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
         </p>
       </div>
 
-      {/* Duplicate merge banner. */}
+      {/* Duplicate merge banner. Always shows a "Review" button so the
+          user has a path forward regardless of match confidence — the
+          modal shows every candidate pair with per-pair "Keep this one"
+          buttons. */}
       {bannerVisible && (
         <div
           data-testid="clients-duplicate-banner"
@@ -120,36 +106,19 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
                 {duplicates.length} possible duplicate{duplicates.length === 1 ? '' : 's'} found
               </div>
               <div className="text-xs" style={{ color: 'var(--tq-muted)', lineHeight: 1.5 }}>
-                {highConfPairs.length > 0 ? (
-                  <>Matching name AND phone: {highConfPairs.map((p, i) => {
-                    const a = clientById.get(p.candidateClientIds[0]);
-                    const b = clientById.get(p.candidateClientIds[1]);
-                    return (
-                      <span key={i}>
-                        {i > 0 ? '; ' : ''}
-                        {a?.name || '(unknown)'} ↔ {b?.name || '(unknown)'}
-                      </span>
-                    );
-                  })}
-                  </>
-                ) : (
-                  <>Some clients share a name, phone or email. Merge to combine their sites + quotes.</>
-                )}
+                Some clients share a name, phone or email. Merge to combine their sites + quotes.
               </div>
             </div>
             <div className="flex gap-2 flex-shrink-0">
-              {highConfPairs[0] && (
-                <button
-                  type="button"
-                  onClick={() => handleMergePair(highConfPairs[0].candidateClientIds[0], highConfPairs[0].candidateClientIds[1])}
-                  disabled={merging}
-                  className="btn-primary text-xs"
-                  style={{ minHeight: 44, padding: '0 14px' }}
-                  data-testid="clients-duplicate-banner-merge"
-                >
-                  {merging ? 'Merging…' : 'Merge first pair'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setReviewOpen(true)}
+                className="btn-primary text-xs"
+                style={{ minHeight: 44, padding: '0 14px' }}
+                data-testid="clients-duplicate-banner-review"
+              >
+                Review
+              </button>
               <button
                 type="button"
                 onClick={() => setBannerDismissed(true)}
@@ -162,6 +131,17 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
             </div>
           </div>
         </div>
+      )}
+
+      {reviewOpen && (
+        <ClientMergeReview
+          currentUserId={currentUserId}
+          duplicates={duplicates}
+          clientsById={clientById}
+          onClose={() => setReviewOpen(false)}
+          onMerged={handleMerged}
+          showToast={showToast}
+        />
       )}
 
       {/* Search + status filter */}
