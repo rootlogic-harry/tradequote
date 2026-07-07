@@ -316,29 +316,32 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/review/MeasurementRow.jsx --
   { file: "src/components/review/MeasurementRow.jsx", line: 166, pr: "PR-future-polish", why: "Numeric edit input inside measurement row" },
   // -- src/components/steps/JobDetails.jsx --
-  // All entries shifted by +18 on 2026-07-07 when the flag-gated
-  // ClientSitePicker strip was inserted before the Client Name input
-  // (Clients & Sites feature, CLIENTS_ENABLED). Same auxiliary inputs
-  // as before — nothing semantic changed. Picker's own controls are
-  // ≥44px by construction (asserted in jobDetailsClientPicker.test.js).
-  { file: "src/components/steps/JobDetails.jsx", line: 384, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 401, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 417, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 434, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 460, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 482, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  // Refreshed 2026-07-07 for the per-quote Site Contact + conditional
+  // Client Name/Phone rewrite (Harry's UAT: "per quote it should be
+  // site contact, quote reference, and site contact"). Two new inputs
+  // (Site Contact Name at ~470, Site Contact Phone at ~489) plus a
+  // net shift as the picker component grew — same auxiliary-fields
+  // exemption owned by PR-future-mobile.
+  { file: "src/components/steps/JobDetails.jsx", line: 407, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 425, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 442, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 470, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 489, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   { file: "src/components/steps/JobDetails.jsx", line: 506, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 552, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 601, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 625, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 650, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 707, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 887, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 931, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 942, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 962, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
-  { file: "src/components/steps/JobDetails.jsx", line: 999, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 532, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 554, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 578, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 624, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 673, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 697, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 722, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 779, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 959, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 1003, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   { file: "src/components/steps/JobDetails.jsx", line: 1014, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 1034, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 1071, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
+  { file: "src/components/steps/JobDetails.jsx", line: 1086, pr: "PR-future-mobile", why: "JobDetails client/site/scale inputs (mostly use nq-field at top but secondary fields lack class)" },
   // -- src/components/steps/ProfileSetup.jsx --
   // Lines shifted by +14 cumulatively across launch-day 2026-06-30:
   //   +1 HelpModal onHelpClick prop (PR #101)

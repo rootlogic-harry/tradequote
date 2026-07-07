@@ -103,6 +103,12 @@ export default function JobDetails({
   const [dragOverSlot, setDragOverSlot] = useState(null); // key of slot being dragged over
   const [dragOverExtra, setDragOverExtra] = useState(false); // extra photos drop zone
   const [uploadingSlot, setUploadingSlot] = useState(null); // which slot is processing
+  // True when the ClientSitePicker has an existing client selected.
+  // Drives the Client Name / Client Phone vs Site Contact fields swap
+  // (see Client & Site section below): existing client → hide client
+  // fields, they're already stored on the client record; show per-job
+  // Site Contact Name / Site Contact Phone instead.
+  const [existingClientPicked, setExistingClientPicked] = useState(false);
 
   const { jobDetails, photos, extraPhotos, profile, captureMode } = state;
   const term = documentTerm(profile);
@@ -368,31 +374,49 @@ export default function JobDetails({
         <ClientSitePicker
           currentUserId={currentUserId}
           onPickClient={(client) => {
+            if (!client) {
+              // User switched back to "— New client —": bring the
+              // Client Name + Phone inputs back into view. Do NOT wipe
+              // typed values — they might be re-entering a fresh
+              // client and want to keep what they've typed so far.
+              setExistingClientPicked(false);
+              return;
+            }
+            setExistingClientPicked(true);
             updateJob('clientName', client.name || '');
             if (client.phone) updateJob('clientPhone', client.phone);
           }}
           onPickSite={(site) => {
             updateJob('siteAddress', site.address || '');
+            // 2026-07-07: auto-fill per-quote site contact from the
+            // site row's persistent contact. User can override for
+            // this quote — override goes to jobDetails only, never
+            // mutates the site row here (edit the site directly on
+            // the Client detail page for a persistent change).
+            updateJob('siteContactName', site.siteContactName || '');
+            updateJob('siteContactPhone', site.siteContactPhone || '');
           }}
         />
       )}
       <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
-        <div>
-          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Client Name *
-          </label>
-          <input
-            type="text"
-            autoComplete="off"
-            enterKeyHint="next"
-            placeholder="e.g. Yorkshire Estates"
-            className={inputClass('clientName')}
-            value={jobDetails.clientName}
-            onChange={(e) => updateJob('clientName', e.target.value)}
-            onBlur={(e) => updateJob('clientName', e.target.value)}
-          />
-          {errors.clientName && <p className="text-tq-error text-xs mt-1">{errors.clientName}</p>}
-        </div>
+        {!existingClientPicked && (
+          <div>
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Client Name *
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              enterKeyHint="next"
+              placeholder="e.g. Yorkshire Estates"
+              className={inputClass('clientName')}
+              value={jobDetails.clientName}
+              onChange={(e) => updateJob('clientName', e.target.value)}
+              onBlur={(e) => updateJob('clientName', e.target.value)}
+            />
+            {errors.clientName && <p className="text-tq-error text-xs mt-1">{errors.clientName}</p>}
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
@@ -410,20 +434,68 @@ export default function JobDetails({
           />
         </div>
 
+        {!existingClientPicked && (
+          <div>
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Client Phone <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>(optional)</span>
+            </label>
+            <input
+              type="tel"
+              autoComplete="tel"
+              enterKeyHint="next"
+              inputMode="tel"
+              placeholder="e.g. 07554 040992"
+              className={inputClass('clientPhone')}
+              value={jobDetails.clientPhone || ''}
+              onChange={(e) => updateJob('clientPhone', e.target.value)}
+              onBlur={(e) => updateJob('clientPhone', e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Per-quote site contact — 2026-07-07 (Harry's UAT):
+            "per quote it should be site contact, quote reference,
+             and site contact". When an existing client is picked
+             these take the row otherwise occupied by Client Name /
+             Client Phone; when a new client is being created they
+             sit below as optional inputs so both sets are captured
+             on the same quote. */}
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Client Phone <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>(optional)</span>
+            Site Contact Name{' '}
+            <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>
+              {existingClientPicked ? '' : '(optional)'}
+            </span>
+          </label>
+          <input
+            type="text"
+            autoComplete="off"
+            enterKeyHint="next"
+            placeholder="e.g. John on-site"
+            className={inputClass('siteContactName')}
+            value={jobDetails.siteContactName || ''}
+            onChange={(e) => updateJob('siteContactName', e.target.value)}
+            onBlur={(e) => updateJob('siteContactName', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Site Contact Phone{' '}
+            <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>
+              {existingClientPicked ? '' : '(optional)'}
+            </span>
           </label>
           <input
             type="tel"
             autoComplete="tel"
             enterKeyHint="next"
             inputMode="tel"
-            placeholder="e.g. 07554 040992"
-            className={inputClass('clientPhone')}
-            value={jobDetails.clientPhone || ''}
-            onChange={(e) => updateJob('clientPhone', e.target.value)}
-            onBlur={(e) => updateJob('clientPhone', e.target.value)}
+            placeholder="e.g. 07123 456789"
+            className={inputClass('siteContactPhone')}
+            value={jobDetails.siteContactPhone || ''}
+            onChange={(e) => updateJob('siteContactPhone', e.target.value)}
+            onBlur={(e) => updateJob('siteContactPhone', e.target.value)}
           />
         </div>
 
@@ -1096,7 +1168,13 @@ function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
     setSelectedClientId(id);
     setSelectedSiteId('');
     setSites([]);
-    if (!id) return; // "— New client —" placeholder: don't fire onPick.
+    if (!id) {
+      // "— New client —" placeholder: tell the parent to reset the
+      // "existing client picked" mode so Client Name + Phone inputs
+      // come back into view.
+      onPickClient?.(null);
+      return;
+    }
     const client = clients.find((c) => c.id === id);
     if (!client) return;
     onPickClient?.(client);

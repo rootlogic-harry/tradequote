@@ -82,6 +82,48 @@ describe('JobDetails client picker — insertion contract', () => {
     expect(jobDetailsSrc).toMatch(/jobDetails\.siteAddress/);
   });
 
+  test('per-quote site contact fields are rendered (name + phone)', () => {
+    // Harry's 2026-07-07 UAT: "per quote it should be site contact,
+    // quote reference, and site contact". Two new inputs on the form:
+    // Site Contact Name + Site Contact Phone.
+    expect(jobDetailsSrc).toMatch(/inputClass\(['"]siteContactName['"]\)/);
+    expect(jobDetailsSrc).toMatch(/inputClass\(['"]siteContactPhone['"]\)/);
+    expect(jobDetailsSrc).toMatch(/jobDetails\.siteContactName/);
+    expect(jobDetailsSrc).toMatch(/jobDetails\.siteContactPhone/);
+    expect(jobDetailsSrc).toMatch(/Site Contact Name/);
+    expect(jobDetailsSrc).toMatch(/Site Contact Phone/);
+  });
+
+  test('picker auto-fills site contact from the picked site row', () => {
+    // Site rows carry persistent site_contact_name / site_contact_phone
+    // (schema at server.js §sites table). Picking a site pre-fills the
+    // per-quote fields; user can override for THIS quote without
+    // mutating the site row.
+    expect(jobDetailsSrc).toMatch(/updateJob\(['"]siteContactName['"]/);
+    expect(jobDetailsSrc).toMatch(/updateJob\(['"]siteContactPhone['"]/);
+    expect(jobDetailsSrc).toMatch(/site\.siteContactName/);
+    expect(jobDetailsSrc).toMatch(/site\.siteContactPhone/);
+  });
+
+  test('Client Name / Client Phone hide when an existing client is picked', () => {
+    // Harry's 2026-07-07 UAT (2nd interpretation): when an existing
+    // client is picked, hide the redundant Client Name + Client Phone
+    // inputs — they're already stored on the client record. The Site
+    // Contact fields take their place.
+    expect(jobDetailsSrc).toMatch(/existingClientPicked/);
+    expect(jobDetailsSrc).toMatch(/!existingClientPicked\s*&&\s*\(/);
+    // Toggle is set/cleared by onPickClient (null == unpicked).
+    expect(jobDetailsSrc).toMatch(/setExistingClientPicked\(true\)/);
+    expect(jobDetailsSrc).toMatch(/setExistingClientPicked\(false\)/);
+  });
+
+  test('picker signals unpick with onPickClient(null) on placeholder', () => {
+    // Without this the parent never learns the user switched back to
+    // "— New client —" mode, and the Client Name / Phone inputs stay
+    // hidden forever.
+    expect(picker).toMatch(/onPickClient\?\.\(null\)/);
+  });
+
   test('client dropdown is a native <select> with the New/Not-listed placeholder', () => {
     // Native <select> — clear "this is a dropdown" affordance. The
     // placeholder must NOT auto-fill anything so a user typing a fresh
