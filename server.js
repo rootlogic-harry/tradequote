@@ -39,6 +39,9 @@ import {
 import {
   isEmailIntegrationEnabledFromProcessEnv,
 } from './src/utils/emailIntegrationEnabled.js';
+import {
+  isClientsEnabledFromProcessEnv,
+} from './src/utils/clientsEnabled.js';
 import { buildTradesmanProfileBlock } from './src/utils/tradesmanProfileBlock.js';
 import {
   parseAIResponse,
@@ -865,6 +868,78 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_events_name_created ON events(event_name, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_events_user_created ON events(user_id, created_at DESC);
     `);
+
+    // ─────── Clients + Sites schema (2026-07-07) ─────────────────────
+    //
+    // Two new entities to split a quote's inline client info into
+    // first-class rows. Spec: docs/CLIENTS_SPEC_v3.md. Rollback runbook:
+    // docs/CLIENTS_ROLLBACK.md.
+    //
+    // Additive only — CREATE TABLE IF NOT EXISTS + ALTER TABLE ADD
+    // COLUMN IF NOT EXISTS. No drops, no renames, no cost to legacy
+    // rows. Feature flag CLIENTS_ENABLED gates the ROUTES + UI, not
+    // the schema — the tables sit unused if the flag is off.
+    //
+    // FK notes:
+    //   - `sites.client_id` references clients but is NOT ON DELETE
+    //     CASCADE. Client deletion is application-controlled (soft
+    //     delete cascades via the DELETE handler in server.js) so
+    //     the moat table `quote_diffs` can survive PII scrub without
+    //     the DB helpfully cascading it away.
+    //   - `sites.user_id` and `clients.user_id` ARE ON DELETE CASCADE
+    //     — deleting a user should still fully cascade their entire
+    //     data footprint (GDPR erasure path).
+    //   - `jobs.site_id` is nullable so legacy jobs with no site
+    //     attachment continue to work.
+    //
+    // Partial indexes exclude soft-deleted rows so filtered lookups
+    // don't scan tombstones.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        phone       TEXT,
+        email       TEXT,
+        notes       TEXT,
+        status      TEXT NOT NULL DEFAULT 'active',
+        deleted_at  TIMESTAMPTZ,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS clients_user_id_idx     ON clients (user_id)             WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS clients_user_status_idx ON clients (user_id, status)     WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS clients_user_name_idx   ON clients (user_id, lower(name)) WHERE deleted_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS sites (
+        id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        user_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        client_id           TEXT NOT NULL REFERENCES clients(id),
+        address             TEXT NOT NULL,
+        site_contact_name   TEXT,
+        site_contact_phone  TEXT,
+        notes               TEXT,
+        deleted_at          TIMESTAMPTZ,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS sites_client_id_idx ON sites (client_id) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS sites_user_id_idx   ON sites (user_id)   WHERE deleted_at IS NULL;
+
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS site_id TEXT REFERENCES sites(id);
+      CREATE INDEX IF NOT EXISTS jobs_site_id_idx ON jobs (site_id) WHERE site_id IS NOT NULL;
+    `);
+
+    // Feature-flag helper for the routes + UI (PRs #3 and #4). Schema
+    // above stands whether the flag is on or off — the flag only gates
+    // the user-facing surface. See docs/CLIENTS_SPEC_v3.md § 2.
+    //
+    // Contract: process.env.CLIENTS_ENABLED === 'true' → routes mount +
+    // UI shows. Anything else (unset / 'false' / '1' / …) → routes 404,
+    // UI hides. Callers use `isClientsEnabledFromProcessEnv()` (imported
+    // above from src/utils/clientsEnabled.js) rather than reading
+    // process.env directly so a future config source (GrowthBook etc.)
+    // can be swapped in without touching every route.
 
     // Migrate hardcoded calibration notes to DB (idempotent)
     const hardcodedNotes = [

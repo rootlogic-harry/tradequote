@@ -133,12 +133,14 @@ same name embedded in a `quote_snapshot` JSONB.
 | `users` | name + email → "Demo Trader N" / `demo-trader-N@staging.fastquote.invalid`; avatar_url → fake URL; auth_provider_id → irreversibly hashed |
 | `jobs` | client_name → "Test Client X"; site_address → "Sample Address Lane N"; client_ip / client_user_agent → NULL; decline_reason → "[redacted in staging]"; all four JSONB snapshots scrubbed via regex on known PII keys |
 | `profiles` | data JSONB scrubbed (companyName, phone, email, vatNumber, tradingAddress, logo) |
+| `clients` | name → "Test Client X" (same pool as `jobs.client_name` for referential consistency); phone → fake number; email → `demo-trader-N@staging.fastquote.invalid`; notes NULLed |
+| `sites` | address → "Sample Address Lane N" (same pool as `jobs.site_address`); site_contact_name → fake client-pool name; site_contact_phone → fake number; notes NULLed |
 | `user_photos` | Real photo data replaced with a 1×1 placeholder PNG; labels / names replaced |
 | `system_errors` | stack + user_agent NULLed; message truncated to 80 chars |
 | `pageviews` | referrer NULLed; ua_hash already anonymous |
 | `admin_audit` | details JSONB NULLed |
 | `drafts` | data JSONB scrubbed |
-| Other tables | Pass through unchanged — no PII (quote_diffs, agent_runs, calibration_notes, dictation_runs, agent_retry_queue, session, settings, free_quote_grants, referral_codes, referrals, quote_purchases) |
+| Other tables | Pass through unchanged — no PII (quote_diffs, agent_runs, calibration_notes, dictation_runs, agent_retry_queue, session, settings, free_quote_grants, referral_codes, referrals, quote_purchases, events) |
 
 **Hard rule, mechanically enforced:** the script never connects to
 any database. It only reads stdin and writes stdout. If you give it
