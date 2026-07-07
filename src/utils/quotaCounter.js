@@ -57,6 +57,10 @@
 export function selectCounterState(billing) {
   if (!billing) return null;
   const raw = billing.quotaState;
+  // Admin plans (Harry + Mark) — treat identically to 'subscribed' at
+  // the UI layer. The Dashboard has no meaningful counter to show and
+  // the "Buy 5 quotes" CTA would be nonsense. Bug 2026-07-07.
+  if (raw === 'admin') return 'subscribed';
   if (raw === 'subscribed') return 'subscribed';
   if (raw === 'comped') return 'comped';
   // /auth/me uses 'exhausted', /api/billing/status uses 'exhausted',

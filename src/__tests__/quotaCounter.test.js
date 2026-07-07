@@ -56,6 +56,14 @@ describe('selectCounterState — maps /auth/me billing to UI state', () => {
     expect(selectCounterState({ quotaState: 'subscribed' })).toBe('subscribed');
   });
 
+  test('admin → "subscribed" (Harry + Mark, banner hidden — bug 2026-07-07)', () => {
+    // The gate reports 'admin' as its own state so the source of the
+    // free-tier bypass stays visible in logs / /auth/me, but the UI
+    // treats admin identically to a paying subscriber for banner
+    // purposes: no counter, no Buy/Subscribe CTAs.
+    expect(selectCounterState({ quotaState: 'admin' })).toBe('subscribed');
+  });
+
   test('comped → "comped"', () => {
     expect(selectCounterState({ quotaState: 'comped' })).toBe('comped');
   });
