@@ -1,10 +1,14 @@
 /**
  * JobDetails Client & Site picker — source-level guard.
  *
- * The Step 2 (Job Details) form gains a client picker strip when
- * `clientsEnabled && currentUserId`. Picking a client fills clientName
- * + clientPhone via existing updateJob dispatches; picking a site fills
- * siteAddress. If the client has exactly one site, it auto-fills.
+ * The Step 2 (Job Details) form gains two native <select> dropdowns
+ * above the Client Name field when `clientsEnabled && currentUserId`:
+ *
+ *   1. Existing Client — always visible if the user has ≥1 client.
+ *      Selecting fills clientName + clientPhone via onPickClient.
+ *   2. Site — appears once a client is picked, pre-selects the
+ *      "standard" (most-recent-job's site or first) and fills
+ *      siteAddress via onPickSite. User can change to another site.
  *
  * This suite pins the source shape so a future refactor can't silently:
  *   - render the picker unconditionally (leaking new UI to users on the
@@ -14,11 +18,10 @@
  *     jobDetails fields),
  *   - break the "typing wins" contract (picker is a shortcut, not a
  *     replacement — the Client Name / Site Address inputs must stay
- *     rendered under the picker).
- *
- * Behavioural tests for the reducer transitions themselves are covered
- * by reducer.test.js (updateJob / SET_JOB_DETAILS). This suite is a
- * cheap source-integrity guard on the picker's insertion contract.
+ *     rendered under the picker),
+ *   - lose the "standard site" auto-select (Harry's 2026-07-07 UAT
+ *     ask: "if I select a client, the site should populate by default
+ *     as the standard, with the option to change").
  */
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
@@ -29,6 +32,10 @@ const repoRoot = join(__dirname, '../../');
 const jobDetailsSrc = readFileSync(
   join(repoRoot, 'src/components/steps/JobDetails.jsx'),
   'utf8',
+);
+
+const picker = jobDetailsSrc.slice(
+  jobDetailsSrc.indexOf('function ClientSitePicker'),
 );
 
 describe('JobDetails client picker — insertion contract', () => {
@@ -75,19 +82,41 @@ describe('JobDetails client picker — insertion contract', () => {
     expect(jobDetailsSrc).toMatch(/jobDetails\.siteAddress/);
   });
 
-  test('touch targets on picker rows respect the 44px min-height contract', () => {
-    // Mobile touch-target lint (from CLAUDE.md § Mobile). Every
-    // interactive control inside the picker must be ≥44px.
-    const picker = jobDetailsSrc.slice(jobDetailsSrc.indexOf('function ClientSitePicker'));
-    // Extract every `minHeight: NN` occurrence inside the picker.
-    const heights = [...picker.matchAll(/minHeight:\s*(\d+)/g)].map((m) => Number(m[1]));
-    expect(heights.length).toBeGreaterThan(0);
-    for (const h of heights) expect(h).toBeGreaterThanOrEqual(44);
+  test('client dropdown is a native <select> with the New/Not-listed placeholder', () => {
+    // Native <select> — clear "this is a dropdown" affordance. The
+    // placeholder must NOT auto-fill anything so a user typing a fresh
+    // name is never surprised by injected values.
+    expect(picker).toMatch(/<select[\s\S]{0,400}data-testid=["']jobdetails-picker-client["']/);
+    expect(picker).toMatch(/— New client \/ not listed —/);
   });
 
-  test('single-site auto-fill fast-path present', () => {
-    // If a client has exactly one site, we skip the site sub-picker
-    // and auto-call onPickSite. Documented in the picker JSDoc.
-    expect(jobDetailsSrc).toMatch(/sites\?.length === 1/);
+  test('site dropdown is a native <select> — no separate button list', () => {
+    // Site picker uses the SAME <select> affordance so the user can
+    // both see the auto-selected standard and change it in one control.
+    expect(picker).toMatch(/<select[\s\S]{0,400}data-testid=["']jobdetails-picker-site["']/);
+  });
+
+  test('standard site is pre-selected from timeline (most recent job)', () => {
+    // "if I select a client, the site should populate by default as
+    // the standard" — Harry, 2026-07-07 UAT.
+    // The picker reads timeline[0].site_id and falls back to the first
+    // site in the list.
+    expect(picker).toMatch(/timeline\[0\]\?\.site_id/);
+    expect(picker).toMatch(/siteList\[0\]/);
+  });
+
+  test('touch targets on picker rows respect the 44px min-height contract', () => {
+    // <select className="nq-field"> inherits ≥48px from the .nq-field
+    // rule in index.html (touchTargets allow-list treats nq-field as
+    // canonical-44px). Confirm the class is applied.
+    expect(picker).toMatch(/className=["']nq-field["']/);
+  });
+
+  test('hides only when the user has zero clients', () => {
+    // Threshold relaxed from <3 to <1 on 2026-07-07 (Harry: "I should
+    // be able to select clients I\'ve already worked with"). Under the
+    // old threshold users with 1 or 2 clients saw nothing.
+    expect(picker).toMatch(/clients\.length === 0/);
+    expect(picker).not.toMatch(/clients\.length < 3/);
   });
 });

@@ -1047,175 +1047,146 @@ export default function JobDetails({
 }
 
 /**
- * ClientSitePicker — collapsed strip above the Client Name field.
+ * ClientSitePicker — visible dropdowns above the Client Name field.
  *
- * Clicking "Pick from existing" opens a small dropdown of the user's
- * clients (>=3 threshold enforced client-side — under that the strip
- * self-hides). Picking a client fills clientName + clientPhone via
- * onPickClient. If the client has ≥1 site, a second row appears
- * offering sites for selection.
+ * Two native <select>s:
+ *   - Existing Client — always visible if the user has ≥1 client. Alpha
+ *     sorted by name. Placeholder "— New client / not listed —" leaves
+ *     everything blank so the user types below (typing wins).
+ *   - Site — appears when a client is picked. Pre-selects the "standard"
+ *     site (site attached to the most recent job for that client, else
+ *     the first site returned) and auto-fills siteAddress. User can
+ *     change to another site via the same dropdown.
  *
- * Typing wins — the picker is a shortcut, not a requirement. Nothing
- * here forces a dropdown open on load.
+ * Auto-fill contract on client pick:
+ *   updateJob('clientName') + updateJob('clientPhone') via onPickClient
+ *   updateJob('siteAddress') via onPickSite with the standard site
+ *
+ * The raw Client Name / Site Address inputs stay rendered below so the
+ * user can type over the picker at any time — the picker is a shortcut,
+ * not a gate. Selecting "— New client / not listed —" clears the site
+ * dropdown but never wipes typed values.
  */
 function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
   const [clients, setClients] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [sites, setSites] = useState([]);
+  const [selectedSiteId, setSelectedSiteId] = useState('');
   const [loadingSites, setLoadingSites] = useState(false);
 
   useEffect(() => {
     if (!currentUserId || loaded) return;
     let alive = true;
-    listClients(currentUserId, { limit: 200 })
+    listClients(currentUserId, { limit: 500 })
       .then((r) => {
         if (!alive) return;
-        setClients(r?.clients || []);
+        const list = (r?.clients || []).slice().sort((a, b) =>
+          (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' }),
+        );
+        setClients(list);
         setLoaded(true);
       })
       .catch(() => { if (alive) setLoaded(true); });
     return () => { alive = false; };
   }, [currentUserId, loaded]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return clients.slice(0, 8);
-    return clients
-      .filter((c) => (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [clients, search]);
-
-  const handlePickClient = async (client) => {
+  const handleClientChange = async (e) => {
+    const id = e.target.value;
+    setSelectedClientId(id);
+    setSelectedSiteId('');
+    setSites([]);
+    if (!id) return; // "— New client —" placeholder: don't fire onPick.
+    const client = clients.find((c) => c.id === id);
+    if (!client) return;
     onPickClient?.(client);
-    setSelectedClient(client);
-    setOpen(false);
-    setSearch('');
-    // Fetch the client's sites so the Site picker can render.
     setLoadingSites(true);
     try {
-      const detail = await getClient(currentUserId, client.id);
-      setSites(detail?.sites || []);
-      // If exactly one site, auto-fill and skip the picker.
-      if (detail?.sites?.length === 1) {
-        onPickSite?.(detail.sites[0]);
-      }
-    } catch { /* ignore */ }
-    finally { setLoadingSites(false); }
+      const detail = await getClient(currentUserId, id);
+      const siteList = detail?.sites || [];
+      setSites(siteList);
+      if (siteList.length === 0) return;
+      // "Standard" site = site attached to the most recent job for this
+      // client, else the first site returned. Timeline is already sorted
+      // newest-first server-side (clientsRoutes.js).
+      const timeline = detail?.timeline || [];
+      const mostRecentSiteId = timeline[0]?.site_id;
+      const standard =
+        siteList.find((s) => s.id === mostRecentSiteId) || siteList[0];
+      setSelectedSiteId(standard.id);
+      onPickSite?.(standard);
+    } catch {
+      /* ignore — user can still type the address below */
+    } finally {
+      setLoadingSites(false);
+    }
   };
 
-  const handlePickSite = (site) => {
-    onPickSite?.(site);
-    setSites([]); // collapse after pick
+  const handleSiteChange = (e) => {
+    const id = e.target.value;
+    setSelectedSiteId(id);
+    const site = sites.find((s) => s.id === id);
+    if (site) onPickSite?.(site);
   };
 
-  // Threshold — under 3 clients this strip is more noise than value.
-  if (loaded && clients.length < 3) return null;
+  // Hide only if there are literally zero clients — nothing to pick.
   if (!loaded) return null;
+  if (clients.length === 0) return null;
 
   return (
     <div
-      className="mb-4"
+      className="mb-6 grid gap-4"
       style={{
-        border: '1px dashed var(--tq-border)',
-        borderRadius: 6,
-        padding: '10px 14px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
       }}
     >
-      {!open && !selectedClient && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="btn-link text-sm"
-          style={{ padding: 0, minHeight: 44, textAlign: 'left' }}
-          data-testid="jobdetails-pick-existing"
+      <div>
+        <label
+          htmlFor="jobdetails-existing-client"
+          className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide"
         >
-          Pick from existing clients ({clients.length}) →
-        </button>
-      )}
+          Existing Client
+        </label>
+        <select
+          id="jobdetails-existing-client"
+          value={selectedClientId}
+          onChange={handleClientChange}
+          className="nq-field"
+          data-testid="jobdetails-picker-client"
+        >
+          <option value="">— New client / not listed —</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {(c.name || '(unnamed)') + (c.phone ? ` · ${c.phone}` : '')}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {open && (
+      {selectedClientId && (
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <input
-              type="search"
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search clients…"
-              className="nq-field flex-1"
-              data-testid="jobdetails-picker-search"
-            />
-            <button
-              type="button"
-              onClick={() => { setOpen(false); setSearch(''); }}
-              className="btn-ghost text-xs"
-              style={{ minHeight: 44, padding: '0 12px' }}
-            >
-              Cancel
-            </button>
-          </div>
-          {filtered.length === 0 ? (
-            <div className="text-xs" style={{ color: 'var(--tq-muted)', padding: '8px 4px' }}>
-              No matches. Keep typing in Client Name below to create a new one.
-            </div>
-          ) : (
-            <div className="flex flex-col" style={{ border: '1px solid var(--tq-border)', borderRadius: 4, overflow: 'hidden' }}>
-              {filtered.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => handlePickClient(c)}
-                  className="w-full text-left"
-                  style={{
-                    padding: '10px 12px', minHeight: 44,
-                    borderBottom: '1px solid var(--tq-border)',
-                    background: 'transparent', cursor: 'pointer',
-                  }}
-                  data-testid="jobdetails-picker-client"
-                >
-                  <div className="text-sm font-heading font-bold" style={{ color: 'var(--tq-text)' }}>
-                    {c.name || '(unnamed)'}
-                  </div>
-                  {c.phone && (
-                    <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>{c.phone}</div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedClient && sites.length >= 2 && (
-        <div className="mt-2">
-          <div className="eyebrow mb-1" style={{ color: 'var(--tq-muted)' }}>
-            Which site for {selectedClient.name}?
-          </div>
-          {loadingSites ? (
-            <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>Loading sites…</div>
-          ) : (
-            <div className="flex flex-col" style={{ border: '1px solid var(--tq-border)', borderRadius: 4, overflow: 'hidden' }}>
-              {sites.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => handlePickSite(s)}
-                  className="w-full text-left"
-                  style={{
-                    padding: '10px 12px', minHeight: 44,
-                    borderBottom: '1px solid var(--tq-border)',
-                    background: 'transparent', cursor: 'pointer',
-                  }}
-                  data-testid="jobdetails-picker-site"
-                >
-                  <div className="text-sm truncate" style={{ color: 'var(--tq-text)' }}>{s.address}</div>
-                </button>
-              ))}
-            </div>
-          )}
+          <label
+            htmlFor="jobdetails-existing-site"
+            className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide"
+          >
+            Site
+          </label>
+          <select
+            id="jobdetails-existing-site"
+            value={selectedSiteId}
+            onChange={handleSiteChange}
+            className="nq-field"
+            data-testid="jobdetails-picker-site"
+            disabled={loadingSites || sites.length === 0}
+          >
+            {loadingSites && <option value="">Loading sites…</option>}
+            {!loadingSites && sites.length === 0 && (
+              <option value="">No sites yet — type below</option>
+            )}
+            {!loadingSites && sites.map((s) => (
+              <option key={s.id} value={s.id}>{s.address}</option>
+            ))}
+          </select>
         </div>
       )}
     </div>
