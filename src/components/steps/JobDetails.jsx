@@ -109,6 +109,13 @@ export default function JobDetails({
   // fields, they're already stored on the client record; show per-job
   // Site Contact Name / Site Contact Phone instead.
   const [existingClientPicked, setExistingClientPicked] = useState(false);
+  // True once the picker has auto-filled a site (either the "standard"
+  // pick on client select or a manual site swap via the Site dropdown).
+  // When true, the Site Address textarea hides — the site is fully
+  // identified by the dropdown selection and editing the address here
+  // would silently diverge from the client record. To change the
+  // address of an existing site, edit it on the Client detail page.
+  const [existingSitePicked, setExistingSitePicked] = useState(false);
 
   const { jobDetails, photos, extraPhotos, profile, captureMode } = state;
   const term = documentTerm(profile);
@@ -380,6 +387,7 @@ export default function JobDetails({
               // typed values — they might be re-entering a fresh
               // client and want to keep what they've typed so far.
               setExistingClientPicked(false);
+              setExistingSitePicked(false);
               return;
             }
             setExistingClientPicked(true);
@@ -395,6 +403,11 @@ export default function JobDetails({
             // the Client detail page for a persistent change).
             updateJob('siteContactName', site.siteContactName || '');
             updateJob('siteContactPhone', site.siteContactPhone || '');
+            // Site is fully identified by the picker — hide the Site
+            // Address textarea below so the user can't silently type
+            // over the picked address (which would create a mismatch
+            // between the quote and the client record).
+            setExistingSitePicked(true);
           }}
         />
       )}
@@ -499,31 +512,33 @@ export default function JobDetails({
           />
         </div>
 
-        <div className="fq:col-span-2">
-          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Site Address *
-          </label>
-          <textarea
-            autoComplete="street-address"
-            enterKeyHint="next"
-            placeholder="e.g. Malham Cove, Skipton BD23 4DA"
-            className={inputClass('siteAddress')}
-            rows={2}
-            value={jobDetails.siteAddress}
-            onChange={(e) => {
-              updateJob('siteAddress', e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            onBlur={(e) => {
-              updateJob('siteAddress', e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            style={{ overflow: 'hidden', resize: 'none' }}
-          />
-          {errors.siteAddress && <p className="text-tq-error text-xs mt-1">{errors.siteAddress}</p>}
-        </div>
+        {!existingSitePicked && (
+          <div className="fq:col-span-2">
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Site Address *
+            </label>
+            <textarea
+              autoComplete="street-address"
+              enterKeyHint="next"
+              placeholder="e.g. Malham Cove, Skipton BD23 4DA"
+              className={inputClass('siteAddress')}
+              rows={2}
+              value={jobDetails.siteAddress}
+              onChange={(e) => {
+                updateJob('siteAddress', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              onBlur={(e) => {
+                updateJob('siteAddress', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              style={{ overflow: 'hidden', resize: 'none' }}
+            />
+            {errors.siteAddress && <p className="text-tq-error text-xs mt-1">{errors.siteAddress}</p>}
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
