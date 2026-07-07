@@ -10,6 +10,8 @@ import ReviewEdit from './components/steps/ReviewEdit.jsx';
 import QuoteOutput from './components/steps/QuoteOutput.jsx';
 import SavedQuotes from './components/SavedQuotes.jsx';
 import SavedQuoteViewer from './components/SavedQuoteViewer.jsx';
+import ClientsList from './components/ClientsList.jsx';
+import ClientDetail from './components/ClientDetail.jsx';
 import RamsEditor from './components/rams/RamsEditor.jsx';
 import RamsOutput from './components/rams/RamsOutput.jsx';
 import Toast from './components/Toast.jsx';
@@ -80,6 +82,12 @@ export default function App() {
   // keeps the safer state — the Email/Outlook entry points stay hidden
   // until the server explicitly says they're on. See docs/EMAIL_FLAG.md.
   const [emailIntegrationEnabled, setEmailIntegrationEnabled] = useState(false);
+  // Feature flag: Clients + Sites feature (CLIENTS_SPEC_v3, 2026-07-07).
+  // Server-driven via /auth/me → features.clientsEnabled. When false
+  // (default), the Sidebar hides the Clients tab and the routes 404.
+  const [clientsEnabled, setClientsEnabled] = useState(false);
+  // Client detail view — id of the currently-open client, or null.
+  const [currentClientId, setCurrentClientId] = useState(null);
   // Quota state (2026-06-22) — populated from /auth/me's billing block.
   // Drives the "block New Quote button on exhausted" guard below so the
   // user never enters the flow only to be blocked at /analyse. Null
@@ -115,6 +123,7 @@ export default function App() {
         if (data?.features) {
           setVideoAnalysisEnabled(!!data.features.videoAnalysisEnabled);
           setEmailIntegrationEnabled(!!data.features.emailIntegrationEnabled);
+          setClientsEnabled(!!data.features.clientsEnabled);
         }
         if (data?.billing) {
           setBilling(data.billing);
@@ -802,6 +811,22 @@ export default function App() {
     setViewingQuote(null);
   };
 
+  const handleGoToClients = () => {
+    setCurrentView('clients');
+    setCurrentClientId(null);
+    setViewingQuote(null);
+  };
+
+  const handleOpenClient = (clientId) => {
+    setCurrentClientId(clientId);
+    setCurrentView('clientDetail');
+  };
+
+  const handleBackToClientsList = () => {
+    setCurrentClientId(null);
+    setCurrentView('clients');
+  };
+
   const handleLogout = async () => {
     try {
       if (state.currentUserId) {
@@ -930,6 +955,31 @@ export default function App() {
       );
     }
 
+    // Clients list view (CLIENTS_SPEC_v3, 2026-07-07)
+    if (currentView === 'clients') {
+      return (
+        <ClientsList
+          currentUserId={state.currentUserId}
+          onOpenClient={handleOpenClient}
+          onBack={handleGoToDashboard}
+          showToast={showToast}
+        />
+      );
+    }
+
+    // Client detail view
+    if (currentView === 'clientDetail' && currentClientId) {
+      return (
+        <ClientDetail
+          currentUserId={state.currentUserId}
+          clientId={currentClientId}
+          onBack={handleBackToClientsList}
+          onOpenQuote={handleViewQuote}
+          showToast={showToast}
+        />
+      );
+    }
+
     // Editor view
     return renderStep();
   };
@@ -999,6 +1049,8 @@ export default function App() {
         onStartNewQuote={handleStartNewQuote}
         onGoToDashboard={handleGoToDashboard}
         onGoToSaved={handleGoToSaved}
+        onGoToClients={handleGoToClients}
+        clientsEnabled={clientsEnabled}
         onGoToAnalytics={() => setCurrentView('analytics')}
         onGoToLearning={() => setCurrentView('learning')}
         onGoToAgents={() => setCurrentView('agents')}
@@ -1070,6 +1122,8 @@ export default function App() {
         onGoToDashboard={handleGoToDashboard}
         onStartNewQuote={handleStartNewQuote}
         onGoToSaved={handleGoToSaved}
+        onGoToClients={handleGoToClients}
+        clientsEnabled={clientsEnabled}
         onSettingsClick={() => setShowProfileModal(true)}
         isAdminPlan={isAdmin}
         isQuotaExhausted={isQuotaExhausted}

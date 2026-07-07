@@ -196,6 +196,106 @@ export async function patchJobDetails(userId, jobId, fields) {
   return res.json();
 }
 
+// ─── Clients + Sites (CLIENTS_SPEC_v3, 2026-07-07) ────────────────
+// Ten wire helpers matching the server routes 1:1. Each helper does
+// exactly one fetch + returns the parsed JSON body. Error handling
+// converts the response to an Error the SPA can catch and toast.
+
+async function clientsFetch(method, path, body) {
+  const opts = {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  };
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    // 404 when the feature flag is off (or when the resource is
+    // genuinely missing). Both are useful signals to the caller.
+    let msg = `Request failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+/**
+ * List clients. `filters` supports:
+ *   - search: matches name / phone / OR address across owned sites
+ *   - status: array or comma-separated string
+ *   - limit: default 50, max 200
+ */
+export async function listClients(userId, filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.search) params.set('search', filters.search);
+  if (filters.status && filters.status.length) {
+    params.set('status', Array.isArray(filters.status) ? filters.status.join(',') : filters.status);
+  }
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return clientsFetch('GET', `/api/users/${userId}/clients${qs ? `?${qs}` : ''}`);
+}
+
+/** Duplicate-candidate pairs for the client-list merge banner. */
+export async function getClientDuplicates(userId) {
+  return clientsFetch('GET', `/api/users/${userId}/clients/duplicates`);
+}
+
+/** Full client detail — client fields + sites + timeline + rollup. */
+export async function getClient(userId, clientId) {
+  return clientsFetch('GET', `/api/users/${userId}/clients/${clientId}`);
+}
+
+/**
+ * Create a client. Optional `site` inline creates the first site in
+ * the same call so the "one-screen simple" path (spec § 0) writes
+ * both rows atomically.
+ */
+export async function createClient(userId, data) {
+  return clientsFetch('POST', `/api/users/${userId}/clients`, data);
+}
+
+/** Whitelist-patch a client (name / phone / email / notes / status). */
+export async function patchClient(userId, clientId, patch) {
+  return clientsFetch('PATCH', `/api/users/${userId}/clients/${clientId}`, patch);
+}
+
+/**
+ * Merge two clients: reparents all of source's sites to target,
+ * COALESCEs target's null fields from source, soft-deletes source.
+ * Transactional server-side (spec § 7).
+ */
+export async function mergeClients(userId, sourceClientId, intoClientId) {
+  return clientsFetch('POST', `/api/users/${userId}/clients/${sourceClientId}/merge`, { intoClientId });
+}
+
+/**
+ * Soft-delete a client. Cascades to their sites; jobs at those sites
+ * hide from list views. The moat learning table is never touched.
+ */
+export async function deleteClient(userId, clientId) {
+  return clientsFetch('DELETE', `/api/users/${userId}/clients/${clientId}`);
+}
+
+/** Create a site for an existing client. */
+export async function createSite(userId, data) {
+  return clientsFetch('POST', `/api/users/${userId}/sites`, data);
+}
+
+/**
+ * Whitelist-patch a site (address / siteContactName / siteContactPhone /
+ * notes). Address changes propagate to draft jobs at the site.
+ */
+export async function patchSite(userId, siteId, patch) {
+  return clientsFetch('PATCH', `/api/users/${userId}/sites/${siteId}`, patch);
+}
+
+/** Soft-delete a site. Jobs at the site hide from list views. */
+export async function deleteSite(userId, siteId) {
+  return clientsFetch('DELETE', `/api/users/${userId}/sites/${siteId}`);
+}
+
 export async function updateJob(userId, jobId, state) {
   const snapshot = buildSaveSnapshot(state);
   const controller = new AbortController();
