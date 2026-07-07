@@ -283,6 +283,24 @@ This is enforced structurally in `aiParser.js` (normalisation) and the reducer (
 
 ---
 
+## In-flight: Client & Site Records (2026-07-07, flag-gated)
+
+Two new entities (`clients`, `sites`) that split a quote's inline
+`clientName / siteAddress / clientPhone` fields into first-class rows.
+Locked spec: `docs/CLIENTS_SPEC_v3.md`. Rollback runbook:
+`docs/CLIENTS_ROLLBACK.md`. Gated by `CLIENTS_ENABLED` env var
+(unset = 404 on new routes, UI hides, existing PATCH `/details`
+behaves as pre-Clients — full backwards compatibility).
+
+Shipping in phases:
+1. Failing tests + spec + rollback (done — this doc pack)
+2. Schema + migration
+3. Routes + rollup helper + placeholder-on-save
+4. UI (Client list + detail + merge banner) + Edit-details extension
+5. Backfill runbook + flag flip
+
+Do NOT implement anything past PR #1 until each stage's tests are green.
+
 ## Design Law: Two Layers, Never Mixed
 
 FastQuote has one customer-facing product and one admin operating layer. They must never be mixed.
