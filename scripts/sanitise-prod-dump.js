@@ -161,6 +161,50 @@ const SANITISE_RULES = {
       return row;
     },
   },
+  clients: {
+    // Client & Site records (2026-07-07). Same fake pools as jobs
+    // (deterministic hash → pool index) so a client mentioned in
+    // both `clients.name` AND `jobs.quote_snapshot.jobDetails.clientName`
+    // resolves to the SAME fake in staging.
+    columns: ['name', 'phone', 'email', 'notes'],
+    transform(row, colIndex) {
+      if (row[colIndex.name] && row[colIndex.name] !== '\\N') {
+        row[colIndex.name] = pickFake(FAKE_CLIENT_NAMES, row[colIndex.name]);
+      }
+      if (row[colIndex.phone] && row[colIndex.phone] !== '\\N') {
+        row[colIndex.phone] = pickFake(FAKE_PHONES, row[colIndex.phone]);
+      }
+      if (row[colIndex.email] && row[colIndex.email] !== '\\N') {
+        row[colIndex.email] = pickFake(FAKE_USER_EMAILS, row[colIndex.email]);
+      }
+      // Notes are free-text tradesman input (e.g. "prefers cash, no VAT
+      // receipt needed"). Null completely — no value in staging.
+      if (row[colIndex.notes] && row[colIndex.notes] !== '\\N') {
+        row[colIndex.notes] = '\\N';
+      }
+      return row;
+    },
+  },
+  sites: {
+    // Address matches the same FAKE_SITE_ADDRESSES pool as jobs.site_address
+    // so a site referenced from a job snapshot resolves to the same fake.
+    columns: ['address', 'site_contact_name', 'site_contact_phone', 'notes'],
+    transform(row, colIndex) {
+      if (row[colIndex.address] && row[colIndex.address] !== '\\N') {
+        row[colIndex.address] = pickFake(FAKE_SITE_ADDRESSES, row[colIndex.address]);
+      }
+      if (row[colIndex.site_contact_name] && row[colIndex.site_contact_name] !== '\\N') {
+        row[colIndex.site_contact_name] = pickFake(FAKE_CLIENT_NAMES, row[colIndex.site_contact_name]);
+      }
+      if (row[colIndex.site_contact_phone] && row[colIndex.site_contact_phone] !== '\\N') {
+        row[colIndex.site_contact_phone] = pickFake(FAKE_PHONES, row[colIndex.site_contact_phone]);
+      }
+      if (row[colIndex.notes] && row[colIndex.notes] !== '\\N') {
+        row[colIndex.notes] = '\\N';
+      }
+      return row;
+    },
+  },
   user_photos: {
     columns: ['data', 'label', 'name'],
     transform(row, colIndex) {
