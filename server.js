@@ -42,6 +42,7 @@ import {
 import {
   isClientsEnabledFromProcessEnv,
 } from './src/utils/clientsEnabled.js';
+import { resolveClientRollup } from './src/utils/clientRollup.js';
 import { buildTradesmanProfileBlock } from './src/utils/tradesmanProfileBlock.js';
 import {
   parseAIResponse,
@@ -3277,25 +3278,125 @@ app.post('/api/users/:id/jobs', async (req, res) => {
     // null on failure (jobs.prompt_chars is observability-only).
     const promptChars = await computeCurrentPromptChars();
 
-    await pool.query(
-      `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
-        quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_chars, prompt_version, quote_token)
-       VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11)`,
-      [
-        id,
-        req.params.id,
-        jobDetails?.clientName || '',
-        jobDetails?.siteAddress || '',
-        quoteRef,
-        jobDetails?.quoteDate || '',
-        totals?.total ?? 0,
-        JSON.stringify(quoteSnapshot),
-        promptChars,
-        promptVersion,
-        quoteToken,
-      ]
-    );
-    res.json({ id });
+    // Placeholder-on-save (CLIENTS_SPEC_v3, 2026-07-07). When the
+    // Clients feature is on, every job save either attaches to an
+    // existing Client (case-insensitive name match) OR lazily creates
+    // Client + Site rows using whatever's in jobDetails. Blank name →
+    // "Draft — YYYY-MM-DD" placeholder with status='needs_visit' so the
+    // client list "needs a name" chip surfaces it for follow-up.
+    //
+    // When the flag is off, this block is skipped entirely and the
+    // POST /jobs handler behaves byte-identically to pre-Clients.
+    let attachedSiteId = null;
+    if (isClientsEnabledFromProcessEnv()) {
+      const userId = req.params.id;
+      const enteredName = (jobDetails?.clientName || '').trim();
+      const enteredPhone = (jobDetails?.clientPhone || '').trim() || null;
+      const enteredAddress = (jobDetails?.siteAddress || '').trim() || 'Address not set';
+
+      const dbClient = await pool.connect();
+      try {
+        await dbClient.query('BEGIN');
+        let clientId = null;
+        let clientCreated = false;
+        if (enteredName) {
+          // Case-insensitive lookup by name for the caller's owned clients.
+          const { rows } = await dbClient.query(
+            `SELECT id FROM clients
+              WHERE user_id = $1 AND lower(name) = lower($2) AND deleted_at IS NULL
+              LIMIT 1`,
+            [userId, enteredName]
+          );
+          if (rows.length > 0) clientId = rows[0].id;
+        }
+        if (!clientId) {
+          const placeholder = enteredName || ('Draft — ' + new Date().toISOString().slice(0, 10));
+          const { rows: created } = await dbClient.query(
+            `INSERT INTO clients (user_id, name, phone, status)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id`,
+            [userId, placeholder, enteredPhone, enteredName ? 'active' : 'needs_visit']
+          );
+          clientId = created[0].id;
+          clientCreated = true;
+        }
+        // Site: match by (client_id, lower(address)) else create.
+        const { rows: siteMatch } = await dbClient.query(
+          `SELECT id FROM sites
+            WHERE user_id = $1 AND client_id = $2
+              AND lower(address) = lower($3) AND deleted_at IS NULL
+            LIMIT 1`,
+          [userId, clientId, enteredAddress]
+        );
+        if (siteMatch.length > 0) {
+          attachedSiteId = siteMatch[0].id;
+        } else {
+          const { rows: siteRows } = await dbClient.query(
+            `INSERT INTO sites (user_id, client_id, address)
+             VALUES ($1, $2, $3)
+             RETURNING id`,
+            [userId, clientId, enteredAddress]
+          );
+          attachedSiteId = siteRows[0].id;
+        }
+
+        // Insert the job with the site attachment in the SAME
+        // transaction so a failure leaves no dangling client/site row
+        // without a job.
+        await dbClient.query(
+          `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
+            quote_reference, quote_date, total_amount, has_rams, quote_snapshot,
+            prompt_chars, prompt_version, quote_token, site_id)
+           VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11, $12)`,
+          [
+            id, userId,
+            jobDetails?.clientName || '',
+            jobDetails?.siteAddress || '',
+            quoteRef,
+            jobDetails?.quoteDate || '',
+            totals?.total ?? 0,
+            JSON.stringify(quoteSnapshot),
+            promptChars,
+            promptVersion,
+            quoteToken,
+            attachedSiteId,
+          ]
+        );
+        await dbClient.query('COMMIT');
+        if (clientCreated) {
+          recordEvent('client_created', userId, {
+            via: 'quote_save',
+            hadName: Boolean(enteredName),
+          }).catch(() => {});
+        }
+      } catch (err) {
+        try { await dbClient.query('ROLLBACK'); } catch { /* swallow */ }
+        throw err;
+      } finally {
+        dbClient.release();
+      }
+    } else {
+      // Flag off — pre-Clients behaviour, byte-identical to before.
+      await pool.query(
+        `INSERT INTO jobs (id, user_id, saved_at, client_name, site_address,
+          quote_reference, quote_date, total_amount, has_rams, quote_snapshot, prompt_chars, prompt_version, quote_token)
+         VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11)`,
+        [
+          id,
+          req.params.id,
+          jobDetails?.clientName || '',
+          jobDetails?.siteAddress || '',
+          quoteRef,
+          jobDetails?.quoteDate || '',
+          totals?.total ?? 0,
+          JSON.stringify(quoteSnapshot),
+          promptChars,
+          promptVersion,
+          quoteToken,
+        ]
+      );
+    }
+    res.json({ id, siteId: attachedSiteId });
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
   }
@@ -6341,6 +6442,576 @@ app.post('/auth/redeem-referral', requireAuth, billingRateLimit, async (req, res
 
 // ───── End Referrals Phase 1 routes ─────
 
+// ─────── Clients + Sites routes (CLIENTS_SPEC_v3, 2026-07-07) ────────
+//
+// Ten endpoints hanging off the /api/users/:id prefix. All auth-gated
+// via the existing requireAuth + requireOwner mount. All write routes
+// use billingRateLimit. All routes 404 when the CLIENTS_ENABLED flag
+// is unset — this is how PR #3 stays inert until PR #4's UI ships.
+//
+// Contract locked in docs/CLIENTS_SPEC_v3.md § 3 + tests at
+// src/__tests__/clientsRoutes.test.js (11 assertions).
+//
+// Quota consumption: NONE. Organising the pipeline must never be
+// gated by the analyse counter. Assertion inside the routes-block
+// scanner enforces this at test time.
+//
+// Route order (alphabetical inside verb groups for readability):
+//   GET    /clients                         list + search + status filter
+//   GET    /clients/duplicates              candidates for the merge banner
+//   GET    /clients/:clientId               detail + rollup + timeline
+//   POST   /clients                         create (optional first site inline)
+//   PATCH  /clients/:clientId               whitelist patch
+//   POST   /clients/:clientId/merge         reparent + soft-delete source
+//   DELETE /clients/:clientId               soft-delete cascading to sites+jobs
+//   POST   /sites                           create (requires clientId)
+//   PATCH  /sites/:siteId                   whitelist patch, propagates to draft jobs
+//   DELETE /sites/:siteId                   soft-delete cascading to jobs
+
+// Guard used by every route in this section. Feature-flag off → 404.
+// A helper rather than repeating the check inline everywhere so a
+// future config source (GrowthBook, per-user opt-in) is a one-file
+// change.
+//
+// Short local alias so the routes read as `guardClientsFlag` while
+// keeping the tested helper name (`isClientsEnabled`) discoverable
+// via grep. The test suite accepts either the helper OR the inline
+// `process.env.CLIENTS_ENABLED === 'true'` form; we use the helper.
+const isClientsEnabled = isClientsEnabledFromProcessEnv;
+function guardClientsFlag(_req, res, next) {
+  if (!isClientsEnabled()) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  return next();
+}
+
+// GET /api/users/:id/clients — list.
+// Query params: search (matches name / phone / OR address across owned
+// sites), status (comma-separated), limit (default 50), cursor (opaque
+// id-since string).
+app.get('/api/users/:id/clients', guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const statusFilter = typeof req.query.status === 'string'
+      ? req.query.status.split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+
+    // Base query — active (non-deleted) clients only, plus per-client
+    // rollup counts driven by the same JOIN chain the detail view uses.
+    // Rollup uses conditional SUMs so we can compute totalWon /
+    // outstanding / livePipeline in ONE query per row.
+    const params = [userId, limit];
+    let where = 'c.user_id = $1 AND c.deleted_at IS NULL';
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`);
+      where += ` AND (lower(c.name) LIKE $${params.length} OR lower(coalesce(c.phone, '')) LIKE $${params.length} OR EXISTS (SELECT 1 FROM sites s2 WHERE s2.client_id = c.id AND s2.deleted_at IS NULL AND lower(s2.address) LIKE $${params.length}))`;
+    }
+    if (statusFilter.length > 0) {
+      params.push(statusFilter);
+      where += ` AND c.status = ANY($${params.length}::text[])`;
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         c.id, c.name, c.phone, c.email, c.status, c.notes,
+         c.created_at AS "createdAt", c.updated_at AS "updatedAt",
+         COALESCE(SUM(j.total_amount) FILTER (WHERE j.status IN ('accepted','completed')), 0)::float8 AS "totalWon",
+         COALESCE(SUM(j.total_amount) FILTER (WHERE j.status = 'sent'), 0)::float8 AS "outstanding",
+         COUNT(j.id) AS "lifetimeQuoteCount"
+       FROM clients c
+       LEFT JOIN sites s ON s.client_id = c.id AND s.deleted_at IS NULL
+       LEFT JOIN jobs j ON j.site_id = s.id
+       WHERE ${where}
+       GROUP BY c.id
+       ORDER BY c.updated_at DESC, c.id
+       LIMIT $2`,
+      params
+    );
+    res.json({ clients: rows.map((r) => ({
+      ...r,
+      lifetimeQuoteCount: Number(r.lifetimeQuoteCount) || 0,
+    })) });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// GET /api/users/:id/clients/duplicates — candidate pairs for the
+// merge banner. Ranked: name+phone match = high, name-only = medium,
+// phone-only = medium, email-only = low.
+app.get('/api/users/:id/clients/duplicates', guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    // Fetch every non-deleted client id + normalised keys once, then
+    // do the O(n²)-ish matching in JS. Fine at Paul's scale (dozens
+    // of clients); revisit if any user's client list grows past ~500.
+    const { rows } = await pool.query(
+      `SELECT id, name, phone, email
+         FROM clients
+        WHERE user_id = $1 AND deleted_at IS NULL`,
+      [userId]
+    );
+
+    const normName = (s) => (s || '').trim().toLowerCase();
+    const normPhone = (s) => (s || '').replace(/[\s\-()]/g, '').toLowerCase();
+    const normEmail = (s) => (s || '').trim().toLowerCase();
+
+    const candidates = [];
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        const a = rows[i];
+        const b = rows[j];
+        const nameMatch = a.name && b.name && normName(a.name) === normName(b.name);
+        const phoneMatch = a.phone && b.phone && normPhone(a.phone) === normPhone(b.phone);
+        const emailMatch = a.email && b.email && normEmail(a.email) === normEmail(b.email);
+        let matchType = null;
+        let confidence = 'low';
+        if (nameMatch && phoneMatch) { matchType = 'name+phone'; confidence = 'high'; }
+        else if (nameMatch) { matchType = 'name'; confidence = 'medium'; }
+        else if (phoneMatch) { matchType = 'phone'; confidence = 'medium'; }
+        else if (emailMatch) { matchType = 'email'; confidence = 'low'; }
+        if (matchType) {
+          candidates.push({
+            candidateClientIds: [a.id, b.id],
+            matchType,
+            confidence,
+          });
+        }
+      }
+    }
+    res.json({ duplicates: candidates });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// GET /api/users/:id/clients/:clientId — detail + rollup + sites +
+// chronological quote timeline.
+app.get('/api/users/:id/clients/:clientId', guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const clientId = req.params.clientId;
+    const { rows: clientRows } = await pool.query(
+      `SELECT id, name, phone, email, notes, status,
+              created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM clients
+        WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+      [clientId, userId]
+    );
+    if (clientRows.length === 0) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    const client = clientRows[0];
+
+    const { rows: sites } = await pool.query(
+      `SELECT id, address, site_contact_name AS "siteContactName",
+              site_contact_phone AS "siteContactPhone", notes,
+              created_at AS "createdAt", updated_at AS "updatedAt",
+              (SELECT COUNT(*) FROM jobs j WHERE j.site_id = s.id) AS "quoteCount"
+         FROM sites s
+        WHERE client_id = $1 AND deleted_at IS NULL
+        ORDER BY updated_at DESC`,
+      [clientId]
+    );
+
+    const { rows: jobs } = await pool.query(
+      `SELECT j.id, j.saved_at AS "savedAt", j.client_name AS "clientName",
+              j.site_address AS "siteAddress", j.quote_reference AS "quoteReference",
+              j.quote_date AS "quoteDate", j.total_amount AS "totalAmount",
+              j.status, j.completed_at AS "completedAt", j.site_id AS "siteId"
+         FROM jobs j
+         JOIN sites s ON s.id = j.site_id
+        WHERE s.client_id = $1 AND s.deleted_at IS NULL
+        ORDER BY j.saved_at DESC`,
+      [clientId]
+    );
+
+    const rollup = resolveClientRollup(jobs);
+
+    res.json({
+      client,
+      sites: sites.map((s) => ({ ...s, quoteCount: Number(s.quoteCount) || 0 })),
+      timeline: jobs,
+      rollup,
+    });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// POST /api/users/:id/clients — create.
+// Body: { name (required), phone?, email?, notes?, status?, site? }
+// where `site` (optional) is { address, siteContactName?, siteContactPhone?, notes? }.
+app.post('/api/users/:id/clients', billingRateLimit, guardClientsFlag, async (req, res) => {
+  const userId = req.params.id;
+  const raw = req.body || {};
+  const clamp = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null);
+  const name = clamp((raw.name || '').trim(), 200);
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const phone = clamp(raw.phone, 40);
+  const email = clamp(raw.email, 200);
+  const notes = clamp(raw.notes, 2000);
+  const status = ['active', 'needs_visit', 'lost'].includes(raw.status) ? raw.status : 'active';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: created } = await client.query(
+      `INSERT INTO clients (user_id, name, phone, email, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, phone, email, notes, status,
+                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [userId, name, phone, email, notes, status]
+    );
+    const newClient = created[0];
+
+    let newSite = null;
+    if (raw.site && typeof raw.site === 'object') {
+      const address = clamp((raw.site.address || '').trim(), 300);
+      if (address) {
+        const { rows: siteRows } = await client.query(
+          `INSERT INTO sites (user_id, client_id, address, site_contact_name, site_contact_phone, notes)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, address, site_contact_name AS "siteContactName",
+                     site_contact_phone AS "siteContactPhone", notes`,
+          [
+            userId, newClient.id, address,
+            clamp(raw.site.siteContactName, 200),
+            clamp(raw.site.siteContactPhone, 40),
+            clamp(raw.site.notes, 2000),
+          ]
+        );
+        newSite = siteRows[0];
+      }
+    }
+    await client.query('COMMIT');
+    recordEvent('client_created', userId, { via: 'manual', hadName: true }).catch(() => {});
+    res.json({ client: newClient, site: newSite });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* swallow */ }
+    safeError(res, err, `${req.method} ${req.path}`);
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /api/users/:id/clients/:clientId — whitelist patch.
+app.patch('/api/users/:id/clients/:clientId', billingRateLimit, guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const clientId = req.params.clientId;
+    const raw = req.body || {};
+    const clamp = (v, n) => (typeof v === 'string' ? v.slice(0, n) : undefined);
+    // Editable field set locked to the five columns below. `id`,
+    // `user_id`, `deleted_at`, `created_at`, `updated_at` are
+    // deliberately excluded.
+    const patchable = [
+      { key: 'name',   max: 200,  free: true  },
+      { key: 'phone',  max: 40,   free: true  },
+      { key: 'email',  max: 200,  free: true  },
+      { key: 'notes',  max: 2000, free: true  },
+      { key: 'status', enums: ['active', 'needs_visit', 'lost'] },
+    ];
+    const set = [];
+    const params = [];
+    const fieldsChanged = [];
+    for (const spec of patchable) {
+      if (raw[spec.key] === undefined) continue;
+      let val;
+      if (spec.free) {
+        val = clamp(raw[spec.key], spec.max);
+      } else if (spec.enums) {
+        val = spec.enums.includes(raw[spec.key]) ? raw[spec.key] : undefined;
+      }
+      if (val !== undefined) {
+        params.push(val);
+        set.push(`${spec.key} = $${params.length}`);
+        fieldsChanged.push(spec.key);
+      }
+    }
+    if (set.length === 0) return res.status(400).json({ error: 'No editable fields supplied' });
+    params.push(clientId, userId);
+    const { rows } = await pool.query(
+      `UPDATE clients
+          SET ${set.join(', ')}, updated_at = NOW()
+        WHERE id = $${params.length - 1}
+          AND user_id = $${params.length}
+          AND deleted_at IS NULL
+        RETURNING id, name, phone, email, notes, status,
+                  created_at AS "createdAt", updated_at AS "updatedAt"`,
+      params
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Client not found' });
+    recordEvent('client_updated', userId, { fieldsChanged }).catch(() => {});
+    res.json({ client: rows[0] });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// POST /api/users/:id/clients/:clientId/merge — reparent + soft-delete
+// source. Body: { intoClientId }.
+app.post('/api/users/:id/clients/:clientId/merge', billingRateLimit, guardClientsFlag, async (req, res) => {
+  const userId = req.params.id;
+  const sourceId = req.params.clientId;
+  const targetId = (req.body || {}).intoClientId;
+  if (!targetId || typeof targetId !== 'string') {
+    return res.status(400).json({ error: 'intoClientId is required' });
+  }
+  if (targetId === sourceId) {
+    return res.status(400).json({ error: 'Cannot merge a client into itself' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Confirm both clients exist and belong to caller.
+    const { rows: found } = await client.query(
+      `SELECT id, name, phone, email, notes
+         FROM clients
+        WHERE user_id = $1 AND deleted_at IS NULL AND id IN ($2, $3)
+        FOR UPDATE`,
+      [userId, sourceId, targetId]
+    );
+    if (found.length !== 2) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    const source = found.find((r) => r.id === sourceId);
+    const target = found.find((r) => r.id === targetId);
+
+    // Count sites + jobs BEFORE reparent (analytics event payload).
+    const { rows: countRows } = await client.query(
+      `SELECT
+         (SELECT COUNT(*) FROM sites WHERE client_id = $1 AND deleted_at IS NULL) AS "siteCount",
+         (SELECT COUNT(*) FROM jobs j JOIN sites s ON s.id = j.site_id WHERE s.client_id = $1) AS "jobCount"`,
+      [sourceId]
+    );
+    const { siteCount, jobCount } = countRows[0];
+
+    // Reparent every non-deleted site from source to target.
+    await client.query(
+      `UPDATE sites SET client_id = $1, updated_at = NOW()
+        WHERE client_id = $2 AND deleted_at IS NULL`,
+      [targetId, sourceId]
+    );
+
+    // Backfill target's null contact fields from source (never overwrite
+    // user-entered data on the target).
+    await client.query(
+      `UPDATE clients
+          SET phone = COALESCE(phone, $2),
+              email = COALESCE(email, $3),
+              notes = COALESCE(notes, $4),
+              updated_at = NOW()
+        WHERE id = $1`,
+      [targetId, source.phone, source.email, source.notes]
+    );
+
+    // Soft-delete source (NEVER a hard DELETE — the merge undo path
+    // relies on the tombstone).
+    await client.query(
+      `UPDATE clients SET deleted_at = NOW(), updated_at = NOW()
+        WHERE id = $1`,
+      [sourceId]
+    );
+
+    await client.query('COMMIT');
+    recordEvent('client_merged', userId, {
+      sourceClientId: sourceId,
+      intoClientId: targetId,
+      siteCount: Number(siteCount) || 0,
+      jobCount: Number(jobCount) || 0,
+    }).catch(() => {});
+    res.json({ ok: true, targetClientId: targetId });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* swallow */ }
+    safeError(res, err, `${req.method} ${req.path}`);
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/users/:id/clients/:clientId — soft-delete cascading to
+// sites and their jobs. The moat learning table is untouched.
+app.delete('/api/users/:id/clients/:clientId', billingRateLimit, guardClientsFlag, async (req, res) => {
+  const userId = req.params.id;
+  const clientId = req.params.clientId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rowCount: found } = await client.query(
+      `UPDATE clients SET deleted_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+      [clientId, userId]
+    );
+    if (found === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Cascade to sites belonging to this client.
+    const { rowCount: siteCount } = await client.query(
+      `UPDATE sites SET deleted_at = NOW(), updated_at = NOW()
+        WHERE client_id = $1 AND deleted_at IS NULL`,
+      [clientId]
+    );
+
+    // No UPDATE on jobs.deleted_at column — the jobs table has no
+    // deleted_at column. The site soft-delete is enough: joins
+    // filter WHERE sites.deleted_at IS NULL so cascaded jobs
+    // disappear from list views via the site.
+
+    await client.query('COMMIT');
+    recordEvent('client_soft_deleted', userId, {
+      siteCount,
+      jobCount: 0, // computed on demand; not stored
+    }).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* swallow */ }
+    safeError(res, err, `${req.method} ${req.path}`);
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/users/:id/sites — create. Requires clientId in body.
+app.post('/api/users/:id/sites', billingRateLimit, guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const raw = req.body || {};
+    const clientId = raw.clientId;
+    if (!clientId || typeof clientId !== 'string') {
+      return res.status(400).json({ error: 'clientId is required' });
+    }
+    const clamp = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null);
+    const address = clamp((raw.address || '').trim(), 300);
+    if (!address) return res.status(400).json({ error: 'address is required' });
+
+    // Confirm the client belongs to caller.
+    const { rows: check } = await pool.query(
+      `SELECT id FROM clients WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+      [clientId, userId]
+    );
+    if (check.length === 0) return res.status(404).json({ error: 'Client not found' });
+
+    const { rows } = await pool.query(
+      `INSERT INTO sites (user_id, client_id, address, site_contact_name, site_contact_phone, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, client_id AS "clientId", address,
+                 site_contact_name AS "siteContactName",
+                 site_contact_phone AS "siteContactPhone",
+                 notes, created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [
+        userId, clientId, address,
+        clamp(raw.siteContactName, 200),
+        clamp(raw.siteContactPhone, 40),
+        clamp(raw.notes, 2000),
+      ]
+    );
+    res.json({ site: rows[0] });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// PATCH /api/users/:id/sites/:siteId — whitelist patch on
+// address / site_contact_name / site_contact_phone / notes.
+// PATCH propagates the new address to `quote_snapshot.jobDetails.
+// siteAddress` on any DRAFT job at the site (spec § 3). Historical
+// jobs (sent/accepted/completed) keep their frozen snapshot copies.
+app.patch('/api/users/:id/sites/:siteId', billingRateLimit, guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const siteId = req.params.siteId;
+    const raw = req.body || {};
+    const clamp = (v, n) => (typeof v === 'string' ? v.slice(0, n) : undefined);
+    const patch = {
+      address:            raw.address            !== undefined ? clamp(raw.address, 300)           : undefined,
+      site_contact_name:  raw.siteContactName    !== undefined ? clamp(raw.siteContactName, 200)   : undefined,
+      site_contact_phone: raw.siteContactPhone   !== undefined ? clamp(raw.siteContactPhone, 40)   : undefined,
+      notes:              raw.notes              !== undefined ? clamp(raw.notes, 2000)            : undefined,
+    };
+    const set = [];
+    const params = [];
+    for (const [key, val] of Object.entries(patch)) {
+      if (val !== undefined) {
+        params.push(val);
+        set.push(`${key} = $${params.length}`);
+      }
+    }
+    if (set.length === 0) return res.status(400).json({ error: 'No editable fields supplied' });
+    params.push(siteId, userId);
+
+    const dbClient = await pool.connect();
+    try {
+      await dbClient.query('BEGIN');
+      const { rows } = await dbClient.query(
+        `UPDATE sites
+            SET ${set.join(', ')}, updated_at = NOW()
+          WHERE id = $${params.length - 1}
+            AND user_id = $${params.length}
+            AND deleted_at IS NULL
+          RETURNING id, client_id AS "clientId", address,
+                    site_contact_name AS "siteContactName",
+                    site_contact_phone AS "siteContactPhone",
+                    notes, created_at AS "createdAt", updated_at AS "updatedAt"`,
+        params
+      );
+      if (rows.length === 0) {
+        await dbClient.query('ROLLBACK');
+        return res.status(404).json({ error: 'Site not found' });
+      }
+
+      // Draft-job propagation for address changes. Historical jobs
+      // (status ≠ 'draft') keep their frozen snapshot copies.
+      if (patch.address !== undefined) {
+        await dbClient.query(
+          `UPDATE jobs
+              SET site_address = $1,
+                  quote_snapshot = jsonb_set(quote_snapshot, '{jobDetails,siteAddress}', to_jsonb($1::text), true),
+                  saved_at = NOW()
+            WHERE site_id = $2 AND status = 'draft'`,
+          [patch.address, siteId]
+        );
+      }
+      await dbClient.query('COMMIT');
+      res.json({ site: rows[0] });
+    } catch (err) {
+      try { await dbClient.query('ROLLBACK'); } catch { /* swallow */ }
+      throw err;
+    } finally {
+      dbClient.release();
+    }
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// DELETE /api/users/:id/sites/:siteId — soft-delete. Jobs at the
+// site are hidden from list views because the JOIN filters on
+// sites.deleted_at IS NULL.
+app.delete('/api/users/:id/sites/:siteId', billingRateLimit, guardClientsFlag, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const siteId = req.params.siteId;
+    const { rowCount } = await pool.query(
+      `UPDATE sites SET deleted_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+      [siteId, userId]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Site not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+// ─────── End Clients + Sites routes ─────────────────────────────────
+
 // Approved calibration notes for system prompt assembly
 app.get('/api/calibration-notes/approved', requireAuth, async (req, res) => {
   try {
@@ -6988,6 +7659,12 @@ const EVENT_NAME_ALLOWLIST = new Set([
   'subscription_started', // applySubscriptionEventToDb first→active
   'pdf_downloaded',       // QuoteOutput PDF button
   'quote_details_edited', // PATCH /jobs/:id/details — Paul's metadata-only edit
+  // Clients feature (CLIENTS_SPEC_v3, 2026-07-07)
+  'client_created',       // POST /clients OR lazy-created on POST /jobs
+  'client_updated',       // PATCH /clients/:clientId
+  'client_merged',        // POST /clients/:clientId/merge
+  'client_soft_deleted',  // DELETE /clients/:clientId
+  'client_hard_purged',   // scheduled scrub after retention window (docs/CLIENTS_HARD_PURGE.md)
   'landing_viewed',       // reserved
   'client_link_copied',   // reserved
   'step_entered',         // reserved
