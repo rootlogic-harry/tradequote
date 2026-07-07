@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
 import { runAnalysis } from '../../utils/analyseJob.js';
-import { savePhoto, deletePhoto, saveDraft, loadPhotos } from '../../utils/userDB.js';
+import { savePhoto, deletePhoto, saveDraft, loadPhotos, listClients, getClient } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
@@ -90,6 +90,12 @@ export default function JobDetails({
   // notification; never called on failure. Defaults to a no-op so
   // isolated unit tests don't need to inject it.
   onAnalysisSuccess = () => {},
+  // Clients feature flag (2026-07-07). When true AND the user has any
+  // saved clients, the ClientPicker component surfaces above the name
+  // field so the user can pick from existing rather than retype.
+  // Typing still wins — the picker is optional.
+  clientsEnabled = false,
+  currentUserId = null,
 }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
@@ -358,6 +364,18 @@ export default function JobDetails({
       </p>
 
       <div className="eyebrow mb-3">Client & Site</div>
+      {clientsEnabled && currentUserId && (
+        <ClientSitePicker
+          currentUserId={currentUserId}
+          onPickClient={(client) => {
+            updateJob('clientName', client.name || '');
+            if (client.phone) updateJob('clientPhone', client.phone);
+          }}
+          onPickSite={(site) => {
+            updateJob('siteAddress', site.address || '');
+          }}
+        />
+      )}
       <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
@@ -1023,6 +1041,153 @@ export default function JobDetails({
         </button>
       </div>
       </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ClientSitePicker — visible dropdowns above the Client Name field.
+ *
+ * Two native <select>s:
+ *   - Existing Client — always visible if the user has ≥1 client. Alpha
+ *     sorted by name. Placeholder "— New client / not listed —" leaves
+ *     everything blank so the user types below (typing wins).
+ *   - Site — appears when a client is picked. Pre-selects the "standard"
+ *     site (site attached to the most recent job for that client, else
+ *     the first site returned) and auto-fills siteAddress. User can
+ *     change to another site via the same dropdown.
+ *
+ * Auto-fill contract on client pick:
+ *   updateJob('clientName') + updateJob('clientPhone') via onPickClient
+ *   updateJob('siteAddress') via onPickSite with the standard site
+ *
+ * The raw Client Name / Site Address inputs stay rendered below so the
+ * user can type over the picker at any time — the picker is a shortcut,
+ * not a gate. Selecting "— New client / not listed —" clears the site
+ * dropdown but never wipes typed values.
+ */
+function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
+  const [clients, setClients] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [sites, setSites] = useState([]);
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [loadingSites, setLoadingSites] = useState(false);
+
+  useEffect(() => {
+    if (!currentUserId || loaded) return;
+    let alive = true;
+    listClients(currentUserId, { limit: 500 })
+      .then((r) => {
+        if (!alive) return;
+        const list = (r?.clients || []).slice().sort((a, b) =>
+          (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' }),
+        );
+        setClients(list);
+        setLoaded(true);
+      })
+      .catch(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [currentUserId, loaded]);
+
+  const handleClientChange = async (e) => {
+    const id = e.target.value;
+    setSelectedClientId(id);
+    setSelectedSiteId('');
+    setSites([]);
+    if (!id) return; // "— New client —" placeholder: don't fire onPick.
+    const client = clients.find((c) => c.id === id);
+    if (!client) return;
+    onPickClient?.(client);
+    setLoadingSites(true);
+    try {
+      const detail = await getClient(currentUserId, id);
+      const siteList = detail?.sites || [];
+      setSites(siteList);
+      if (siteList.length === 0) return;
+      // "Standard" site = site attached to the most recent job for this
+      // client, else the first site returned. Timeline is already sorted
+      // newest-first server-side (clientsRoutes.js).
+      const timeline = detail?.timeline || [];
+      const mostRecentSiteId = timeline[0]?.site_id;
+      const standard =
+        siteList.find((s) => s.id === mostRecentSiteId) || siteList[0];
+      setSelectedSiteId(standard.id);
+      onPickSite?.(standard);
+    } catch {
+      /* ignore — user can still type the address below */
+    } finally {
+      setLoadingSites(false);
+    }
+  };
+
+  const handleSiteChange = (e) => {
+    const id = e.target.value;
+    setSelectedSiteId(id);
+    const site = sites.find((s) => s.id === id);
+    if (site) onPickSite?.(site);
+  };
+
+  // Hide only if there are literally zero clients — nothing to pick.
+  if (!loaded) return null;
+  if (clients.length === 0) return null;
+
+  return (
+    <div
+      className="mb-6 grid gap-4"
+      style={{
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+      }}
+    >
+      <div>
+        <label
+          htmlFor="jobdetails-existing-client"
+          className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide"
+        >
+          Existing Client
+        </label>
+        <select
+          id="jobdetails-existing-client"
+          value={selectedClientId}
+          onChange={handleClientChange}
+          className="nq-field"
+          data-testid="jobdetails-picker-client"
+        >
+          <option value="">— New client / not listed —</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {(c.name || '(unnamed)') + (c.phone ? ` · ${c.phone}` : '')}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {selectedClientId && (
+        <div>
+          <label
+            htmlFor="jobdetails-existing-site"
+            className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide"
+          >
+            Site
+          </label>
+          <select
+            id="jobdetails-existing-site"
+            value={selectedSiteId}
+            onChange={handleSiteChange}
+            className="nq-field"
+            data-testid="jobdetails-picker-site"
+            disabled={loadingSites || sites.length === 0}
+          >
+            {loadingSites && <option value="">Loading sites…</option>}
+            {!loadingSites && sites.length === 0 && (
+              <option value="">No sites yet — type below</option>
+            )}
+            {!loadingSites && sites.map((s) => (
+              <option key={s.id} value={s.id}>{s.address}</option>
+            ))}
+          </select>
+        </div>
       )}
     </div>
   );
