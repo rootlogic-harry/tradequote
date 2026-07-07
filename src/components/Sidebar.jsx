@@ -14,6 +14,7 @@ export default function Sidebar({
   onStartNewQuote,
   onGoToDashboard,
   onGoToSaved,
+  onGoToClients,
   onGoToLearning,
   onGoToAgents,
   onGoToAnalytics,
@@ -25,6 +26,7 @@ export default function Sidebar({
   onHelpClick,
   onLogout,
   isAdminPlan = false,
+  clientsEnabled = false,
   billing = null,
   className = '',
 }) {
@@ -32,6 +34,9 @@ export default function Sidebar({
     { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon, action: onGoToDashboard },
     { key: 'new', label: 'New quote', icon: PlusIcon, action: onStartNewQuote },
     { key: 'saved', label: 'My quotes', icon: FolderIcon, action: onGoToSaved },
+    // Clients tab — flag-gated (CLIENTS_ENABLED env var → /auth/me
+    // features.clientsEnabled → the prop below). See docs/CLIENTS_SPEC_v3.md.
+    ...(clientsEnabled && onGoToClients ? [{ key: 'clients', label: 'Clients', icon: PeopleIcon, action: onGoToClients }] : []),
     ...(isAdminPlan && onGoToAnalytics ? [{ key: 'analytics', label: 'Analytics', icon: TrendIcon, action: onGoToAnalytics }] : []),
     ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', icon: ChartIcon, action: onGoToLearning }] : []),
     ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', icon: CpuIcon, action: onGoToAgents }] : []),
@@ -41,6 +46,7 @@ export default function Sidebar({
     (key === 'dashboard' && currentView === 'dashboard') ||
     (key === 'saved' && currentView === 'saved') ||
     (key === 'new' && currentView === 'editor') ||
+    (key === 'clients' && (currentView === 'clients' || currentView === 'clientDetail')) ||
     (key === 'analytics' && currentView === 'analytics') ||
     (key === 'learning' && currentView === 'learning') ||
     (key === 'agents' && currentView === 'agents');
@@ -240,6 +246,17 @@ function FolderIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+function PeopleIcon({ size = 18 }) {
+  // Two-figure "clients" icon — the Clients tab (2026-07-07).
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
