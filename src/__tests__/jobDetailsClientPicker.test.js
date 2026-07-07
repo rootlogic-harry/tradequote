@@ -161,4 +161,16 @@ describe('JobDetails client picker — insertion contract', () => {
     expect(picker).toMatch(/clients\.length === 0/);
     expect(picker).not.toMatch(/clients\.length < 3/);
   });
+
+  test('Site Address textarea hides when a site is picked', () => {
+    // Harry's 2026-07-07 UAT: "if you select the site - you shouldn't
+    // be able to amend the site address". The picker already fully
+    // identifies the site; a free-text Site Address input would let
+    // the user silently diverge from the client record.
+    expect(jobDetailsSrc).toMatch(/existingSitePicked/);
+    expect(jobDetailsSrc).toMatch(/!existingSitePicked\s*&&\s*\(/);
+    // Toggle wiring: picker's onPickSite → true, unpick → false.
+    expect(jobDetailsSrc).toMatch(/setExistingSitePicked\(true\)/);
+    expect(jobDetailsSrc).toMatch(/setExistingSitePicked\(false\)/);
+  });
 });
