@@ -45,7 +45,11 @@ describe('Clients routes — feature-flag gating', () => {
     ];
     for (const routeRegex of routes) {
       const match = serverSrc.match(routeRegex);
-      expect(match, `route missing: ${routeRegex}`).not.toBeNull();
+      // If null: the route is missing. Regex identifies which one.
+      if (match === null) {
+        throw new Error(`route missing: ${routeRegex}`);
+      }
+      expect(match).not.toBeNull();
     }
   });
 
