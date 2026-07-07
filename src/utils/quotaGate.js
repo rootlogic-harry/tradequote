@@ -20,7 +20,7 @@
  * Order of evaluation is load-bearing — change it and you change
  * who pays. Test coverage is in src/__tests__/quotaGate.test.js.
  *
- *   0. plan === 'admin' → ALLOW with reason='admin' (Harry + Mark;
+ *   0. isAdminPlan(user) → ALLOW with reason='admin' (Harry + Mark;
  *      unlimited analyses, never charged. Sits BEFORE the subscription
  *      check so an admin who happens to have a Stripe sub still
  *      registers as 'admin' in the reason field — the /auth/me billing
