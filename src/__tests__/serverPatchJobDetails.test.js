@@ -75,13 +75,24 @@ describe('PATCH body whitelist + length caps', () => {
 });
 
 describe('PATCH atomicity + snapshot integrity', () => {
-  const block = serverSrc.slice(
-    serverSrc.indexOf("app.patch('/api/users/:id/jobs/:jobId/details'"),
-    serverSrc.indexOf("app.patch('/api/users/:id/jobs/:jobId/details'") + 4000
-  );
+  // Extract the whole handler by finding the next `app.<verb>(`
+  // boundary (2026-07-07, PR #124). Was a hardcoded +4000 which
+  // fitted the pre-Clients handler; the propagation block pushed
+  // it past that ceiling.
+  const block = (() => {
+    const start = serverSrc.indexOf("app.patch('/api/users/:id/jobs/:jobId/details'");
+    if (start === -1) return '';
+    const rest = serverSrc.slice(start);
+    const next = rest.search(/\napp\.(?:get|post|put|patch|delete|use)\(/);
+    return rest.slice(0, next > 0 ? next : 8000);
+  })();
 
   test('SELECT current snapshot with FOR UPDATE before the rewrite', () => {
-    expect(block).toMatch(/SELECT quote_snapshot FROM jobs WHERE id = \$1 AND user_id = \$2 FOR UPDATE/);
+    // 2026-07-07 (PR #124): Clients feature extended the SELECT list
+    // to include site_id so the PATCH can propagate to sites/clients
+    // rows when the flag is on. The core "get quote_snapshot under a
+    // row lock" contract is unchanged.
+    expect(block).toMatch(/SELECT quote_snapshot[\s\S]{0,80}FROM jobs[\s\S]{0,40}WHERE id = \$1 AND user_id = \$2 FOR UPDATE/);
   });
 
   test('merges jobDetails over previous values (no other snapshot key touched)', () => {
@@ -115,10 +126,16 @@ describe('Analytics + audit', () => {
   });
 
   test('fires the event only via the success path (best-effort)', () => {
-    const block = serverSrc.slice(
-      serverSrc.indexOf("app.patch('/api/users/:id/jobs/:jobId/details'"),
-      serverSrc.indexOf("app.patch('/api/users/:id/jobs/:jobId/details'") + 4000
-    );
+    // Same next-app-verb boundary extraction as the atomicity block
+    // above (2026-07-07, PR #124): the pre-Clients +4000 was too
+    // small once the Site/Client propagation block landed.
+    const block = (() => {
+      const start = serverSrc.indexOf("app.patch('/api/users/:id/jobs/:jobId/details'");
+      if (start === -1) return '';
+      const rest = serverSrc.slice(start);
+      const next = rest.search(/\napp\.(?:get|post|put|patch|delete|use)\(/);
+      return rest.slice(0, next > 0 ? next : 8000);
+    })();
     expect(block).toMatch(/recordEvent\(\s*['"]quote_details_edited['"]/);
     expect(block).toMatch(/\.catch\(\s*\(\)\s*=>\s*\{\s*\}\s*\)/);
   });

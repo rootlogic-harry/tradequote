@@ -43,6 +43,12 @@ import {
   isClientsEnabledFromProcessEnv,
 } from './src/utils/clientsEnabled.js';
 import { resolveClientRollup } from './src/utils/clientRollup.js';
+
+// Short local alias so tests and route bodies both discover the
+// symbol via grep. The routes block below re-declares the same alias
+// after the block anchor — that duplicate is fine (const shadowing
+// is intentional and harmless).
+const isClientsEnabled = isClientsEnabledFromProcessEnv;
 import { buildTradesmanProfileBlock } from './src/utils/tradesmanProfileBlock.js';
 import {
   parseAIResponse,
@@ -1545,6 +1551,10 @@ app.get('/auth/me', async (req, res) => {
   const features = {
     videoAnalysisEnabled: isVideoAnalysisEnabledFromProcessEnv(),
     emailIntegrationEnabled: isEmailIntegrationEnabledFromProcessEnv(),
+    // Clients feature (CLIENTS_SPEC_v3, 2026-07-07). When true, the
+    // SPA renders the Clients nav entry + list + detail views.
+    // When false (default), the routes 404 and the SPA hides the tab.
+    clientsEnabled: isClientsEnabledFromProcessEnv(),
   };
 
   // Quota state (2026-06-22). The SubscriptionBanner reads this to
@@ -6038,50 +6048,116 @@ app.patch('/api/users/:id/jobs/:jobId/details', billingRateLimit, async (req, re
       return res.status(400).json({ error: 'No editable fields supplied' });
     }
 
-    const { rows } = await pool.query(
-      `SELECT quote_snapshot FROM jobs WHERE id = $1 AND user_id = $2 FOR UPDATE`,
-      [req.params.jobId, req.params.id]
-    );
-    if (rows.length === 0) return res.status(404).json({ error: 'Job not found' });
+    // Wrap the whole PATCH in a transaction so the snapshot update +
+    // (optionally) the Site row + Client row are atomic. If any step
+    // fails, the caller sees the previous state everywhere.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const snapshot = rows[0].quote_snapshot || {};
-    const prevDetails = snapshot.jobDetails || {};
-    const newDetails = { ...prevDetails, ...fieldsToPatch };
-    const newSnapshot = { ...snapshot, jobDetails: newDetails };
+      // Pull snapshot AND site_id in the same query so we can decide
+      // whether to propagate to Client/Site without a second round trip.
+      const { rows } = await client.query(
+        `SELECT quote_snapshot, site_id FROM jobs
+          WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [req.params.jobId, req.params.id]
+      );
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      const snapshot = rows[0].quote_snapshot || {};
+      const siteId = rows[0].site_id;
+      const prevDetails = snapshot.jobDetails || {};
+      const newDetails = { ...prevDetails, ...fieldsToPatch };
+      const newSnapshot = { ...snapshot, jobDetails: newDetails };
 
-    // Denormalised columns track the JSONB. quote_reference stays
-    // untouched (tied to the dedup window + sequence allocation).
-    await pool.query(
-      `UPDATE jobs
-          SET quote_snapshot = $1,
-              client_name    = $2,
-              site_address   = $3,
-              quote_date     = $4,
-              saved_at       = NOW()
-        WHERE id = $5 AND user_id = $6`,
-      [
-        JSON.stringify(newSnapshot),
-        newDetails.clientName  || '',
-        newDetails.siteAddress || '',
-        newDetails.quoteDate   || '',
-        req.params.jobId,
-        req.params.id,
-      ]
-    );
+      // Denormalised columns track the JSONB. quote_reference stays
+      // untouched (tied to the dedup window + sequence allocation).
+      // Historical/completed jobs at the same site keep their frozen
+      // snapshot copies — we only update THIS job's snapshot here.
+      await client.query(
+        `UPDATE jobs
+            SET quote_snapshot = $1,
+                client_name    = $2,
+                site_address   = $3,
+                quote_date     = $4,
+                saved_at       = NOW()
+          WHERE id = $5 AND user_id = $6`,
+        [
+          JSON.stringify(newSnapshot),
+          newDetails.clientName  || '',
+          newDetails.siteAddress || '',
+          newDetails.quoteDate   || '',
+          req.params.jobId,
+          req.params.id,
+        ]
+      );
 
-    // Audit log — server-side console only, so a future "the address
-    // changed without me knowing" question is answerable from the
-    // Railway log without a DB column add.
-    const editedKeys = Object.keys(fieldsToPatch).join(',');
-    console.log(`[Quote] details edited: user=${req.params.id} job=${req.params.jobId} fields=${editedKeys}`);
+      // Clients-feature propagation (CLIENTS_SPEC_v3, 2026-07-07).
+      // When the flag is on AND the job carries a site_id, mirror the
+      // relevant edits into the Site row (address) and Client row
+      // (name, phone). Site row = CURRENT truth; the historical
+      // snapshot copy above is the AT-SAVE-TIME truth (spec § 0).
+      //
+      // When the flag is off, this block is skipped entirely and the
+      // PATCH is byte-identical to its pre-Clients shape.
+      if (isClientsEnabled() && siteId) {
+        // Propagate siteAddress → sites.address for THIS job's site.
+        if (fieldsToPatch.siteAddress !== undefined) {
+          await client.query(
+            `UPDATE sites SET address = $1, updated_at = NOW()
+              WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL`,
+            [fieldsToPatch.siteAddress, siteId, req.params.id]
+          );
+        }
+        // For Client updates, look up client_id via the site.
+        if (fieldsToPatch.clientName !== undefined || fieldsToPatch.clientPhone !== undefined) {
+          const { rows: siteRows } = await client.query(
+            `SELECT client_id FROM sites WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+            [siteId, req.params.id]
+          );
+          const clientId = siteRows[0]?.client_id;
+          if (clientId) {
+            if (fieldsToPatch.clientName !== undefined) {
+              await client.query(
+                `UPDATE clients SET name = $1, updated_at = NOW()
+                  WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL`,
+                [fieldsToPatch.clientName, clientId, req.params.id]
+              );
+            }
+            if (fieldsToPatch.clientPhone !== undefined) {
+              await client.query(
+                `UPDATE clients SET phone = $1, updated_at = NOW()
+                  WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL`,
+                [fieldsToPatch.clientPhone, clientId, req.params.id]
+              );
+            }
+          }
+        }
+      }
 
-    // Analytics — best-effort fire. event name is on the allowlist.
-    recordEvent('quote_details_edited', req.params.id, {
-      jobId: req.params.jobId,
-      fieldsEdited: editedKeys,
-    }).catch(() => {});
+      await client.query('COMMIT');
 
-    res.json({ ok: true, jobDetails: newDetails });
+      // Audit log — server-side console only, so a future "the address
+      // changed without me knowing" question is answerable from the
+      // Railway log without a DB column add.
+      const editedKeys = Object.keys(fieldsToPatch).join(',');
+      console.log(`[Quote] details edited: user=${req.params.id} job=${req.params.jobId} fields=${editedKeys}`);
+
+      // Analytics — best-effort fire. event name is on the allowlist.
+      recordEvent('quote_details_edited', req.params.id, {
+        jobId: req.params.jobId,
+        fieldsEdited: editedKeys,
+      }).catch(() => {});
+
+      return res.json({ ok: true, jobDetails: newDetails });
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch { /* swallow */ }
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     safeError(res, err, `${req.method} ${req.path}`);
   }
@@ -6473,11 +6549,10 @@ app.post('/auth/redeem-referral', requireAuth, billingRateLimit, async (req, res
 // future config source (GrowthBook, per-user opt-in) is a one-file
 // change.
 //
-// Short local alias so the routes read as `guardClientsFlag` while
-// keeping the tested helper name (`isClientsEnabled`) discoverable
-// via grep. The test suite accepts either the helper OR the inline
-// `process.env.CLIENTS_ENABLED === 'true'` form; we use the helper.
-const isClientsEnabled = isClientsEnabledFromProcessEnv;
+// The `isClientsEnabled` alias is declared once at the top of the
+// file next to the import — routes read it directly. This guard
+// centralises the 404 response so a future config source (GrowthBook,
+// per-user opt-in) is a one-line change.
 function guardClientsFlag(_req, res, next) {
   if (!isClientsEnabled()) {
     return res.status(404).json({ error: 'Not found' });
