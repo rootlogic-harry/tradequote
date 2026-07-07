@@ -25,6 +25,43 @@ import { quotaGate, FREE_QUOTES_LIMIT, resolveQuotaState } from '../utils/quotaG
 describe('quotaGate', () => {
   const baseNow = new Date('2026-06-22T12:00:00Z');
 
+  describe('admin plan bypass (2026-07-07)', () => {
+    test('plan=admin → allowed with reason "admin", even with zero of everything', () => {
+      const user = { plan: 'admin', free_quotes_used: 0, purchased_quotes: 0 };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'admin',
+      });
+    });
+
+    test('plan=admin wins over quota exhaustion (Harry + Mark unlimited)', () => {
+      const user = { plan: 'admin', free_quotes_used: 999, purchased_quotes: 0 };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'admin',
+      });
+    });
+
+    test('plan=admin reports "admin" even when the user has an active Stripe sub', () => {
+      // Real scenario 2026-07-07 — Mark's markdoyle account was plan=admin
+      // AND subscription_status=active. The UI must key off `admin` so the
+      // billing banner never mistakes him for a paying customer.
+      const user = { plan: 'admin', free_quotes_used: 0, purchased_quotes: 0 };
+      expect(quotaGate(user, { hasActiveSubscription: true, now: baseNow })).toEqual({
+        allowed: true,
+        reason: 'admin',
+      });
+    });
+
+    test('plan=basic → no admin bypass (regression guard)', () => {
+      const user = { plan: 'basic', free_quotes_used: 3, purchased_quotes: 0 };
+      expect(quotaGate(user, { hasActiveSubscription: false, now: baseNow })).toEqual({
+        allowed: false,
+        reason: 'quota_exhausted',
+      });
+    });
+  });
+
   describe('active subscription path', () => {
     test('allows when hasActiveSubscription=true regardless of quota', () => {
       const user = { free_quotes_used: 99, comp_until: null };
@@ -404,6 +441,33 @@ describe('quotaGate', () => {
   });
 
   describe('resolveQuotaState — billing payload helper', () => {
+    test('admin — reports quotaState "admin" (bug 2026-07-07)', () => {
+      // Downstream SPA (selectCounterState in quotaCounter.js) maps
+      // this to 'subscribed' for banner purposes.
+      expect(
+        resolveQuotaState(
+          { plan: 'admin', free_quotes_used: 0, comp_until: null },
+          { hasActiveSubscription: false, now: baseNow }
+        )
+      ).toMatchObject({
+        quotaState: 'admin',
+      });
+    });
+
+    test('admin — reports "admin" even when the row has an active Stripe sub', () => {
+      // Mark's markdoyle account carried both plan=admin AND
+      // subscription_status=active up to 2026-07-07.
+      expect(
+        resolveQuotaState(
+          { plan: 'admin', free_quotes_used: 0, comp_until: null },
+          { hasActiveSubscription: true, now: baseNow }
+        )
+      ).toMatchObject({
+        quotaState: 'admin',
+        hasActiveSubscription: true,
+      });
+    });
+
     test('subscribed', () => {
       expect(
         resolveQuotaState(
