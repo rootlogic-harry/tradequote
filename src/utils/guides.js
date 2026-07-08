@@ -377,9 +377,9 @@ function buildIndexGraph(guides) {
     '@type': 'CollectionPage',
     '@id': `${canonical}#collection`,
     url: canonical,
-    name: 'Dry stone walling guides',
+    name: 'Stone walling guides',
     description:
-      'Practical guides for UK dry stone wallers — pricing per metre, day rates, measurement, RAMS, regional rate notes and quoting conventions.',
+      'Practical guides for UK wallers — dry stone and mortared — pricing per metre, day rates, measurement, RAMS, regional rate notes and quoting conventions.',
     inLanguage: 'en-GB',
     isPartOf: { '@id': `${SITE_BASE}/#website` },
     hasPart: guides.map((g) => ({
@@ -607,7 +607,7 @@ function shell({
   <main class="g-wrap">
 ${bodyHtml}
     <div class="g-foot">
-      <p>FastQuote &mdash; Quoting tools for UK dry stone wallers. <a href="/">Start a free quote</a>.</p>
+      <p>FastQuote &mdash; Quoting tools for dry stone &amp; mortared walls. <a href="/">Start a free quote</a>.</p>
     </div>
   </main>
 </body>
@@ -622,7 +622,7 @@ export function renderGuidesIndex(guidesDir) {
   const guides = listGuides(guidesDir);
   const title = 'Guides — FastQuote';
   const description =
-    'Practical guides for UK dry stone wallers: pricing, measurement methodology, regional rate notes and quoting conventions.';
+    'Practical guides for UK wallers — dry stone and mortared. Pricing, measurement methodology, regional rate notes and quoting conventions.';
   const canonical = 'https://fastquote.uk/guides/';
 
   let listHtml;
@@ -630,7 +630,7 @@ export function renderGuidesIndex(guidesDir) {
     listHtml = `
     <div class="g-empty">
       <h2>Coming soon</h2>
-      <p>Practical guides for UK dry stone wallers &mdash; pricing per metre, measurement methodology, regional rate notes &mdash; are on their way.</p>
+      <p>Practical guides for UK wallers &mdash; dry stone and mortared &mdash; pricing per metre, measurement methodology, regional rate notes &mdash; are on their way.</p>
       <p><a href="/">Try FastQuote in the meantime</a>.</p>
     </div>`;
   } else {
@@ -646,8 +646,8 @@ export function renderGuidesIndex(guidesDir) {
   }
 
   const bodyHtml = `    <p class="g-eyebrow">Guides</p>
-    <h1>Dry stone walling guides</h1>
-    <p>Practical, no-jargon guides for UK dry stone wallers &mdash; pricing, measurement methodology, regional rate notes and quoting conventions.</p>
+    <h1>Stone walling guides</h1>
+    <p>Practical, no-jargon guides for UK wallers &mdash; dry stone and mortared &mdash; pricing, measurement methodology, regional rate notes and quoting conventions.</p>
 ${listHtml}`;
 
   const jsonLdGraph = guides.length > 0 ? buildIndexGraph(guides) : null;
@@ -720,7 +720,7 @@ function renderAuthorBio() {
         Written by
         <a href="${SITE_BASE}" itemprop="url"><span class="g-author-name" itemprop="name">Harry Doyle</span></a>,
         <span itemprop="jobTitle">Founder of FastQuote</span>.
-        We work with dry stone wallers across Yorkshire and the Cotswolds to help them quote faster.
+        We work with wallers across Yorkshire and the Cotswolds — dry stone and mortared — to help them quote faster.
       </p>
     </aside>`;
 }
