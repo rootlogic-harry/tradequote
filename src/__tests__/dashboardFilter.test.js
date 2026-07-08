@@ -17,6 +17,7 @@ import {
   filterAndLimitJobs,
   computeFilterCounts,
   DASHBOARD_FILTER_KEYS,
+  DASHBOARD_PREVIEW_LIMIT,
 } from '../utils/dashboardFilter.js';
 
 const fixtureJobs = [
@@ -30,6 +31,27 @@ const fixtureJobs = [
 describe('DASHBOARD_FILTER_KEYS', () => {
   it('exports the six pill keys in the documented order', () => {
     expect(DASHBOARD_FILTER_KEYS).toEqual(['all', 'draft', 'sent', 'accepted', 'completed', 'declined']);
+  });
+});
+
+describe('DASHBOARD_PREVIEW_LIMIT', () => {
+  it('is a positive integer', () => {
+    expect(Number.isInteger(DASHBOARD_PREVIEW_LIMIT)).toBe(true);
+    expect(DASHBOARD_PREVIEW_LIMIT).toBeGreaterThan(0);
+  });
+
+  it('is at least 25 so Mark\'s 25-sent-quote UAT case surfaces without truncation', () => {
+    // 2026-07-08 rationale — see the constant\'s JSDoc.
+    expect(DASHBOARD_PREVIEW_LIMIT).toBeGreaterThanOrEqual(25);
+  });
+
+  it('caps filterAndLimitJobs to exactly this many rows', () => {
+    // Build a fixture with 30 sent quotes so the limit definitely bites.
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: `s${i}`, status: 'sent', clientName: `Sent ${i}`,
+    }));
+    const result = filterAndLimitJobs(many, 'sent', DASHBOARD_PREVIEW_LIMIT);
+    expect(result.length).toBe(DASHBOARD_PREVIEW_LIMIT);
   });
 });
 
