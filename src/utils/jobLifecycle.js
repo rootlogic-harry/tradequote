@@ -1,13 +1,28 @@
 /**
  * Job lifecycle bucketing for the dashboard / saved-jobs tab split.
  *
- * Bucket definitions (Mark's ask 2026-06-26, three-tab structure):
+ * Bucket definitions (Mark's ask 2026-06-26, three-tab structure;
+ * refined 2026-07-08 for the auto-archive rule):
+ *
  *   ACTIVE    = in-flight work: draft, sent (even past expiry), accepted,
- *               and unknown future statuses. Mark's feedback 2026-06-21:
- *               expired sent quotes stay active (late-authorisation use case).
- *   COMPLETED = completed only. Lives in its own tab so a hundred finished
- *               jobs don't crowd the working list.
- *   ARCHIVE   = declined only.
+ *               and unknown future statuses. Expired sent quotes stay
+ *               active per Mark's 2026-06-21 feedback (late-authorisation
+ *               use case).
+ *   COMPLETED = status='completed' AND touched within the last
+ *               `AUTO_ARCHIVE_DAYS` (30). Recent finishes stay visible
+ *               so Paul + Mark can reference them without expanding the
+ *               archive.
+ *   ARCHIVE   = declined OR (completed AND older than AUTO_ARCHIVE_DAYS).
+ *               Mark's 2026-07-07 UAT: "move old jobs either accepted
+ *               done or lost somewhere so we can save them out of the
+ *               way. its not uncommon to write a job off or have it
+ *               rejected only for the client to come back 12 months
+ *               later asking if you can do it".
+ *
+ * "Age" is computed from `saved_at` — the closest proxy we have without
+ * adding a `completed_at` column. If a completed job is edited later,
+ * `saved_at` bumps forward and the job re-emerges from Archive, which
+ * matches the "if I'm touching it, it's relevant" heuristic.
  *
  * The three buckets are mutually exclusive and total. `isExpired` is still
  * exported because the ExpiryBadge in Dashboard.jsx uses it to stamp
@@ -15,6 +30,28 @@
  *
  * Pure functions; no React, no DOM. Tested in jobLifecycle.test.js.
  */
+
+/**
+ * Days after which a `completed` job auto-slides into Archive. Kept as
+ * a named constant so downstream code (empty states, copy) can read the
+ * threshold without duplicating the number. Bump this and the whole
+ * archive rule shifts together.
+ */
+export const AUTO_ARCHIVE_DAYS = 30;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Age of a job in whole days since `saved_at`. Returns Infinity for
+ * missing/unparseable timestamps so unknown-age rows fall into archive
+ * (safer default — an ancient row with no timestamp is definitely not
+ * "fresh"). */
+function ageDaysSinceSaved(job, now) {
+  const stamp = job?.savedAt;
+  if (!stamp) return Infinity;
+  const ms = new Date(stamp).getTime();
+  if (Number.isNaN(ms)) return Infinity;
+  return Math.floor((now.getTime() - ms) / MS_PER_DAY);
+}
 
 /**
  * True if `job` is a sent quote whose expiry date has passed.
@@ -55,27 +92,29 @@ export function isActiveJob(job, now = new Date()) {
 
 /**
  * True if the job belongs in the Completed list.
- * Completed = status === 'completed' only.
- *
- * The `now` parameter is unused today but kept for signature symmetry.
+ * Completed = status === 'completed' AND touched within the last
+ * AUTO_ARCHIVE_DAYS. Ageing thresholds are compared against `saved_at`;
+ * see the file header for why.
  */
-// eslint-disable-next-line no-unused-vars
 export function isCompletedJob(job, now = new Date()) {
   if (!job || typeof job !== 'object') return false;
   const status = (job.status || 'draft').toLowerCase();
-  return status === 'completed';
+  if (status !== 'completed') return false;
+  return ageDaysSinceSaved(job, now) < AUTO_ARCHIVE_DAYS;
 }
 
 /**
  * True if the job belongs in the Archive list.
- * Archive = declined only. (Expired sends are NOT archived — see
- * the file header for Mark's 2026-06-21 rationale.)
- *
- * The `now` parameter is kept for signature symmetry; today unused.
+ * Archive = declined OR (completed AND older than AUTO_ARCHIVE_DAYS).
+ * Expired sends are NOT archived — see the file header for Mark's
+ * 2026-06-21 rationale.
  */
-// eslint-disable-next-line no-unused-vars
 export function isArchivedJob(job, now = new Date()) {
   if (!job || typeof job !== 'object') return false;
   const status = (job.status || 'draft').toLowerCase();
-  return status === 'declined';
+  if (status === 'declined') return true;
+  if (status === 'completed') {
+    return ageDaysSinceSaved(job, now) >= AUTO_ARCHIVE_DAYS;
+  }
+  return false;
 }
