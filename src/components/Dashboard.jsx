@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { formatCurrency } from '../utils/quoteBuilder.js';
 import { formatCurrencyCompact } from '../utils/formatCurrencyCompact.js';
-import { filterAndLimitJobs, computeFilterCounts } from '../utils/dashboardFilter.js';
+import { filterAndLimitJobs, computeFilterCounts, DASHBOARD_PREVIEW_LIMIT } from '../utils/dashboardFilter.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Dashboard redesign (2026-06-29) — money-first stats, one-action rows,
@@ -351,7 +351,15 @@ export default function Dashboard({
   // jobs and then filter within those 10, which on a busy account looks
   // identical to "the filter does nothing".
   const counts = useMemo(() => computeFilterCounts(jobs), [jobs]);
-  const visibleJobs = useMemo(() => filterAndLimitJobs(jobs, filter, 10), [jobs, filter]);
+  const visibleJobs = useMemo(
+    () => filterAndLimitJobs(jobs, filter, DASHBOARD_PREVIEW_LIMIT),
+    [jobs, filter],
+  );
+  // "N more" footer only renders when the current filter has more rows
+  // than fit in the preview. counts.all is the total across all statuses;
+  // counts[<filter>] is the total for the active pill.
+  const totalForFilter = filter === 'all' ? counts.all : (counts[filter] || 0);
+  const hiddenCount = Math.max(0, totalForFilter - visibleJobs.length);
 
   // ── Money-first stats (spec §"Money-first stat hierarchy") ──
   const wonThisYear = useMemo(() => {
@@ -705,6 +713,23 @@ export default function Dashboard({
                 onMenuAction={handleMenuAction}
               />
             ))}
+            {/* "See all" footer — 2026-07-08. Mark's UAT: had 25 sent
+                quotes, could only see 10 on the Dashboard preview and
+                thought the app had lost them. Now the cap is 25 AND
+                the preview declares itself as a preview when there's
+                more to see. onViewJobs navigates to SavedQuotes (the
+                full, uncapped list). */}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={onViewJobs}
+                className="btn-link w-full text-sm"
+                style={{ minHeight: 44, textAlign: 'center', padding: '10px 12px' }}
+                data-testid="dashboard-see-all-more"
+              >
+                {hiddenCount} more {hiddenCount === 1 ? 'quote' : 'quotes'} — see all in My Quotes →
+              </button>
+            )}
           </div>
         )}
       </div>

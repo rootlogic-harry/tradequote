@@ -84,11 +84,30 @@ describe('Dashboard filter pill wiring (regression: pills did not actually filte
     );
   });
 
-  it('visibleJobs is computed by filterAndLimitJobs(jobs, filter, 10)', () => {
+  it('visibleJobs is computed by filterAndLimitJobs with the shared preview limit', () => {
     // The helper is the single source of truth for the filter — the
     // mechanical bug class (slice-before-filter / stale closure) is now
-    // owned by the helper's unit tests.
-    expect(dashboardSrc).toMatch(/filterAndLimitJobs\(jobs,\s*filter,\s*10\)/);
+    // owned by the helper's unit tests. The limit constant lives in
+    // dashboardFilter.js so bumping it doesn't require touching this
+    // component test (2026-07-08 bump from 10 → 25 for Mark's UAT).
+    expect(dashboardSrc).toMatch(
+      /filterAndLimitJobs\(jobs,\s*filter,\s*DASHBOARD_PREVIEW_LIMIT\)/,
+    );
+    expect(dashboardSrc).toMatch(
+      /import\s*\{[^}]*DASHBOARD_PREVIEW_LIMIT[^}]*\}\s*from\s*['"]\.\.\/utils\/dashboardFilter\.js['"]/,
+    );
+  });
+
+  it('renders a "N more — see all in My Quotes" footer when capped', () => {
+    // Preview-vs-full contract: the Dashboard is a preview; SavedQuotes
+    // is the full list. When the preview truncates, the footer makes
+    // the boundary explicit and gives a one-tap route to the full
+    // list. Mark's 2026-07-07 UAT — had 25 sent, saw 10, didn't know
+    // the rest existed.
+    expect(dashboardSrc).toMatch(/data-testid=["']dashboard-see-all-more["']/);
+    expect(dashboardSrc).toMatch(/hiddenCount > 0/);
+    expect(dashboardSrc).toMatch(/see all in My Quotes/);
+    expect(dashboardSrc).toMatch(/onClick=\{onViewJobs\}/);
   });
 
   it('useMemo for visibleJobs depends on both `jobs` AND `filter`', () => {
