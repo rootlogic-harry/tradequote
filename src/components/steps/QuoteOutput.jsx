@@ -284,7 +284,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     // TRQ-122 follow-up: the raw transcript is AI context only, never
     // pasted into customer-facing output (PDF, DOCX, email body).
     const body = encodeURIComponent(
-      `Dear ${jobDetails.clientName},\n\nPlease find attached our ${term.lower} (ref: ${jobDetails.quoteReference}) for dry stone walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
+      `Dear ${jobDetails.clientName},\n\nPlease find attached our ${term.lower} (ref: ${jobDetails.quoteReference}) for walling works at ${jobDetails.siteAddress}.\n\nPlease do not hesitate to contact us should you have any questions.\n\nKind regards,\n${profile.fullName}\n${profile.companyName}\n${profile.phone}`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
@@ -336,7 +336,7 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
       const body =
         `Dear ${jobDetails.clientName},\n\n` +
         `Please find attached our ${term.lower} (ref: ${jobDetails.quoteReference}) ` +
-        `for dry stone walling works at ${jobDetails.siteAddress}.\n\n` +
+        `for walling works at ${jobDetails.siteAddress}.\n\n` +
         `Please do not hesitate to contact us should you have any questions.\n\n` +
         `Kind regards,\n${profile.fullName || ''}\n${profile.companyName || ''}\n${profile.phone || ''}`;
 

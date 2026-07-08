@@ -129,7 +129,7 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
 
   test('hero section with eyebrow + two-line headline + sub + facts', () => {
     expect(html).toMatch(/<section class="hero">/);
-    expect(html).toMatch(/<span class="eyebrow">For dry stone wallers<\/span>/);
+    expect(html).toMatch(/<span class="eyebrow">For UK wallers &mdash; dry stone and mortared<\/span>/);
     expect(html).toMatch(/From quote to customer\./);
     expect(html).toMatch(/<span class="hero-title-amber">Ready in 5 minutes\.<\/span>/);
     expect(html).toMatch(/Spend less time on paperwork/);

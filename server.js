@@ -2162,9 +2162,9 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FastQuote &mdash; From quote to customer, ready in 5 minutes.</title>
-  <meta name="description" content="FastQuote turns a few photos of a job into a professional quote in five minutes. Built for dry stone wallers." />
+  <meta name="description" content="FastQuote turns a few photos of a job into a professional quote in five minutes. Built for UK wallers — dry stone and mortared." />
   <meta name="theme-color" content="#f4eee2" />
-  <meta property="og:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
+  <meta property="og:title" content="FastQuote &mdash; Quoting tools for dry stone &amp; mortared walls" />
   <meta property="og:description" content="Photograph the wall. Get measurements, materials and a polished quote in five minutes." />
   <meta property="og:image" content="https://fastquote.uk/og.png" />
   <meta property="og:image:width" content="2400" />
@@ -2175,7 +2175,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <meta property="og:url" content="https://fastquote.uk/" />
   <meta property="og:site_name" content="FastQuote" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="FastQuote &mdash; Quoting tools for dry stone wallers" />
+  <meta name="twitter:title" content="FastQuote &mdash; Quoting tools for dry stone &amp; mortared walls" />
   <meta name="twitter:description" content="Photograph the wall. Get measurements, materials and a polished quote in five minutes." />
   <meta name="twitter:image" content="https://fastquote.uk/og.png" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -2191,7 +2191,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
         "name": "FastQuote",
         "url": "https://fastquote.uk/",
         "email": "fastquote@harrydoyle.uk",
-        "description": "FastQuote is operated by Harry Doyle (sole trader), United Kingdom. Quoting tools for dry stone wallers.",
+        "description": "FastQuote is operated by Harry Doyle (sole trader), United Kingdom. Quoting tools for dry stone and mortared walls.",
         "areaServed": {
           "@type": "Country",
           "name": "United Kingdom"
@@ -2220,11 +2220,11 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
         "applicationSubCategory": "Quoting and estimating software",
         "operatingSystem": "Web",
         "url": "https://fastquote.uk/",
-        "description": "Quoting tools for dry stone wallers — photos in, professional quote out, in under five minutes.",
+        "description": "Quoting tools for dry stone and mortared walls — photos in, professional quote out, in under five minutes.",
         "publisher": { "@id": "https://fastquote.uk/#organization" },
         "audience": {
           "@type": "Audience",
-          "audienceType": "UK dry stone wallers"
+          "audienceType": "UK wallers (dry stone and mortared)"
         },
         "offers": [
           { "@id": "https://fastquote.uk/#offer-subscription" },
@@ -2266,7 +2266,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
       {
         "@type": "HowTo",
         "@id": "https://fastquote.uk/#howto",
-        "name": "How to build a dry stone wall quote with FastQuote",
+        "name": "How to build a walling quote with FastQuote",
         "description": "From photos to a professional quote in roughly five minutes.",
         "totalTime": "PT5M",
         "step": [
@@ -2323,7 +2323,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
             "name": "Do I need to be a DSWA member to use FastQuote?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "No. FastQuote is open to any UK dry stone waller. The tool follows measurement and pricing conventions aligned with DSWA practice, and we work alongside West Yorkshire wallers, but no DSWA membership is required."
+              "text": "No. FastQuote is open to any UK waller. The tool follows measurement and pricing conventions aligned with DSWA practice, and we work alongside West Yorkshire wallers, but no DSWA membership is required."
             }
           },
           {
@@ -2416,7 +2416,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     <div class="hero-grain" aria-hidden="true"></div>
     <div class="hero-inner">
       <div class="hero-copy">
-        <span class="eyebrow">For dry stone wallers</span>
+        <span class="eyebrow">For UK wallers &mdash; dry stone and mortared</span>
         <h1 class="hero-title">
           From quote to customer.
           <span class="hero-title-amber">Ready in 5 minutes.</span>

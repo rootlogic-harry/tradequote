@@ -1,14 +1,14 @@
 # FastQuote
 
-> AI-assisted quoting tool for UK dry stone wallers. Photograph the wall, get measurements, materials and a professional, editable quote in under 5 minutes.
+> AI-assisted quoting tool for UK wallers — dry stone and mortared. Photograph the wall, get measurements, materials and a professional, editable quote in under 5 minutes.
 
 ## What FastQuote does
 
-FastQuote turns a few photos of a damaged or new-build dry stone wall into a complete, professionally formatted quote. It estimates wall measurements, reclaimable stone, new stone tonnage, labour days and materials cost, then produces a branded PDF or Word document the tradesman can edit and send to their client. Every number is editable before send — the tool helps the waller quote faster, it does not replace their judgement.
+FastQuote turns a few photos of a damaged or new-build stone wall into a complete, professionally formatted quote. Covers both dry stone and mortared work. It estimates wall measurements, reclaimable stone, new stone tonnage, labour days and materials cost, then produces a branded PDF or Word document the tradesman can edit and send to their client. Every number is editable before send — the tool helps the waller quote faster, it does not replace their judgement.
 
 ## Who it's for
 
-Self-employed and small-business dry stone wallers working in the UK, particularly the Yorkshire Dales, Lake District, Cotswolds, Peak District and Scottish Borders. Built alongside working West Yorkshire wallers, with input from members of the Dry Stone Walling Association (DSWA).
+Self-employed and small-business wallers working in the UK — dry stone and mortared — particularly the Yorkshire Dales, Lake District, Cotswolds, Peak District and Scottish Borders. Built alongside working West Yorkshire wallers, with input from members of the Dry Stone Walling Association (DSWA).
 
 ## Pricing
 
@@ -30,7 +30,7 @@ Self-employed and small-business dry stone wallers working in the UK, particular
 
 ## Docs and guides
 
-- [/guides/](https://fastquote.uk/guides/) — guide index (UK dry stone wall pricing, quoting conventions, regional rate notes)
+- [/guides/](https://fastquote.uk/guides/) — guide index (UK stone-wall pricing, quoting conventions, regional rate notes)
 
 ## Trust and compliance
 
