@@ -27,6 +27,16 @@
 export const DASHBOARD_FILTER_KEYS = ['all', 'draft', 'sent', 'accepted', 'completed', 'declined'];
 
 /**
+ * Row cap for the Dashboard's Recent-quotes preview. Was 10 through
+ * 2026-07-07; bumped to 25 on 2026-07-08 after Mark's UAT flagged that
+ * he had 25 sent quotes and could only see 10 on the Dashboard preview.
+ * The Dashboard is still a *preview* — SavedQuotes is the full list —
+ * so we pair the higher cap with a "N more — see all in My Quotes"
+ * footer link the Dashboard renders when `visibleJobs.length < counts[filter]`.
+ */
+export const DASHBOARD_PREVIEW_LIMIT = 25;
+
+/**
  * Returns jobs matching `filter`, capped at `limit`.
  * Filter runs before the slice so the pill always reflects the user's intent.
  */
