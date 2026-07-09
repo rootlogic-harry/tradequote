@@ -102,6 +102,15 @@ export const initialState = {
     // actions so Paul can tap Call or WhatsApp without digging up the
     // number. Never required; form leaves it blank if unknown.
     clientPhone: '',
+    // Per-quote site contact (2026-07-07). When the tradesman picks
+    // an existing client + site, these auto-fill from the site row's
+    // persistent site_contact_name / site_contact_phone. When creating
+    // a new client / site, these are optional inputs on the form.
+    // Stored in quote_snapshot.jobDetails; not fed into any prompt or
+    // AI path (they're a client-facing courtesy field for the quote
+    // document).
+    siteContactName: '',
+    siteContactPhone: '',
     quoteReference: `QT-${new Date().getFullYear()}-0001`,
     quoteDate: new Date().toISOString().split('T')[0],
     briefNotes: '',
@@ -501,6 +510,8 @@ function reducerCore(state, action) {
           clientName: '',
           siteAddress: '',
           clientPhone: '',
+          siteContactName: '',
+          siteContactPhone: '',
           quoteReference: `QT-${year}-${String(nextSeq).padStart(4, '0')}`,
           quoteDate: new Date().toISOString().split('T')[0],
           briefNotes: '',

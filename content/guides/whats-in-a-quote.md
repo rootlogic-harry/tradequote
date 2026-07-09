@@ -1,14 +1,15 @@
 ---
-title: "What should a dry stone walling quote include?"
-description: "A professional dry stone walling quote should list scope, measurements, tonnage, labour days, materials, VAT, payment terms, RAMS and insurance details."
+title: "What should a walling quote include? (dry stone or mortared)"
+description: "A professional walling quote (dry stone or mortared) lists scope, measurements, tonnage, labour days, materials, VAT, RAMS and insurance."
 slug: "whats-in-a-quote"
 publishedAt: "2026-06-30"
+modifiedAt: "2026-07-07"
 section: "Methodology"
-keywords: ["dry stone walling quote template", "what to include in a walling quote", "waller quote checklist", "professional walling quote", "RAMS quote"]
+keywords: ["dry stone walling quote template", "mortared wall quote", "what to include in a walling quote", "waller quote checklist", "professional walling quote", "RAMS quote"]
 related: ["cost-per-metre", "dswa-day-rate", "chapter-8-traffic-management"]
 ---
 
-# What should a dry stone walling quote include?
+# What should a walling quote include? (dry stone or mortared)
 
 A good walling quote does two things at once. It gives the customer enough detail that they trust the price, and it gives you enough cover that you can hold the price when the job throws up the inevitable surprise. If either of those is missing, you are either underpriced or arguing.
 

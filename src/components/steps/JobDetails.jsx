@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PHOTO_SLOTS } from '../../constants.js';
 import { validateJobDetails, validateRequiredPhotoSlots } from '../../utils/validators.js';
 import { runAnalysis } from '../../utils/analyseJob.js';
-import { savePhoto, deletePhoto, saveDraft, loadPhotos } from '../../utils/userDB.js';
+import { savePhoto, deletePhoto, saveDraft, loadPhotos, listClients, getClient } from '../../utils/userDB.js';
 import VoiceRecorder from '../VoiceRecorder.jsx';
 import CaptureChoice from '../CaptureChoice.jsx';
 import VideoUpload from '../VideoUpload.jsx';
@@ -90,6 +90,12 @@ export default function JobDetails({
   // notification; never called on failure. Defaults to a no-op so
   // isolated unit tests don't need to inject it.
   onAnalysisSuccess = () => {},
+  // Clients feature flag (2026-07-07). When true AND the user has any
+  // saved clients, the ClientPicker component surfaces above the name
+  // field so the user can pick from existing rather than retype.
+  // Typing still wins — the picker is optional.
+  clientsEnabled = false,
+  currentUserId = null,
 }) {
   const [errors, setErrors] = useState({});
   const [photoWarnings, setPhotoWarnings] = useState({ missingSlots: [] });
@@ -97,6 +103,19 @@ export default function JobDetails({
   const [dragOverSlot, setDragOverSlot] = useState(null); // key of slot being dragged over
   const [dragOverExtra, setDragOverExtra] = useState(false); // extra photos drop zone
   const [uploadingSlot, setUploadingSlot] = useState(null); // which slot is processing
+  // True when the ClientSitePicker has an existing client selected.
+  // Drives the Client Name / Client Phone vs Site Contact fields swap
+  // (see Client & Site section below): existing client → hide client
+  // fields, they're already stored on the client record; show per-job
+  // Site Contact Name / Site Contact Phone instead.
+  const [existingClientPicked, setExistingClientPicked] = useState(false);
+  // True once the picker has auto-filled a site (either the "standard"
+  // pick on client select or a manual site swap via the Site dropdown).
+  // When true, the Site Address textarea hides — the site is fully
+  // identified by the dropdown selection and editing the address here
+  // would silently diverge from the client record. To change the
+  // address of an existing site, edit it on the Client detail page.
+  const [existingSitePicked, setExistingSitePicked] = useState(false);
 
   const { jobDetails, photos, extraPhotos, profile, captureMode } = state;
   const term = documentTerm(profile);
@@ -358,23 +377,59 @@ export default function JobDetails({
       </p>
 
       <div className="eyebrow mb-3">Client & Site</div>
+      {clientsEnabled && currentUserId && (
+        <ClientSitePicker
+          currentUserId={currentUserId}
+          onPickClient={(client) => {
+            if (!client) {
+              // User switched back to "— New client —": bring the
+              // Client Name + Phone inputs back into view. Do NOT wipe
+              // typed values — they might be re-entering a fresh
+              // client and want to keep what they've typed so far.
+              setExistingClientPicked(false);
+              setExistingSitePicked(false);
+              return;
+            }
+            setExistingClientPicked(true);
+            updateJob('clientName', client.name || '');
+            if (client.phone) updateJob('clientPhone', client.phone);
+          }}
+          onPickSite={(site) => {
+            updateJob('siteAddress', site.address || '');
+            // 2026-07-07: auto-fill per-quote site contact from the
+            // site row's persistent contact. User can override for
+            // this quote — override goes to jobDetails only, never
+            // mutates the site row here (edit the site directly on
+            // the Client detail page for a persistent change).
+            updateJob('siteContactName', site.siteContactName || '');
+            updateJob('siteContactPhone', site.siteContactPhone || '');
+            // Site is fully identified by the picker — hide the Site
+            // Address textarea below so the user can't silently type
+            // over the picked address (which would create a mismatch
+            // between the quote and the client record).
+            setExistingSitePicked(true);
+          }}
+        />
+      )}
       <div className="grid grid-cols-1 fq:grid-cols-2 gap-4 mb-8">
-        <div>
-          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Client Name *
-          </label>
-          <input
-            type="text"
-            autoComplete="off"
-            enterKeyHint="next"
-            placeholder="e.g. Yorkshire Estates"
-            className={inputClass('clientName')}
-            value={jobDetails.clientName}
-            onChange={(e) => updateJob('clientName', e.target.value)}
-            onBlur={(e) => updateJob('clientName', e.target.value)}
-          />
-          {errors.clientName && <p className="text-tq-error text-xs mt-1">{errors.clientName}</p>}
-        </div>
+        {!existingClientPicked && (
+          <div>
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Client Name *
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              enterKeyHint="next"
+              placeholder="e.g. Yorkshire Estates"
+              className={inputClass('clientName')}
+              value={jobDetails.clientName}
+              onChange={(e) => updateJob('clientName', e.target.value)}
+              onBlur={(e) => updateJob('clientName', e.target.value)}
+            />
+            {errors.clientName && <p className="text-tq-error text-xs mt-1">{errors.clientName}</p>}
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
@@ -392,48 +447,98 @@ export default function JobDetails({
           />
         </div>
 
+        {!existingClientPicked && (
+          <div>
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Client Phone <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>(optional)</span>
+            </label>
+            <input
+              type="tel"
+              autoComplete="tel"
+              enterKeyHint="next"
+              inputMode="tel"
+              placeholder="e.g. 07554 040992"
+              className={inputClass('clientPhone')}
+              value={jobDetails.clientPhone || ''}
+              onChange={(e) => updateJob('clientPhone', e.target.value)}
+              onBlur={(e) => updateJob('clientPhone', e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Per-quote site contact — 2026-07-07 (Harry's UAT):
+            "per quote it should be site contact, quote reference,
+             and site contact". When an existing client is picked
+             these take the row otherwise occupied by Client Name /
+             Client Phone; when a new client is being created they
+             sit below as optional inputs so both sets are captured
+             on the same quote. */}
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Client Phone <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>(optional)</span>
+            Site Contact Name{' '}
+            <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>
+              {existingClientPicked ? '' : '(optional)'}
+            </span>
+          </label>
+          <input
+            type="text"
+            autoComplete="off"
+            enterKeyHint="next"
+            placeholder="e.g. John on-site"
+            className={inputClass('siteContactName')}
+            value={jobDetails.siteContactName || ''}
+            onChange={(e) => updateJob('siteContactName', e.target.value)}
+            onBlur={(e) => updateJob('siteContactName', e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+            Site Contact Phone{' '}
+            <span className="text-tq-muted" style={{ textTransform: 'none', opacity: 0.6 }}>
+              {existingClientPicked ? '' : '(optional)'}
+            </span>
           </label>
           <input
             type="tel"
             autoComplete="tel"
             enterKeyHint="next"
             inputMode="tel"
-            placeholder="e.g. 07554 040992"
-            className={inputClass('clientPhone')}
-            value={jobDetails.clientPhone || ''}
-            onChange={(e) => updateJob('clientPhone', e.target.value)}
-            onBlur={(e) => updateJob('clientPhone', e.target.value)}
+            placeholder="e.g. 07123 456789"
+            className={inputClass('siteContactPhone')}
+            value={jobDetails.siteContactPhone || ''}
+            onChange={(e) => updateJob('siteContactPhone', e.target.value)}
+            onBlur={(e) => updateJob('siteContactPhone', e.target.value)}
           />
         </div>
 
-        <div className="fq:col-span-2">
-          <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
-            Site Address *
-          </label>
-          <textarea
-            autoComplete="street-address"
-            enterKeyHint="next"
-            placeholder="e.g. Malham Cove, Skipton BD23 4DA"
-            className={inputClass('siteAddress')}
-            rows={2}
-            value={jobDetails.siteAddress}
-            onChange={(e) => {
-              updateJob('siteAddress', e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            onBlur={(e) => {
-              updateJob('siteAddress', e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            style={{ overflow: 'hidden', resize: 'none' }}
-          />
-          {errors.siteAddress && <p className="text-tq-error text-xs mt-1">{errors.siteAddress}</p>}
-        </div>
+        {!existingSitePicked && (
+          <div className="fq:col-span-2">
+            <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
+              Site Address *
+            </label>
+            <textarea
+              autoComplete="street-address"
+              enterKeyHint="next"
+              placeholder="e.g. Malham Cove, Skipton BD23 4DA"
+              className={inputClass('siteAddress')}
+              rows={2}
+              value={jobDetails.siteAddress}
+              onChange={(e) => {
+                updateJob('siteAddress', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              onBlur={(e) => {
+                updateJob('siteAddress', e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              style={{ overflow: 'hidden', resize: 'none' }}
+            />
+            {errors.siteAddress && <p className="text-tq-error text-xs mt-1">{errors.siteAddress}</p>}
+          </div>
+        )}
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
@@ -1023,6 +1128,159 @@ export default function JobDetails({
         </button>
       </div>
       </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ClientSitePicker — visible dropdowns above the Client Name field.
+ *
+ * Two native <select>s:
+ *   - Existing Client — always visible if the user has ≥1 client. Alpha
+ *     sorted by name. Placeholder "— New client / not listed —" leaves
+ *     everything blank so the user types below (typing wins).
+ *   - Site — appears when a client is picked. Pre-selects the "standard"
+ *     site (site attached to the most recent job for that client, else
+ *     the first site returned) and auto-fills siteAddress. User can
+ *     change to another site via the same dropdown.
+ *
+ * Auto-fill contract on client pick:
+ *   updateJob('clientName') + updateJob('clientPhone') via onPickClient
+ *   updateJob('siteAddress') via onPickSite with the standard site
+ *
+ * The raw Client Name / Site Address inputs stay rendered below so the
+ * user can type over the picker at any time — the picker is a shortcut,
+ * not a gate. Selecting "— New client / not listed —" clears the site
+ * dropdown but never wipes typed values.
+ */
+function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
+  const [clients, setClients] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [sites, setSites] = useState([]);
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [loadingSites, setLoadingSites] = useState(false);
+
+  useEffect(() => {
+    if (!currentUserId || loaded) return;
+    let alive = true;
+    listClients(currentUserId, { limit: 500 })
+      .then((r) => {
+        if (!alive) return;
+        const list = (r?.clients || []).slice().sort((a, b) =>
+          (a.name || '').localeCompare(b.name || '', 'en', { sensitivity: 'base' }),
+        );
+        setClients(list);
+        setLoaded(true);
+      })
+      .catch(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [currentUserId, loaded]);
+
+  const handleClientChange = async (e) => {
+    const id = e.target.value;
+    setSelectedClientId(id);
+    setSelectedSiteId('');
+    setSites([]);
+    if (!id) {
+      // "— New client —" placeholder: tell the parent to reset the
+      // "existing client picked" mode so Client Name + Phone inputs
+      // come back into view.
+      onPickClient?.(null);
+      return;
+    }
+    const client = clients.find((c) => c.id === id);
+    if (!client) return;
+    onPickClient?.(client);
+    setLoadingSites(true);
+    try {
+      const detail = await getClient(currentUserId, id);
+      const siteList = detail?.sites || [];
+      setSites(siteList);
+      if (siteList.length === 0) return;
+      // "Standard" site = site attached to the most recent job for this
+      // client, else the first site returned. Timeline is already sorted
+      // newest-first server-side (clientsRoutes.js).
+      const timeline = detail?.timeline || [];
+      const mostRecentSiteId = timeline[0]?.site_id;
+      const standard =
+        siteList.find((s) => s.id === mostRecentSiteId) || siteList[0];
+      setSelectedSiteId(standard.id);
+      onPickSite?.(standard);
+    } catch {
+      /* ignore — user can still type the address below */
+    } finally {
+      setLoadingSites(false);
+    }
+  };
+
+  const handleSiteChange = (e) => {
+    const id = e.target.value;
+    setSelectedSiteId(id);
+    const site = sites.find((s) => s.id === id);
+    if (site) onPickSite?.(site);
+  };
+
+  // Hide only if there are literally zero clients — nothing to pick.
+  if (!loaded) return null;
+  if (clients.length === 0) return null;
+
+  return (
+    <div
+      className="mb-6 grid gap-4"
+      style={{
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+      }}
+    >
+      <div>
+        <label
+          htmlFor="jobdetails-existing-client"
+          className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide"
+        >
+          Existing Client
+        </label>
+        <select
+          id="jobdetails-existing-client"
+          value={selectedClientId}
+          onChange={handleClientChange}
+          className="nq-field"
+          data-testid="jobdetails-picker-client"
+        >
+          <option value="">— New client / not listed —</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {(c.name || '(unnamed)') + (c.phone ? ` · ${c.phone}` : '')}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {selectedClientId && (
+        <div>
+          <label
+            htmlFor="jobdetails-existing-site"
+            className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide"
+          >
+            Site
+          </label>
+          <select
+            id="jobdetails-existing-site"
+            value={selectedSiteId}
+            onChange={handleSiteChange}
+            className="nq-field"
+            data-testid="jobdetails-picker-site"
+            disabled={loadingSites || sites.length === 0}
+          >
+            {loadingSites && <option value="">Loading sites…</option>}
+            {!loadingSites && sites.length === 0 && (
+              <option value="">No sites yet — type below</option>
+            )}
+            {!loadingSites && sites.map((s) => (
+              <option key={s.id} value={s.id}>{s.address}</option>
+            ))}
+          </select>
+        </div>
       )}
     </div>
   );

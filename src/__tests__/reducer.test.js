@@ -382,6 +382,23 @@ describe('reducer', () => {
       expect(result.jobDetails.clientName).toBe('Updated');
       expect(result.jobDetails.briefNotes).toBe('Important note');
     });
+
+    test('initial state exposes siteContactName + siteContactPhone (default empty)', () => {
+      // Added 2026-07-07 for Harry's UAT: per-quote site contact
+      // fields, auto-filled by the ClientSitePicker when a saved site
+      // is chosen, editable per quote without mutating the site row.
+      expect(initialState.jobDetails.siteContactName).toBe('');
+      expect(initialState.jobDetails.siteContactPhone).toBe('');
+    });
+
+    test('UPDATE_JOB_DETAILS merges site-contact fields', () => {
+      const result = reducer(initialState, {
+        type: 'UPDATE_JOB_DETAILS',
+        updates: { siteContactName: 'John Foreman', siteContactPhone: '07123 456789' },
+      });
+      expect(result.jobDetails.siteContactName).toBe('John Foreman');
+      expect(result.jobDetails.siteContactPhone).toBe('07123 456789');
+    });
   });
 
   describe('SET_PHOTO', () => {

@@ -1,22 +1,23 @@
 ---
-title: "Quoting for dry stone wallers — the FastQuote guide"
-description: "A practical guide to quoting dry stone walling jobs in the UK — day rates, per-metre pricing, stone tonnage, RAMS, VAT, and what a good quote should contain."
+title: "Quoting for stone wallers — the FastQuote guide"
+description: "Practical guide to quoting UK walling jobs — dry stone and mortared. Day rates, per-metre pricing, tonnage, RAMS, VAT, and what a good quote contains."
 slug: "index"
 publishedAt: "2026-06-30"
+modifiedAt: "2026-07-07"
 section: "Methodology"
-keywords: ["dry stone walling quotes", "dry stone wall pricing UK", "waller day rate", "stone tonnage", "RAMS", "quote template waller"]
+keywords: ["stone walling quotes", "dry stone wall pricing UK", "mortared walling", "waller day rate", "stone tonnage", "RAMS", "quote template waller"]
 related: ["cost-per-metre", "dswa-day-rate", "whats-in-a-quote"]
 ---
 
-# Quoting for dry stone wallers — the FastQuote guide
+# Quoting for stone wallers — the FastQuote guide
 
-If you build dry stone walls for a living, the wall itself is rarely the hard part. The hard part is everything that has to happen before you ever lift a hammer: a customer rings you, you go out to look at the job, you stand there counting metres and guessing tonnage, you drive home, and then you sit at the kitchen table at half-nine at night with a cold cup of tea trying to turn it all into a quote that does not make you look like a cowboy.
+If you build stone walls for a living — dry stone or mortared — the wall itself is rarely the hard part. The hard part is everything that has to happen before you ever lift a hammer: a customer rings you, you go out to look at the job, you stand there counting metres and guessing tonnage, you drive home, and then you sit at the kitchen table at half-nine at night with a cold cup of tea trying to turn it all into a quote that does not make you look like a cowboy.
 
 Most one-person walling businesses we have spoken to spend somewhere between one and two hours producing a written quote. Some spend longer. A fair few do not produce one at all — they send a price by text, or quote it on the spot, and then lose the work when the customer asks for "something in writing for the insurance" or "an itemised breakdown for the farm accounts".
 
 The job is the job. It always was. What has changed is that customers — especially landowners, estates, the National Park officers, and anyone spending grant money — now expect a quote that looks like a quote. A few lines on the back of a delivery ticket does not cut it any more.
 
-This guide is the FastQuote hub for everything to do with quoting walling work: what a good quote contains, how long it should take to write, what to charge, and how to handle the bits around the wall itself (VAT, RAMS, Chapter 8, stone sourcing). It is written for working wallers, not for the consumer-side audience that the rest of the internet seems to serve. Each section links out to a deeper article. Pick the ones that matter.
+This guide is the FastQuote hub for everything to do with quoting walling work — dry stone and mortared — what a good quote contains, how long it should take to write, what to charge, and how to handle the bits around the wall itself (VAT, RAMS, Chapter 8, stone sourcing). It is written for working wallers, not for the consumer-side audience that the rest of the internet seems to serve. Each section links out to a deeper article. Pick the ones that matter.
 
 ## How long should a quote take?
 
@@ -28,7 +29,7 @@ The wallers we built FastQuote with were going from roughly an hour and a half d
 
 ## What a good waller's quote includes
 
-A professional dry stone walling quote should contain, at minimum:
+A professional walling quote — dry stone or mortared — should contain, at minimum:
 
 - **Site address and a clear description of what you are quoting for.** "Rebuild collapsed section of field boundary, north side of Beck Lane, approx 14m, double-faced gritstone, height 1.1m to 1.3m."
 - **Wall measurements.** Length in metres, height in metres, top width, bottom width if it is a proper batter. Single-skin or double-faced. Note if any sections are short-stoned, copestones missing, or built on a rubble fill.

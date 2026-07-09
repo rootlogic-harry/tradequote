@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   listClients,
   getClientDuplicates,
+  createClient,
 } from '../utils/userDB.js';
 import ClientMergeReview from './ClientMergeReview.jsx';
 
@@ -37,6 +38,7 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
   const [activeStatus, setActiveStatus] = useState('all');
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [newClientOpen, setNewClientOpen] = useState(false);
 
   const currentFilter = STATUS_FILTERS.find((f) => f.key === activeStatus) || STATUS_FILTERS[0];
 
@@ -76,13 +78,36 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
     await refresh();
   }, [refresh]);
 
+  const handleCreate = useCallback(async (payload) => {
+    try {
+      const res = await createClient(currentUserId, payload);
+      setNewClientOpen(false);
+      showToast?.('Client added', 'success');
+      await refresh();
+      if (res?.client?.id) onOpenClient?.(res.client.id);
+    } catch (e) {
+      showToast?.(e?.message || 'Failed to add client', 'error');
+    }
+  }, [currentUserId, refresh, showToast, onOpenClient]);
+
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="page-title mb-1">Clients</h1>
-        <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
-          {clients.length} {clients.length === 1 ? 'client' : 'clients'}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="page-title mb-1">Clients</h1>
+          <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+            {clients.length} {clients.length === 1 ? 'client' : 'clients'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setNewClientOpen(true)}
+          className="btn-primary text-sm"
+          style={{ minHeight: 44, padding: '0 16px' }}
+          data-testid="clients-new-client"
+        >
+          + New client
+        </button>
       </div>
 
       {/* Duplicate merge banner. Always shows a "Review" button so the
@@ -141,6 +166,13 @@ export default function ClientsList({ currentUserId, onOpenClient, onBack, showT
           onClose={() => setReviewOpen(false)}
           onMerged={handleMerged}
           showToast={showToast}
+        />
+      )}
+
+      {newClientOpen && (
+        <NewClientModal
+          onSubmit={handleCreate}
+          onCancel={() => setNewClientOpen(false)}
         />
       )}
 
@@ -284,4 +316,112 @@ function getStatusChip(status) {
     default:
       return { label: status || '—',  bg: 'rgba(120,120,120,0.14)', fg: 'rgb(80,80,80)'  };
   }
+}
+
+function NewClientModal({ onSubmit, onCancel }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [siteAddress, setSiteAddress] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const canSubmit = name.trim() && !submitting;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      // Send optional site if the user entered an address, so the
+      // create-and-first-site flow lives in a single POST (spec §3).
+      const payload = {
+        name: name.trim(),
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+      };
+      if (siteAddress.trim()) {
+        payload.site = { address: siteAddress.trim() };
+      }
+      await onSubmit(payload);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-client-title"
+      onClick={onCancel}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 16,
+      }}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        style={{
+          background: 'var(--tq-card)', borderRadius: 12, width: 480,
+          maxWidth: '95vw', maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          border: '1.5px solid var(--tq-border)',
+        }}
+      >
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--tq-border)' }}>
+          <h3
+            id="new-client-title"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, margin: 0, color: 'var(--tq-text)' }}
+          >
+            New client
+          </h3>
+          <p style={{ margin: '4px 0 0', color: 'var(--tq-muted)', fontSize: 13 }}>
+            Site address is optional — you can add it later.
+          </p>
+        </div>
+        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12, flex: '1 1 auto', overflowY: 'auto' }}>
+          <label>
+            <div className="eyebrow mb-1" style={{ color: 'var(--tq-muted)' }}>Client name *</div>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="nq-field"
+              maxLength={200}
+              autoFocus
+              required
+              data-testid="new-client-name"
+            />
+          </label>
+          <label>
+            <div className="eyebrow mb-1" style={{ color: 'var(--tq-muted)' }}>Phone (optional)</div>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="nq-field" maxLength={40} />
+          </label>
+          <label>
+            <div className="eyebrow mb-1" style={{ color: 'var(--tq-muted)' }}>Email (optional)</div>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="nq-field" maxLength={200} />
+          </label>
+          <label>
+            <div className="eyebrow mb-1" style={{ color: 'var(--tq-muted)' }}>First site address (optional)</div>
+            <textarea
+              value={siteAddress}
+              onChange={(e) => setSiteAddress(e.target.value)}
+              rows={2}
+              className="nq-field"
+              style={{ minHeight: 44 }}
+              maxLength={300}
+            />
+          </label>
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--tq-border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onCancel} className="btn-ghost" style={{ minHeight: 44, padding: '0 16px' }}>Cancel</button>
+          <button type="submit" disabled={!canSubmit} className="btn-primary" style={{ minHeight: 44, padding: '0 16px' }} data-testid="new-client-submit">
+            {submitting ? 'Adding…' : 'Add client'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }

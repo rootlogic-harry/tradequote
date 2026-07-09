@@ -1003,7 +1003,7 @@ export default function App() {
           />
         );
       case 2:
-        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} videoAnalysisEnabled={videoAnalysisEnabled} onAnalysisSuccess={refreshBilling} />;
+        return <JobDetails state={state} dispatch={dispatch} abortRef={abortRef} showToast={showToast} voiceDictationEnabled={voiceDictationEnabled} videoAnalysisEnabled={videoAnalysisEnabled} onAnalysisSuccess={refreshBilling} clientsEnabled={clientsEnabled} currentUserId={state.currentUserId} />;
       case 3:
         return <AIAnalysis state={state} dispatch={dispatch} cancelAnalysis={cancelAnalysis} />;
       case 4:

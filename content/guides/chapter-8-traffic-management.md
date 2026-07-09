@@ -1,6 +1,6 @@
 ---
 title: "Do I need Chapter 8 traffic management for roadside walls?"
-description: "Chapter 8 traffic management is required for dry stone walling on adopted UK highways. Sign sets cost £400 to £700 to buy or £80 to £160 per day to hire."
+description: "Chapter 8 traffic management is required for walling on adopted UK highways (dry stone or mortared). Sign sets: £400–£700 to buy, £80–£160 per day."
 slug: "chapter-8-traffic-management"
 publishedAt: "2026-06-30"
 section: "Methodology"
@@ -10,7 +10,7 @@ related: ["whats-in-a-quote", "dswa-day-rate", "cost-per-metre"]
 
 # Do I need Chapter 8 traffic management for roadside walls?
 
-If you are rebuilding a wall that fronts onto a public highway, the answer is almost always yes. Chapter 8 is the part of the Department for Transport's Traffic Signs Manual that sets out the rules for signing, lighting and guarding works on the road. It is not specific to walling — it covers any roadside works — but a dry stone waller working within a few feet of moving traffic is squarely in scope.
+If you are rebuilding a wall that fronts onto a public highway, the answer is almost always yes. Chapter 8 is the part of the Department for Transport's Traffic Signs Manual that sets out the rules for signing, lighting and guarding works on the road. It is not specific to walling — it covers any roadside works — but a waller working within a few feet of moving traffic (dry stone or mortared) is squarely in scope.
 
 Customers ask about this because they hear "Chapter 8" thrown around by builders and assume it is optional paperwork. It is not. Getting it wrong is the difference between a successful job and a regulatory problem.
 

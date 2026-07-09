@@ -303,6 +303,26 @@ export default function SavedQuotes({
 
   const completedCount = useMemo(() => quotes.filter(q => isCompletedJob(q, now)).length, [quotes, now]);
   const archiveCount = useMemo(() => quotes.filter(q => isArchivedJob(q, now)).length, [quotes, now]);
+  const activeCount = useMemo(() => quotes.filter(q => isActiveJob(q, now)).length, [quotes, now]);
+
+  // Per-pill counts within Active. Draft / Sent / Accepted are computed
+  // against the active bucket only (not the full quotes list) so they
+  // never inflate for a completed/declined job. Mark's 2026-07-07 UAT:
+  // wanted the SavedQuotes numbers to reconcile with the Dashboard's
+  // pill counts (both now count the same active-bucketed jobs by
+  // status). All = every job in Active.
+  const activePillCounts = useMemo(() => {
+    const counts = { All: 0, Draft: 0, Sent: 0, Accepted: 0 };
+    for (const q of quotes) {
+      if (!isActiveJob(q, now)) continue;
+      counts.All += 1;
+      const s = (q.status || 'draft').toLowerCase();
+      if (s === 'draft')    counts.Draft    += 1;
+      else if (s === 'sent')     counts.Sent     += 1;
+      else if (s === 'accepted') counts.Accepted += 1;
+    }
+    return counts;
+  }, [quotes, now]);
 
   const getStatus = (job) => (job.status || 'draft').toUpperCase();
 
@@ -412,9 +432,13 @@ export default function SavedQuotes({
         </p>
       </div>
 
-      {/* Active / Completed / Archive tabs (Mark's 2026-06-26 ask). Count
-          badges hidden when zero so tabs don't read "(0)". Default tab is
-          'Active' on every session — the others are opt-in. */}
+      {/* Active / Completed / Archive tabs (Mark's 2026-06-26 ask; count
+          rendering unified 2026-07-08 for filter consistency with the
+          Dashboard's pill counts). Every tab now carries a count so
+          the totals reconcile at a glance:
+            Active + Completed + Archived = Dashboard's ALL count.
+          Default tab is 'Active' on every session — the others are
+          opt-in. */}
       <div className="flex flex-wrap gap-2 mb-4" role="tablist" aria-label="Job list view">
         <button
           type="button"
@@ -422,8 +446,9 @@ export default function SavedQuotes({
           aria-selected={isActiveView}
           onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'active' })}
           className={`pill ${isActiveView ? 'active' : ''}`}
+          data-testid="savedquotes-tab-active"
         >
-          Active
+          Active ({activeCount})
         </button>
         <button
           type="button"
@@ -431,8 +456,9 @@ export default function SavedQuotes({
           aria-selected={isCompletedView}
           onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'completed' })}
           className={`pill ${isCompletedView ? 'active' : ''}`}
+          data-testid="savedquotes-tab-completed"
         >
-          Completed{completedCount > 0 ? ` (${completedCount})` : ''}
+          Completed ({completedCount})
         </button>
         <button
           type="button"
@@ -440,8 +466,9 @@ export default function SavedQuotes({
           aria-selected={isArchiveView}
           onClick={() => dispatch?.({ type: 'SET_VIEW_MODE', mode: 'archive' })}
           className={`pill ${isArchiveView ? 'active' : ''}`}
+          data-testid="savedquotes-tab-archive"
         >
-          Archived{archiveCount > 0 ? ` (${archiveCount})` : ''}
+          Archived ({archiveCount})
         </button>
       </div>
 
@@ -479,7 +506,8 @@ export default function SavedQuotes({
         </div>
 
         {/* Filter pills — Active view only. Completed + Archive are
-            single-status buckets. */}
+            single-status buckets. Counts render inline in the pill
+            label (matches the Dashboard's pill contract). */}
         {isActiveView && (
           <div className="flex flex-wrap gap-2 self-start">
             {ACTIVE_FILTERS.map((f) => (
@@ -487,8 +515,12 @@ export default function SavedQuotes({
                 key={f}
                 onClick={() => setActiveFilter(f)}
                 className={`pill ${activeFilter === f ? 'active' : ''}`}
+                data-testid={`savedquotes-pill-${f.toLowerCase()}`}
               >
                 {f}
+                <span className="ml-1.5 text-[11px] opacity-70" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {activePillCounts[f] || 0}
+                </span>
               </button>
             ))}
           </div>

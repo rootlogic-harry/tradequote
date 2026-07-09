@@ -34,21 +34,21 @@ describe('SavedQuotes three-tab UI (active / completed / archive)', () => {
     expect(src).toMatch(/viewMode\s*=\s*['"]active['"]/);
   });
 
-  it('renders Active, Completed, and Archived tabs', () => {
-    expect(src).toMatch(/>\s*Active\s*</);
-    expect(src).toMatch(/>\s*Completed/);
-    expect(src).toMatch(/>\s*Archived/);
+  it('renders Active, Completed, and Archived tabs with counts', () => {
+    // 2026-07-08 (Harry's UAT reconciliation): every tab now carries a
+    // count so SavedQuotes reconciles with the Dashboard pill totals
+    // at a glance. Count is always visible — no more "(0)" hidden
+    // toggle (the parenthesised number is the whole point of the
+    // consistency).
+    expect(src).toMatch(/Active\s*\(\{activeCount\}\)/);
+    expect(src).toMatch(/Completed\s*\(\{completedCount\}\)/);
+    expect(src).toMatch(/Archived\s*\(\{archiveCount\}\)/);
   });
 
   it('dispatches SET_VIEW_MODE for all three view modes on tab click', () => {
     expect(src).toMatch(/SET_VIEW_MODE.*active/);
     expect(src).toMatch(/SET_VIEW_MODE.*completed/);
     expect(src).toMatch(/SET_VIEW_MODE.*archive/);
-  });
-
-  it('count badges omitted when buckets are empty (no "(0)")', () => {
-    expect(src).toMatch(/completedCount\s*>\s*0/);
-    expect(src).toMatch(/archiveCount\s*>\s*0/);
   });
 
   it('drops Declined AND Completed from the status filter pills', () => {
@@ -66,6 +66,21 @@ describe('SavedQuotes three-tab UI (active / completed / archive)', () => {
     // Pills wrapped in `isActiveView && (...)` — Completed + Archive
     // are single-status buckets so the filter axis would be noise.
     expect(src).toMatch(/isActiveView\s*&&\s*\([\s\S]{0,200}ACTIVE_FILTERS/);
+  });
+
+  it('renders per-status count on each Active pill (Harry\'s 2026-07-08 consistency)', () => {
+    // Counts drawn from activePillCounts. All / Draft / Sent / Accepted
+    // each get a live number so the pills reconcile with the Dashboard
+    // and with the Active tab total.
+    expect(src).toMatch(/activePillCounts\s*=\s*useMemo/);
+    expect(src).toMatch(/activePillCounts\[f\]/);
+    // Invariant: All == Draft + Sent + Accepted (asserted server-side
+    // via the pill-count loop). Guard the source shape so a refactor
+    // can't silently drop a status.
+    expect(src).toMatch(/counts\.Draft\s*\+=/);
+    expect(src).toMatch(/counts\.Sent\s*\+=/);
+    expect(src).toMatch(/counts\.Accepted\s*\+=/);
+    expect(src).toMatch(/counts\.All\s*\+=/);
   });
 
   it('has an archive-specific empty-state copy', () => {
