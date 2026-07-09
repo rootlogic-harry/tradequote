@@ -259,6 +259,44 @@ describe('verify callback — account linking by lower(email)', () => {
   test('existing users get _isNewUser=false (no double referral credit)', () => {
     expect(block).toMatch(/_isNewUser\s*=\s*false/);
   });
+
+  // ─── 2b. LEGACY GOOGLE FALLBACK (2026-07-09, Paul's UAT) ──────────────
+  //
+  // A legacy user provisioned by the pre-Auth0 passport-google-oauth20
+  // callback with email=NULL couldn't be found by path 1 (email match)
+  // or path 2 (Auth0 sub match). Path 3 then created a duplicate,
+  // orphaning the user's quotes. The fix parses Auth0's
+  // `google-oauth2|<googleSubId>` sub and looks the legacy row up by
+  // (auth_provider='google', auth_provider_id=<googleSubId>).
+  test('extracts the legacy Google sub from Auth0\'s google-oauth2| prefix', () => {
+    expect(block).toMatch(/sub\.startsWith\(['"]google-oauth2\|['"]\)/);
+    expect(block).toMatch(/sub\.slice\(['"]google-oauth2\|['"]\.length\)/);
+  });
+
+  test('queries users with auth_provider="google" using the extracted Google sub', () => {
+    expect(block).toMatch(
+      /SELECT \* FROM users WHERE auth_provider = \$1 AND auth_provider_id = \$2[\s\S]{0,60}?LIMIT 1/,
+    );
+    expect(block).toMatch(/\[['"]google['"],\s*legacyGoogleSub\]/);
+  });
+
+  test('relabels the matched legacy row to auth_provider="auth0" + records the Auth0 sub', () => {
+    // Same relabelling contract as the email-match path — future
+    // logins hit path 1 or path 2 instead of this fallback.
+    const legacyBlock = block.slice(block.indexOf('LEGACY GOOGLE FALLBACK'));
+    expect(legacyBlock).toMatch(/auth_provider\s*=\s*'auth0'/);
+    expect(legacyBlock).toMatch(/auth_provider_id\s*=\s*\$3/);
+  });
+
+  test('logs the fallback match for auditability', () => {
+    expect(block).toMatch(/legacy-google fallback matched/i);
+  });
+
+  test('logs a warning line whenever provisioning a NEW user (Paul-shape trace)', () => {
+    // Not blocking — genuine signups still get through — but the log
+    // line makes duplicate-provision incidents visible after the fact.
+    expect(block).toMatch(/provisioning NEW user/i);
+  });
 });
 
 // ─── 8. Remember-this-device → 30-day cookie ─────────────────────────────
