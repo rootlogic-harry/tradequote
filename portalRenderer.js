@@ -374,10 +374,32 @@ function footerBlock(profile) {
   const company = profile?.companyName || profile?.fullName || '';
   const firstName = (profile?.fullName || profile?.companyName || '').split(/\s+/)[0] || '';
   const phone = profile?.phone || '';
+
+  // Mark's 2026-07-14 feedback: trading address + VAT number were on
+  // the DOCX footer but missing from the portal and from the portal's
+  // "Save as PDF" (which is window.print of the portal HTML). Adding
+  // them here fixes both surfaces at once. Same shape the DOCX footer
+  // uses (src/utils/exportDocx.js:500) and the same fail-closed VAT
+  // check as calculations.js (strict boolean, not truthy string).
+  //
+  // For UK-registered traders the VAT number on any quote-shaped
+  // document is a compliance expectation — it can't be missing on the
+  // customer-facing surface if it's on the PDF.
+  const tradingAddress = String(profile?.tradingAddress || profile?.address || '').trim();
+  const vatNumber = String(profile?.vatNumber || '').trim();
+  const showVat = profile?.vatRegistered === true && vatNumber;
+  const chromeSegments = [];
+  if (tradingAddress) chromeSegments.push(escapeHtml(tradingAddress));
+  if (showVat) chromeSegments.push('VAT No: ' + escapeHtml(vatNumber));
+  const chromeLine = chromeSegments.length > 0
+    ? `<div class="cp-footer-chrome">${chromeSegments.join(' · ')}</div>`
+    : '';
+
   return `
 <div class="cp-footer">
   <div class="cp-footer-line">Questions? Call ${escapeHtml(firstName || 'your tradesman')}</div>
   ${phone ? `<div class="cp-footer-phone"><a href="tel:${escapeHtml(phone.replace(/\s+/g, ''))}">${escapeHtml(phone)}</a></div>` : ''}
+  ${chromeLine}
   <div class="cp-footer-disclaimer">Prepared by ${escapeHtml(company)} using FastQuote. Accepting indicates your intent to proceed${firstName ? ` — the full agreement will be confirmed directly with ${escapeHtml(firstName)}` : ''}.</div>
 </div>`;
 }

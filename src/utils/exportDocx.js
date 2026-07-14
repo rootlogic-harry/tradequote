@@ -497,10 +497,14 @@ export async function exportQuoteAsDocx({
   }
 
   // Footer rendered via section footer (not inline paragraphs).
+  // Strict boolean check on vatRegistered (Pitfall #17 in CLAUDE.md —
+  // a stringified "false" would silently turn VAT on if we relied on a
+  // truthy check). Matches isVatRegistered() in calculations.js +
+  // portalRenderer.js.
   const docFooterAddress = profile.tradingAddress || profile.address || '';
   const docFooterParts = [
     docFooterAddress,
-    profile.vatRegistered && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null,
+    profile.vatRegistered === true && profile.vatNumber ? `VAT No: ${profile.vatNumber}` : null,
   ].filter(Boolean);
   const docFooter = new Footer({
     children: [new Paragraph({
