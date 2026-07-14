@@ -56,6 +56,84 @@ export function stripMathFromDescription(description) {
     .trim();
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// stripFillerPhrases (Mark, 2026-07-14)
+//
+// Deterministic strip of low-information filler phrases the model
+// keeps generating even when the prompt tells it not to. Mark's
+// specific complaint: "as specified by tradesman" appearing a few
+// times per quote. Manual edits don't teach the model (there's no
+// fine-tuning loop) — so we handle it in code, same pattern as the
+// math strip above ("prompts are probabilistic, regex is not").
+//
+// Covers the common shapes the model has produced in Mark's quotes:
+//   "(as specified by tradesman)"
+//   "(as specified by the tradesman)"
+//   "…, as specified by tradesman."
+//   "…—as directed by the tradesman"
+//   "as per tradesman's specification"
+//   "as noted by builder"
+//
+// Also covers legacy variants (trader / waller / contractor) and the
+// verb spectrum (specified / directed / noted / advised / instructed /
+// requested). Not exhaustive — we can add more as they surface.
+//
+// Preserves the surrounding sentence. Runs AFTER stripMathFromDescription
+// so the trailing whitespace/punct tidy applies once at the end.
+// ─────────────────────────────────────────────────────────────────────
+
+const FILLER_VERBS = 'specified|directed|noted|advised|instructed|requested|per|described';
+const FILLER_NOUNS = 'tradesman|trader|builder|waller|contractor';
+
+// Parenthetical shape: `(as specified by tradesman)` — strip the whole
+// pair of parens including the phrase, plus any leading whitespace.
+const FILLER_PARENS_RE = new RegExp(
+  `\\s*\\(\\s*(?:as|to be)\\s+(?:${FILLER_VERBS})(?:\\s+by)?\\s+(?:the\\s+)?(?:${FILLER_NOUNS})['’]?s?(?:\\s+(?:specification|spec|instructions?|direction))?\\s*\\)`,
+  'gi',
+);
+
+// Mid-sentence shape (connector on BOTH sides): `The wall, as specified
+// by tradesman, will be rebuilt.` The replacer keeps the leading
+// connector so grammar survives: "The wall, will be rebuilt." Cleanup
+// pass then trims the trailing comma-before-word.
+const FILLER_INLINE_MID_RE = new RegExp(
+  `([,;—–\\-])\\s*\\bas\\s+(?:${FILLER_VERBS})\\s+by\\s+(?:the\\s+)?(?:${FILLER_NOUNS})\\b\\s*[,;—–\\-]`,
+  'gi',
+);
+
+// End-of-clause shape (leading connector, terminating punctuation NOT
+// in the char class): `Rebuild to 1.2m height, as specified by
+// tradesman.` Strip the whole leading connector + phrase.
+const FILLER_INLINE_END_RE = new RegExp(
+  `[\\s,;—–\\-]*\\bas\\s+(?:${FILLER_VERBS})\\s+by\\s+(?:the\\s+)?(?:${FILLER_NOUNS})\\b`,
+  'gi',
+);
+
+// "as per tradesman's specification" and similar possessive shapes
+// that use "per" instead of "by".
+const FILLER_PER_POSSESSIVE_RE = new RegExp(
+  `[\\s,;—–\\-]*\\bas\\s+per\\s+(?:the\\s+)?(?:${FILLER_NOUNS})['’]?s?\\s+(?:specification|spec|instructions?|direction)`,
+  'gi',
+);
+
+export function stripFillerPhrases(description) {
+  if (typeof description !== 'string' || !description) return description;
+  return description
+    .replace(FILLER_PARENS_RE, '')
+    // Mid-sentence must run BEFORE end-of-clause — otherwise the
+    // end-of-clause regex would greedy-match the same substring first
+    // and leave a dangling trailing comma.
+    .replace(FILLER_INLINE_MID_RE, ' ')
+    .replace(FILLER_INLINE_END_RE, '')
+    .replace(FILLER_PER_POSSESSIVE_RE, '')
+    // Same cleanup as stripMathFromDescription — collapse double
+    // spaces, remove space-before-punct, normalise dangling periods.
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\.\s*\.\s*/g, '. ')
+    .trim();
+}
+
 export function parseAIResponse(raw) {
   if (raw == null || raw === '') return null;
 
@@ -248,13 +326,24 @@ export function normalizeAIResponse(parsed) {
     aiQuantity: m.quantity,
   }));
 
+  // damageDescription: strip filler phrases (Mark, 2026-07-14).
+  // The math strip is deliberately NOT applied here — damage descriptions
+  // don't contain math walkthroughs in the observed cases, and running
+  // the math regexes on a long narrative paragraph risks a spurious
+  // parenthetical clip.
+  if (data.damageDescription) {
+    data.damageDescription = stripFillerPhrases(data.damageDescription);
+  }
+
   // Schedule of works: add id + strip any AI math walkthrough from the
   // client-facing description (Paul Clough bug, 2026-06-30). See
-  // stripMathFromDescription above for the regex contract.
+  // stripMathFromDescription above for the regex contract. Also strip
+  // "as specified by tradesman" filler phrases (Mark, 2026-07-14) —
+  // same deterministic pattern, different set of phrases.
   data.scheduleOfWorks = data.scheduleOfWorks.map((s, i) => ({
     ...s,
     id: `sow-${i}`,
-    description: stripMathFromDescription(s.description),
+    description: stripFillerPhrases(stripMathFromDescription(s.description)),
   }));
 
   // Labour: add aiEstimatedDays
