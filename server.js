@@ -1119,7 +1119,64 @@ async (_accessToken, _refreshToken, _extraParams, profile, done) => {
       return done(null, u);
     }
 
+    // 2b. LEGACY GOOGLE FALLBACK (2026-07-09).
+    //     Paul's UAT: he had a legacy user row with email=NULL from the
+    //     pre-Auth0 Google callback (the legacy GoogleStrategy stored
+    //     `email = profile.emails?.[0]?.value ?? null` — silently NULL
+    //     if the OAuth scope didn't include email). His first Auth0
+    //     login (magic link, then Google) fell through both matches
+    //     above and provisioned a duplicate row, orphaning his quotes.
+    //
+    //     Auth0's Google connection returns `sub` as `google-oauth2|<googleSubId>`;
+    //     the pre-Auth0 GoogleStrategy stored the raw <googleSubId>
+    //     as auth_provider_id. Split on '|' and try to match a legacy
+    //     row before creating a new one. Idempotent — on match, relabel
+    //     the row to `auth_provider='auth0'` with the new sub.
+    //
+    //     Only applies to `google-oauth2|...` shape subs; email/apple/
+    //     other connections don't have a stable legacy identifier so
+    //     they still fall through to the new-user path.
+    if (typeof sub === 'string' && sub.startsWith('google-oauth2|')) {
+      const legacyGoogleSub = sub.slice('google-oauth2|'.length);
+      if (legacyGoogleSub) {
+        const byLegacy = await pool.query(
+          'SELECT * FROM users WHERE auth_provider = $1 AND auth_provider_id = $2 LIMIT 1',
+          ['google', legacyGoogleSub]
+        );
+        if (byLegacy.rows.length > 0) {
+          const u = byLegacy.rows[0];
+          await pool.query(
+            `UPDATE users
+                SET last_login_at    = NOW(),
+                    avatar_url       = COALESCE($1, avatar_url),
+                    email            = COALESCE(email, $2),
+                    auth_provider    = 'auth0',
+                    auth_provider_id = $3
+              WHERE id = $4`,
+            [avatar, email, sub, u.id]
+          );
+          u.email = u.email || email;
+          u.avatar_url = avatar || u.avatar_url;
+          u.auth_provider = 'auth0';
+          u.auth_provider_id = sub;
+          u._isNewUser = false;
+          console.log(`[Auth0] legacy-google fallback matched id=${u.id} sub=${legacyGoogleSub}`);
+          return done(null, u);
+        }
+      }
+    }
+
     // 3. New user — provision account with unique, URL-safe ID.
+    //    Belt-and-braces logging (2026-07-09): every new-user provision
+    //    logs the incoming email + auth-provider prefix so a suspicious
+    //    duplicate (e.g. Paul-shape: legacy Google user re-materialising
+    //    on Auth0 login) is at least visible in the deploy logs. The
+    //    provision itself is not blocked — that would break genuinely
+    //    new signups.
+    console.log(
+      `[Auth0] provisioning NEW user email=${email || '<none>'} ` +
+      `subPrefix=${(sub || '').split('|')[0] || '<unknown>'} name=${name || '<none>'}`,
+    );
     const baseId = (name || email || 'user')
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')

@@ -154,6 +154,122 @@ describe('renderClientPortal — structure', () => {
   });
 });
 
+// Mark's 2026-07-14 feedback: portal (and "Save as PDF" from the
+// portal, which is window.print of this HTML) was missing the trading
+// address and VAT number that the DOCX + server PDF already carry.
+// For a UK-registered trader those are compliance chrome, not
+// decoration — the customer needs them on the surface they see.
+describe('renderClientPortal — footer chrome (trading address + VAT)', () => {
+  test('renders trading address + VAT No when VAT-registered profile has both', () => {
+    const html = renderClientPortal(
+      makeJob({
+        client_snapshot_profile: {
+          ...baseProfile,
+          tradingAddress: 'Upper Lane House, 22 Upper Lane, Halifax HX3 7EE',
+          vatRegistered: true,
+          vatNumber: 'GB 437 9344 64',
+        },
+      }),
+      TOKEN,
+    );
+    expect(html).toMatch(/class="cp-footer-chrome"/);
+    expect(html).toMatch(/Upper Lane House, 22 Upper Lane, Halifax HX3 7EE/);
+    expect(html).toMatch(/VAT No: GB 437 9344 64/);
+  });
+
+  test('falls back to profile.address when tradingAddress missing (matches DOCX)', () => {
+    // Same fallback the DOCX footer uses (exportDocx.js:500). Mark's
+    // real profile only has `address` populated, not `tradingAddress`.
+    const html = renderClientPortal(
+      makeJob({
+        client_snapshot_profile: {
+          ...baseProfile,
+          address: 'Upper Lane House, 22 Upper Lane, Halifax HX3 7EE',
+          tradingAddress: '',
+          vatRegistered: true,
+          vatNumber: 'GB 437 9344 64',
+        },
+      }),
+      TOKEN,
+    );
+    expect(html).toMatch(/Upper Lane House, 22 Upper Lane, Halifax HX3 7EE/);
+    expect(html).toMatch(/VAT No: GB 437 9344 64/);
+  });
+
+  test('omits VAT No when vatRegistered is not strictly true (Paul-shape)', () => {
+    // Paul is not VAT-registered. Fail-closed boolean check — string
+    // "true" / 1 / objects must NOT flip VAT on. Matches the totals()
+    // isVatRegistered contract.
+    const html = renderClientPortal(
+      makeJob({
+        client_snapshot_profile: {
+          ...baseProfile,
+          address: '14, Mill Hill Lane, Brighouse HD6 2EL',
+          vatRegistered: false,
+          vatNumber: '',
+        },
+      }),
+      TOKEN,
+    );
+    expect(html).toMatch(/class="cp-footer-chrome"/);
+    expect(html).toMatch(/14, Mill Hill Lane, Brighouse HD6 2EL/);
+    expect(html).not.toMatch(/VAT No:/);
+  });
+
+  test('omits the chrome line entirely when neither address nor VAT is present', () => {
+    const html = renderClientPortal(
+      makeJob({
+        client_snapshot_profile: {
+          ...baseProfile,
+          address: '',
+          tradingAddress: '',
+          vatRegistered: false,
+          vatNumber: '',
+        },
+      }),
+      TOKEN,
+    );
+    expect(html).not.toMatch(/class="cp-footer-chrome"/);
+  });
+
+  test('escapes address + VAT to defend against XSS via a compromised profile', () => {
+    const html = renderClientPortal(
+      makeJob({
+        client_snapshot_profile: {
+          ...baseProfile,
+          tradingAddress: 'Upper Lane <script>alert(1)</script>',
+          vatRegistered: true,
+          vatNumber: 'GB "><img src=x>',
+        },
+      }),
+      TOKEN,
+    );
+    expect(html).not.toMatch(/<script>alert\(1\)<\/script>/);
+    expect(html).not.toMatch(/<img\s+src=x>/i);
+    expect(html).toMatch(/&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  });
+
+  test('sits inside .cp-footer, above the disclaimer (so the friendly line stays last)', () => {
+    const html = renderClientPortal(
+      makeJob({
+        client_snapshot_profile: {
+          ...baseProfile,
+          tradingAddress: 'Upper Lane House',
+          vatRegistered: true,
+          vatNumber: 'GB 437 9344 64',
+        },
+      }),
+      TOKEN,
+    );
+    const footer = html.match(/<div class="cp-footer">[\s\S]*?<\/div>\s*<\/div>/);
+    expect(footer).not.toBeNull();
+    const chromeIdx = footer[0].indexOf('cp-footer-chrome');
+    const disclaimerIdx = footer[0].indexOf('cp-footer-disclaimer');
+    expect(chromeIdx).toBeGreaterThan(-1);
+    expect(disclaimerIdx).toBeGreaterThan(chromeIdx);
+  });
+});
+
 describe('renderClientPortal — accent whitelist', () => {
   test('defaults to amber when profile.accent is missing', () => {
     const html = renderClientPortal(

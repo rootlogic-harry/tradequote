@@ -315,6 +315,16 @@ shown to the tradesman's end customer. Use professional trade language:
   Prefer factual language: "complete loss of structural integrity",
   "full-depth collapse", "the section has failed entirely". The
   tradesman almost always deletes it; do not emit it.
+- NEVER attribute a fact or dimension back to the tradesman. Phrases
+  like "as specified by tradesman", "as specified by the tradesman",
+  "as directed by the tradesman", "as per tradesman's specification"
+  (and the same shapes for trader/builder/waller/contractor) must
+  NOT appear in damageDescription or scheduleOfWorks. If a dimension
+  or intent is not visible in the photos, state it plainly — do not
+  hedge with a "as specified by X" filler. Mark's 2026-07-14
+  feedback: manual removal is not learning, so the server strips
+  these deterministically as belt-and-braces — but a prompt that
+  never emits them saves the strip a job.
 - Say "coursed" not "courses of stone" when describing bond patterns.
 - Keep measurements in millimetres.
 

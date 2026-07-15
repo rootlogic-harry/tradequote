@@ -79,7 +79,9 @@ test.describe('Saved Jobs tab switching', () => {
   });
 
   test('Active is the initial view (aria-selected)', async ({ authedPage: page }) => {
-    const activeTab = page.getByRole('tab', { name: /^active$/i });
+    // Match by "Active" prefix — the button text now includes a
+    // "(N)" count (PR #134, 2026-07-08 count unification).
+    const activeTab = page.getByRole('tab', { name: /^active\b/i });
     await expect(activeTab).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -101,7 +103,9 @@ test.describe('Saved Jobs tab switching', () => {
 
   test('clicking Active returns aria-selected to Active after a detour', async ({ authedPage: page }) => {
     const completedTab = page.getByRole('tab', { name: /^completed/i });
-    const activeTab = page.getByRole('tab', { name: /^active$/i });
+    // Match by "Active" prefix — the button text now includes a
+    // "(N)" count (PR #134, 2026-07-08 count unification).
+    const activeTab = page.getByRole('tab', { name: /^active\b/i });
 
     await completedTab.click();
     await expect(completedTab).toHaveAttribute('aria-selected', 'true');
