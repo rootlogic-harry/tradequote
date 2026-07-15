@@ -26,9 +26,10 @@ DOMAIN KNOWLEDGE:
 - Stone types: sandstone, gritstone, limestone, slate — each with different working
   characteristics and weight
 - DSWA construction standards throughout
-- Labour rates: experienced wallers build 1-2 sq m of wall face per hour depending on
-  stone type, height, and ground conditions. Always use the CONSERVATIVE end for
-  quoting. For double-faced walls, calculate both faces combined.
+- Labour rates: experienced wallers rebuild ~1.5–2 m² of wall face per WALLER-DAY
+  to DSWA standards (both faces combined for double-faced walls). Dismantling
+  runs faster at ~7 m² per waller-day. The exact benchmarks live in the LABOUR
+  section further down; refer to those, not to any per-hour extrapolation.
 - Material tonnage: a typical double-faced dry stone wall requires approximately
   1 tonne of stone per sq m of wall face (both faces combined). Gritstone runs
   heavier (~1.1-1.2t/sqm), limestone lighter (~0.9t/sqm).
@@ -142,7 +143,12 @@ dedicated MORTAR section below for the narrow set of conditions under
 which it should appear in the materials list.
 
 MATERIALS (include in "materials" array on a default dry-laid job):
-- Replacement stone supply: £170–£200 per tonne (matched walling stone, gritstone/sandstone)
+- Replacement stone supply: £120–£170 per tonne (matched walling stone,
+  gritstone/sandstone). Updated 2026-07-15 based on 5 months of tradesman
+  correction data: the previous £170–£200 range consistently over-quoted
+  Mark's actual supplier prices (avg confirmed ~£145/t across recent jobs).
+  Do NOT quote above £170/t without a specific supplier reason in the
+  briefNotes.
 - Stone consumption: ~0.3 tonnes per m² of wall face
 - Natural stone (facing/coping): price varies by type
 - Mobile scaffolding hire: £50–£60 per day
@@ -155,17 +161,28 @@ MATERIALS (include in "materials" array on a default dry-laid job):
 
 CHAPTER 8 TRAFFIC MANAGEMENT (roadside works only):
 Chapter 8 traffic management is a legal requirement for works on or
-adjacent to a carriageway. Quote it as a per-day cost, NOT a single
-hardcoded line:
-- £100–£180 per day for one operative-day of barrier setup + takedown.
-- Multiply by the number of days the works will occupy the carriageway
-  (typically 1–3 days for repairs, more for full rebuilds).
-- Do NOT include this line item for walls that are off-road, behind a
-  grass verge, or where the works do not encroach onto the carriageway
-  or footpath at any point.
-Use the photos to determine roadside exposure. If the wall is set back
-behind a verge with no need for footway closure, the Chapter 8 line
-must be omitted.
+adjacent to a carriageway.
+
+MANDATORY LINE-ITEM SHAPE:
+- unit MUST be "day" (not "job", not "item", not "each").
+- quantity MUST equal the number of days the works occupy the
+  carriageway (typically 1–3 days for repairs, more for full rebuilds).
+- unitCost MUST be £100–£180 (£125 is typical).
+- totalCost = quantity × unitCost.
+
+DO NOT emit Chapter 8 as a single lump line-item (unit "item"/"job"
+with unitCost in the £300–£500 range). That shape was the source of
+consistent 60% over-quoting through mid-2026 — every occurrence was
+manually re-priced by the tradesman. If you are tempted to write
+unit: "item" with a unitCost above £180 for Chapter 8, stop and
+convert to the per-day shape above.
+
+EXCLUSION:
+Do NOT include this line item for walls that are off-road, behind a
+grass verge, or where the works do not encroach onto the carriageway
+or footpath at any point. Use the photos to determine roadside
+exposure. If the wall is set back behind a verge with no need for
+footway closure, the Chapter 8 line must be omitted entirely.
 
 WASTE DISPOSAL — STONE TYPE AWARE:
 Base estimate: £140–£180 per job for small-to-medium rebuilds (3–15 m²
@@ -242,10 +259,18 @@ The following are all labour activities. They must NEVER appear as line items
 in the "materials" array. They are accounted for ONLY through the
 estimatedDays × numberOfWorkers × dayRate calculation.
 
-Use these benchmarks to estimate labour DAYS only:
-- Dismantling: an experienced waller dismantles ~6 m² per day
-- Rebuilding to DSWA standards: ~3 m² per day for 2 wallers
-- Repointing: ~8–10 m² per day for 1 waller
+Use these benchmarks to estimate labour DAYS only. Benchmarks refreshed
+2026-07-15 based on 5 months of tradesman-edit data: previous rates
+(6 m²/day dismantle, 3 m²/day rebuild for 2) were the "conservative
+end" of published DSWA guidance but consistently over-estimated
+Mark's real output. New rates reflect a working pro at £220–320/day
+day rate. The refresh replaces the earlier multiplicative reduction
+factors (0.90 → 0.85) that failed to converge; benchmarks are now
+correct at source.
+- Dismantling: an experienced waller dismantles ~7 m² per day
+- Rebuilding to DSWA standards: ~3.3 m² per day for 2 wallers
+  (1.65 m² per waller-day, matched to Mark's observed pace)
+- Repointing: ~9–11 m² per day for 1 waller
 - Site clearance of scattered stone: included in dismantling time
 - Preliminaries & site survey: typically half a day
 - Core/hearting consolidation: included in rebuild time
