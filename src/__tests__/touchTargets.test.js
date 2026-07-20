@@ -367,8 +367,10 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/ProfileSetup.jsx", line: 599, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
   // -- src/components/steps/QuoteOutput.jsx --
   // Line shifted +13 on 2026-07-20 for the Download-menu worker-copy
-  // entry (Mark's UAT). Same photo-selection toggle, same rationale.
-  { file: "src/components/steps/QuoteOutput.jsx", line: 1221, pr: "PR-future-polish", why: "Photo selection toggle (20×20 by design, inside Preview overlay)" },
+  // entry, then +23 more later that day for the print-fallback
+  // hideCosts fix (printAsWorkerCopy state + fallback wiring +
+  // clone hideCosts prop). Same photo-selection toggle throughout.
+  { file: "src/components/steps/QuoteOutput.jsx", line: 1244, pr: "PR-future-polish", why: "Photo selection toggle (20×20 by design, inside Preview overlay)" },
 
 ];
 

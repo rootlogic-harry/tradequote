@@ -128,7 +128,10 @@ describe('quotePageChrome wiring', () => {
   test('handleDownloadPdfServer passes headerHtml + footerHtml to the /pdf route', () => {
     const idx = quoteOutputSrc.indexOf('handleDownloadPdfServer = async');
     expect(idx).toBeGreaterThan(-1);
-    const slice = quoteOutputSrc.slice(idx, idx + 3000);
+    // Scope to the function body — grow with the function so a later
+    // insertion (e.g. print-fallback wiring 2026-07-20) doesn't push
+    // buildPageChromeText past a fixed char window.
+    const slice = quoteOutputSrc.slice(idx, idx + 6000);
     expect(slice).toMatch(/buildPageChromeText/);
     expect(slice).toMatch(/buildPdfHeaderHtml/);
     expect(slice).toMatch(/buildPdfFooterHtml/);
