@@ -3,7 +3,14 @@ import QuoteOutput from './steps/QuoteOutput.jsx';
 import EditDetailsModal from './EditDetailsModal.jsx';
 import { loadPhotos, getProfile } from '../utils/userDB.js';
 
-export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId, liveProfile, showToast }) {
+// isAdminPlan defaults to false — fail-safe per CLAUDE.md Pitfall #1
+// (basic users must never accidentally see admin UI). Callers on the
+// admin path (App.jsx dashboard + saved views) MUST pass the resolved
+// isAdmin explicitly. Mark's 2026-07-20 UAT surfaced that both mount
+// sites were dropping the prop, so QuoteOutput inside SavedQuoteViewer
+// saw isAdminPlan=false and hid every admin-only affordance (worker
+// copy PDF, QuickBooks export, RAMS actions).
+export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUserId, liveProfile, showToast, isAdminPlan = false }) {
   const snapshot = quote?.snapshot || {};
   const [restoredPhotos, setRestoredPhotos] = useState(null);
   const [restoredLogo, setRestoredLogo] = useState(null);
@@ -126,6 +133,8 @@ export default function SavedQuoteViewer({ quote, onBack, onEditQuote, currentUs
         dispatch={() => {}}
         onBack={onBack}
         isReadOnly
+        isAdminPlan={isAdminPlan}
+        showToast={showToast}
       />
       <EditDetailsModal
         open={editDetailsOpen}

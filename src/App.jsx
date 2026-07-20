@@ -865,6 +865,7 @@ export default function App() {
             currentUserId={state.currentUserId}
             liveProfile={state.profile}
             showToast={showToast}
+            isAdminPlan={isAdmin}
           />
         );
       }
@@ -936,6 +937,7 @@ export default function App() {
             currentUserId={state.currentUserId}
             liveProfile={state.profile}
             showToast={showToast}
+            isAdminPlan={isAdmin}
           />
         );
       }

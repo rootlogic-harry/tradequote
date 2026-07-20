@@ -103,3 +103,55 @@ describe('QuoteOutput photos safety', () => {
     }
   });
 });
+
+// Mark's 2026-07-20 UAT: "why can't I see the worker copy option?"
+// Root cause: SavedQuoteViewer renders QuoteOutput but wasn't
+// threading `isAdminPlan` through, so QuoteOutput fell back to its
+// fail-safe default of `false` and hid every admin-only affordance
+// (worker-copy PDF menu item, More-actions worker-copy button,
+// QuickBooks export, RAMS actions). Existed since SavedQuoteViewer
+// shipped — only surfaced when Mark started opening saved quotes to
+// send workers to site.
+describe('SavedQuoteViewer — admin-plan prop thread', () => {
+  const src = readFileSync(
+    join(__dirname, '../components/SavedQuoteViewer.jsx'), 'utf8',
+  );
+  const appSrc = readFileSync(
+    join(__dirname, '../App.jsx'), 'utf8',
+  );
+
+  it('accepts an isAdminPlan prop with a fail-safe default of false', () => {
+    // Default MUST be false — CLAUDE.md Pitfall #1 (dangerous defaults).
+    // Basic users must never accidentally see admin UI if a caller
+    // forgets to pass the prop.
+    expect(src).toMatch(/isAdminPlan\s*=\s*false/);
+  });
+
+  it('threads isAdminPlan into the QuoteOutput render', () => {
+    // The SavedQuoteViewer prop must land on QuoteOutput. Without this
+    // line the worker-copy button + menu item stay hidden even when
+    // the parent knows the user is admin.
+    expect(src).toMatch(
+      /<QuoteOutput[\s\S]{0,500}isAdminPlan=\{isAdminPlan\}/,
+    );
+  });
+
+  it('threads showToast into QuoteOutput too (previously dropped)', () => {
+    // Same class of bug — a save toast from the SavedQuoteViewer path
+    // wasn't reaching the user. Fixed alongside the isAdminPlan fix.
+    expect(src).toMatch(
+      /<QuoteOutput[\s\S]{0,500}showToast=\{showToast\}/,
+    );
+  });
+
+  it('every App.jsx mount of SavedQuoteViewer passes isAdminPlan', () => {
+    // Two mount sites — dashboard view + saved-quotes view. Both must
+    // pass `isAdminPlan={isAdmin}` so admin users see admin UI on
+    // BOTH surfaces.
+    const mounts = appSrc.match(/<SavedQuoteViewer[\s\S]*?\/>/g) || [];
+    expect(mounts.length).toBeGreaterThanOrEqual(2);
+    for (const mount of mounts) {
+      expect(mount).toMatch(/isAdminPlan=\{isAdmin\}/);
+    }
+  });
+});
