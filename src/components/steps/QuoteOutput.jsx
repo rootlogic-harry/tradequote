@@ -133,6 +133,14 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
   // user always gets a PDF option, no dead-end. The fallback produces the
   // same document because both render paths share public/print.css.
   const [generatingServerPdf, setGeneratingServerPdf] = useState(false);
+  // Mirrors the last-fired worker-copy intent so the print-only clone
+  // at the bottom of Step 5 respects it when window.print() runs.
+  // Without this flag, a server /pdf failure while trying to generate
+  // a worker copy silently falls back to window.print() → prints the
+  // full-price clone → Mark sends prices to Paul (Mark's 2026-07-20
+  // UAT bug). Reset to false after every print so the next plain
+  // "Save via print" from the Download menu stays unredacted.
+  const [printAsWorkerCopy, setPrintAsWorkerCopy] = useState(false);
   // hideCosts=true is the "worker copy" path Mark uses when sending
   // Paul or Jordan to site without him. Same pipeline; QuoteDocument
   // skips the Cost Breakdown + Totals block and reframes the
@@ -154,6 +162,21 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
     const falLbackToPrint = (reason) => {
       console.warn('[PDF] server render failed, falling back to window.print():', reason);
       showToast?.('Opening print dialog…', 'info');
+      // Mark's 2026-07-20 bug: the print-only clone at the bottom of
+      // Step 5 doesn't take a hideCosts prop, so window.print() would
+      // silently print the full-priced document even when the user
+      // asked for a worker copy. Flip the state flag BEFORE the
+      // print so React re-renders the clone with hideCosts, then
+      // reset it after the print dialog closes.
+      if (hideCosts) setPrintAsWorkerCopy(true);
+      // afterprint fires on dialog close (both print + cancel). Once-
+      // only listener so a subsequent Save via print stays unredacted.
+      const clear = () => setPrintAsWorkerCopy(false);
+      window.addEventListener('afterprint', clear, { once: true });
+      // Safety timeout — some mobile browsers don't fire afterprint.
+      setTimeout(clear, 15_000);
+      // 100ms delay gives React a paint tick to re-render the clone
+      // before Chromium's print engine snapshots the DOM.
       setTimeout(() => window.print(), 100);
     };
 
@@ -1255,9 +1278,13 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
 
       {/* Print-only clone — full quote + photo appendix rendered inline so
            the browser's print engine paginates cleanly. Hidden on screen
-           via `.print-only`. */}
+           via `.print-only`. hideCosts flips to true when the server
+           /pdf fallback fires from a worker-copy request (Mark's
+           2026-07-20 fix) — otherwise it renders the full-price
+           document, which is right for the plain "Save via print"
+           menu item. */}
       <div className="print-root print-only" aria-hidden="true">
-        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} />
+        <QuoteDocument state={state} showPhotos selectedPhotos={filteredPhotos} hideCosts={printAsWorkerCopy} />
       </div>
 
       {/* TRQ-94: Profile gate. */}

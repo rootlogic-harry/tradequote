@@ -179,6 +179,51 @@ describe('QuoteOutput — Download worker copy button', () => {
     // items array, one in the More-actions disclosure.
     expect(Math.abs(menuIdx - moreIdx)).toBeGreaterThan(500);
   });
+
+  // Mark's 2026-07-20 UAT #2: worker-copy PDF downloaded but prices
+  // STILL visible. Root cause: server /pdf fallback fires
+  // window.print(), which snapshots the .print-only clone of
+  // QuoteDocument — and that clone didn't take a hideCosts prop, so
+  // it always printed the full-price document regardless of intent.
+  describe('print-fallback respects worker-copy intent (2026-07-20 fix)', () => {
+    test('component owns a printAsWorkerCopy state flag', () => {
+      // Same pattern as generatingServerPdf — component-scoped, resets
+      // on afterprint so a subsequent plain "Save via print" from the
+      // Download menu stays unredacted.
+      expect(quoteOutputSrc).toMatch(/const\s*\[printAsWorkerCopy,\s*setPrintAsWorkerCopy\]\s*=\s*useState\(false\)/);
+    });
+
+    test('the print-only clone reads hideCosts from printAsWorkerCopy', () => {
+      // Anchor on the print-only clone container. The clone MUST
+      // forward printAsWorkerCopy as its hideCosts prop.
+      expect(quoteOutputSrc).toMatch(
+        /className="print-root print-only"[\s\S]{0,600}?<QuoteDocument[\s\S]{0,400}?hideCosts=\{printAsWorkerCopy\}/,
+      );
+    });
+
+    test('the print fallback sets the flag before window.print() fires', () => {
+      // In falLbackToPrint: flip the flag before triggering print, so
+      // React has a paint tick to re-render the clone with hideCosts
+      // before Chromium's print engine snapshots the DOM.
+      expect(quoteOutputSrc).toMatch(/if \(hideCosts\)\s*setPrintAsWorkerCopy\(true\)/);
+      // The flag reset MUST be scheduled — otherwise a subsequent
+      // plain print would silently render as a worker copy too.
+      expect(quoteOutputSrc).toMatch(/setPrintAsWorkerCopy\(false\)/);
+      // afterprint listener resets the flag on dialog close.
+      expect(quoteOutputSrc).toMatch(/addEventListener\(['"]afterprint['"]/);
+    });
+
+    test('the visible on-screen preview stays unredacted (tradesman needs to see prices)', () => {
+      // Only the print-only clone flips on hideCosts via
+      // printAsWorkerCopy. The visible preview shown to the tradesman
+      // when they tap Preview always shows the full priced document —
+      // dumping hideCosts into it would break the review flow.
+      const previewIdx = quoteOutputSrc.indexOf('previewOpen && (');
+      expect(previewIdx).toBeGreaterThan(-1);
+      const previewBlock = quoteOutputSrc.slice(previewIdx, previewIdx + 400);
+      expect(previewBlock).not.toMatch(/hideCosts/);
+    });
+  });
 });
 
 describe('Architecture — no server change required', () => {
