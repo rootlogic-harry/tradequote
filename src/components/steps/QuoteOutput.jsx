@@ -997,6 +997,19 @@ export default function QuoteOutput({ state, dispatch, onBack, isReadOnly, showT
             { id: 'pdf', icon: 'pdf', label: 'PDF', sub: 'Best for sending & printing', onClick: () => handleDownloadPdfServer() },
             { id: 'word', icon: 'word', label: 'Word', sub: 'Edit before you send', onClick: handleDownloadDocx },
             { id: 'print', icon: 'print', label: 'Print / Save via print', sub: 'Open the print dialog', onClick: handlePrint },
+            // Mark's 2026-07-20 UAT: "did we lose the download for staff
+            // option?" — the worker-copy PDF was still in the "More
+            // actions" disclosure, but users looking for "download
+            // without prices" reasonably expect it in the Download menu
+            // next to PDF / Word / Print. Admin-only gate matches the
+            // existing button in the More actions disclosure.
+            ...(isAdminPlan ? [{
+              id: 'worker-copy',
+              icon: 'pdf',
+              label: 'Worker copy (PDF)',
+              sub: 'Same PDF with prices hidden — for site staff',
+              onClick: () => handleDownloadPdfServer({ hideCosts: true }),
+            }] : []),
           ]}
         />
         {!isReadOnly && (

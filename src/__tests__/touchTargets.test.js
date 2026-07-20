@@ -366,7 +366,9 @@ const CURRENT_VIOLATIONS = [
   { file: "src/components/steps/ProfileSetup.jsx", line: 577, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
   { file: "src/components/steps/ProfileSetup.jsx", line: 599, pr: "PR-settings-redesign", why: "ProfileSetup auxiliary inputs / nested form fields (dynamic className via fieldClass)" },
   // -- src/components/steps/QuoteOutput.jsx --
-  { file: "src/components/steps/QuoteOutput.jsx", line: 1208, pr: "PR-future-polish", why: "Photo selection toggle (20×20 by design, inside Preview overlay)" },
+  // Line shifted +13 on 2026-07-20 for the Download-menu worker-copy
+  // entry (Mark's UAT). Same photo-selection toggle, same rationale.
+  { file: "src/components/steps/QuoteOutput.jsx", line: 1221, pr: "PR-future-polish", why: "Photo selection toggle (20×20 by design, inside Preview overlay)" },
 
 ];
 

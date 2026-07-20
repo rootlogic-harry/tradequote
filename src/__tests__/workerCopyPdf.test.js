@@ -141,6 +141,44 @@ describe('QuoteOutput — Download worker copy button', () => {
     const block = quoteOutputSrc.slice(Math.max(0, idx - 600), idx);
     expect(block).toMatch(/title="[^"]*worker|title="[^"]*costs|title="[^"]*customer/);
   });
+
+  // Mark's 2026-07-20 UAT: "did we lose the download for staff option?"
+  // The worker-copy button was still present in the "More actions"
+  // disclosure, but users looking for "download without prices"
+  // reasonably expect it in the primary Download PDF split-button menu
+  // next to PDF / Word / Print. The fix adds the same action to the
+  // Download menu without removing the More-actions duplicate.
+  test('worker-copy item is also present in the primary Download PDF menu (admin-only)', () => {
+    // Anchor on the Download PDF split-button's `items={[ ... ]}` prop
+    // (adjacent to mainLabel="Download PDF"). The worker-copy item is
+    // conditionally spread via `...(isAdminPlan ? [{...}] : [])` so
+    // basic users don't see it.
+    const idx = quoteOutputSrc.indexOf('mainLabel="Download PDF"');
+    expect(idx).toBeGreaterThan(-1);
+    // Grab the next ~1200 chars — that's the items array for the
+    // Download menu.
+    const block = quoteOutputSrc.slice(idx, idx + 1400);
+    // Admin-only conditional spread present.
+    expect(block).toMatch(/\.\.\.\(isAdminPlan \?/);
+    // The worker-copy item's identity is stable.
+    expect(block).toMatch(/id:\s*['"]worker-copy['"]/);
+    // Label the user actually reads.
+    expect(block).toMatch(/label:\s*['"]Worker copy \(PDF\)['"]/);
+    // Wire to the same handler as the More-actions button.
+    expect(block).toMatch(/handleDownloadPdfServer\(\{\s*hideCosts:\s*true\s*\}\)/);
+  });
+
+  test('the More-actions duplicate stays (belt-and-braces discoverability)', () => {
+    // Removing the More-actions button would break the muscle memory
+    // Mark has already built. Both entry points coexist by design.
+    const menuIdx = quoteOutputSrc.indexOf("id: 'worker-copy'");
+    const moreIdx = quoteOutputSrc.indexOf('Download worker copy');
+    expect(menuIdx).toBeGreaterThan(-1);
+    expect(moreIdx).toBeGreaterThan(-1);
+    // Different positions in the file — one in the Download menu
+    // items array, one in the More-actions disclosure.
+    expect(Math.abs(menuIdx - moreIdx)).toBeGreaterThan(500);
+  });
 });
 
 describe('Architecture — no server change required', () => {
