@@ -85,6 +85,45 @@ describe('Print CSS in public/print.css', () => {
     expect(printCss).not.toMatch(/\[data-print-section="photos"\][^}]*break-before:\s*page/);
   });
 
+  // 2026-07-20 (Mark's Juans-Building worker-copy PDF): the SITE
+  // PHOTOGRAPHS heading widowed at the bottom of page 3 while the
+  // photos flowed onto pages 4-5. Two fixes below prevent this class
+  // of bug for the photos section AND every other section heading.
+  describe('section headings never widow — 2026-07-20 fix', () => {
+    it('every [data-print-section] > h2 has break-after: avoid', () => {
+      // Covers Description of Damage, Measurements, Schedule of Works,
+      // Cost Breakdown, Notes & Conditions. Their h2 is a direct child
+      // of the [data-print-section] wrapper. Tells the layout engine
+      // to keep the heading with the block that follows.
+      expect(printCss).toMatch(/\[data-print-section\]\s*>\s*h2\s*\{[^}]*break-after:\s*avoid/);
+      // Legacy property alias for older Chromium builds.
+      expect(printCss).toMatch(/\[data-print-section\]\s*>\s*h2\s*\{[^}]*page-break-after:\s*avoid/);
+    });
+
+    it('the first [data-print-pair] in the photos section has break-inside: avoid', () => {
+      // The Site Photographs h2 nests inside the first [data-print-pair]
+      // — the selector above doesn't reach it. This rule groups the
+      // heading with the first two photos as one atomic unit, matching
+      // the intended contract documented in QuoteDocument.jsx since
+      // TRQ-178.
+      expect(printCss).toMatch(
+        /\[data-print-section="photos"\]\s+\[data-print-pair\]:first-child\s*\{[^}]*break-inside:\s*avoid/,
+      );
+      expect(printCss).toMatch(
+        /\[data-print-section="photos"\]\s+\[data-print-pair\]:first-child\s*\{[^}]*page-break-inside:\s*avoid/,
+      );
+    });
+
+    it('subsequent [data-print-pair] elements still flow (kills 70% whitespace)', () => {
+      // TRQ-178's rationale — a 5-photo appendix shouldn't strand the
+      // 5th photo alone on its own page with 70% whitespace above. The
+      // :first-child scope means pairs 2+ stay unconstrained; the rule
+      // must NOT expand to `[data-print-pair]` alone.
+      const bareRule = /\[data-print-section="photos"\]\s+\[data-print-pair\]\s*\{[^}]*break-inside:\s*avoid/;
+      expect(printCss).not.toMatch(bareRule);
+    });
+  });
+
   // index.html must reference the stylesheet so the browser loads it for
   // window.print(); the server-side Puppeteer path reads the file directly.
   it('index.html links the print stylesheet', () => {
