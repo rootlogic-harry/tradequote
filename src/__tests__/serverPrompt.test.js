@@ -189,6 +189,50 @@ describe('Server-side SYSTEM_PROMPT', () => {
     // Calibration investigation 2026-06-22 — three system-prompt edits
     // derived from the diff corpus. Each pins a behavioural constraint
     // the calibration loop could not fix via per-field notes.
+    test('replacement stone supply is £120–£170/t (refresh from £170–£200 on 2026-07-15)', () => {
+      // Refreshed 2026-07-15 based on 5 months of quote_diffs data —
+      // Mark's real supplier prices average ~£145/t; the old £170–£200
+      // range was consistently over-quoting. See archive-stale-
+      // calibrations-2026-07-15.sql for the calibration notes retired
+      // in the same PR.
+      expect(SYSTEM_PROMPT).toMatch(/Replacement stone supply:\s*£120.{1,3}£170 per tonne/);
+      // The old range must be gone from the primary bullet line so the
+      // model doesn't anchor on the higher number.
+      const materialsBlock = SYSTEM_PROMPT.match(
+        /MATERIALS \(include in "materials" array[^)]*\):[\s\S]*?(?=CHAPTER 8|PLANT HIRE|MORTAR|LABOUR \()/,
+      );
+      expect(materialsBlock).not.toBeNull();
+      expect(materialsBlock[0]).not.toMatch(/£170.{1,3}£200 per tonne/);
+      // Explicit ceiling so the model can't quietly drift back up.
+      expect(SYSTEM_PROMPT).toMatch(/Do NOT quote above £170\/t/);
+    });
+
+    test('labour benchmarks refreshed from 6/3 to 7/3.3 m² per day (2026-07-15)', () => {
+      // The 6 m²/day dismantle + 3 m²/day rebuild-for-2 rates were the
+      // DSWA "conservative end" but 5 months of Mark corrections
+      // (68% edit rate on labour_days) showed they consistently
+      // over-estimated. New rates reflect his real observed pace.
+      expect(SYSTEM_PROMPT).toMatch(/Dismantling:\s+an experienced waller dismantles ~7 m² per day/);
+      expect(SYSTEM_PROMPT).toMatch(/Rebuilding to DSWA standards:\s+~3\.3 m² per day for 2 wallers/);
+      // The old rates must be gone from the benchmark bullets so the
+      // model doesn't see both and split the difference.
+      const labourBenchmarkBlock = SYSTEM_PROMPT.match(
+        /Use these benchmarks to estimate labour DAYS[\s\S]*?(?=POST-CALCULATION|ESTIMATING LABOUR)/,
+      );
+      expect(labourBenchmarkBlock).not.toBeNull();
+      expect(labourBenchmarkBlock[0]).not.toMatch(/dismantles ~6 m² per day/);
+      expect(labourBenchmarkBlock[0]).not.toMatch(/~3 m² per day for 2 wallers/);
+    });
+
+    test('domain-knowledge Labour rates line agrees with the LABOUR section benchmarks', () => {
+      // Line 29 used to say "1-2 sq m of wall face per hour" — a 5-10x
+      // over-statement that contradicted the day-level benchmarks and
+      // let the model rationalise faster rates in its head. Rewritten
+      // 2026-07-15 to point back at the LABOUR section.
+      expect(SYSTEM_PROMPT).not.toMatch(/1-2 sq m of wall face per hour/);
+      expect(SYSTEM_PROMPT).toMatch(/rebuild ~1\.5.{1,3}2 m² of wall face per WALLER-DAY/);
+    });
+
     test('POST-CALCULATION ADJUSTMENT enforces asymmetric labour-days rule', () => {
       // The model must not apply a flat percentage factor to labour days.
       // The investigation found that three successive 0.X factors (0.90,
@@ -206,14 +250,25 @@ describe('Server-side SYSTEM_PROMPT', () => {
       expect(SYSTEM_PROMPT).toMatch(/IGNORE that note|ignore .{1,40}calibration note/i);
     });
 
-    test('CHAPTER 8 traffic management is per-day, not a fixed line item', () => {
+    test('CHAPTER 8 traffic management uses the mandatory per-day line-item shape', () => {
+      // Refreshed 2026-07-15 (see fix/prompt-recalibrate-persistent-fields
+      // PR) — the prompt no longer just says "per day", it MANDATES the
+      // unit=day + quantity=N + unitCost=£100–£180 shape. Root cause of
+      // the previous flexibility was Mark's 60% over-quoting on Chapter
+      // 8: the AI was collapsing the line into unit=item with unitCost
+      // at £415 (midpoint of a stale calibration note's £380–450 range).
       expect(SYSTEM_PROMPT).toMatch(/CHAPTER 8 TRAFFIC MANAGEMENT/);
-      // Empirical range from the investigation
-      expect(SYSTEM_PROMPT).toMatch(/£100.{1,3}£180 per day/);
-      // Multiply by occupation-days — the key behaviour change
-      expect(SYSTEM_PROMPT).toMatch(/[Mm]ultiply by the number of days/);
-      // Explicit omission rule for off-road walls — without this the
-      // model adds the line to every quote regardless of context
+      expect(SYSTEM_PROMPT).toMatch(/MANDATORY LINE-ITEM SHAPE/);
+      // Unit must be literally "day"
+      expect(SYSTEM_PROMPT).toMatch(/unit MUST be ["'“”]day["'“”]/);
+      // Quantity = number of days occupied
+      expect(SYSTEM_PROMPT).toMatch(/quantity MUST equal the number of days/i);
+      // Empirical unitCost range — with the £125 typical anchor
+      expect(SYSTEM_PROMPT).toMatch(/unitCost MUST be £100.{1,3}£180/);
+      expect(SYSTEM_PROMPT).toMatch(/£125 is typical/);
+      // Explicit ban on the lump-line shape that was the source of the bug
+      expect(SYSTEM_PROMPT).toMatch(/DO NOT emit Chapter 8 as a single lump/);
+      // Explicit omission rule for off-road walls
       expect(SYSTEM_PROMPT).toMatch(/off-road|grass verge|do not include|must be omitted/i);
     });
 
