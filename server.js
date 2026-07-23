@@ -3862,7 +3862,17 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
       //   "magically went out again". Added 2026-06-29 alongside the
       //   dashboard redesign's Re-open kebab action.
       declined:  ['sent', 'draft'],
-      completed: [],                // terminal state
+      // completed → draft: same rationale as declined → draft.
+      // Mark's 2026-07-23 UAT: "unarchive in case a client re-appears,
+      // which they do sometimes". A client who returns 12 months
+      // later is best served by the finished job coming BACK into
+      // the waller's hands as a fresh draft (edit price / update
+      // scope) rather than staying pinned in the terminal Completed
+      // bucket. SavedQuotes kebab exposes this via Re-open on
+      // Archive tab; Dashboard kebab keeps completed terminal by
+      // design (the Recent list is bounded, so accumulation isn't
+      // an issue there).
+      completed: ['draft'],
     };
     const currentStatus = rows[0].current_status || 'draft';
     const allowed = VALID_TRANSITIONS[currentStatus] || [];
