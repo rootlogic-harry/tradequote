@@ -92,6 +92,22 @@
     widows: 3;
   }
 
+  /* 2026-07-20 (Mark's Juans-Building worker-copy PDF): every section
+     heading MUST stay with the block that follows it. The orphan/
+     widow rules above are text-line level — they don't prevent a
+     stand-alone <h2> at the bottom of a page followed by a page
+     break before its content. `break-after: avoid` on the h2 tells
+     the layout engine to move the heading to the next page along
+     with its first content block if there isn't room for both.
+     Applies to Description of Damage, Measurements, Schedule,
+     Cost Breakdown, and Notes headings (each a direct child of
+     [data-print-section]). The Site Photographs heading nests
+     inside a [data-print-pair] so it needs its own rule below. */
+  [data-print-section] > h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
   /* Cost breakdown table: keep header with at least one body row.
      Individual rows still don't split (a row with mid-line break
      looks broken), but the table as a whole may flow across pages. */
@@ -122,6 +138,19 @@
      appendix doesn't strand the 5th photo alone on its own page
      with 70% whitespace below it (Mark's headline complaint). */
   [data-print-section="photos"] .print-photo {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* 2026-07-20 (Mark's Juans-Building worker-copy PDF): the FIRST
+     [data-print-pair] carries the "SITE PHOTOGRAPHS" heading + the
+     first two photos. This whole group stays together — otherwise
+     the heading widows at the bottom of one page and the photos
+     start the next (exactly Mark's bug). The intended contract has
+     been documented in QuoteDocument.jsx since TRQ-178 but never
+     enforced in CSS. Second/third pairs still flow freely so a
+     5-photo appendix doesn't force a page break with 70% whitespace. */
+  [data-print-section="photos"] [data-print-pair]:first-child {
     break-inside: avoid;
     page-break-inside: avoid;
   }
