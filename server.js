@@ -92,6 +92,7 @@ import {
   REFERRAL_REFEREE_BONUS,
   REFERRAL_REFERRER_REWARD,
 } from './src/utils/referrals.js';
+import { pickUtms } from './src/utils/utmCapture.js';
 import {
   renderGuidesIndex,
   renderGuidePage,
@@ -534,6 +535,19 @@ async function initDB() {
       -- 'purchased-remaining'. NOT decremented on refund — refund policy
       -- is manual; see docs/REFUNDS.md.
       ALTER TABLE users ADD COLUMN IF NOT EXISTS purchased_quotes INTEGER NOT NULL DEFAULT 0;
+
+      -- Ad-attribution — 2026-08-04. Three nullable columns captured
+      -- once at signup from ?utm_source= / ?utm_campaign= / ?utm_medium=.
+      -- NULL = direct / organic / word-of-mouth (no UTM present).
+      -- Analytics-only — never read on the hot path, never affects quota
+      -- or rewards. Referral (?ref=) still owns the bonus-quote reward;
+      -- these three columns are pure marketing attribution and coexist
+      -- with a referral code on the same signup.
+      --
+      -- See docs/AD_TEST spec (2026-07-07) for the campaign context.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_campaign TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_medium TEXT;
     `);
 
     // free_quote_grants: per-(user, quote_token) record of which
@@ -1257,6 +1271,10 @@ app.get('/auth/login', (req, res, next) => {
   if (typeof refRaw === 'string' && refRaw.length > 0 && refRaw.length <= 64) {
     req.session.pendingReferralCode = refRaw;
   }
+  // Ad attribution (2026-08-04): same session-stash pattern as `ref` above.
+  // Direct-to-login ads (fastquote.uk/auth/login?utm_source=meta) land here.
+  // Landing/signup/login paths also stash on their handlers — first-write-wins.
+  stashPendingUtm(req);
   // "Remember this device" checkbox on Universal Login posts back as
   // ?remember=1. We stash the boolean on the session so the post-
   // callback handler can extend cookie.maxAge to 30 days. Default
@@ -1313,6 +1331,11 @@ app.get('/auth/callback',
     const user = req.user;
     const pendingRef = req.session?.pendingReferralCode || null;
     const rememberDevice = !!req.session?.rememberDevice;
+    // Ad attribution (2026-08-04): lift alongside pendingRef BEFORE
+    // regenerate() blows the pre-login session away. Referral and UTM
+    // coexist — a Meta ad referrer who also carries a friend's ?ref=
+    // gets both persisted (ref → bonus quotes, UTM → analytics).
+    const pendingUtm = req.session?.pendingUtm || null;
     req.session.regenerate((err) => {
       if (err) return next(err);
       req.login(user, (loginErr) => {
@@ -1328,6 +1351,15 @@ app.get('/auth/callback',
         // funnel can separate first-login activations from returning
         // logins. Best-effort, swallowed internally.
         recordEvent('signup_completed', user.id, { wasNew: !!user?._isNewUser }).catch(() => {});
+        // Ad attribution — write UTMs to the new user's row. Guarded
+        // by _isNewUser so returning users never have their original
+        // signup_source overwritten by a later ad click. Kicked off
+        // in parallel with the referral apply — both are best-effort
+        // and neither can block the login. Fire-and-forget after
+        // scheduling both so `next()` isn't gated on either finishing.
+        if (pendingUtm && user?._isNewUser) {
+          applyUtmAtSignup(user.id, pendingUtm).catch(() => {});
+        }
         // Best-effort: a failure here must NEVER block the login. The
         // referral helper logs and swallows internally.
         if (pendingRef && user?._isNewUser) {
@@ -1436,6 +1468,59 @@ async function applyReferralAtSignup(refereeUserId, rawCode) {
     throw err;
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Ad attribution — 2026-08-04. Stash a captured UTM payload on the
+ * session so it survives the /→/signup→/login→/auth/login redirect
+ * chain AND the Auth0 round-trip back to /auth/callback. Called at
+ * every entry point (/, /signup, /login, /auth/login) so wherever the
+ * user first lands, the attribution is captured. First-write-wins —
+ * a landing capture is NOT overwritten by a downstream page-view
+ * with different (or missing) UTMs. This mirrors how first-view
+ * ownership works everywhere else in the codebase.
+ *
+ * Note the deliberate parallel with `pendingReferralCode`: same
+ * session mechanism, same "first entry point wins" contract, same
+ * lift-before-regenerate treatment in /auth/callback. Referral and
+ * UTM coexist — a Meta ad referrer who ALSO carries a friend's
+ * ?ref= code gets both persisted (referral drives the bonus quota,
+ * UTM drives analytics). They never conflict.
+ */
+function stashPendingUtm(req) {
+  if (!req?.session || req.session.pendingUtm) return;
+  const utm = pickUtms(req.query || {});
+  if (utm) req.session.pendingUtm = utm;
+}
+
+/**
+ * Ad attribution — 2026-08-04. Apply captured UTMs to the new user's
+ * row. Called ONCE, in the /auth/callback post-login handler, guarded
+ * by `_isNewUser === true` so returning users NEVER have their
+ * original attribution overwritten by a later ad click. Analytics-
+ * only — never touches quota, bonus quotes, subscription state.
+ *
+ * Idempotent-by-guard: the caller only invokes this on the new-user
+ * branch, so the UPDATE always writes columns that were NULL from
+ * the INSERT default. No transaction needed — a single row, three
+ * text columns, no cross-table state.
+ */
+async function applyUtmAtSignup(userId, utm) {
+  if (!userId || !utm) return { applied: false };
+  try {
+    await pool.query(
+      `UPDATE users
+          SET signup_source = $2,
+              signup_campaign = $3,
+              signup_medium = $4
+        WHERE id = $1`,
+      [userId, utm.source, utm.campaign, utm.medium],
+    );
+    return { applied: true };
+  } catch (err) {
+    console.warn('[UTM] applyUtmAtSignup failed:', err.message);
+    return { applied: false, error: err.message };
   }
 }
 
@@ -1846,6 +1931,11 @@ app.get('/login', (req, res) => {
   if (req.isAuthenticated?.() || req.session?.legacyUserId) {
     return res.redirect('/');
   }
+
+  // Ad attribution (2026-08-04): stash UTMs on the session so they
+  // survive the redirect to /auth/login and the subsequent Auth0
+  // round-trip. First-write-wins — no-op if landing already captured.
+  stashPendingUtm(req);
 
   // Referrals Phase 1 (2026-06-23) + Auth0 (2026-06-29): forward `?ref=`
   // and `?remember=` through to /auth/login so the OAuth state carries
@@ -2849,6 +2939,11 @@ app.get('/', (req, res, next) => {
   if (req.isAuthenticated?.() || req.session?.legacyUserId) {
     return next();
   }
+  // Ad attribution — capture ?utm_* on the landing page BEFORE we
+  // render, so the value survives clicks through /signup → /login →
+  // /auth/login → Auth0 → callback. First-write-wins so a later
+  // page-view can't overwrite the ad-referrer origin.
+  stashPendingUtm(req);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(LANDING_PAGE_HTML);
 });
@@ -2865,6 +2960,11 @@ app.get('/signup', (req, res) => {
   // the ref before /auth/login's session-stash sees it. Normalised
   // here so a malformed value never reaches downstream routes.
   const ref = normaliseReferralCode(req.query.ref);
+  // Ad attribution (2026-08-04): stash UTMs here too so an ad URL of
+  // fastquote.uk/signup?utm_source=meta lands the attribution on the
+  // session even though the redirect chain drops the query string.
+  // First-write-wins — safe to call at every entry point.
+  stashPendingUtm(req);
   const qs = ref ? `?ref=${encodeURIComponent(ref)}` : '';
   res.redirect(302, `/login${qs}`);
 });
