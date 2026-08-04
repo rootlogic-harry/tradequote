@@ -245,7 +245,11 @@ describe('/signup route preserves ?ref= across the redirect', () => {
   test('reads req.query.ref and forwards it normalised', () => {
     const start = serverSrc.indexOf("app.get('/signup',");
     expect(start).toBeGreaterThan(-1);
-    const block = serverSrc.slice(start, start + 600);
+    // Bumped from 600 → 900 chars on 2026-08-04 when the UTM stash
+    // block landed in this handler. The assertions below are for the
+    // redirect at the bottom, so the slice needs to reach past the
+    // stashPendingUtm call + its rationale comment to keep working.
+    const block = serverSrc.slice(start, start + 900);
     expect(block).toMatch(/normaliseReferralCode\(\s*req\.query\.ref\s*\)/);
     expect(block).toMatch(/res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`/);
     expect(block).toMatch(/ref=\$\{encodeURIComponent\(ref\)\}/);
@@ -253,7 +257,11 @@ describe('/signup route preserves ?ref= across the redirect', () => {
 
   test('falls back to bare /login when no ref present (no breaking change)', () => {
     const start = serverSrc.indexOf("app.get('/signup',");
-    const block = serverSrc.slice(start, start + 600);
+    // Bumped from 600 → 900 chars on 2026-08-04 when the UTM stash
+    // block landed in this handler. The assertions below are for the
+    // redirect at the bottom, so the slice needs to reach past the
+    // stashPendingUtm call + its rationale comment to keep working.
+    const block = serverSrc.slice(start, start + 900);
     // `?ref=` is empty string when normaliseReferralCode returns null,
     // so the redirect collapses to bare `/login`.
     expect(block).toMatch(/const qs = ref \? `\?ref=/);
