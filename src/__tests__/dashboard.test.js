@@ -89,9 +89,14 @@ describe('Dashboard filter pill wiring (regression: pills did not actually filte
     // mechanical bug class (slice-before-filter / stale closure) is now
     // owned by the helper's unit tests. The limit constant lives in
     // dashboardFilter.js so bumping it doesn't require touching this
-    // component test (2026-07-08 bump from 10 → 25 for Mark's UAT).
+    // component test.
+    //
+    // 2026-07-08: bump from 10 → 25 for Mark's UAT.
+    // 2026-07-23: input is now `searchedJobs` — the searched-job list
+    //   consumed by the pill filter + preview cap. Search runs BEFORE
+    //   the pill so counts + "N more" footer reflect the search.
     expect(dashboardSrc).toMatch(
-      /filterAndLimitJobs\(jobs,\s*filter,\s*DASHBOARD_PREVIEW_LIMIT\)/,
+      /filterAndLimitJobs\(searchedJobs,\s*filter,\s*DASHBOARD_PREVIEW_LIMIT\)/,
     );
     expect(dashboardSrc).toMatch(
       /import\s*\{[^}]*DASHBOARD_PREVIEW_LIMIT[^}]*\}\s*from\s*['"]\.\.\/utils\/dashboardFilter\.js['"]/,
@@ -110,19 +115,24 @@ describe('Dashboard filter pill wiring (regression: pills did not actually filte
     expect(dashboardSrc).toMatch(/onClick=\{onViewJobs\}/);
   });
 
-  it('useMemo for visibleJobs depends on both `jobs` AND `filter`', () => {
-    // The useMemo dep array must contain `filter` — without it, the
-    // memo would return its first-render result forever and the pills
-    // would visually flip but the list wouldn't change.
+  it('useMemo for visibleJobs depends on both `searchedJobs` AND `filter`', () => {
+    // 2026-07-23: dep array changed from [jobs, filter] to
+    // [searchedJobs, filter] because search runs BEFORE the pill.
+    // Without searchedJobs in the deps the memo would return its
+    // first-render result forever and typing in the search box would
+    // visually clear results but the list wouldn't move.
     const visibleStart = dashboardSrc.indexOf('const visibleJobs = useMemo');
     expect(visibleStart).toBeGreaterThan(-1);
     const visibleEnd = dashboardSrc.indexOf(';', visibleStart);
     const visibleBlock = dashboardSrc.slice(visibleStart, visibleEnd);
-    expect(visibleBlock).toMatch(/\[\s*jobs\s*,\s*filter\s*\]/);
+    expect(visibleBlock).toMatch(/\[\s*searchedJobs\s*,\s*filter\s*\]/);
   });
 
-  it('pill counts are computed by computeFilterCounts(jobs)', () => {
-    expect(dashboardSrc).toMatch(/computeFilterCounts\(jobs\)/);
+  it('pill counts are computed by computeFilterCounts(searchedJobs)', () => {
+    // 2026-07-23: pill counts must reflect the search — otherwise
+    // typing "Yorkshire" leaves "All 43" up top even though the list
+    // shows only 3 Yorkshire matches.
+    expect(dashboardSrc).toMatch(/computeFilterCounts\(searchedJobs\)/);
   });
 
   it('the pill onClick fires setFilter with the pill key', () => {
@@ -138,6 +148,57 @@ describe('Dashboard filter pill wiring (regression: pills did not actually filte
 
   it('the "Chase these" link in the Awaiting cell still snaps the filter to sent', () => {
     expect(dashboardSrc).toMatch(/setFilter\(['"]sent['"]\)/);
+  });
+});
+
+// Mark's 2026-07-23 UAT: "big list of jobs [...] add a search option
+// [...] I see the search now but it isn't visible on the dashboard".
+// The search runs BEFORE the pill filter so pill counts + the
+// "N more" footer reflect the current search text.
+describe('Dashboard search (Mark\'s 2026-07-23 UAT)', () => {
+  const dashboardSrc = readFileSync(
+    join(__dirname, '../components/Dashboard.jsx'),
+    'utf8',
+  );
+
+  it('exposes a search input with the same testid contract as SavedQuotes', () => {
+    // Single stable hook so Playwright + future integration tests can
+    // find the input reliably regardless of layout tweaks.
+    expect(dashboardSrc).toMatch(/data-testid=["']dashboard-search["']/);
+    expect(dashboardSrc).toMatch(/placeholder="Search by client, reference, or address/);
+  });
+
+  it('search state is component-scoped useState (no URL / no localStorage)', () => {
+    // Deliberate: search is transient. Reloading the dashboard should
+    // land back on the full list, not a stale filter that's puzzling
+    // the user. If a future ask wants persistence, revisit here.
+    expect(dashboardSrc).toMatch(/const\s*\[searchTerm,\s*setSearchTerm\]\s*=\s*useState\(''\)/);
+  });
+
+  it('search is applied via a useMemo\'d searchedJobs derivation', () => {
+    // Case-insensitive substring match across clientName /
+    // quoteReference / siteAddress. Same three fields as SavedQuotes.
+    expect(dashboardSrc).toMatch(/const\s+searchedJobs\s*=\s*useMemo/);
+    expect(dashboardSrc).toMatch(/clientName[^\n]*includes\(q\)/);
+    expect(dashboardSrc).toMatch(/quoteReference[^\n]*includes\(q\)/);
+    expect(dashboardSrc).toMatch(/siteAddress[^\n]*includes\(q\)/);
+  });
+
+  it('empty search returns the full jobs list (no accidental filtering)', () => {
+    // Fast-path when the box is empty — otherwise every re-render
+    // walks the array for no benefit AND a subtle bug where a
+    // whitespace-only string could hide rows.
+    const searchStart = dashboardSrc.indexOf('const searchedJobs = useMemo');
+    const searchEnd = dashboardSrc.indexOf(', [', searchStart);
+    const block = dashboardSrc.slice(searchStart, searchEnd);
+    expect(block).toMatch(/if \(!q\) return jobs/);
+  });
+
+  it('empty-state copy calls out the search when it\'s the reason for zero rows', () => {
+    // "No quotes yet. Create your first quote…" is misleading when
+    // the user is searching. The copy MUST branch on searchTerm.
+    expect(dashboardSrc).toMatch(/No quotes match ["']\$\{searchTerm\.trim\(\)\}["']/);
+    expect(dashboardSrc).toMatch(/Clear search/);
   });
 });
 

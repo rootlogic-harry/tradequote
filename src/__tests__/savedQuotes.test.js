@@ -155,6 +155,45 @@ describe('SavedQuotes row redesign — Dashboard-parity', () => {
   });
 });
 
+// Mark's 2026-07-23 UAT: "ability to unarchive in case a client
+// re-appears, which they do sometimes". The Dashboard kebab has had
+// Re-open on `declined` jobs since 2026-06-29 — this closes the parity
+// gap by extending the same action to `completed` AND declined jobs
+// in the SavedQuotes archive view. Server VALID_TRANSITIONS widened
+// in the same PR so `completed → draft` is a legal transition.
+describe('SavedQuotes archive Re-open (Mark\'s 2026-07-23 UAT)', () => {
+  it('kebab exposes Re-open for completed jobs (client re-appears)', () => {
+    // Anchor on the `if (status === 'completed')` branch of
+    // kebabItemsFor. The Re-open item must sit above the divider so
+    // Delete stays visually separated + confirmation-armed.
+    const completedStart = src.indexOf("if (status === 'completed')");
+    expect(completedStart).toBeGreaterThan(-1);
+    const completedBlock = src.slice(completedStart, completedStart + 800);
+    expect(completedBlock).toMatch(/id:\s*['"]reopen['"],\s*label:\s*['"]Re-open['"]/);
+    // Divider between Re-open and Delete keeps the destructive item
+    // separated in the menu.
+    expect(completedBlock).toMatch(/id:\s*['"]reopen['"][\s\S]*?id:\s*['"]__['"][\s\S]*?id:\s*['"]delete['"]/);
+  });
+
+  it('kebab exposes Re-open for declined jobs (customer changed their mind)', () => {
+    const declinedStart = src.indexOf("if (status === 'declined')");
+    expect(declinedStart).toBeGreaterThan(-1);
+    const declinedBlock = src.slice(declinedStart, declinedStart + 800);
+    expect(declinedBlock).toMatch(/id:\s*['"]reopen['"],\s*label:\s*['"]Re-open['"]/);
+    expect(declinedBlock).toMatch(/id:\s*['"]reopen['"][\s\S]*?id:\s*['"]__['"][\s\S]*?id:\s*['"]delete['"]/);
+  });
+
+  it('handleMenuAction case reopen routes to openStatusModal(quote.id, "draft")', () => {
+    // Re-uses the existing status modal so the confirmation copy +
+    // side-effects (analytics fire, StatusBadge refresh) stay
+    // consistent with every other status transition in the app.
+    // The dispatch value MUST be 'draft' — VALID_TRANSITIONS.completed
+    // only allows 'draft' as a legal next state (see
+    // serverResilience.test.js).
+    expect(src).toMatch(/case\s+['"]reopen['"]:[\s\S]{0,400}?openStatusModal\(quote\.id,\s*['"]draft['"]\)/);
+  });
+});
+
 describe('SavedQuotes archive view copy passes the visibility-rules check', () => {
   it('does not introduce AI/agent/confidence vocabulary in tab/empty-state block', () => {
     // Anchor on the 3-tab comment block ("Active / Completed / Archive

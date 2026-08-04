@@ -340,7 +340,25 @@ export default function Dashboard({
   // map "Done" → status === 'completed'.
   const [filter, setFilter] = useState('all');
   const [showMonthly, setShowMonthly] = useState(false);
+  // Mark's UAT (2026-07-23): "big list of jobs [...] add a search
+  // option [...] it isn't visible on the dashboard". Same shape as
+  // SavedQuotes's search — client / quote reference / site address,
+  // case-insensitive substring. Runs BEFORE the pill filter + preview
+  // cap so the pill counts + "N more" footer both reflect the search.
+  const [searchTerm, setSearchTerm] = useState('');
   const currentYear = new Date().getFullYear();
+
+  // Apply search first — every downstream memo consumes the searched
+  // list so filter pills + counts + "N more" footer all reflect it.
+  const searchedJobs = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return jobs;
+    return jobs.filter((j) => (
+      (j.clientName || '').toLowerCase().includes(q) ||
+      (j.quoteReference || '').toLowerCase().includes(q) ||
+      (j.siteAddress || '').toLowerCase().includes(q)
+    ));
+  }, [jobs, searchTerm]);
 
   // ── Live filter counts ──
   // Both counts + visibleJobs delegate to pure helpers in
@@ -350,10 +368,10 @@ export default function Dashboard({
   // BEFORE slicing — slicing first would truncate to the most recent 10
   // jobs and then filter within those 10, which on a busy account looks
   // identical to "the filter does nothing".
-  const counts = useMemo(() => computeFilterCounts(jobs), [jobs]);
+  const counts = useMemo(() => computeFilterCounts(searchedJobs), [searchedJobs]);
   const visibleJobs = useMemo(
-    () => filterAndLimitJobs(jobs, filter, DASHBOARD_PREVIEW_LIMIT),
-    [jobs, filter],
+    () => filterAndLimitJobs(searchedJobs, filter, DASHBOARD_PREVIEW_LIMIT),
+    [searchedJobs, filter],
   );
   // "N more" footer only renders when the current filter has more rows
   // than fit in the preview. counts.all is the total across all statuses;
@@ -659,29 +677,64 @@ export default function Dashboard({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Filter quotes">
-          {[
-            ['all', 'All'],
-            ['draft', 'Drafts'],
-            ['sent', 'Sent'],
-            ['accepted', 'Accepted'],
-            ['completed', 'Done'],
-            ['declined', 'Declined'],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={filter === key}
-              onClick={() => setFilter(key)}
-              className={`pill ${filter === key ? 'active' : ''}`}
+        {/* Search + filter pills. Search stacks above the pills on
+             mobile, sits on the same row on desktop. Same shape as
+             SavedQuotes for continuity. Mark's 2026-07-23 UAT. */}
+        <div className="flex flex-col fq:flex-row gap-3 mb-3 fq:items-center">
+          <div className="relative flex-1 fq:max-w-xs">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by client, reference, or address…"
+              className="nq-field w-full pl-9"
+              data-testid="dashboard-search"
+            />
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              width="14" height="14" viewBox="0 0 24 24"
+              fill="none" stroke="var(--tq-muted)" strokeWidth="2" strokeLinecap="round"
+              aria-hidden
             >
-              {label}
-              <span className="ml-1.5 text-[11px] opacity-70" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {counts[key]}
-              </span>
-            </button>
-          ))}
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                aria-label="Clear search"
+                className="touch-44 absolute right-1 top-1/2 -translate-y-1/2"
+                style={{ minHeight: 44, minWidth: 44, color: 'var(--tq-muted)', lineHeight: 1, fontSize: 20, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                &times;
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter quotes">
+            {[
+              ['all', 'All'],
+              ['draft', 'Drafts'],
+              ['sent', 'Sent'],
+              ['accepted', 'Accepted'],
+              ['completed', 'Done'],
+              ['declined', 'Declined'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                onClick={() => setFilter(key)}
+                className={`pill ${filter === key ? 'active' : ''}`}
+              >
+                {label}
+                <span className="ml-1.5 text-[11px] opacity-70" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {counts[key]}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {visibleJobs.length === 0 ? (
@@ -691,11 +744,22 @@ export default function Dashboard({
           >
             <div className="text-3xl mb-3 opacity-20">&#128221;</div>
             <p className="text-sm mb-4" style={{ color: 'var(--tq-muted)' }}>
-              {filter === 'all'
-                ? 'No quotes yet. Create your first quote to get started.'
-                : `No ${filter === 'completed' ? 'done' : filter} quotes.`}
+              {searchTerm.trim()
+                ? `No quotes match "${searchTerm.trim()}".`
+                : filter === 'all'
+                  ? 'No quotes yet. Create your first quote to get started.'
+                  : `No ${filter === 'completed' ? 'done' : filter} quotes.`}
             </p>
-            {filter === 'all' && (
+            {searchTerm.trim() ? (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="btn-ghost"
+                style={{ minHeight: 44, padding: '0 18px' }}
+              >
+                Clear search
+              </button>
+            ) : filter === 'all' && (
               <button onClick={onStartNewQuote} className="btn-primary" type="button">
                 + New quote
               </button>
