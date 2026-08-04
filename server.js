@@ -2498,7 +2498,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
           <div class="demo-head">
             <span class="demo-live">
               <span class="demo-dot" aria-hidden="true"></span>
-              Live &middot; Beck Farm, HD8
+              Live &middot; Nook Farm, FD8
             </span>
             <button type="button" class="demo-replay" aria-label="Replay demo">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

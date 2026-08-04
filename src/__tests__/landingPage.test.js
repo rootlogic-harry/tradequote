@@ -151,9 +151,12 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
 
   test('live demo strip carries the three stages + replay + progress bar', () => {
     expect(html).toMatch(/<div class="demo" data-demo/);
-    // PII sanitisation: fictional farm + Holmfirth postcode (Harry lives
-    // there), no reference to any real customer.
-    expect(html).toMatch(/Live &middot; Beck Farm, HD8/);
+    // PII sanitisation: fictional farm + non-existent UK postcode area
+    // (FD is unassigned by Royal Mail, same "555 phone number" trick as
+    // film scripts). Previous placeholder "Beck Farm, HD8" turned out
+    // to be a real address — swapped 2026-08-04 to a guaranteed-fake
+    // pair with no risk of colliding with a customer.
+    expect(html).toMatch(/Live &middot; Nook Farm, FD8/);
     expect(html).toMatch(/class="demo-replay"/);
     // All three stages are in the markup so JS can rotate them.
     expect(html).toMatch(/data-stage="1"[\s\S]*?Photos go in/);
