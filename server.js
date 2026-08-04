@@ -5580,6 +5580,19 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       )
       SELECT
         u.id AS "userId", u.name, u.plan, u.last_login_at AS "lastLoginAt",
+        -- Ad attribution (2026-08-04, PR 2 of AD_TEST). Nullable —
+        -- NULL renders as "direct" on the dashboard. Projected here
+        -- so the same per-user row carries both the funnel signal
+        -- and the analytics-source signal without a second query.
+        u.signup_source AS "signupSource",
+        u.signup_campaign AS "signupCampaign",
+        u.signup_medium AS "signupMedium",
+        -- Paying signal for the Source summary + per-user column.
+        -- `subscription_status` is the Stripe truth; `purchased_quotes`
+        -- captures the £9.99 pack path. A user is "Paying" if EITHER
+        -- is truthy — see the SourceSummarySection docs.
+        u.subscription_status AS "subscriptionStatus",
+        COALESCE(u.purchased_quotes, 0) AS "purchasedQuotes",
         COALESCE(j.jobs, 0) AS "jobs",
         COALESCE(j.rams_count, 0) AS "ramsCount",
         COALESCE(j.active_days, 0) AS "activeDays",
@@ -5598,6 +5611,47 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       LEFT JOIN user_fails f ON f.user_id = u.id
       LEFT JOIN user_audio a ON a.user_id = u.id
       ORDER BY COALESCE(t.prompt_tokens + t.completion_tokens, 0) DESC
+    `);
+
+    // ── Signups by source (2026-08-04, ad-attribution PR 2) ─────────
+    // The £100 Meta ad test needs cost-per-paying-signup. This is the
+    // funnel — one row per distinct `signup_source`, plus a
+    // "direct" bucket for the NULL rows (organic / word-of-mouth /
+    // pre-attribution-launch signups).
+    //
+    // "activated" = at least one `quote_analysed` event on record.
+    // Same signal the funnel widget uses (see EVENT_NAME_ALLOWLIST) —
+    // more reliable than any jobs-side probe because it fires
+    // server-side on both the photo and video paths and predates
+    // the events table being disabled by ad-blockers (it isn't).
+    //
+    // "paying" = active subscription OR any purchased pack quotes on
+    // the row today. Refunded packs still count as "paying at some
+    // point" (refunds don't roll back purchased_quotes — see
+    // docs/REFUNDS.md). Good enough for a first ad test; if the
+    // refund rate spikes we'll revisit.
+    //
+    // COALESCE(signup_source, 'direct') gives us the fallback bucket
+    // without a UNION or a two-round trip. NEVER interpolates user
+    // input — all SQL literals below are hard-coded.
+    const signupsBySourceQuery = pool.query(`
+      SELECT
+        COALESCE(u.signup_source, 'direct') AS "source",
+        COUNT(*)::int AS "signups",
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1 FROM events e
+            WHERE e.user_id = u.id
+              AND e.event_name = 'quote_analysed'
+          )
+        )::int AS "activated",
+        COUNT(*) FILTER (
+          WHERE u.subscription_status = 'active'
+             OR COALESCE(u.purchased_quotes, 0) > 0
+        )::int AS "paying"
+      FROM users u
+      GROUP BY COALESCE(u.signup_source, 'direct')
+      ORDER BY COUNT(*) DESC
     `);
 
     // ── Per-quote spend (top 20 most-expensive quotes in window) ─────
@@ -5847,6 +5901,7 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       pageviewsPerDayRes, pageviewsTopPathsRes,
       errorsPerDayRes, errorsRecentRes, retentionRes,
       eventsTopRes, eventsFunnelRes, eventsSummaryRes,
+      signupsBySourceRes,
     ] = await Promise.all([
       usersQuery, signupsQuery, quotesQuery, perUserQuery, perQuoteQuery,
       spendByModelQuery, failuresQuery, retryQueueQuery, portalQuery, dailyTrendQuery,
@@ -5854,6 +5909,7 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       pageviewsPerDayQuery, pageviewsTopPathsQuery,
       errorsPerDayQuery, errorsRecentQuery, retentionQuery,
       eventsTopQuery, eventsFunnelQuery, eventsSummaryQuery,
+      signupsBySourceQuery,
     ]);
 
     // Convert per-user token totals into £ for the dashboard. Per-user
@@ -5874,11 +5930,19 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       }
       const audioBytes = Number(u.whisperAudioBytes) || 0;
       const whisperGbp = whisperBytesToGbp(audioBytes);
+      // Ad-attribution PR 2 — `isPaying` is the truth signal used by
+      // the Source summary. Computed here (not in SQL) so the JS
+      // fallback for `purchased_quotes` being NULL on pre-2026-06-24
+      // users is consistent with the summary query's COALESCE above.
+      const isPaying = u.subscriptionStatus === 'active'
+        || (Number(u.purchasedQuotes) || 0) > 0;
       return {
         ...u,
         promptTokens: Number(u.promptTokens) || 0,
         completionTokens: Number(u.completionTokens) || 0,
         whisperAudioBytes: audioBytes,
+        purchasedQuotes: Number(u.purchasedQuotes) || 0,
+        isPaying,
         estimatedCostGbp: Number((modelCostGbp + whisperGbp).toFixed(4)),
       };
     });
@@ -5970,6 +6034,16 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       quotes: quotesRes.rows[0] || {},
       perUser: usersWithCost,
       perQuote: perQuoteWithCost,
+      // Ad-attribution PR 2 (2026-08-04). One row per distinct
+      // signup_source, plus a synthesised "direct" bucket for the
+      // NULL rows. Sorted by signups DESC so the top ad source
+      // lands at the top of the SourceSummarySection table.
+      signupsBySource: signupsBySourceRes.rows.map((r) => ({
+        source: r.source,
+        signups: Number(r.signups) || 0,
+        activated: Number(r.activated) || 0,
+        paying: Number(r.paying) || 0,
+      })),
       spend: {
         totalGbp: Number(totalCostGbp.toFixed(2)),
         byModel: spendByModelWithCost,

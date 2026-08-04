@@ -72,6 +72,7 @@ export default function Analytics() {
           <SummaryCards data={data} />
           <RetentionSection retention={data.retention} />
           <ActivitySection series={data.series} />
+          <SourceSummarySection signupsBySource={data.signupsBySource} />
           <PerUserSection users={data.perUser} />
           <PerQuoteSection quotes={data.perQuote} />
           <SpendSection spend={data.spend} pricing={data.pricing} />
@@ -207,6 +208,72 @@ function SummaryCards({ data }) {
   );
 }
 
+// ─── Signups by source (ad-attribution PR 2, 2026-08-04) ────────────
+//
+// The £100 Meta ad test needs one number: cost per paying signup.
+// This section is the funnel that computes it:
+//
+//   Source     | Signups | Activated | Paying
+//   -----------+---------+-----------+-------
+//   meta       |      12 |         8 |      2
+//   direct     |       5 |         3 |      1
+//
+// "Activated" = user has fired quote_analysed at least once
+// (server-side event, ad-blocker-resistant).
+// "Paying"    = active subscription OR ≥ 1 purchased quote in balance.
+// "direct"    = signup_source IS NULL (organic / word-of-mouth /
+// pre-attribution-launch signups).
+//
+// The dataset stays admin-only (same visibility rules as the rest of
+// this dashboard). Empty-state renders when no signups have been
+// captured yet — expected during the first week after each PR ships.
+
+function SourceSummarySection({ signupsBySource }) {
+  const rows = signupsBySource || [];
+  if (rows.length === 0) {
+    return (
+      <Section title="Signups by source">
+        <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+          No signups tracked yet.
+        </p>
+      </Section>
+    );
+  }
+  return (
+    <Section title="Signups by source">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" data-testid="source-summary-table">
+          <thead>
+            <tr className="border-b" style={{ borderColor: 'var(--tq-border)', color: 'var(--tq-muted)' }}>
+              <th className="text-left py-2 pr-3">Source</th>
+              <th className="text-right py-2 pr-3">Signups</th>
+              <th className="text-right py-2 pr-3">Activated</th>
+              <th className="text-right py-2">Paying</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr
+                key={r.source}
+                className="border-b"
+                style={{ borderColor: 'var(--tq-border-soft)' }}
+                data-source={r.source}
+              >
+                <td className="py-2 pr-3 font-medium" style={{ color: r.source === 'direct' ? 'var(--tq-muted)' : 'inherit' }}>
+                  {r.source}
+                </td>
+                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{r.signups}</td>
+                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{r.activated}</td>
+                <td className="py-2 text-right font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{r.paying}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
 // ─── Per-user section ────────────────────────────────────────────────
 
 function PerUserSection({ users }) {
@@ -225,6 +292,7 @@ function PerUserSection({ users }) {
             <tr className="border-b" style={{ borderColor: 'var(--tq-border)', color: 'var(--tq-muted)' }}>
               <th className="text-left py-2 pr-3">User</th>
               <th className="text-left py-2 pr-3">Plan</th>
+              <th className="text-left py-2 pr-3">Source</th>
               <th className="text-left py-2 pr-3">Last login</th>
               <th className="text-right py-2 pr-3">Quotes</th>
               <th className="text-right py-2 pr-3">RAMS</th>
@@ -241,6 +309,9 @@ function PerUserSection({ users }) {
               <tr key={u.userId} className="border-b" style={{ borderColor: 'var(--tq-border-soft)' }}>
                 <td className="py-2 pr-3 font-medium">{u.name || u.userId}</td>
                 <td className="py-2 pr-3">{u.plan}</td>
+                <td className="py-2 pr-3" style={{ color: u.signupSource ? 'inherit' : 'var(--tq-muted)' }}>
+                  {u.signupSource || 'direct'}
+                </td>
                 <td className="py-2 pr-3" style={{ color: 'var(--tq-muted)' }}>
                   {formatDateTime(u.lastLoginAt)}
                 </td>
