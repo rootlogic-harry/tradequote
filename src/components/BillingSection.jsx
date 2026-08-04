@@ -3,10 +3,18 @@ import React, { useEffect, useState } from 'react';
 /**
  * BillingSection — Settings / Billing surface (2026-06-30 launch checklist).
  *
- * Two stacks:
- *   1. Subscription status card — plan name + next billing date + Manage
- *      subscription button (opens Stripe billing portal). Only renders
- *      when the user has an active subscription.
+ * Renders one of two subscription cards then the past-purchases stack:
+ *   1a. Subscribed card — plan name + next billing date + "Manage or
+ *       cancel subscription" button (opens the Stripe billing portal —
+ *       Stripe owns the cancel flow, dunning, cancel-at-period-end,
+ *       retention offers, so we deliberately don't reimplement it).
+ *   1b. Non-subscribed card (Mark's 2026-08-04 UAT) — headline price,
+ *       "Cancel anytime" reassurance, and a "Subscribe" button that
+ *       POSTs /api/billing/checkout and follows the returned Stripe
+ *       Checkout URL. Before this, non-subscribers saw nothing but
+ *       past purchases here — the Subscribe path was only reachable
+ *       via the QuotaCounter banner, which is quota-state gated and
+ *       invisible in Settings.
  *   2. Past purchases table — combined pack + subscription invoices,
  *      most recent first, capped at 24. Each row has a "Download
  *      invoice" link that opens hostedInvoiceUrl in a new tab.
@@ -16,17 +24,18 @@ import React, { useEffect, useState } from 'react';
  * PDF rendering — we just surface the link. No custom rendering.
  *
  * Free-tier users with no purchases still see this section; they get an
- * empty-state. The whole component is read-only (no edits, no forms),
- * matching the locked spec.
+ * empty-state on the purchases stack + the Subscribe card above it.
  *
  * Vocabulary stays inside the safe-list: "subscription", "invoice",
- * "manage", "download", "monthly", "pack". No banned terms.
+ * "manage", "cancel", "download", "monthly", "pack", "unlimited".
+ * No banned AI/agent/confidence terms.
  */
 export default function BillingSection() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState([]);
   const [status, setStatus] = useState(null);
   const [portalBusy, setPortalBusy] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -68,6 +77,23 @@ export default function BillingSection() {
     }
   };
 
+  // Mirrors the SubscriptionBanner / QuotaCounter subscribe pattern —
+  // POST to /api/billing/checkout, follow the returned Stripe Checkout
+  // URL. Failures re-enable the button so a network blip is recoverable.
+  const startCheckout = async () => {
+    if (checkoutBusy) return;
+    setCheckoutBusy(true);
+    try {
+      const r = await fetch('/api/billing/checkout', { method: 'POST' });
+      if (!r.ok) throw new Error(`checkout ${r.status}`);
+      const { url } = await r.json();
+      if (url) window.location.href = url;
+      else setCheckoutBusy(false);
+    } catch {
+      setCheckoutBusy(false);
+    }
+  };
+
   // Subscription card only renders when Stripe says state==='active'.
   // For trial / expired / free-tier users, the card is hidden — they
   // see the standalone Subscribe banner elsewhere in the app.
@@ -86,7 +112,7 @@ export default function BillingSection() {
         </p>
       </div>
 
-      {isSubscribed && (
+      {isSubscribed ? (
         <div
           className="mb-6 p-4 border border-tq-border rounded"
           style={{ background: 'var(--tq-card)' }}
@@ -108,6 +134,10 @@ export default function BillingSection() {
                 </div>
               )}
             </div>
+            {/* "Manage or cancel" — Stripe portal is the canonical
+                cancel path (Stripe handles cancel-at-period-end +
+                retention). Naming makes that discoverable so users
+                don't hunt for a separate Cancel button. */}
             <button
               type="button"
               onClick={openPortal}
@@ -116,10 +146,48 @@ export default function BillingSection() {
               style={{ minHeight: 44 }}
               data-action="manage-subscription"
             >
-              Manage subscription
+              Manage or cancel subscription
             </button>
           </div>
         </div>
+      ) : (
+        // Non-subscribed card — Mark's 2026-08-04 UAT ("here we need
+        // the option for the monthly subscription"). Same shape as
+        // the subscribed card so the layout doesn't shift after a
+        // successful checkout. Loading state suppresses the card to
+        // avoid a flash of Subscribe → Manage when the user IS
+        // subscribed and status hasn't loaded yet.
+        !loading && (
+          <div
+            className="mb-6 p-4 border border-tq-border rounded"
+            style={{ background: 'var(--tq-card)' }}
+            data-billing-card="subscribe"
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="font-heading uppercase tracking-wide text-xs" style={{ color: 'var(--tq-muted)' }}>
+                  Subscription
+                </div>
+                <div className="font-heading text-lg mt-1">
+                  FastQuote Unlimited &mdash; &pound;{monthlyPrice.toFixed(2)}/month
+                </div>
+                <div className="text-sm mt-1" style={{ color: 'var(--tq-muted)' }}>
+                  Unlimited quotes. Cancel anytime.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={startCheckout}
+                disabled={checkoutBusy}
+                className="btn-primary touch-44"
+                style={{ minHeight: 44 }}
+                data-action="subscribe-monthly"
+              >
+                Subscribe
+              </button>
+            </div>
+          </div>
+        )
       )}
 
       <div>
