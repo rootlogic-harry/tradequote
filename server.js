@@ -5588,9 +5588,11 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
         u.signup_campaign AS "signupCampaign",
         u.signup_medium AS "signupMedium",
         -- Paying signal for the Source summary + per-user column.
-        -- `subscription_status` is the Stripe truth; `purchased_quotes`
+        -- subscription_status is the Stripe truth; purchased_quotes
         -- captures the £9.99 pack path. A user is "Paying" if EITHER
         -- is truthy — see the SourceSummarySection docs.
+        -- (No backticks in SQL comments inside a JS template literal —
+        --  JS parses them as template delimiters before the SQL is sent.)
         u.subscription_status AS "subscriptionStatus",
         COALESCE(u.purchased_quotes, 0) AS "purchasedQuotes",
         COALESCE(j.jobs, 0) AS "jobs",
