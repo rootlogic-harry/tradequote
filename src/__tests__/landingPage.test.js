@@ -345,8 +345,13 @@ describe('/signup route', () => {
     // /signup (no ref) still resolves to /login because qs collapses
     // to empty string. 2026-06-30 fix — see serverReferrals.test.js
     // for the share-URL preservation detail.
+    //
+    // Window bumped 600→900 on 2026-08-04 alongside the UTM ad-
+    // attribution stash (docs/AD_TEST) — stashPendingUtm(req) + its
+    // rationale comment pushed the redirect assertion outside the
+    // old window. Same fix applied to serverReferrals.test.js.
     expect(serverSrc).toMatch(
-      /app\.get\(\s*['"]\/signup['"][\s\S]{0,600}?res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`\s*\)/
+      /app\.get\(\s*['"]\/signup['"][\s\S]{0,900}?res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`\s*\)/
     );
   });
 });
