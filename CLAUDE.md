@@ -182,7 +182,10 @@ Honesty guardrails enforced in the copy (asserted by `landingPage.test.js`):
 - No video / film references anywhere (video is disabled in prod via PR #35).
 - No "at rest" encryption claim (Railway-PG at-rest control is unverified —
   softened to "kept secure").
-- No PII pointing at real customers (`Beck Farm, HD8` is fictional).
+- No PII pointing at real customers (`Nook Farm, FD8` — FD is an
+  unassigned UK postcode area so it cannot collide with a real
+  address; earlier placeholder `Beck Farm, HD8` was swapped out on
+  2026-08-04 after it turned out to match a real address).
 - Footer email is `fastquote@harrydoyle.uk` — the working inbox. The
   `fastquote.uk` MX does NOT accept `hello@`.
 - ICO `ZC178109` cited in the data-trust band AND the footer.

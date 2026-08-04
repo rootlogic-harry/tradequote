@@ -618,8 +618,9 @@ pacing.
 - Record VO in one take if possible; cut later.
 - Use the staging environment if the photo-based analysis is more
   reliable there than prod. Video is disabled in prod anyway.
-- Don't use real customer names anywhere. "Beck Farm" is the placeholder
-  used on the landing — keep using that.
+- Don't use real customer names anywhere. "Nook Farm, FD8" is the
+  placeholder used on the landing (FD is an unassigned UK postcode
+  area, so it cannot collide with a real address) — keep using that.
 - End frame: don't promise "AI-powered" — the landing copy avoids that
   language and so should the video.
 - Captions: hard-code burnt-in captions for accessibility. Mobile-first
