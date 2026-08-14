@@ -46,11 +46,20 @@ export default function MaterialsTable({ materials = [], dispatch }) {
   };
 
   const addMaterial = () => {
+    // Default quantity to 1 (not empty) so a lump-sum item entered as
+    // description + Rate £ (e.g. "Pointing mortar" @ £50) computes a
+    // non-zero totalCost immediately and renders on the client-facing
+    // quote. Empty-quantity rows land at totalCost=0 and get filtered
+    // out by QuoteDocument / exportDocx / portalRenderer's
+    // "description && totalCost > 0" guard — from Mark's side that
+    // looks like "can't add extra materials, doesn't apply to the
+    // cost column" (WhatsApp 2026-08-12). Multi-quantity items still
+    // work — the waller just types over the 1 with the real number.
     dispatch({
       type: 'UPDATE_MATERIALS',
       materials: [
         ...materials,
-        { id: `mat-new-${Date.now()}`, description: '', quantity: '', unit: 'Item', unitCost: 0, totalCost: 0 },
+        { id: `mat-new-${Date.now()}`, description: '', quantity: 1, unit: 'Item', unitCost: 0, totalCost: 0 },
       ],
     });
   };
