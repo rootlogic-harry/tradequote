@@ -322,6 +322,7 @@ function PerUserSection({ users }) {
             className="underline"
             style={{ color: 'var(--tq-accent)' }}
             onClick={() => setHideInactive(false)}
+            data-touch-exempt="true"
           >
             Show all
           </button>
