@@ -17,13 +17,15 @@
  *   - OpenAI Whisper: https://openai.com/api/pricing/
  */
 
-export const PRICES_LAST_REVIEWED = '2026-04-30';
+export const PRICES_LAST_REVIEWED = '2026-09-18';
 export const USD_TO_GBP = 0.79;
 
 // USD per 1,000,000 tokens. Keep keys aligned with the values
 // ANTHROPIC_MODEL_ALLOWLIST permits in server.js.
 const ANTHROPIC_PRICES_USD_PER_MTOK = {
-  // Sonnet 4 (full-quality analysis path)
+  // Sonnet 5 (full-quality analysis path, upgraded 2026-09-18)
+  'claude-sonnet-5': { input: 2, output: 10 },
+  // Legacy — rows written before the upgrade
   'claude-sonnet-4-20250514': { input: 3, output: 15 },
   'claude-sonnet-4-5-20250929': { input: 3, output: 15 },
   // Haiku 4.5 (background agents — self-critique, feedback, calibration)

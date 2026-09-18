@@ -38,11 +38,9 @@ describe('Anthropic temperature plumbing', () => {
   test('video analysis route passes a low temperature to Sonnet', () => {
     // Pull the block immediately preceding the Sonnet model identifier
     // in the video route and assert it sets temperature to a low value.
-    // Hotfix 2026-06-16: model pinned upgraded from Sonnet 4
-    // (claude-sonnet-4-20250514, retired by Anthropic) to Sonnet 4.5
-    // (claude-sonnet-4-5-20250929).
+    // Upgraded to Sonnet 5 on 2026-09-18.
     const videoBlock = serverSrc.match(
-      /callAnthropicRaw\(\{[\s\S]{0,1200}?model: 'claude-sonnet-4-5-20250929'[\s\S]{0,1200}?\}\)/
+      /callAnthropicRaw\(\{[\s\S]{0,1200}?model: 'claude-sonnet-5'[\s\S]{0,1200}?\}\)/
     );
     expect(videoBlock).not.toBeNull();
     expect(videoBlock[0]).toMatch(/temperature:\s*0\.[12]\b/);
