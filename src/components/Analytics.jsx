@@ -210,6 +210,8 @@ function SummaryCards({ data }) {
 // ─── Per-user section ────────────────────────────────────────────────
 
 function PerUserSection({ users }) {
+  const [hideInactive, setHideInactive] = useState(true);
+
   if (!users || users.length === 0) {
     return (
       <Section title="Per-user spend">
@@ -217,61 +219,101 @@ function PerUserSection({ users }) {
       </Section>
     );
   }
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const visible = hideInactive
+    ? users.filter((u) => u.lastLoginAt && new Date(u.lastLoginAt) >= thirtyDaysAgo)
+    : users;
+  const hiddenCount = users.length - visible.length;
+
   return (
     <Section title="Per-user spend">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b" style={{ borderColor: 'var(--tq-border)', color: 'var(--tq-muted)' }}>
-              <th className="text-left py-2 pr-3">User</th>
-              <th className="text-left py-2 pr-3">Plan</th>
-              <th className="text-left py-2 pr-3">Last login</th>
-              <th className="text-right py-2 pr-3">Quotes</th>
-              <th className="text-right py-2 pr-3">RAMS</th>
-              <th className="text-right py-2 pr-3">Active days</th>
-              <th className="text-right py-2 pr-3">Fails</th>
-              <th className="text-right py-2 pr-3">Quoted £</th>
-              <th className="text-right py-2 pr-3">Analyse calls</th>
-              <th className="text-right py-2 pr-3">Tokens</th>
-              <th className="text-right py-2">Spend £</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.userId} className="border-b" style={{ borderColor: 'var(--tq-border-soft)' }}>
-                <td className="py-2 pr-3 font-medium">{u.name || u.userId}</td>
-                <td className="py-2 pr-3">{u.plan}</td>
-                <td className="py-2 pr-3" style={{ color: 'var(--tq-muted)' }}>
-                  {formatDateTime(u.lastLoginAt)}
-                </td>
-                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{u.jobs}</td>
-                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {u.ramsCount || 0}
-                </td>
-                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {u.activeDays || 0}
-                </td>
-                <td className="py-2 pr-3 text-right" style={{
-                  fontFamily: 'JetBrains Mono, monospace',
-                  color: (u.failedAnalyseCalls || 0) > 0 ? 'var(--tq-error-txt)' : 'inherit',
-                }}>
-                  {u.failedAnalyseCalls || 0}
-                </td>
-                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  £{Math.round(u.quotedValue).toLocaleString()}
-                </td>
-                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{u.analyseCalls}</td>
-                <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {formatTokens(Number(u.promptTokens) + Number(u.completionTokens))}
-                </td>
-                <td className="py-2 text-right font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  £{u.estimatedCostGbp.toFixed(4)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="text-xs" style={{ color: 'var(--tq-muted)' }}>
+          {visible.length} user{visible.length === 1 ? '' : 's'}
+          {hiddenCount > 0 && ` · ${hiddenCount} inactive hidden`}
+        </div>
+        <label
+          className="flex items-center gap-2 text-xs cursor-pointer"
+          style={{ color: 'var(--tq-muted)', minHeight: 44 }}
+        >
+          <input
+            type="checkbox"
+            checked={hideInactive}
+            onChange={(e) => setHideInactive(e.target.checked)}
+            style={{ minHeight: 16, minWidth: 16 }}
+            data-touch-exempt="true"
+          />
+          Hide inactive (30d+)
+        </label>
       </div>
+      {visible.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--tq-muted)' }}>
+          No active users in the last 30 days.{' '}
+          <button
+            type="button"
+            className="underline"
+            style={{ color: 'var(--tq-accent)' }}
+            onClick={() => setHideInactive(false)}
+          >
+            Show all
+          </button>
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b" style={{ borderColor: 'var(--tq-border)', color: 'var(--tq-muted)' }}>
+                <th className="text-left py-2 pr-3">User</th>
+                <th className="text-left py-2 pr-3">Plan</th>
+                <th className="text-left py-2 pr-3">Last login</th>
+                <th className="text-right py-2 pr-3">Quotes</th>
+                <th className="text-right py-2 pr-3">RAMS</th>
+                <th className="text-right py-2 pr-3">Active days</th>
+                <th className="text-right py-2 pr-3">Fails</th>
+                <th className="text-right py-2 pr-3">Quoted £</th>
+                <th className="text-right py-2 pr-3">Analyse calls</th>
+                <th className="text-right py-2 pr-3">Tokens</th>
+                <th className="text-right py-2">Spend £</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((u) => (
+                <tr key={u.userId} className="border-b" style={{ borderColor: 'var(--tq-border-soft)' }}>
+                  <td className="py-2 pr-3 font-medium">{u.name || u.userId}</td>
+                  <td className="py-2 pr-3">{u.plan}</td>
+                  <td className="py-2 pr-3" style={{ color: 'var(--tq-muted)' }}>
+                    {formatDateTime(u.lastLoginAt)}
+                  </td>
+                  <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{u.jobs}</td>
+                  <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    {u.ramsCount || 0}
+                  </td>
+                  <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    {u.activeDays || 0}
+                  </td>
+                  <td className="py-2 pr-3 text-right" style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    color: (u.failedAnalyseCalls || 0) > 0 ? 'var(--tq-error-txt)' : 'inherit',
+                  }}>
+                    {u.failedAnalyseCalls || 0}
+                  </td>
+                  <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    £{Math.round(u.quotedValue).toLocaleString()}
+                  </td>
+                  <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{u.analyseCalls}</td>
+                  <td className="py-2 pr-3 text-right" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    {formatTokens(Number(u.promptTokens) + Number(u.completionTokens))}
+                  </td>
+                  <td className="py-2 text-right font-medium" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    £{u.estimatedCostGbp.toFixed(4)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }

@@ -83,3 +83,23 @@ describe('Analytics.jsx — data fetch + UI sections', () => {
     expect(analyticsSrc).toMatch(/setError/);
   });
 });
+
+describe('Analytics.jsx — PerUserSection inactive filter', () => {
+  test('hide-inactive toggle defaults to true (ON)', () => {
+    expect(analyticsSrc).toMatch(/hideInactive.*true|useState\(true\)/);
+  });
+
+  test('filters by 30-day lastLoginAt cutoff', () => {
+    expect(analyticsSrc).toMatch(/thirtyDaysAgo/);
+    expect(analyticsSrc).toMatch(/30 \* 24 \* 60 \* 60 \* 1000/);
+  });
+
+  test('toggle label reads "Hide inactive (30d+)"', () => {
+    expect(analyticsSrc).toMatch(/Hide inactive \(30d\+\)/);
+  });
+
+  test('shows count of hidden inactive users when hideInactive is ON', () => {
+    expect(analyticsSrc).toMatch(/hiddenCount/);
+    expect(analyticsSrc).toMatch(/inactive hidden/);
+  });
+});
