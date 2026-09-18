@@ -151,9 +151,12 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
 
   test('live demo strip carries the three stages + replay + progress bar', () => {
     expect(html).toMatch(/<div class="demo" data-demo/);
-    // PII sanitisation: fictional farm + Holmfirth postcode (Harry lives
-    // there), no reference to any real customer.
-    expect(html).toMatch(/Live &middot; Beck Farm, HD8/);
+    // PII sanitisation: fictional farm + non-existent UK postcode area
+    // (FD is unassigned by Royal Mail, same "555 phone number" trick as
+    // film scripts). Previous placeholder "Beck Farm, HD8" turned out
+    // to be a real address — swapped 2026-08-04 to a guaranteed-fake
+    // pair with no risk of colliding with a customer.
+    expect(html).toMatch(/Live &middot; Nook Farm, FD8/);
     expect(html).toMatch(/class="demo-replay"/);
     // All three stages are in the markup so JS can rotate them.
     expect(html).toMatch(/data-stage="1"[\s\S]*?Photos go in/);
@@ -342,8 +345,13 @@ describe('/signup route', () => {
     // /signup (no ref) still resolves to /login because qs collapses
     // to empty string. 2026-06-30 fix — see serverReferrals.test.js
     // for the share-URL preservation detail.
+    //
+    // Window bumped 600→900 on 2026-08-04 alongside the UTM ad-
+    // attribution stash (docs/AD_TEST) — stashPendingUtm(req) + its
+    // rationale comment pushed the redirect assertion outside the
+    // old window. Same fix applied to serverReferrals.test.js.
     expect(serverSrc).toMatch(
-      /app\.get\(\s*['"]\/signup['"][\s\S]{0,600}?res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`\s*\)/
+      /app\.get\(\s*['"]\/signup['"][\s\S]{0,900}?res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`\s*\)/
     );
   });
 });

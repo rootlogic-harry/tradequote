@@ -41,13 +41,26 @@ describe('Race condition protections', () => {
 describe('Status transition validation', () => {
   test('server validates status transitions with VALID_TRANSITIONS map', () => {
     expect(serverSource).toContain('VALID_TRANSITIONS');
-    expect(serverSource).toContain("completed: []");
+    // 2026-07-23: completed → draft was added so Mark can un-archive a
+    // job whose client came back months later. Was previously `completed: []`.
+    expect(serverSource).toMatch(/completed:\s*\[['"]draft['"]\]/);
   });
 
-  test('completed is a terminal state (no transitions out)', () => {
+  test('completed can transition to draft (un-archive on client return)', () => {
+    // Mark's 2026-07-23 UAT: "unarchive in case a client re-appears".
+    // Same rationale as declined → draft — the job goes back into the
+    // waller's hands rather than magically re-sending. The customer-
+    // facing client-portal path is unaffected: it still guards against
+    // completed jobs being marked accepted/declined via the token.
     const match = serverSource.match(/completed:\s*\[(.*?)\]/);
     expect(match).toBeTruthy();
-    expect(match[1].trim()).toBe(''); // empty array — no transitions out
+    expect(match[1]).toContain("'draft'");
+    // Explicitly NOT allowed — a completed job going straight back to
+    // accepted / sent would misrepresent the state to the customer.
+    // Draft is the only sanctioned exit.
+    expect(match[1]).not.toContain("'sent'");
+    expect(match[1]).not.toContain("'accepted'");
+    expect(match[1]).not.toContain("'declined'");
   });
 
   test('declined can transition to sent OR draft (re-send vs re-open for edit)', () => {

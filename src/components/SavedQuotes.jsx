@@ -55,16 +55,26 @@ function kebabItemsFor(status, { isAdminPlan = false, hasRams = false, canViewRa
     return items;
   }
   if (status === 'completed') {
-    // Completed is terminal but we still want a Delete affordance so
-    // old finished jobs can be pruned. Dashboard's kebab returns []
-    // here because Dashboard's Recent list is bounded; SavedQuotes is
-    // the full archive, so users will accumulate completed rows.
+    // Completed is terminal in the normal lifecycle, but Mark's UAT
+    // (2026-07-23): "unarchive in case a client re-appears, which
+    // they do sometimes". Re-open moves the job back to draft so
+    // the waller can re-quote / re-send. Server-side transitions
+    // widen to accept completed → draft in the same PR.
     return [
+      { id: 'reopen', label: 'Re-open' },
+      { id: '__' },
       { id: 'delete', label: 'Delete', danger: true },
     ];
   }
   if (status === 'declined') {
+    // Same treatment for declined jobs — a customer who called back
+    // to reconsider is best served by the quote returning to the
+    // waller's hands (draft) rather than magically re-sending. This
+    // has been available in the Dashboard kebab since 2026-06-29;
+    // extending to SavedQuotes archive tab closes the parity gap.
     return [
+      { id: 'reopen', label: 'Re-open' },
+      { id: '__' },
       { id: 'delete', label: 'Delete', danger: true },
     ];
   }
@@ -356,6 +366,14 @@ export default function SavedQuotes({
         return;
       case 'decline':
         openStatusModal(quote.id, 'declined');
+        return;
+      case 'reopen':
+        // Re-open a completed / declined job → draft. Same target as
+        // the Dashboard kebab's Re-open action, which has existed for
+        // declined since 2026-06-29. Mark's 2026-07-23 UAT: same path
+        // now works for completed jobs too. Server VALID_TRANSITIONS
+        // widened in the same PR to accept completed → draft.
+        openStatusModal(quote.id, 'draft');
         return;
       case 'delete':
         handleDelete(quote.id);

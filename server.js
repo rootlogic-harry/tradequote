@@ -92,6 +92,7 @@ import {
   REFERRAL_REFEREE_BONUS,
   REFERRAL_REFERRER_REWARD,
 } from './src/utils/referrals.js';
+import { pickUtms } from './src/utils/utmCapture.js';
 import {
   renderGuidesIndex,
   renderGuidePage,
@@ -534,6 +535,19 @@ async function initDB() {
       -- 'purchased-remaining'. NOT decremented on refund — refund policy
       -- is manual; see docs/REFUNDS.md.
       ALTER TABLE users ADD COLUMN IF NOT EXISTS purchased_quotes INTEGER NOT NULL DEFAULT 0;
+
+      -- Ad-attribution — 2026-08-04. Three nullable columns captured
+      -- once at signup from ?utm_source= / ?utm_campaign= / ?utm_medium=.
+      -- NULL = direct / organic / word-of-mouth (no UTM present).
+      -- Analytics-only — never read on the hot path, never affects quota
+      -- or rewards. Referral (?ref=) still owns the bonus-quote reward;
+      -- these three columns are pure marketing attribution and coexist
+      -- with a referral code on the same signup.
+      --
+      -- See docs/AD_TEST spec (2026-07-07) for the campaign context.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_source TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_campaign TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_medium TEXT;
     `);
 
     // free_quote_grants: per-(user, quote_token) record of which
@@ -1257,6 +1271,10 @@ app.get('/auth/login', (req, res, next) => {
   if (typeof refRaw === 'string' && refRaw.length > 0 && refRaw.length <= 64) {
     req.session.pendingReferralCode = refRaw;
   }
+  // Ad attribution (2026-08-04): same session-stash pattern as `ref` above.
+  // Direct-to-login ads (fastquote.uk/auth/login?utm_source=meta) land here.
+  // Landing/signup/login paths also stash on their handlers — first-write-wins.
+  stashPendingUtm(req);
   // "Remember this device" checkbox on Universal Login posts back as
   // ?remember=1. We stash the boolean on the session so the post-
   // callback handler can extend cookie.maxAge to 30 days. Default
@@ -1313,6 +1331,11 @@ app.get('/auth/callback',
     const user = req.user;
     const pendingRef = req.session?.pendingReferralCode || null;
     const rememberDevice = !!req.session?.rememberDevice;
+    // Ad attribution (2026-08-04): lift alongside pendingRef BEFORE
+    // regenerate() blows the pre-login session away. Referral and UTM
+    // coexist — a Meta ad referrer who also carries a friend's ?ref=
+    // gets both persisted (ref → bonus quotes, UTM → analytics).
+    const pendingUtm = req.session?.pendingUtm || null;
     req.session.regenerate((err) => {
       if (err) return next(err);
       req.login(user, (loginErr) => {
@@ -1328,6 +1351,15 @@ app.get('/auth/callback',
         // funnel can separate first-login activations from returning
         // logins. Best-effort, swallowed internally.
         recordEvent('signup_completed', user.id, { wasNew: !!user?._isNewUser }).catch(() => {});
+        // Ad attribution — write UTMs to the new user's row. Guarded
+        // by _isNewUser so returning users never have their original
+        // signup_source overwritten by a later ad click. Kicked off
+        // in parallel with the referral apply — both are best-effort
+        // and neither can block the login. Fire-and-forget after
+        // scheduling both so `next()` isn't gated on either finishing.
+        if (pendingUtm && user?._isNewUser) {
+          applyUtmAtSignup(user.id, pendingUtm).catch(() => {});
+        }
         // Best-effort: a failure here must NEVER block the login. The
         // referral helper logs and swallows internally.
         if (pendingRef && user?._isNewUser) {
@@ -1436,6 +1468,59 @@ async function applyReferralAtSignup(refereeUserId, rawCode) {
     throw err;
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Ad attribution — 2026-08-04. Stash a captured UTM payload on the
+ * session so it survives the /→/signup→/login→/auth/login redirect
+ * chain AND the Auth0 round-trip back to /auth/callback. Called at
+ * every entry point (/, /signup, /login, /auth/login) so wherever the
+ * user first lands, the attribution is captured. First-write-wins —
+ * a landing capture is NOT overwritten by a downstream page-view
+ * with different (or missing) UTMs. This mirrors how first-view
+ * ownership works everywhere else in the codebase.
+ *
+ * Note the deliberate parallel with `pendingReferralCode`: same
+ * session mechanism, same "first entry point wins" contract, same
+ * lift-before-regenerate treatment in /auth/callback. Referral and
+ * UTM coexist — a Meta ad referrer who ALSO carries a friend's
+ * ?ref= code gets both persisted (referral drives the bonus quota,
+ * UTM drives analytics). They never conflict.
+ */
+function stashPendingUtm(req) {
+  if (!req?.session || req.session.pendingUtm) return;
+  const utm = pickUtms(req.query || {});
+  if (utm) req.session.pendingUtm = utm;
+}
+
+/**
+ * Ad attribution — 2026-08-04. Apply captured UTMs to the new user's
+ * row. Called ONCE, in the /auth/callback post-login handler, guarded
+ * by `_isNewUser === true` so returning users NEVER have their
+ * original attribution overwritten by a later ad click. Analytics-
+ * only — never touches quota, bonus quotes, subscription state.
+ *
+ * Idempotent-by-guard: the caller only invokes this on the new-user
+ * branch, so the UPDATE always writes columns that were NULL from
+ * the INSERT default. No transaction needed — a single row, three
+ * text columns, no cross-table state.
+ */
+async function applyUtmAtSignup(userId, utm) {
+  if (!userId || !utm) return { applied: false };
+  try {
+    await pool.query(
+      `UPDATE users
+          SET signup_source = $2,
+              signup_campaign = $3,
+              signup_medium = $4
+        WHERE id = $1`,
+      [userId, utm.source, utm.campaign, utm.medium],
+    );
+    return { applied: true };
+  } catch (err) {
+    console.warn('[UTM] applyUtmAtSignup failed:', err.message);
+    return { applied: false, error: err.message };
   }
 }
 
@@ -1846,6 +1931,11 @@ app.get('/login', (req, res) => {
   if (req.isAuthenticated?.() || req.session?.legacyUserId) {
     return res.redirect('/');
   }
+
+  // Ad attribution (2026-08-04): stash UTMs on the session so they
+  // survive the redirect to /auth/login and the subsequent Auth0
+  // round-trip. First-write-wins — no-op if landing already captured.
+  stashPendingUtm(req);
 
   // Referrals Phase 1 (2026-06-23) + Auth0 (2026-06-29): forward `?ref=`
   // and `?remember=` through to /auth/login so the OAuth state carries
@@ -2498,7 +2588,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
           <div class="demo-head">
             <span class="demo-live">
               <span class="demo-dot" aria-hidden="true"></span>
-              Live &middot; Beck Farm, HD8
+              Live &middot; Nook Farm, FD8
             </span>
             <button type="button" class="demo-replay" aria-label="Replay demo">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2849,6 +2939,11 @@ app.get('/', (req, res, next) => {
   if (req.isAuthenticated?.() || req.session?.legacyUserId) {
     return next();
   }
+  // Ad attribution — capture ?utm_* on the landing page BEFORE we
+  // render, so the value survives clicks through /signup → /login →
+  // /auth/login → Auth0 → callback. First-write-wins so a later
+  // page-view can't overwrite the ad-referrer origin.
+  stashPendingUtm(req);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(LANDING_PAGE_HTML);
 });
@@ -2865,6 +2960,11 @@ app.get('/signup', (req, res) => {
   // the ref before /auth/login's session-stash sees it. Normalised
   // here so a malformed value never reaches downstream routes.
   const ref = normaliseReferralCode(req.query.ref);
+  // Ad attribution (2026-08-04): stash UTMs here too so an ad URL of
+  // fastquote.uk/signup?utm_source=meta lands the attribution on the
+  // session even though the redirect chain drops the query string.
+  // First-write-wins — safe to call at every entry point.
+  stashPendingUtm(req);
   const qs = ref ? `?ref=${encodeURIComponent(ref)}` : '';
   res.redirect(302, `/login${qs}`);
 });
@@ -3862,7 +3962,17 @@ app.put('/api/users/:id/jobs/:jobId/status', async (req, res) => {
       //   "magically went out again". Added 2026-06-29 alongside the
       //   dashboard redesign's Re-open kebab action.
       declined:  ['sent', 'draft'],
-      completed: [],                // terminal state
+      // completed → draft: same rationale as declined → draft.
+      // Mark's 2026-07-23 UAT: "unarchive in case a client re-appears,
+      // which they do sometimes". A client who returns 12 months
+      // later is best served by the finished job coming BACK into
+      // the waller's hands as a fresh draft (edit price / update
+      // scope) rather than staying pinned in the terminal Completed
+      // bucket. SavedQuotes kebab exposes this via Re-open on
+      // Archive tab; Dashboard kebab keeps completed terminal by
+      // design (the Recent list is bounded, so accumulation isn't
+      // an issue there).
+      completed: ['draft'],
     };
     const currentStatus = rows[0].current_status || 'draft';
     const allowed = VALID_TRANSITIONS[currentStatus] || [];
@@ -5470,6 +5580,21 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       )
       SELECT
         u.id AS "userId", u.name, u.plan, u.last_login_at AS "lastLoginAt",
+        -- Ad attribution (2026-08-04, PR 2 of AD_TEST). Nullable —
+        -- NULL renders as "direct" on the dashboard. Projected here
+        -- so the same per-user row carries both the funnel signal
+        -- and the analytics-source signal without a second query.
+        u.signup_source AS "signupSource",
+        u.signup_campaign AS "signupCampaign",
+        u.signup_medium AS "signupMedium",
+        -- Paying signal for the Source summary + per-user column.
+        -- subscription_status is the Stripe truth; purchased_quotes
+        -- captures the £9.99 pack path. A user is "Paying" if EITHER
+        -- is truthy — see the SourceSummarySection docs.
+        -- (No backticks in SQL comments inside a JS template literal —
+        --  JS parses them as template delimiters before the SQL is sent.)
+        u.subscription_status AS "subscriptionStatus",
+        COALESCE(u.purchased_quotes, 0) AS "purchasedQuotes",
         COALESCE(j.jobs, 0) AS "jobs",
         COALESCE(j.rams_count, 0) AS "ramsCount",
         COALESCE(j.active_days, 0) AS "activeDays",
@@ -5488,6 +5613,47 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       LEFT JOIN user_fails f ON f.user_id = u.id
       LEFT JOIN user_audio a ON a.user_id = u.id
       ORDER BY COALESCE(t.prompt_tokens + t.completion_tokens, 0) DESC
+    `);
+
+    // ── Signups by source (2026-08-04, ad-attribution PR 2) ─────────
+    // The £100 Meta ad test needs cost-per-paying-signup. This is the
+    // funnel — one row per distinct `signup_source`, plus a
+    // "direct" bucket for the NULL rows (organic / word-of-mouth /
+    // pre-attribution-launch signups).
+    //
+    // "activated" = at least one `quote_analysed` event on record.
+    // Same signal the funnel widget uses (see EVENT_NAME_ALLOWLIST) —
+    // more reliable than any jobs-side probe because it fires
+    // server-side on both the photo and video paths and predates
+    // the events table being disabled by ad-blockers (it isn't).
+    //
+    // "paying" = active subscription OR any purchased pack quotes on
+    // the row today. Refunded packs still count as "paying at some
+    // point" (refunds don't roll back purchased_quotes — see
+    // docs/REFUNDS.md). Good enough for a first ad test; if the
+    // refund rate spikes we'll revisit.
+    //
+    // COALESCE(signup_source, 'direct') gives us the fallback bucket
+    // without a UNION or a two-round trip. NEVER interpolates user
+    // input — all SQL literals below are hard-coded.
+    const signupsBySourceQuery = pool.query(`
+      SELECT
+        COALESCE(u.signup_source, 'direct') AS "source",
+        COUNT(*)::int AS "signups",
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1 FROM events e
+            WHERE e.user_id = u.id
+              AND e.event_name = 'quote_analysed'
+          )
+        )::int AS "activated",
+        COUNT(*) FILTER (
+          WHERE u.subscription_status = 'active'
+             OR COALESCE(u.purchased_quotes, 0) > 0
+        )::int AS "paying"
+      FROM users u
+      GROUP BY COALESCE(u.signup_source, 'direct')
+      ORDER BY COUNT(*) DESC
     `);
 
     // ── Per-quote spend (top 20 most-expensive quotes in window) ─────
@@ -5737,6 +5903,7 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       pageviewsPerDayRes, pageviewsTopPathsRes,
       errorsPerDayRes, errorsRecentRes, retentionRes,
       eventsTopRes, eventsFunnelRes, eventsSummaryRes,
+      signupsBySourceRes,
     ] = await Promise.all([
       usersQuery, signupsQuery, quotesQuery, perUserQuery, perQuoteQuery,
       spendByModelQuery, failuresQuery, retryQueueQuery, portalQuery, dailyTrendQuery,
@@ -5744,6 +5911,7 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       pageviewsPerDayQuery, pageviewsTopPathsQuery,
       errorsPerDayQuery, errorsRecentQuery, retentionQuery,
       eventsTopQuery, eventsFunnelQuery, eventsSummaryQuery,
+      signupsBySourceQuery,
     ]);
 
     // Convert per-user token totals into £ for the dashboard. Per-user
@@ -5764,11 +5932,19 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       }
       const audioBytes = Number(u.whisperAudioBytes) || 0;
       const whisperGbp = whisperBytesToGbp(audioBytes);
+      // Ad-attribution PR 2 — `isPaying` is the truth signal used by
+      // the Source summary. Computed here (not in SQL) so the JS
+      // fallback for `purchased_quotes` being NULL on pre-2026-06-24
+      // users is consistent with the summary query's COALESCE above.
+      const isPaying = u.subscriptionStatus === 'active'
+        || (Number(u.purchasedQuotes) || 0) > 0;
       return {
         ...u,
         promptTokens: Number(u.promptTokens) || 0,
         completionTokens: Number(u.completionTokens) || 0,
         whisperAudioBytes: audioBytes,
+        purchasedQuotes: Number(u.purchasedQuotes) || 0,
+        isPaying,
         estimatedCostGbp: Number((modelCostGbp + whisperGbp).toFixed(4)),
       };
     });
@@ -5860,6 +6036,16 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       quotes: quotesRes.rows[0] || {},
       perUser: usersWithCost,
       perQuote: perQuoteWithCost,
+      // Ad-attribution PR 2 (2026-08-04). One row per distinct
+      // signup_source, plus a synthesised "direct" bucket for the
+      // NULL rows. Sorted by signups DESC so the top ad source
+      // lands at the top of the SourceSummarySection table.
+      signupsBySource: signupsBySourceRes.rows.map((r) => ({
+        source: r.source,
+        signups: Number(r.signups) || 0,
+        activated: Number(r.activated) || 0,
+        paying: Number(r.paying) || 0,
+      })),
       spend: {
         totalGbp: Number(totalCostGbp.toFixed(2)),
         byModel: spendByModelWithCost,

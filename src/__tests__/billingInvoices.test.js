@@ -292,15 +292,41 @@ describe('BillingSection component', () => {
     expect(billingSectionJsx).toMatch(/rel=['"]noopener noreferrer['"]/);
   });
 
-  test('Manage subscription button POSTs to /api/billing/portal', () => {
+  test('subscribed-state button POSTs to /api/billing/portal and surfaces "cancel" in the label', () => {
+    // The Stripe portal is the canonical cancel path (Stripe owns the
+    // cancel-at-period-end flow + retention offers), but "Manage
+    // subscription" alone hid the cancel option — Mark's 2026-08-04
+    // UAT flagged that he couldn't find where to cancel. Label MUST
+    // include the word "cancel" so the path is discoverable.
     expect(billingSectionJsx).toMatch(/fetch\(['"]\/api\/billing\/portal['"],\s*\{\s*method:\s*['"]POST['"]/);
-    expect(billingSectionJsx).toMatch(/Manage subscription/);
+    expect(billingSectionJsx).toMatch(/Manage or cancel subscription/);
   });
 
-  test('subscription card hidden unless user has an active subscription', () => {
-    // The `isSubscribed` gate keys off /api/billing/status response.
+  test('subscribed-vs-non-subscribed branch keys off /api/billing/status', () => {
+    // The `isSubscribed` gate drives which card renders. Both branches
+    // must exist — before 2026-08-04 the false branch rendered nothing
+    // and non-subscribers had no path to subscribe from Settings.
     expect(billingSectionJsx).toMatch(/isSubscribed/);
     expect(billingSectionJsx).toMatch(/state === ['"]active['"]/);
+    expect(billingSectionJsx).toMatch(/isSubscribed\s*\?/);
+  });
+
+  test('non-subscribed card exposes a Subscribe CTA that POSTs /api/billing/checkout', () => {
+    // Mark's 2026-08-04 UAT: "here we need the option for the monthly
+    // subscription". Before this the Subscribe path was only reachable
+    // via the QuotaCounter banner, which is quota-state gated and
+    // invisible in Settings — Mark bought a £9.99 pack and had no way
+    // to upgrade to monthly from the Billing tab.
+    expect(billingSectionJsx).toMatch(/data-billing-card=['"]subscribe['"]/);
+    expect(billingSectionJsx).toMatch(/data-action=['"]subscribe-monthly['"]/);
+    expect(billingSectionJsx).toMatch(/fetch\(['"]\/api\/billing\/checkout['"],\s*\{\s*method:\s*['"]POST['"]/);
+    // Same helper copy as the QuotaCounter subscribe pill — "Cancel
+    // anytime" reassurance defuses subscription anxiety and mirrors
+    // the copy on stripe.fastquote.uk marketing.
+    expect(billingSectionJsx).toMatch(/Cancel anytime/);
+    // Guard against a flash of the wrong card while status is loading
+    // (would flip Subscribe → Manage for an already-subscribed user).
+    expect(billingSectionJsx).toMatch(/!loading\s*&&/);
   });
 
   test('no banned AI vocabulary leaks into the user-facing copy', () => {
