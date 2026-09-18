@@ -5104,7 +5104,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       const analysisResponse = await callAnthropicRaw({
         systemPrompt: augmentedPrompt,
         messages: [{ role: 'user', content: imageContent }],
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-5',
         maxTokens: 4000,
         // Low temperature for structured measurement extraction so
         // identical inputs converge on similar outputs. Without this,
@@ -5258,7 +5258,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
 // We now enforce a model allowlist, a token ceiling, a body-size
 // ceiling, and a defensive message-array length cap.
 const ANTHROPIC_MODEL_ALLOWLIST = new Set([
-  'claude-sonnet-4-5-20250929',     // primary analysis
+  'claude-sonnet-5',     // primary analysis
   'claude-haiku-4-5-20251001',    // agent calls
   // Add new models explicitly. Never wildcard.
 ]);
@@ -5956,7 +5956,7 @@ app.get('/api/admin/analytics', requireAuth, requireAdminPlan, async (req, res) 
       // default since analyse calls are Sonnet (background agents on
       // Haiku contribute much less spend).
       const estimatedCostGbp = tokensToGbp(
-        'claude-sonnet-4-5-20250929', promptTokens, completionTokens
+        'claude-sonnet-5', promptTokens, completionTokens
       );
       return {
         ...q,
@@ -7438,7 +7438,7 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
     const r = await pool.query(
       `INSERT INTO agent_runs (user_id, agent_type, status, model)
        VALUES ($1, 'analyse', 'running', $2) RETURNING id`,
-      [req.params.id, typeof model === 'string' ? model : 'claude-sonnet-4-5-20250929']
+      [req.params.id, typeof model === 'string' ? model : 'claude-sonnet-5']
     );
     analyseRunId = r.rows[0]?.id;
   } catch (err) {
@@ -7448,7 +7448,7 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   // SECURITY (sec-audit H-1): clamp model + max_tokens to the same
   // allowlist/ceiling the proxy enforces. Prevents an authenticated
   // user from forcing Opus calls or 200k-token outputs.
-  const requestedModel = typeof model === 'string' ? model : 'claude-sonnet-4-5-20250929';
+  const requestedModel = typeof model === 'string' ? model : 'claude-sonnet-5';
   if (!ANTHROPIC_MODEL_ALLOWLIST.has(requestedModel)) {
     console.warn(`[Analyse] reject user=${req.user?.id} model="${requestedModel}"`);
     return res.status(400).json({ error: `Model not permitted` });
