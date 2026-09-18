@@ -354,22 +354,12 @@ shown to the tradesman's end customer. Use professional trade language:
 - Keep measurements in millimetres.
 
 DAMAGE DESCRIPTION FORMAT:
-The damageDescription must be structured as numbered sections, one per damaged
-component or area. Each section starts with a numbered header line in the format:
-  1 — Component Name
-followed by a detailed paragraph describing that component's damage, dimensions,
-construction style, and structural observations. Example:
-
-  1 — Sandstone Gate Pier
-  The principal sandstone gate pier, measuring approximately 300mm x 300mm x 1350mm,
-  has suffered significant structural displacement...
-
-  2 — Brick Retaining Wall
-  The brick retaining wall adjacent to the gate entrance extends approximately 2400mm...
-
-Use an em dash (—) between the number and title. Include specific dimensions,
-stone types, mortar conditions, and structural observations in each section.
-If there is only one damaged component, still use "1 — [component name]".
+Write the damageDescription as one or more plain paragraphs of continuous prose.
+Do not use numbered section headers, em dashes, or any other prefix before the
+description — begin directly with the descriptive text. Where you need to
+separate distinct damaged components or areas, use a new paragraph. Include
+specific dimensions, stone types, mortar conditions, and structural observations.
+Do not use em dashes (—) anywhere in the damageDescription; use commas instead.
 
 SCHEDULE OF WORKS DETAIL:
 Each schedule step description must include:
@@ -394,9 +384,8 @@ Return ONLY valid JSON. No preamble, no markdown fences. Schema:
   "referenceCardDetected": boolean,
   "referenceCardNote": "string",
   "stoneType": "sandstone | gritstone | limestone | slate | unknown",
-  "damageDescription": "string — numbered sections (1 — Component Name\\n paragraph),
-    one per damaged component, with dimensions, stone types, mortar conditions,
-    and structural observations",
+  "damageDescription": "string — plain prose paragraphs, no numbered headers or em dashes,
+    with dimensions, stone types, mortar conditions, and structural observations",
   "measurements": [
     {
       "item": "string",
