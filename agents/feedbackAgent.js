@@ -85,7 +85,7 @@ Analyse what likely went wrong (or right) with this quote.`;
     agentType: 'feedback',
     systemPrompt: FEEDBACK_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userContent }],
-    model: 'claude-haiku-4-5-20251001',
+    model: 'claude-opus-5',
     maxTokens: 2000,
     inputSummary: {
       feedback: completionFeedback,

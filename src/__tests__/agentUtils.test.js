@@ -64,7 +64,7 @@ describe('completeAgentRun', () => {
     const pool = mockPool();
     await completeAgentRun(pool, 'run-1', {
       output: { corrections: [], notes: 'All good', confidence: 1.0 },
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-opus-5',
       promptTokens: 1500,
       completionTokens: 300,
       durationMs: 2500,
@@ -74,7 +74,7 @@ describe('completeAgentRun', () => {
     expect(call.sql).toContain("status = 'completed'");
     expect(call.sql).toContain('output_summary');
     expect(JSON.parse(call.params[0])).toEqual({ corrections: [], notes: 'All good', confidence: 1.0 });
-    expect(call.params[1]).toBe('claude-haiku-4-5-20251001');
+    expect(call.params[1]).toBe('claude-opus-5');
     expect(call.params[2]).toBe(1500);
     expect(call.params[3]).toBe(300);
     expect(call.params[4]).toBe(2500);

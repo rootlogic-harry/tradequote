@@ -28,7 +28,9 @@ const ANTHROPIC_PRICES_USD_PER_MTOK = {
   // Legacy — rows written before the upgrade
   'claude-sonnet-4-20250514': { input: 3, output: 15 },
   'claude-sonnet-4-5-20250929': { input: 3, output: 15 },
-  // Haiku 4.5 (background agents — self-critique, feedback, calibration)
+  // Opus 5 (background agents — self-critique, feedback, calibration, upgraded 2026-09-18)
+  'claude-opus-5': { input: 5, output: 25 },
+  // Haiku 4.5 — legacy, kept for historical agent_runs rows
   'claude-haiku-4-5-20251001': { input: 1, output: 5 },
 };
 

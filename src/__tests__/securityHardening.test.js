@@ -92,7 +92,7 @@ describe('sec-audit H-1 — Anthropic proxy enforces model + token caps', () => 
     // The two models we actually use.
     // Upgraded to Sonnet 5 on 2026-09-18.
     expect(serverSrc).toMatch(/['"]claude-sonnet-5['"]/);
-    expect(serverSrc).toMatch(/['"]claude-haiku-4-5-20251001['"]/);
+    expect(serverSrc).toMatch(/['"]claude-opus-5['"]/);
   });
 
   test('caps max_tokens at a sane ceiling (cost DoS guard)', () => {
