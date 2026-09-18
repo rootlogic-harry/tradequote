@@ -182,7 +182,7 @@ Check for internal consistency issues in this dry stone wall repair quote analys
     agentType: 'self_critique',
     systemPrompt: CRITIQUE_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userContent }],
-    model: 'claude-haiku-4-5-20251001', // Fast model for critique — cost-efficient
+    model: 'claude-opus-5',
     maxTokens: 2000,
     inputSummary: {
       materialsCount: analysis.materials?.length,

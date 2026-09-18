@@ -17,10 +17,16 @@ describe('tokensToGbp', () => {
     expect(gbp).toBeCloseTo(14.22, 2);
   });
 
-  test('Haiku 4.5: 1M input + 1M output → £4.74', () => {
+  test('Haiku 4.5: 1M input + 1M output → £4.74 (legacy rows)', () => {
     // 1M × $1 + 1M × $5 = $6; × 0.79 = £4.74
     const gbp = tokensToGbp('claude-haiku-4-5-20251001', 1_000_000, 1_000_000);
     expect(gbp).toBeCloseTo(4.74, 2);
+  });
+
+  test('Opus 5: 1M input + 1M output → £23.70', () => {
+    // 1M × $5 + 1M × $25 = $30; × 0.79 = £23.70
+    const gbp = tokensToGbp('claude-opus-5', 1_000_000, 1_000_000);
+    expect(gbp).toBeCloseTo(23.70, 2);
   });
 
   test('typical analyse call (10k input, 2k output) on Sonnet 4 → ~£0.05', () => {
@@ -59,7 +65,8 @@ describe('metadata exports', () => {
   test('knownModels lists current allowlist', () => {
     const models = knownModels();
     expect(models).toContain('claude-sonnet-4-20250514');
-    expect(models).toContain('claude-haiku-4-5-20251001');
+    expect(models).toContain('claude-haiku-4-5-20251001'); // legacy
+    expect(models).toContain('claude-opus-5');
   });
 
   test('PRICES_LAST_REVIEWED is an ISO date string', () => {

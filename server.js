@@ -5259,7 +5259,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
 // ceiling, and a defensive message-array length cap.
 const ANTHROPIC_MODEL_ALLOWLIST = new Set([
   'claude-sonnet-5',     // primary analysis
-  'claude-haiku-4-5-20251001',    // agent calls
+  'claude-opus-5',                // agent calls
   // Add new models explicitly. Never wildcard.
 ]);
 const ANTHROPIC_MAX_TOKENS_CEILING = 8192;   // generous for analysis output

@@ -71,7 +71,7 @@ describe('runCalibrationAgent', () => {
     expect(mockRunAgent).toHaveBeenCalledTimes(1);
     const call = mockRunAgent.mock.calls[0][0];
     expect(call.agentType).toBe('calibration');
-    expect(call.model).toBe('claude-haiku-4-5-20251001');
+    expect(call.model).toBe('claude-opus-5');
     expect(call.userId).toBe('admin1');
     expect(call.jobId).toBeNull();
   });
