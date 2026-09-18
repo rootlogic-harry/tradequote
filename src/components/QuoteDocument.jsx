@@ -100,43 +100,24 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   // Filter out empty / £0 material rows for display
   const displayMaterials = materials.filter(mat => mat.description?.trim() && mat.totalCost > 0);
 
-  // Render description with bold numbered section headers
+  // Render description as plain prose paragraphs.
+  // Strips any legacy "1 — Component Name" section headers that older
+  // quotes may contain, and converts em dashes to commas throughout.
   const renderDescription = (text) => {
     if (!text) return null;
-    const lines = text.split('\n');
-    const headerPattern = /^\d+\s*[—–-]\s*(.+)$/;
-    const elements = [];
-    let bodyLines = [];
-
-    const flushBody = () => {
-      if (bodyLines.length > 0) {
-        const content = bodyLines.join('\n').trim();
-        if (content) {
-          elements.push(
-            <p key={`body-${elements.length}`} className="text-lg text-gray-700 whitespace-pre-wrap mb-3">{content}</p>
-          );
-        }
-        bodyLines = [];
-      }
-    };
-
-    for (const line of lines) {
-      if (headerPattern.test(line)) {
-        flushBody();
-        elements.push(
-          <p key={`hdr-${elements.length}`} className="text-lg text-gray-800 font-bold mt-4 mb-1">{line}</p>
-        );
-      } else {
-        bodyLines.push(line);
-      }
-    }
-    flushBody();
-
-    // Fallback: if no headers detected, render as single paragraph
-    if (elements.length === 0) {
-      return <p className="text-lg text-gray-700 whitespace-pre-wrap">{text}</p>;
-    }
-    return <>{elements}</>;
+    const normalised = text
+      .replace(/^\d+\s*[—–-]\s*.+$/gm, '')  // strip numbered header lines
+      .replace(/—/g, ',')                     // em dash → comma
+      .replace(/\n{3,}/g, '\n\n')             // collapse excess blank lines
+      .trim();
+    if (!normalised) return null;
+    return (
+      <>
+        {normalised.split('\n\n').filter(Boolean).map((para, i) => (
+          <p key={i} className="text-lg text-gray-700 whitespace-pre-wrap mb-3">{para.trim()}</p>
+        ))}
+      </>
+    );
   };
 
   return (
