@@ -5,8 +5,19 @@
 # Chromium runtime libs needed by @sparticuz/chromium never made it into
 # the image, so Puppeteer would have failed to launch on the first PDF
 # request. With a Dockerfile we control apt exactly.
-
-FROM node:20-bullseye-slim
+#
+# Base bumped bullseye -> bookworm (2026-09-19). Debian 11 (bullseye)'s
+# security repo has moved off deb.debian.org onto archive.debian.org as
+# packages age out of support, which surfaced as `apt-get install`
+# 404-ing on half the Chromium runtime libs mid-build (discovered via a
+# diagnostic parallel Railway service that landed on a healthy build
+# node and actually got far enough to hit the real error, instead of
+# the primary service's stuck-builder symptom masking it). Bookworm
+# (Debian 12) is still in full security support, keeps the exact same
+# apt package names as bullseye for every lib below (the libFOOt64
+# rename only lands in trixie/13), and @sparticuz/chromium 147.x is
+# built against a glibc baseline bookworm satisfies comfortably.
+FROM node:20-bookworm-slim
 
 # Runtime shared libs + fonts that Chromium (bundled by @sparticuz/chromium)
 # needs to launch headless. ffmpeg stays for the video processing pipeline.
