@@ -43,6 +43,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 # Then the rest of the app + build
+# BUILD_DATE busts the layer cache when Railway's cache gets stuck
+ARG BUILD_DATE
 COPY . .
 RUN npm run build
 
