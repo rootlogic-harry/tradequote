@@ -105,7 +105,7 @@ FastQuote is a production AI-powered quote generator for dry stone walling profe
 | Voice-to-text | OpenAI Whisper (`openai` SDK), `multer` for upload |
 | Video processing | ffmpeg (apt), fluent-ffmpeg (frame extraction, audio extraction) |
 | Testing | Jest 29 (ESM), TDD |
-| Build | `Dockerfile` (node:20-bullseye-slim, apt-installs ffmpeg + Chromium runtime libs). `railway.toml` declares `builder = "dockerfile"`. **No `nixpacks.toml`** — Nixpacks was abandoned (silently dropping aptPkgs). |
+| Build | `Dockerfile` (node:20-bookworm-slim, apt-installs ffmpeg + Chromium runtime libs). Bumped from bullseye 2026-09-19 — bullseye's security repo had aged off `deb.debian.org` onto the archive, 404-ing the apt-get install mid-build. `railway.toml` declares `builder = "dockerfile"`. **No `nixpacks.toml`** — Nixpacks was abandoned (silently dropping aptPkgs). |
 | Hosting | Railway (auto-deploy on push to `main`) |
 | Fonts | Barlow Condensed (headings), Inter (body), JetBrains Mono (money) |
 
