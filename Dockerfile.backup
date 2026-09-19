@@ -14,15 +14,19 @@
 #     optionally BACKUP_ALERT_WEBHOOK
 #   - See docs/BACKUP.md for the full runbook.
 
-FROM node:20-bullseye-slim
+# Base bumped bullseye -> bookworm (2026-09-19), same fix as the main
+# Dockerfile: bullseye's security repo has aged off deb.debian.org onto
+# the archive, 404-ing apt-get installs mid-build. See Dockerfile's own
+# comment for the full story.
+FROM node:20-bookworm-slim
 
 # postgresql-client-18 provides pg_dump matching the Railway-managed
-# Postgres 18 server. Debian bullseye's default `postgresql-client`
-# metapackage is v13, which pg_dump refuses to use against a v18
+# Postgres 18 server. Debian bookworm's default `postgresql-client`
+# metapackage is older, which pg_dump refuses to use against a v18
 # server ("server version mismatch"). We pull the matching major
-# from the PGDG APT repo. curl + gnupg are needed only to fetch and
-# trust the PGDG signing key; we purge them after to keep the image
-# lean.
+# from the PGDG APT repo (bookworm-pgdg — PGDG maintains a repo per
+# Debian release). curl + gnupg are needed only to fetch and trust the
+# PGDG signing key; we purge them after to keep the image lean.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -30,7 +34,7 @@ RUN apt-get update \
       gnupg \
   && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
        | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
-  && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bullseye-pgdg main" \
+  && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
        > /etc/apt/sources.list.d/pgdg.list \
   && apt-get update \
   && apt-get install -y --no-install-recommends postgresql-client-18 \
