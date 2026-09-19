@@ -41,9 +41,6 @@ export default function RamsDocument({ rams, profile, showPhotos = true }) {
           <p className="text-lg font-bold text-gray-800" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             RISK ASSESSMENT &amp; METHOD STATEMENT
           </p>
-          <p>{formatDate(rams.documentDate)}</p>
-          <p>{profile?.phone}</p>
-          <p>{profile?.email}</p>
         </div>
       </div>
 
