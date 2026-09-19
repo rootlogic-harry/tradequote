@@ -180,12 +180,14 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
         } catch (e) { console.warn('Logo failed:', e); }
       }
 
-      // Header
+      // Header. Date/phone/email line removed 2026-09-19 (Mark's WhatsApp
+      // UAT) — it sat directly under the logo with no separation and read
+      // as cluttered; contact info is still covered by the Organisation &
+      // Contact and Emergency Contact Details sections further down.
       children.push(
         new Paragraph({ children: [txt(rams.company || '', { bold: true, size: 36, font: HEADING_FONT })], spacing: { after: 40 } }),
-        new Paragraph({ children: [txt('RISK ASSESSMENT & METHOD STATEMENT', { bold: true, size: 28, color: '444444', font: HEADING_FONT })], spacing: { after: 40 } }),
         new Paragraph({
-          children: [txt(`${formatDateSimple(rams.documentDate)}  |  ${profile?.phone || ''}  |  ${profile?.email || ''}`, { size: 20, color: '666666' })],
+          children: [txt('RISK ASSESSMENT & METHOD STATEMENT', { bold: true, size: 28, color: '444444', font: HEADING_FONT })],
           spacing: { after: 300 },
           border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' } },
         }),
