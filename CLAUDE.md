@@ -546,7 +546,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~4,440 tests across ~200 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~4,480 tests across ~205 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -1026,6 +1026,15 @@ The author thought the COALESCE protected against a no-op when the session didn'
 Diagnostics log **structure only** (`describeResponseShape`: block types, `stop_reason`, token counts) — never the response text, which contains customer site addresses.
 
 **Model-upgrade checklist:** before merging any change of Claude model, make ONE live call on the real request shape (same params, same `max_tokens`) and inspect `content` block types + `stop_reason` + `usage`. The Sonnet 5 upgrade shipped two outages back to back (`temperature` 400s on 2026-09-19, this on 2026-09-20) because unit tests mock the API.
+
+### 19. Word is strict where Pages isn't — DOCX packages must be structurally valid (2026-09-20)
+
+Mark's Word downloads showed *"Word found unreadable content … recover?"*. The exporter had been tuned in Pages.app, which silently tolerates packages that Word rejects. Two root causes, both reproduced from the real exporter:
+
+1. **`ImageRun` without `type`.** docx v9 requires `type: 'jpg' | 'png' | 'gif' | 'bmp'` on raster images. Omitted, it does not throw — the picture is written as `word/media/<hash>.undefined` with **no content type registered**. Use `decodeImageDataUrl()` from `src/utils/docxSafe.js`: it detects the type from the image's **magic bytes** (never the data-URL MIME) and throws for formats Word can't embed (webp) — the per-image `try/catch` then skips that one picture instead of corrupting the file. `imageRunContract.test.js` fails CI if any `new ImageRun` lacks `type` or bypasses the helper.
+2. **Control characters in text.** XML 1.0 forbids C0 controls (`\u0000-\u0008`, `\u000B`, `\u000C`, `\u000E-\u001F`). One stray vertical tab from dictation or a PDF paste makes `document.xml` malformed. Every `TextRun` in `exportDocx.js` and `RamsOutput.jsx` goes through `sanitizeXmlText()` inside the `txt()` helper — keep new text on that path.
+
+`exportDocx.test.js` runs the REAL exporter and inspects the zip (media extensions have registered content types; no illegal XML characters). **Pages/Preview opening a file proves nothing about Word.** Known upstream quirk, deliberately not worked around: docx 9.6.1 gives every image `wp:docPr id="1"`; Word tolerates it.
 
 ---
 

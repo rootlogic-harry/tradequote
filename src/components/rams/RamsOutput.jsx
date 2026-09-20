@@ -6,6 +6,7 @@ import { COMMON_PPE } from '../../data/ramsDefaults.js';
 import { updateJobRams } from '../../utils/userDB.js';
 import useDragReorder from '../../hooks/useDragReorder.js';
 import { buildQuoteFilename } from '../../utils/quoteFilename.js';
+import { decodeImageDataUrl, sanitizeXmlText } from '../../utils/docxSafe.js';
 
 function formatDateSimple(iso) {
   if (!iso) return '';
@@ -147,7 +148,8 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
 
       const txt = (text, opts = {}) => {
         const { font: fontName, ...rest } = opts;
-        return new TextRun({ text, font: { name: fontName || BODY_FONT }, ...rest });
+        // sanitizeXmlText: XML-illegal control characters make Word report the file as corrupt.
+        return new TextRun({ text: sanitizeXmlText(text), font: { name: fontName || BODY_FONT }, ...rest });
       };
 
       const monoTxt = (text, opts = {}) => txt(text, { ...opts, font: MONO_FONT });
@@ -163,10 +165,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
       // Logo
       if (profile?.logo) {
         try {
-          const logoBase64 = profile.logo.split(',')[1];
-          const logoBytes = atob(logoBase64);
-          const logoArray = new Uint8Array(logoBytes.length);
-          for (let k = 0; k < logoBytes.length; k++) logoArray[k] = logoBytes.charCodeAt(k);
+          const { data: logoArray, type: logoType } = decodeImageDataUrl(profile.logo);
           const logoImg = new Image();
           logoImg.src = profile.logo;
           await new Promise(resolve => { logoImg.onload = resolve; logoImg.onerror = resolve; });
@@ -174,7 +173,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
           let logoW = 200, logoH = logoW / logoAspect;
           if (logoH > 80) { logoH = 80; logoW = logoH * logoAspect; }
           children.push(new Paragraph({
-            children: [new ImageRun({ data: logoArray, transformation: { width: Math.round(logoW), height: Math.round(logoH) } })],
+            children: [new ImageRun({ type: logoType, data: logoArray, transformation: { width: Math.round(logoW), height: Math.round(logoH) } })],
             spacing: { after: 100 },
           }));
         } catch (e) { console.warn('Logo failed:', e); }
@@ -340,10 +339,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
           for (let j = 0; j < 2 && i + j < filteredPhotos.length; j++) {
             const photo = filteredPhotos[i + j];
             try {
-              const base64Data = photo.data.split(',')[1];
-              const byteChars = atob(base64Data);
-              const byteArray = new Uint8Array(byteChars.length);
-              for (let k = 0; k < byteChars.length; k++) byteArray[k] = byteChars.charCodeAt(k);
+              const { data: byteArray, type: photoType } = decodeImageDataUrl(photo.data);
 
               const img = new Image();
               img.src = photo.data;
@@ -356,7 +352,7 @@ export default function RamsOutput({ rams, profile, dispatch, showToast, onBackT
 
               pageChildren.push(
                 new Paragraph({
-                  children: [new ImageRun({ data: byteArray, transformation: { width: Math.round(drawW), height: Math.round(drawH) } })],
+                  children: [new ImageRun({ type: photoType, data: byteArray, transformation: { width: Math.round(drawW), height: Math.round(drawH) } })],
                   spacing: { before: 100, after: 40 },
                 }),
                 new Paragraph({

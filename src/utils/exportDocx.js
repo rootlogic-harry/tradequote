@@ -32,6 +32,7 @@
 import { formatCurrency, formatDate } from './quoteBuilder.js';
 import { photoMaxDimensions } from './photoLayout.js';
 import { DEFAULT_NOTES } from './defaultNotes.js';
+import { decodeImageDataUrl, sanitizeXmlText } from './docxSafe.js';
 
 export async function exportQuoteAsDocx({
   jobDetails,
@@ -69,11 +70,14 @@ export async function exportQuoteAsDocx({
     right:  { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' },
   };
 
-  // Text-run helper with proper font embedding
+  // Text-run helper with proper font embedding. Every string passes through
+  // sanitizeXmlText: XML 1.0 forbids control characters (a stray vertical tab
+  // from dictation/paste makes document.xml malformed and Word reports
+  // "unreadable content" — 2026-09-20).
   const txt = (text, opts = {}) => {
     const { font: fontName, ...rest } = opts;
     return new TextRun({
-      text,
+      text: sanitizeXmlText(text),
       font: { name: fontName || BODY_FONT },
       ...rest,
     });
@@ -96,12 +100,9 @@ export async function exportQuoteAsDocx({
   // Logo in Word header
   if (profile.logo) {
     try {
-      const logoBase64 = profile.logo.split(',')[1];
-      const logoBytes = atob(logoBase64);
-      const logoArray = new Uint8Array(logoBytes.length);
-      for (let k = 0; k < logoBytes.length; k++) {
-        logoArray[k] = logoBytes.charCodeAt(k);
-      }
+      // Throws for formats Word can't embed (e.g. webp) → caught below, the
+      // logo is skipped and the rest of the document stays valid.
+      const { data: logoArray, type: logoType } = decodeImageDataUrl(profile.logo);
       const logoImg = new Image();
       logoImg.src = profile.logo;
       await new Promise((resolve) => { logoImg.onload = resolve; logoImg.onerror = resolve; });
@@ -120,6 +121,10 @@ export async function exportQuoteAsDocx({
         new Paragraph({
           children: [
             new ImageRun({
+              // `type` is REQUIRED by docx v9. Omitted, the image is written as
+              // word/media/<hash>.undefined with no content type and Word
+              // reports the file as corrupt (2026-09-20).
+              type: logoType,
               data: logoArray,
               transformation: { width: Math.round(logoW), height: Math.round(logoH) },
             }),
@@ -555,12 +560,8 @@ export async function exportQuoteAsDocx({
       for (let j = 0; j < 2 && i + j < filteredPhotos.length; j++) {
         const photo = filteredPhotos[i + j];
         try {
-          const base64Data = photo.data.split(',')[1];
-          const byteChars = atob(base64Data);
-          const byteArray = new Uint8Array(byteChars.length);
-          for (let k = 0; k < byteChars.length; k++) {
-            byteArray[k] = byteChars.charCodeAt(k);
-          }
+          // Throws for formats Word can't embed → this photo is skipped.
+          const { data: byteArray, type: photoType } = decodeImageDataUrl(photo.data);
 
           const img = new Image();
           img.src = photo.data;
@@ -585,6 +586,7 @@ export async function exportQuoteAsDocx({
               alignment: AlignmentType.CENTER,
               children: [
                 new ImageRun({
+                  type: photoType,
                   data: byteArray,
                   transformation: {
                     width: Math.round(drawW),
