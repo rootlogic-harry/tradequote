@@ -7375,7 +7375,10 @@ import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 // response can't strand the user on the "Reviewing analysis..." screen
 // (Paul saw 9+ minutes — the socket-idle timeout in callAnthropicRaw
 // doesn't fire when the upstream drips bytes).
-const SELF_CRITIQUE_TIMEOUT_MS = 25_000;
+// 45s: measured 23.8s for the Opus 5 critique at effort 'low' in production
+// (2026-09-20) — the old 25s left ~1s of margin, so a slightly slower run would
+// have been skipped silently. It only adds wall-clock when the critique is slow.
+const SELF_CRITIQUE_TIMEOUT_MS = 45_000;
 
 app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;

@@ -129,7 +129,9 @@ describe('DOCX section spacing', () => {
   it('inserts an explicit spacer paragraph between the quote-ref shaded block and DESCRIPTION OF DAMAGE', () => {
     // Pages.app visually collapses paragraph-after spacing when the
     // preceding paragraph has shading. An empty <Paragraph> forces the gap.
-    const block = quoteOutput.match(/shading:\s*\{\s*fill:\s*['"]F5F5F5['"][\s\S]*?DESCRIPTION OF DAMAGE/);
+    // `shading` also carries type/color (w:val is schema-required — 2026-09-20), so
+    // don't assume `fill` is the first key.
+    const block = quoteOutput.match(/shading:\s*\{[^}]*fill:\s*['"]F5F5F5['"][^}]*\}[\s\S]*?DESCRIPTION OF DAMAGE/);
     expect(block).not.toBeNull();
     // Between the shaded ref and the next heading there must be a spacer
     // paragraph with children: []

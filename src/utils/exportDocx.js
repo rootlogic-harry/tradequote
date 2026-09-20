@@ -32,6 +32,8 @@
 import { formatCurrency, formatDate } from './quoteBuilder.js';
 import { photoMaxDimensions } from './photoLayout.js';
 import { DEFAULT_NOTES } from './defaultNotes.js';
+import { decodeImageDataUrl, sanitizeXmlText, createImageIdGenerator, imageAltText } from './docxSafe.js';
+import { descriptionParagraphs } from './damageDescription.js';
 
 export async function exportQuoteAsDocx({
   jobDetails,
@@ -49,7 +51,7 @@ export async function exportQuoteAsDocx({
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     WidthType, AlignmentType, BorderStyle, ImageRun, TableLayoutType,
-    convertInchesToTwip, SectionType, Footer, Header,
+    convertInchesToTwip, SectionType, Footer, Header, ShadingType,
   } = await import('docx');
 
   const {
@@ -69,16 +71,28 @@ export async function exportQuoteAsDocx({
     right:  { style: BorderStyle.SINGLE, size: 1, color: 'DDDDDD' },
   };
 
-  // Text-run helper with proper font embedding
+  // Text-run helper with proper font embedding. Every string passes through
+  // sanitizeXmlText: XML 1.0 forbids control characters (a stray vertical tab
+  // from dictation/paste makes document.xml malformed and Word reports
+  // "unreadable content" — 2026-09-20).
   const txt = (text, opts = {}) => {
     const { font: fontName, ...rest } = opts;
     return new TextRun({
-      text,
+      text: sanitizeXmlText(text),
       font: { name: fontName || BODY_FONT },
       ...rest,
     });
   };
   const monoTxt = (text, opts = {}) => txt(text, { ...opts, font: MONO_FONT });
+
+  // A raw "\n" inside <w:t> renders as a space in Word, so a multi-line
+  // string becomes one run per line with a real <w:br/> between them.
+  const multilineRuns = (text, opts = {}) =>
+    String(text).split('\n').map((line, i) => txt(line, i === 0 ? opts : { ...opts, break: 1 }));
+
+  // One id generator per document: every image's wp:docPr id must be unique
+  // document-wide (docx 9.6.1 would otherwise give them all id="1").
+  const nextImageId = createImageIdGenerator();
 
   // Table column widths in twips. A4 page = 11906 twips; with 1in
   // margins each side = 9026 twips usable. Sized conservatively to
@@ -96,12 +110,9 @@ export async function exportQuoteAsDocx({
   // Logo in Word header
   if (profile.logo) {
     try {
-      const logoBase64 = profile.logo.split(',')[1];
-      const logoBytes = atob(logoBase64);
-      const logoArray = new Uint8Array(logoBytes.length);
-      for (let k = 0; k < logoBytes.length; k++) {
-        logoArray[k] = logoBytes.charCodeAt(k);
-      }
+      // Throws for formats Word can't embed (e.g. webp) → caught below, the
+      // logo is skipped and the rest of the document stays valid.
+      const { data: logoArray, type: logoType } = decodeImageDataUrl(profile.logo);
       const logoImg = new Image();
       logoImg.src = profile.logo;
       await new Promise((resolve) => { logoImg.onload = resolve; logoImg.onerror = resolve; });
@@ -120,8 +131,13 @@ export async function exportQuoteAsDocx({
         new Paragraph({
           children: [
             new ImageRun({
+              // `type` is REQUIRED by docx v9. Omitted, the image is written as
+              // word/media/<hash>.undefined with no content type and Word
+              // reports the file as corrupt (2026-09-20).
+              type: logoType,
               data: logoArray,
               transformation: { width: Math.round(logoW), height: Math.round(logoH) },
+              altText: imageAltText(nextImageId, `${profile.companyName || 'Company'} logo`),
             }),
           ],
           spacing: { after: 100 },
@@ -162,7 +178,8 @@ export async function exportQuoteAsDocx({
   // Reference line
   children.push(
     new Paragraph({
-      shading: { fill: 'F5F5F5' },
+      // w:val is REQUIRED by the schema; fill alone is a validation error on every document.
+      shading: { type: ShadingType.CLEAR, color: 'auto', fill: 'F5F5F5' },
       children: [
         txt(
           `${term.title} ref: ${jobDetails.quoteReference} — ${jobDetails.clientName}, ${jobDetails.siteAddress}`,
@@ -186,43 +203,16 @@ export async function exportQuoteAsDocx({
     }),
   );
 
-  // Numbered-section parsing — "1 — Component Name" headers go bold,
-  // bodies render as plain paragraphs underneath.
-  const descText = damageDescription || '';
-  const descLines = descText.split('\n');
-  const descHeaderPattern = /^\d+\s*[—–-]\s*(.+)$/;
-  const hasHeaders = descLines.some((l) => descHeaderPattern.test(l));
-
-  if (hasHeaders) {
-    let bodyBuf = [];
-    const flushDescBody = () => {
-      const content = bodyBuf.join('\n').trim();
-      if (content) {
-        children.push(new Paragraph({
-          children: [txt(content, { size: 22 })],
-          spacing: { after: 120 },
-        }));
-      }
-      bodyBuf = [];
-    };
-    for (const line of descLines) {
-      if (descHeaderPattern.test(line)) {
-        flushDescBody();
-        children.push(new Paragraph({
-          children: [txt(line, { bold: true, size: 22 })],
-          spacing: { before: 200, after: 60 },
-        }));
-      } else {
-        bodyBuf.push(line);
-      }
-    }
-    flushDescBody();
-  } else {
+  // Same normalisation as the on-screen quote (utils/damageDescription.js):
+  // legacy numbered headers stripped, em dash → comma, blank lines separate
+  // paragraphs. A single newline inside a paragraph is a real line break.
+  const descParas = descriptionParagraphs(damageDescription);
+  descParas.forEach((para, idx) => {
     children.push(new Paragraph({
-      children: [txt(descText, { size: 22 })],
-      spacing: { after: 300 },
+      children: multilineRuns(para, { size: 22 }),
+      spacing: { after: idx === descParas.length - 1 ? 300 : 120 },
     }));
-  }
+  });
 
   children.push(new Paragraph({ spacing: { after: 200 }, children: [] }));
 
@@ -555,12 +545,8 @@ export async function exportQuoteAsDocx({
       for (let j = 0; j < 2 && i + j < filteredPhotos.length; j++) {
         const photo = filteredPhotos[i + j];
         try {
-          const base64Data = photo.data.split(',')[1];
-          const byteChars = atob(base64Data);
-          const byteArray = new Uint8Array(byteChars.length);
-          for (let k = 0; k < byteChars.length; k++) {
-            byteArray[k] = byteChars.charCodeAt(k);
-          }
+          // Throws for formats Word can't embed → this photo is skipped.
+          const { data: byteArray, type: photoType } = decodeImageDataUrl(photo.data);
 
           const img = new Image();
           img.src = photo.data;
@@ -585,6 +571,8 @@ export async function exportQuoteAsDocx({
               alignment: AlignmentType.CENTER,
               children: [
                 new ImageRun({
+                  type: photoType,
+                  altText: imageAltText(nextImageId, photo.label ? `Site photograph: ${photo.label}` : `Site photograph ${i + j + 1}`),
                   data: byteArray,
                   transformation: {
                     width: Math.round(drawW),
