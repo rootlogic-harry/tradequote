@@ -110,7 +110,9 @@ Do NOT re-propose notes that are already approved (listed above).`;
     systemPrompt: CALIBRATION_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userContent }],
     model: 'claude-opus-5',
-    maxTokens: 3000,
+    // Thinking tokens count against max_tokens on Opus 5 (3000 was sized
+    // for Haiku, no thinking). A ceiling, not a target. 2026-09-20.
+    maxTokens: 8000,
     inputSummary: {
       fieldsAboveThreshold: fieldBias.length,
       feedbackLessonsCount: feedbackRuns.length,

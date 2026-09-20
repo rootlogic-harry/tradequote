@@ -6,6 +6,7 @@ import {
   applyMeasurementPlausibilityBounds,
 } from './aiParser.js';
 import { buildTradesmanProfileBlock } from './tradesmanProfileBlock.js';
+import { extractResponseText } from './anthropicResponse.js';
 
 export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId, quoteToken, onAnalysisSuccess }) {
   try {
@@ -148,7 +149,10 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
     }
 
     const data = await response.json();
-    const rawText = data.content?.[0]?.text || '';
+    // Text block by TYPE — the raw /api/anthropic/messages fallback returns
+    // Anthropic's response verbatim, which on Sonnet 5 leads with a thinking
+    // block that has no text (2026-09-20 incident).
+    const rawText = extractResponseText(data).text;
     const parsed = parseAIResponse(rawText);
 
     if (!parsed) {

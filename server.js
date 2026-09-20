@@ -5113,14 +5113,21 @@ app.post('/api/users/:id/jobs/:jobId/video',
         // (400s the request — see 2026-09-19 outage); `effort` is the
         // documented replacement lever.
         effort: 'low',
+        // claude-sonnet-5 runs adaptive thinking when this is omitted:
+        // thinking tokens eat max_tokens and a thinking block leads the
+        // response (2026-09-20 "unreadable response" incident). This is a
+        // structured-extraction call — it ran without thinking on Sonnet 4.5.
+        thinking: { type: 'disabled' },
         apiKey,
       });
 
-      const rawText = analysisResponse.content?.[0]?.text || '';
+      // Text block by TYPE — never content[0] (see anthropicResponse.js).
+      const rawText = extractResponseText(analysisResponse).text;
 
       // Parse, validate, and normalise using the same aiParser pipeline as the photo path (#1)
       const parsed = parseAIResponse(rawText);
       if (!parsed) {
+        console.warn(`[Video] unreadable model output user=${req.params.id} ${describeResponseShape(analysisResponse)}`);
         return res.status(422).json({ error: 'Analysis returned an unreadable response. Try again.' });
       }
 
@@ -7356,7 +7363,8 @@ app.get('/api/calibration-notes/approved', requireAuth, async (req, res) => {
 import { runSelfCritique } from './agents/selfCritique.js';
 import { runFeedbackAgent } from './agents/feedbackAgent.js';
 import { runCalibrationAgent } from './agents/calibrationAgent.js';
-import { callAnthropicRaw, withTimeout } from './agents/agentUtils.js';
+import { callAnthropicRaw, failAgentRun, withTimeout } from './agents/agentUtils.js';
+import { extractResponseText, describeResponseShape } from './src/utils/anthropicResponse.js';
 import { shouldAutoCalibrate } from './autoCalibration.js';
 import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 
@@ -7499,6 +7507,12 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
           // on claude-sonnet-5 / claude-opus-5 (see 2026-09-19 outage);
           // `effort` is the documented replacement lever.
           effort: 'low',
+          // claude-sonnet-5 runs adaptive thinking when this is omitted —
+          // it eats max_tokens and a thinking block leads the response
+          // (2026-09-20 incident). Structured extraction ran without
+          // thinking on Sonnet 4.5. Opus 5 is left at its default: 'disabled'
+          // has known failure modes there and the client only sends Sonnet.
+          thinking: requestedModel === 'claude-sonnet-5' ? { type: 'disabled' } : undefined,
           apiKey,
         });
         break;
@@ -7517,21 +7531,34 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
     }
     if (!analysisResponse) throw lastErr || new Error('Analysis failed without response');
 
-    const rawText = analysisResponse.content?.[0]?.text || '';
+    // Text block by TYPE — never content[0]: thinking blocks can lead the
+    // response and have no text (2026-09-20 incident).
+    const extracted = extractResponseText(analysisResponse);
+    const rawText = extracted.text;
 
-    // Try to parse the analysis JSON
-    let analysisJson = null;
-    try {
-      const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      const toParse = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
-      analysisJson = JSON.parse(toParse);
-    } catch {
-      // Return raw response if not parseable — let client handle it
-      return res.json({
-        content: [{ type: 'text', text: rawText }],
-        usage: analysisResponse.usage,
-        critiqueNotes: null,
-      });
+    // Same lenient parser the client uses (fences stripped, first "{" to
+    // last "}"): prose-wrapped JSON is recovered and, unlike the old strict
+    // parse + hand-off to the client, still gets self-critique.
+    const analysisJson = parseAIResponse(rawText);
+    if (!analysisJson) {
+      // Previously: HTTP 200 + raw text, no log, run left 'running' — Mark
+      // saw "unreadable" for a day while the error rate read 0%. Now a real
+      // 422, the run is closed as failed, and the log records STRUCTURE only
+      // (block types, stop_reason, tokens) — never the text (site addresses).
+      const shape = describeResponseShape(analysisResponse);
+      console.warn(
+        `[Analyse] unreadable model output user=${req.params.id} model=${requestedModel} ` +
+        `${extracted.truncated ? 'TRUNCATED ' : ''}${shape}`
+      );
+      if (analyseRunId) {
+        await failAgentRun(
+          pool,
+          analyseRunId,
+          `unreadable model output: ${shape}`.slice(0, 500),
+          Date.now() - analyseStart
+        ).catch(() => {});
+      }
+      return res.status(422).json({ error: 'Analysis returned an unreadable response. Try again.' });
     }
 
     // Call 2: Self-critique (fire-and-forget safe — if it fails or

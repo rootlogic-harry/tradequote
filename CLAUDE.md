@@ -471,7 +471,7 @@ Excluded: `aiRawResponse`, `photos`, `extraPhotos`, `step`, `isAnalysing`, `rams
 
 ## AI Agents
 
-Three async agents, all Haiku 4.5, all logged to `agent_runs` table:
+Three async agents, all Opus 5 (`claude-opus-5`, upgraded from Haiku 4.5 on 2026-09-18), all logged to `agent_runs` table. **Opus 5 thinks by default** — see Pitfall #18 for what that means for token budgets and response parsing. Self-critique runs at `effort: 'low'` so it fits its 25s timeout; feedback/calibration run at the model default:
 
 | Agent | File | Purpose | Trigger |
 |-------|------|---------|---------|
@@ -546,7 +546,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~3,990 tests across ~171 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~4,440 tests across ~200 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -1014,6 +1014,18 @@ UPDATE users SET subscription_status = COALESCE($3, subscription_status) WHERE i
 The author thought the COALESCE protected against a no-op when the session didn't carry subscription info. It didn't — the COALESCE protected the `customer` + `subscription` ID columns (which ARE null in payment mode) but not the literal `'active'`. Result: Harry bought a £9.99 quote pack and was implicitly promoted to a full subscriber. The webhook fan-out comment in `server.js` explicitly claimed this was safe; it wasn't.
 
 **Self-check:** When you write `COALESCE($N, ...)`, ask: "Could `$N` ever be a literal non-null value the caller didn't explicitly opt into?" If yes, refactor to an explicit precondition check (`if (session.mode !== 'subscription') return`) before the UPDATE — don't rely on COALESCE to do nothing. Tests in `quotePack.test.js` pin the fix.
+
+### 18. Sonnet 5 / Opus 5 think by default — never read `content[0]`, and budget for thinking (2026-09-20)
+
+`claude-sonnet-5` and `claude-opus-5` run **adaptive thinking whenever the request omits `thinking`**. Three consequences, all of which shipped as a production incident (Mark's analyse returned HTTP 200 with an unreadable body for a day; the error rate read 0%):
+
+1. **A `thinking` block leads the response** and has no `text` (display defaults to "omitted"). `content[0].text` is `undefined` → `''` → `JSON.parse` fails. **Always read text by block type** via `extractResponseText()` in `src/utils/anthropicResponse.js`. `anthropicContentBlocks.test.js` fails CI if any reader in `server.js`, `agents/`, or `analyseJob.js` reads `content[0]` again.
+2. **Thinking tokens count against `max_tokens`.** The pre-upgrade budgets (2000–4000) were sized for models that didn't think. Structured-extraction calls (photo + video analyse) pass `thinking: { type: 'disabled' }` on Sonnet 5 — what they ran as on Sonnet 4.5. The Opus 5 agents keep thinking ON (it helps critique) and have headroom instead: self-critique 4000, feedback 6000, calibration 8000. Do NOT send `disabled` to Opus 5 with `effort` `xhigh`/`max` (400).
+3. **Empty/truncated output must FAIL, never "complete".** `runAgent` throws (and records `agent_runs.status='failed'` with block types + `stop_reason`) when the model returns no text, is cut off at `max_tokens`, or refuses. The photo `/analyse` route returns **422** — not 200 with garbage — and closes its `agent_runs` row as failed. Failures that return 200 are invisible to the HTTP error rate. The photo route parses with the same lenient `parseAIResponse` as the client (first `{` to last `}`), so prose-wrapped JSON still works and still gets self-critique.
+
+Diagnostics log **structure only** (`describeResponseShape`: block types, `stop_reason`, token counts) — never the response text, which contains customer site addresses.
+
+**Model-upgrade checklist:** before merging any change of Claude model, make ONE live call on the real request shape (same params, same `max_tokens`) and inspect `content` block types + `stop_reason` + `usage`. The Sonnet 5 upgrade shipped two outages back to back (`temperature` 400s on 2026-09-19, this on 2026-09-20) because unit tests mock the API.
 
 ---
 
