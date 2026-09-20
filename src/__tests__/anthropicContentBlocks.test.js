@@ -129,7 +129,7 @@ describe('analysis max_tokens headroom (Sonnet 5 tokenizer emits ~30% more token
 describe('agents on claude-opus-5 (thinking stays ON — it helps critique — but budgets must allow for it)', () => {
   const maxTokensOf = (src) => Number(/maxTokens:\s*(\d[\d_]*)/.exec(src)?.[1].replace(/_/g, ''));
 
-  test('self-critique runs at low effort so it fits SELF_CRITIQUE_TIMEOUT_MS (25s)', () => {
+  test('self-critique runs at low effort so it fits SELF_CRITIQUE_TIMEOUT_MS', () => {
     expect(READERS['agents/selfCritique.js']).toMatch(/effort:\s*'low'/);
   });
 
@@ -143,5 +143,24 @@ describe('agents on claude-opus-5 (thinking stays ON — it helps critique — b
   });
   test('calibration maxTokens >= 8000', () => {
     expect(maxTokensOf(READERS['agents/calibrationAgent.js'])).toBeGreaterThanOrEqual(8000);
+  });
+});
+
+describe('operational config (2026-09-20 review)', () => {
+  test('SELF_CRITIQUE_TIMEOUT_MS leaves >= ~2x headroom over the observed ~24s Opus 5 critique', () => {
+    // Measured in production at effort 'low': 23.8s against the old 25s limit —
+    // a slightly slower run would have silently skipped the critique.
+    const ms = Number(/SELF_CRITIQUE_TIMEOUT_MS\s*=\s*([\d_]+)/.exec(serverSrc)[1].replace(/_/g, ''));
+    expect(ms).toBeGreaterThanOrEqual(45000);
+  });
+
+  test("agentUtils DEFAULT_MODEL is a model the proxy allowlist actually permits", () => {
+    // It was 'claude-sonnet-4-5-20250929' (retired lineage, not allowlisted).
+    // All callers pass a model today, but a future caller that forgets would
+    // have sent a model the rest of the system rejects.
+    const allow = serverSrc.match(/ANTHROPIC_MODEL_ALLOWLIST\s*=\s*new Set\(\[([\s\S]*?)\]\)/)[1];
+    const allowed = [...allow.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const def = /const DEFAULT_MODEL\s*=\s*'([^']+)'/.exec(READERS['agents/agentUtils.js'])[1];
+    expect(allowed).toContain(def);
   });
 });

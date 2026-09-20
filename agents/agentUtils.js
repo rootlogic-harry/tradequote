@@ -3,12 +3,13 @@ import { extractResponseText, describeResponseShape } from '../src/utils/anthrop
 
 const ANTHROPIC_API_URL = 'api.anthropic.com';
 const ANTHROPIC_API_PATH = '/v1/messages';
-// Hotfix 2026-06-16: Anthropic retired claude-sonnet-4-20250514
-// (Paul started hitting 404 not_found_error on every analyse call).
-// Migrated to Sonnet 4.5 — same pricing ($3/$15 per MTok), behaviourally
-// close. The old string is kept in src/utils/anthropicPricing.js for
-// historical agent_runs row cost-out only.
-const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
+// Fallback ONLY for callers that omit `model` (all current callers pass one).
+// Must be a model the proxy allowlist permits — anthropicContentBlocks.test.js
+// enforces it. History: Sonnet 4 was retired 2026-06-16 (Paul hit 404s) and
+// this moved to Sonnet 4.5; on 2026-09-18 the app moved to Sonnet 5 but this
+// default was left on the old id (2026-09-20 review). Old ids stay in
+// src/utils/anthropicPricing.js for historical agent_runs cost-out only.
+const DEFAULT_MODEL = 'claude-sonnet-5';
 const DEFAULT_MAX_TOKENS = 4000;
 
 /**

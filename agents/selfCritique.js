@@ -185,7 +185,7 @@ Check for internal consistency issues in this dry stone wall repair quote analys
     model: 'claude-opus-5',
     // Opus 5 thinks by default and thinking tokens count against
     // max_tokens (2000 was sized for Haiku). Low effort keeps the critique
-    // inside SELF_CRITIQUE_TIMEOUT_MS (25s) in server.js — it runs
+    // inside SELF_CRITIQUE_TIMEOUT_MS (45s) in server.js — it runs
     // synchronously in the user's request. 2026-09-20.
     effort: 'low',
     maxTokens: 4000,
