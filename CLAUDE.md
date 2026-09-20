@@ -546,7 +546,7 @@ Completion tracking bar at top. Sticky pill bar for quick-jump navigation. Expor
 
 **Command:** `npm test`
 
-**Current count:** ~4,480 tests across ~205 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
+**Current count:** ~4,530 tests across ~207 suites (unit + video processing + measurement plausibility + review layout + dictation robustness + quote document layout + analytics + profile-gate + regression harness + quota gate + referrals Phase 1 + unified quotes banner + pay-as-you-go pack + landing Daylight re-theme + mobile touch-target lint + per-guide JSON-LD). API integration and security suites run separately via `npm run test:api` / `npm run test:security` (both need a live `DATABASE_URL`).
 
 **TDD approach:** Write tests first, confirm failure, implement, confirm green.
 
@@ -1029,12 +1029,18 @@ Diagnostics log **structure only** (`describeResponseShape`: block types, `stop_
 
 ### 19. Word is strict where Pages isn't — DOCX packages must be structurally valid (2026-09-20)
 
-Mark's Word downloads showed *"Word found unreadable content … recover?"*. The exporter had been tuned in Pages.app, which silently tolerates packages that Word rejects. Two root causes, both reproduced from the real exporter:
+Mark's Word downloads showed *"Word found unreadable content … recover?"*. The exporters had been tuned in Pages.app, which silently tolerates packages Word rejects. Running Microsoft's own Open XML SDK validator over the real output found **four** defects (there had been no tests at all):
 
-1. **`ImageRun` without `type`.** docx v9 requires `type: 'jpg' | 'png' | 'gif' | 'bmp'` on raster images. Omitted, it does not throw — the picture is written as `word/media/<hash>.undefined` with **no content type registered**. Use `decodeImageDataUrl()` from `src/utils/docxSafe.js`: it detects the type from the image's **magic bytes** (never the data-URL MIME) and throws for formats Word can't embed (webp) — the per-image `try/catch` then skips that one picture instead of corrupting the file. `imageRunContract.test.js` fails CI if any `new ImageRun` lacks `type` or bypasses the helper.
-2. **Control characters in text.** XML 1.0 forbids C0 controls (`\u0000-\u0008`, `\u000B`, `\u000C`, `\u000E-\u001F`). One stray vertical tab from dictation or a PDF paste makes `document.xml` malformed. Every `TextRun` in `exportDocx.js` and `RamsOutput.jsx` goes through `sanitizeXmlText()` inside the `txt()` helper — keep new text on that path.
+1. **`ImageRun` without `type`.** docx v9 requires `type: 'jpg' | 'png' | 'gif' | 'bmp'`. Omitted, it does not throw — the picture becomes `word/media/<hash>.undefined` with **no content type registered**. Use `decodeImageDataUrl()` (`src/utils/docxSafe.js`): it detects the type from **magic bytes** (never the data-URL MIME) and throws for formats Word can't embed (webp); the per-image `try/catch` then skips that one picture instead of corrupting the file.
+2. **Control characters in text.** XML 1.0 forbids C0 controls (`\u0000-\u0008`, `\u000B`, `\u000C`, `\u000E-\u001F`); one stray vertical tab (dictation, PDF paste) makes `document.xml` malformed. Every `TextRun` goes through `sanitizeXmlText()` inside the `txt()` helper — keep new text on that path.
+3. **`shading: { fill }` without `val`.** `<w:shd w:val>` is schema-required; the validator flagged **every** document (even with no images). Always `shading: { type: ShadingType.CLEAR, color: 'auto', fill }`.
+4. **Duplicate `wp:docPr id`.** docx 9.6.1 gives every image `id="1"` (its id generator is recreated per image). The validator rates it a Semantic error. Give each image a unique id and alt text via `altText: imageAltText(nextImageId, label)` with one `createImageIdGenerator()` **per document, shared across all sections**.
 
-`exportDocx.test.js` runs the REAL exporter and inspects the zip (media extensions have registered content types; no illegal XML characters). **Pages/Preview opening a file proves nothing about Word.** Known upstream quirk, deliberately not worked around: docx 9.6.1 gives every image `wp:docPr id="1"`; Word tolerates it.
+Also: a raw `\n` inside `<w:t>` renders as a space in Word — multi-line text needs one run per line with `break: 1` (`multilineRuns` in both exporters). The damage description is normalised by ONE shared function (`src/utils/damageDescription.js`: strip legacy numbered headers, em dash → comma, blank lines → paragraphs) used by both `QuoteDocument` and `exportDocx`, so screen/PDF and Word can't drift (they had: #152 updated only the screen).
+
+**Both exporters live in `src/utils/`** (`exportDocx.js`, `exportRamsDocx.js`) — never inline in a React component (the RAMS one used to be, which is why it was never tested and had drifted: it omitted Work types and Additional Method Description that the on-screen RAMS shows). `imageRunContract.test.js` fails CI for an `ImageRun` without `type`, one that bypasses `decodeImageDataUrl`, or any exporter inside `components/`. `exportDocx.test.js` / `exportRamsDocx.test.js` run the REAL exporters and check the zip via `src/__tests__/helpers/docxInspect.js` (content types, illegal chars, `w:shd`, unique `docPr`, cells end in a paragraph, relationships).
+
+**Pages/Preview opening a file proves nothing about Word.** Before shipping any exporter change, validate real output with Microsoft's validator (offline, no install into the repo): `npx @xarsh/ooxml-validator file.docx` (JSON: `ok` + `errors`). Known limitation: the Jest checks encode the rules found so far; the validator is the broader net.
 
 ---
 

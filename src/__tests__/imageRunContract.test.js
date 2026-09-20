@@ -32,7 +32,11 @@ const withImageRun = files.filter((f) => /new ImageRun\(/.test(f.src));
 describe('ImageRun always declares a type', () => {
   test('the scan finds the known ImageRun call sites (guards the guard)', () => {
     const names = withImageRun.map((f) => f.p);
-    expect(names).toEqual(expect.arrayContaining(['utils/exportDocx.js', 'components/rams/RamsOutput.jsx']));
+    expect(names).toEqual(expect.arrayContaining(['utils/exportDocx.js', 'utils/exportRamsDocx.js']));
+  });
+
+  test('exporters stay out of React components (they must be testable + validated; RamsOutput used to hold one inline)', () => {
+    expect(withImageRun.map((f) => f.p).filter((p) => p.startsWith('components/'))).toEqual([]);
   });
 
   test.each(withImageRun.map((f) => [f.p, f.src]))('%s: every new ImageRun({ ... }) has `type:`', (_p, src) => {

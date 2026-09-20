@@ -63,7 +63,30 @@ export function decodeImageDataUrl(dataUrl) {
 export function sanitizeXmlText(value) {
   if (value == null) return '';
   return String(value)
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
     // lone high surrogate (not followed by a low) or lone low (not preceded by a high)
     .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
+}
+
+/**
+ * docx 9.6.1 gives EVERY image `wp:docPr id="1"` (its id generator is recreated
+ * per image). Microsoft's Open XML validator rates that a Semantic error
+ * ("Attribute 'id' should have unique value"). The id is settable via
+ * altText.id, so hand each image one from a per-document counter.
+ *
+ * @returns {() => string} next id ("1", "2", …) — one generator per document,
+ *   shared across every section (ids are unique document-wide)
+ */
+export function createImageIdGenerator() {
+  let n = 0;
+  return () => String(++n);
+}
+
+/**
+ * altText for an ImageRun: unique id + non-empty name/description/title (alt
+ * text for screen readers; Word also expects a name on every drawing).
+ */
+export function imageAltText(nextId, label) {
+  const text = sanitizeXmlText(label).trim() || 'Image';
+  return { id: nextId(), name: text, description: text, title: text };
 }

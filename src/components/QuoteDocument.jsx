@@ -4,6 +4,7 @@ import { calculateAllTotals } from '../utils/calculations.js';
 import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 import { documentTerm } from '../utils/documentType.js';
 import { aspectBand } from '../utils/photoLayout.js';
+import { descriptionParagraphs } from '../utils/damageDescription.js';
 
 // Inline-editable text — switches between a static element and an auto-growing
 // textarea (or input) based on `editable`. When not editable the markup is
@@ -100,21 +101,16 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
   // Filter out empty / £0 material rows for display
   const displayMaterials = materials.filter(mat => mat.description?.trim() && mat.totalCost > 0);
 
-  // Render description as plain prose paragraphs.
-  // Strips any legacy "1 — Component Name" section headers that older
-  // quotes may contain, and converts em dashes to commas throughout.
+  // Render description as plain prose paragraphs. Normalisation (strip legacy
+  // numbered headers, em dash → comma, collapse blank lines) is shared with the
+  // Word export via utils/damageDescription.js so the two never drift.
   const renderDescription = (text) => {
-    if (!text) return null;
-    const normalised = text
-      .replace(/^\d+\s*[—–-]\s*.+$/gm, '')  // strip numbered header lines
-      .replace(/—/g, ',')                     // em dash → comma
-      .replace(/\n{3,}/g, '\n\n')             // collapse excess blank lines
-      .trim();
-    if (!normalised) return null;
+    const paragraphs = descriptionParagraphs(text);
+    if (paragraphs.length === 0) return null;
     return (
       <>
-        {normalised.split('\n\n').filter(Boolean).map((para, i) => (
-          <p key={i} className="text-lg text-gray-700 whitespace-pre-wrap mb-3">{para.trim()}</p>
+        {paragraphs.map((para, i) => (
+          <p key={i} className="text-lg text-gray-700 whitespace-pre-wrap mb-3">{para}</p>
         ))}
       </>
     );
