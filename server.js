@@ -5105,7 +5105,9 @@ app.post('/api/users/:id/jobs/:jobId/video',
         systemPrompt: augmentedPrompt,
         messages: [{ role: 'user', content: imageContent }],
         model: 'claude-sonnet-5',
-        maxTokens: 4000,
+        // 8000: Sonnet 5's tokenizer emits ~30% more tokens than 4.x (4000 was
+        // tuned on Sonnet 4.5). A ceiling, not a target. 2026-09-20.
+        maxTokens: 8000,
         // Low effort for structured measurement extraction so identical
         // inputs converge on similar outputs. Without this, re-running
         // analysis on the same video produced ~£10k swings (Paul,
@@ -7464,7 +7466,7 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   }
   const requestedMaxTokens = typeof max_tokens === 'number' && max_tokens > 0
     ? Math.min(max_tokens, ANTHROPIC_MAX_TOKENS_CEILING)
-    : 4000;
+    : 8000; // see analyseJob.js: Sonnet 5 tokenizer headroom (2026-09-20)
 
   try {
     // Use server-side prompt (ignore any client-sent systemPrompt)

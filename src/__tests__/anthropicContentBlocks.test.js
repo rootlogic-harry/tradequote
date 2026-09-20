@@ -98,6 +98,34 @@ describe('video analysis route', () => {
   });
 });
 
+describe('analysis max_tokens headroom (Sonnet 5 tokenizer emits ~30% more tokens than 4.x for the same text)', () => {
+  // 4000 was tuned on Sonnet 4.5. max_tokens is a ceiling, not a target —
+  // raising it costs nothing unless the output is actually that long — and
+  // the server proxy ceiling is 8192. Truncation would surface as a 422.
+  const CEILING = Number(/ANTHROPIC_MAX_TOKENS_CEILING\s*=\s*(\d+)/.exec(serverSrc)[1]);
+
+  test('client requests >= 8000 and never above the server ceiling', () => {
+    const n = Number(/max_tokens:\s*(\d+)/.exec(READERS['src/utils/analyseJob.js'])[1]);
+    expect(n).toBeGreaterThanOrEqual(8000);
+    expect(n).toBeLessThanOrEqual(CEILING);
+  });
+
+  test("photo route's fallback when the client sends none is >= 8000", () => {
+    const start = serverSrc.indexOf("app.post('/api/users/:id/analyse'");
+    const block = serverSrc.slice(start, serverSrc.indexOf('// ─', start + 1));
+    const fallback = Number(/Math\.min\(max_tokens,[^)]*\)\s*:\s*(\d+)/.exec(block)[1]);
+    expect(fallback).toBeGreaterThanOrEqual(8000);
+    expect(fallback).toBeLessThanOrEqual(CEILING);
+  });
+
+  test('video route asks for >= 8000', () => {
+    const idx = serverSrc.indexOf("model: 'claude-sonnet-5'");
+    const n = Number(/maxTokens:\s*(\d+)/.exec(serverSrc.slice(idx, idx + 400))[1]);
+    expect(n).toBeGreaterThanOrEqual(8000);
+    expect(n).toBeLessThanOrEqual(CEILING);
+  });
+});
+
 describe('agents on claude-opus-5 (thinking stays ON — it helps critique — but budgets must allow for it)', () => {
   const maxTokensOf = (src) => Number(/maxTokens:\s*(\d[\d_]*)/.exec(src)?.[1].replace(/_/g, ''));
 
