@@ -18,8 +18,9 @@
  * These source-level scans assert that:
  *   1. callAnthropicRaw forwards the effort parameter when supplied.
  *   2. Both main-analysis call sites in server.js pass a low effort.
- *   3. Self-critique / other agent callers DO NOT silently get an effort
- *      forced — diversity helps the critique surface alternatives.
+ *   3. Self-critique runs at low effort (2026-09-20: it sits under a 25s
+ *      timeout on Opus 5, which thinks by default). Feedback / calibration
+ *      agents still get NO forced effort — they're background jobs.
  *   4. `temperature` is never sent to the Anthropic API from this proxy —
  *      it 400s on both allowlisted models.
  */
@@ -70,10 +71,13 @@ describe('Anthropic effort plumbing (replaces temperature — 2026-09-19)', () =
     }
   });
 
-  test('self-critique runner does not set effort (keeps model default)', () => {
-    // CRITIQUE_SYSTEM_PROMPT benefits from diversity — alternative
-    // interpretations of the same analysis surface more candidate issues.
-    // We deliberately don't lock it to a low effort.
-    expect(selfCritiqueSrc).not.toMatch(/effort:/);
+  test('self-critique runner uses low effort (2026-09-20, Harry-approved)', () => {
+    // Reverses the earlier "don't lock effort" decision. Self-critique runs
+    // synchronously in the user's request path under a 25s wall-clock
+    // timeout (SELF_CRITIQUE_TIMEOUT_MS); on claude-opus-5, which thinks by
+    // default, the model-default effort risks blowing that budget and
+    // silently skipping the critique. Feedback and calibration agents are
+    // unchanged (background, no timeout).
+    expect(selfCritiqueSrc).toMatch(/effort:\s*'low'/);
   });
 });

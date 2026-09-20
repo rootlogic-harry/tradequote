@@ -1,4 +1,5 @@
 import https from 'https';
+import { extractResponseText, describeResponseShape } from '../src/utils/anthropicResponse.js';
 
 const ANTHROPIC_API_URL = 'api.anthropic.com';
 const ANTHROPIC_API_PATH = '/v1/messages';
@@ -105,20 +106,27 @@ async function failAgentRun(pool, runId, errorMessage, durationMs) {
 }
 
 /**
- * Make a raw HTTPS request to the Anthropic Messages API.
- * Returns the parsed JSON response body.
+ * Build the Messages API request body. Split out of callAnthropicRaw so the
+ * wire shape is unit-testable without mocking https.
+ *
+ * `temperature` is rejected outright (400 invalid_request_error) on
+ * claude-sonnet-5 and claude-opus-5 — the only two models this proxy
+ * is allowed to call (ANTHROPIC_MODEL_ALLOWLIST). Discovered 2026-09-19
+ * when it took down 100% of Mark's analyse calls after the Sonnet 5
+ * upgrade. `effort` is the documented replacement lever: callers pass
+ * 'low' when they want tightly-scoped, low-variance output (originally
+ * needed to stop £10k swings between back-to-back runs on identical
+ * inputs — Paul, 2026-05-13); omitted, the model runs at its default
+ * effort.
+ *
+ * `thinking` (2026-09-20): claude-sonnet-5 / claude-opus-5 run ADAPTIVE
+ * THINKING when the field is omitted. Thinking tokens count against
+ * max_tokens and the response leads with a thinking block. The structured-
+ * extraction analysis calls pass { type: 'disabled' } (what they ran as on
+ * Sonnet 4.5); the background agents omit it and keep the model default.
+ * Never pass 'disabled' with effort xhigh/max on Opus 5 — that is a 400.
  */
-function callAnthropicRaw({ systemPrompt, messages, model, maxTokens, apiKey, effort }) {
-  // `temperature` is rejected outright (400 invalid_request_error) on
-  // claude-sonnet-5 and claude-opus-5 — the only two models this proxy
-  // is allowed to call (ANTHROPIC_MODEL_ALLOWLIST). Discovered 2026-09-19
-  // when it took down 100% of Mark's analyse calls after the Sonnet 5
-  // upgrade. `effort` is the documented replacement lever: callers pass
-  // 'low' when they want tightly-scoped, low-variance output (originally
-  // needed to stop £10k swings between back-to-back runs on identical
-  // inputs — Paul, 2026-05-13); omitted, the model runs at its default
-  // effort so existing agent calls (self-critique, feedback, calibration)
-  // aren't altered by this change.
+function buildAnthropicPayload({ systemPrompt, messages, model, maxTokens, effort, thinking }) {
   const payload = {
     model: model || DEFAULT_MODEL,
     max_tokens: maxTokens || DEFAULT_MAX_TOKENS,
@@ -128,7 +136,20 @@ function callAnthropicRaw({ systemPrompt, messages, model, maxTokens, apiKey, ef
   if (typeof effort === 'string') {
     payload.output_config = { effort };
   }
-  const body = JSON.stringify(payload);
+  if (thinking && typeof thinking === 'object') {
+    payload.thinking = thinking;
+  }
+  return payload;
+}
+
+/**
+ * Make a raw HTTPS request to the Anthropic Messages API.
+ * Returns the parsed JSON response body.
+ */
+function callAnthropicRaw({ systemPrompt, messages, model, maxTokens, apiKey, effort, thinking }) {
+  const body = JSON.stringify(
+    buildAnthropicPayload({ systemPrompt, messages, model, maxTokens, effort, thinking })
+  );
 
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -180,11 +201,19 @@ function callAnthropicRaw({ systemPrompt, messages, model, maxTokens, apiKey, ef
  * @param {string} opts.systemPrompt - System prompt for Claude
  * @param {Array} opts.messages - Messages array for Claude
  * @param {string} [opts.model] - Model override
- * @param {number} [opts.maxTokens] - Max tokens override
+ * @param {number} [opts.maxTokens] - Max tokens override. On Opus 5 thinking
+ *   tokens count against this, so size it with headroom.
+ * @param {string} [opts.effort] - Optional output_config.effort (omit = model default)
+ * @param {Function} [opts.callFn] - Anthropic caller; defaults to callAnthropicRaw
+ *   (injectable so runAgent's output handling is unit-testable)
  * @param {Object} [opts.inputSummary] - Summary of input for logging
  * @returns {Promise<{runId: string, output: Object, rawText: string}>}
+ * @throws when the model returns no usable text, is truncated at max_tokens,
+ *   or refuses — the run is recorded 'failed', never 'completed' with empty
+ *   output (2026-09-20: thinking blocks made every Opus 5 agent "succeed"
+ *   with an empty rawText).
  */
-async function runAgent({ pool, userId, jobId, agentType, systemPrompt, messages, model, maxTokens, inputSummary }) {
+async function runAgent({ pool, userId, jobId, agentType, systemPrompt, messages, model, maxTokens, effort, callFn = callAnthropicRaw, inputSummary }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY not configured');
@@ -194,17 +223,32 @@ async function runAgent({ pool, userId, jobId, agentType, systemPrompt, messages
   const start = Date.now();
 
   try {
-    const response = await callAnthropicRaw({
+    const response = await callFn({
       systemPrompt,
       messages,
       model: model || DEFAULT_MODEL,
       maxTokens,
+      effort,
       apiKey,
     });
 
     const durationMs = Date.now() - start;
-    const rawText = response.content?.[0]?.text || '';
-    const usage = response.usage || {};
+    // Find the text block by TYPE — on Opus 5 content[0] is a thinking block.
+    const extracted = extractResponseText(response);
+    const rawText = extracted.text;
+    const usage = response?.usage || {};
+
+    if (extracted.truncated || extracted.refused || !extracted.hasText) {
+      // Most specific first. "no usable text" already carries stop_reason
+      // in the shape string, so a thinking-only max_tokens response is
+      // diagnosable from it; "truncated" is for partial text.
+      const why = extracted.refused
+        ? 'model refused'
+        : !extracted.hasText
+          ? 'model returned no usable text'
+          : 'response truncated at max_tokens';
+      throw new Error(`Agent ${agentType}: ${why} (${describeResponseShape(response)})`);
+    }
 
     // Try to parse JSON from the response text
     let parsed = null;
@@ -247,4 +291,4 @@ function withTimeout(promise, ms, label) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-export { runAgent, createAgentRun, completeAgentRun, failAgentRun, callAnthropicRaw, withTimeout };
+export { runAgent, createAgentRun, completeAgentRun, failAgentRun, callAnthropicRaw, buildAnthropicPayload, withTimeout };

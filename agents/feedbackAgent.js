@@ -86,7 +86,9 @@ Analyse what likely went wrong (or right) with this quote.`;
     systemPrompt: FEEDBACK_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userContent }],
     model: 'claude-opus-5',
-    maxTokens: 2000,
+    // Thinking tokens count against max_tokens on Opus 5 (2000 was sized
+    // for Haiku, no thinking). A ceiling, not a target. 2026-09-20.
+    maxTokens: 6000,
     inputSummary: {
       feedback: completionFeedback,
       quoteTotal: totalAmount,

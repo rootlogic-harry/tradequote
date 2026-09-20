@@ -6,6 +6,7 @@ import {
   applyMeasurementPlausibilityBounds,
 } from './aiParser.js';
 import { buildTradesmanProfileBlock } from './tradesmanProfileBlock.js';
+import { extractResponseText } from './anthropicResponse.js';
 
 export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, abortRef, dispatch, userId, quoteToken, onAnalysisSuccess }) {
   try {
@@ -85,7 +86,10 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
       signal: controller.signal,
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 4000,
+        // Sonnet 5's tokenizer emits ~30% more tokens than 4.x for the same
+        // text; 4000 was tuned on Sonnet 4.5. A ceiling, not a target — the
+        // server proxy clamps to 8192. 2026-09-20.
+        max_tokens: 8000,
         messages: [
           {
             role: 'user',
@@ -148,7 +152,10 @@ export async function runAnalysis({ photos, extraPhotos, jobDetails, profile, ab
     }
 
     const data = await response.json();
-    const rawText = data.content?.[0]?.text || '';
+    // Text block by TYPE — the raw /api/anthropic/messages fallback returns
+    // Anthropic's response verbatim, which on Sonnet 5 leads with a thinking
+    // block that has no text (2026-09-20 incident).
+    const rawText = extractResponseText(data).text;
     const parsed = parseAIResponse(rawText);
 
     if (!parsed) {

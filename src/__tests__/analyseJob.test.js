@@ -215,6 +215,29 @@ describe('runAnalysis', () => {
     expect(dispatched.calls[0].error).toContain('unreadable');
   });
 
+  test('reads the text block when the raw proxy response leads with a thinking block (2026-09-20)', async () => {
+    // /api/anthropic/messages (no userId) returns Anthropic's response
+    // verbatim. On claude-sonnet-5 that is [thinking, text] — content[0]
+    // has no .text, so the old client read '' and showed "unreadable".
+    const dispatched = trackDispatch();
+    globalThis.fetch = mockFetchOk({
+      content: [
+        { type: 'thinking', thinking: '', signature: 'sig' },
+        { type: 'text', text: JSON.stringify(VALID_AI_JSON) },
+      ],
+      stop_reason: 'end_turn',
+    });
+
+    const args = baseArgs();
+    args.userId = undefined;
+    args.dispatch = dispatched.fn;
+    await runAnalysis(args);
+
+    expect(dispatched.calls).toHaveLength(1);
+    expect(dispatched.calls[0].type).toBe('ANALYSIS_SUCCESS');
+    expect(dispatched.calls[0].normalised.stoneType).toBe('gritstone');
+  });
+
   test('passes critiqueNotes through from response', async () => {
     const dispatched = trackDispatch();
     globalThis.fetch = mockFetchOk({
