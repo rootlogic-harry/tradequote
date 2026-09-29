@@ -42,6 +42,10 @@ import {
 import {
   isClientsEnabledFromProcessEnv,
 } from './src/utils/clientsEnabled.js';
+import {
+  isHomeownerQuotesEnabledFromProcessEnv,
+} from './src/utils/homeownerQuotesEnabled.js';
+import { registerHomeownerQuoteRoutes } from './homeownerQuotesRoutes.js';
 import { resolveClientRollup } from './src/utils/clientRollup.js';
 
 // Short local alias so tests and route bodies both discover the
@@ -962,6 +966,48 @@ async function initDB() {
     // process.env directly so a future config source (GrowthBook etc.)
     // can be swapped in without touching every route.
 
+    // ─────── Homeowner quotes (West Yorkshire lead pipe) ─────────────
+    //
+    // Public guide-price + ask-a-waller flow. Additive table only.
+    // HOMEOWNER_QUOTES_ENABLED gates routes + UI (fail-closed).
+    // Photos live as JSONB data URLs for the local/test window —
+    // handover says move them to private object storage before scale.
+    // Does NOT touch jobs / quote_diffs / agent_runs / waller quota.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS homeowner_quotes (
+        id                          TEXT PRIMARY KEY,
+        created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        postcode                    TEXT NOT NULL,
+        postcode_outward            TEXT NOT NULL,
+        area_label                  TEXT,
+        in_west_yorkshire           BOOLEAN NOT NULL DEFAULT FALSE,
+        length_m                    NUMERIC NOT NULL,
+        height_m                    NUMERIC NOT NULL,
+        estimate_low                INT NOT NULL,
+        estimate_high               INT NOT NULL,
+        estimate_currency           TEXT NOT NULL DEFAULT 'GBP',
+        homeowner_name              TEXT,
+        homeowner_email             TEXT,
+        homeowner_phone             TEXT,
+        waller_requested            BOOLEAN NOT NULL DEFAULT FALSE,
+        consent_share_with_wallers  BOOLEAN NOT NULL DEFAULT FALSE,
+        consent_marketing           BOOLEAN NOT NULL DEFAULT FALSE,
+        consent_at                  TIMESTAMPTZ,
+        status                      TEXT NOT NULL DEFAULT 'estimate_only',
+        outcome                     TEXT NOT NULL DEFAULT 'unknown',
+        photos                      JSONB NOT NULL DEFAULT '[]'::jsonb,
+        notified_user_ids           TEXT[] NOT NULL DEFAULT '{}',
+        notified_at                 TIMESTAMPTZ,
+        ip_hash                     TEXT
+      );
+      CREATE INDEX IF NOT EXISTS homeowner_quotes_created_idx
+        ON homeowner_quotes (created_at DESC);
+      CREATE INDEX IF NOT EXISTS homeowner_quotes_ip_day_idx
+        ON homeowner_quotes (ip_hash, created_at DESC)
+        WHERE waller_requested = TRUE;
+    `);
+
     // Migrate hardcoded calibration notes to DB (idempotent)
     const hardcodedNotes = [
       { fieldType: 'material_unit_cost', fieldLabel: 'Chapter 8 traffic management', note: 'If any photograph shows the wall is adjacent to a public carriageway, include a Chapter 8 traffic management line item (£380–450). This is a legal requirement for roadside works.' },
@@ -992,6 +1038,12 @@ async function initDB() {
     await client.query(`
       UPDATE users SET plan = 'admin', auth_provider = 'local', profile_complete = true
       WHERE id IN ('mark', 'harry');
+    `);
+    // Local/dev notify targets need an email on the user row. COALESCE
+    // so a real Auth0 email is never overwritten.
+    await client.query(`
+      UPDATE users SET email = COALESCE(email, 'mark@localhost.dev') WHERE id = 'mark';
+      UPDATE users SET email = COALESCE(email, 'harry@localhost.dev') WHERE id = 'harry';
     `);
 
     console.log('Database schema initialised, default users bootstrapped.');
@@ -1697,6 +1749,9 @@ app.get('/auth/me', async (req, res) => {
     // SPA renders the Clients nav entry + list + detail views.
     // When false (default), the routes 404 and the SPA hides the tab.
     clientsEnabled: isClientsEnabledFromProcessEnv(),
+    // Homeowner quotes / West Yorkshire lead pipe. When true, admins
+    // see the Enquiries panel and public /quote routes are live.
+    homeownerQuotesEnabled: isHomeownerQuotesEnabledFromProcessEnv(),
   };
 
   // Quota state (2026-06-22). The SubscriptionBanner reads this to
@@ -2548,12 +2603,13 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
         <span class="brand-mark" aria-hidden="true"></span>FASTQUOTE
       </a>
       <nav class="nav-links" aria-label="Primary">
+        <a href="/quote">Get a quote</a>
         <a href="#how">How it works</a>
         <a href="#pricing">Pricing</a>
       </nav>
       <div class="nav-actions">
-        <a href="/login" class="nav-login">Log in</a>
-        <a href="/signup" class="btn btn-sm btn-primary">Get started &rarr;</a>
+        <a href="/quote" class="btn btn-sm btn-primary">Get a quote</a>
+        <a href="/login" class="nav-login">Waller sign in</a>
       </div>
     </div>
   </header>
@@ -2563,23 +2619,24 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
     <div class="hero-grain" aria-hidden="true"></div>
     <div class="hero-inner">
       <div class="hero-copy">
-        <span class="eyebrow">For UK wallers &mdash; dry stone and mortared</span>
+        <span class="eyebrow">Quotes for customers &middot; Quotes for wallers</span>
         <h1 class="hero-title">
-          From quote to customer.
-          <span class="hero-title-amber">Ready in 5 minutes.</span>
+          A guide price.
+          <span class="hero-title-amber">Then a real quote.</span>
         </h1>
         <p class="hero-sub">
-          Spend less time on paperwork, more time doing your job. Take a few
-          photos of the wall &mdash; FastQuote handles the measurements,
-          materials and a professional quote, typically in under five minutes.
+          Homeowners get a free guide for a dry stone wall and can ask a
+          West Yorkshire waller to quote the job. Wallers sign in to send
+          their own professional quotes from photos.
         </p>
         <div class="hero-cta-row">
-          <a href="/signup" class="btn btn-lg btn-primary">Get started &rarr;</a>
+          <a href="/quote" class="btn btn-lg btn-primary">Get a quote</a>
+          <a href="/login" class="btn btn-lg btn-ghost">Waller sign in</a>
         </div>
         <ul class="hero-facts">
-          <li>No card needed to try</li>
-          <li>Simple monthly pricing, cancel anytime</li>
-          <li>Built with West Yorkshire wallers</li>
+          <li>Free for homeowners. No account</li>
+          <li>Waller matching is West Yorkshire only</li>
+          <li>Wallers keep simple monthly pricing, cancel anytime</li>
         </ul>
       </div>
 
@@ -2676,8 +2733,8 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
 
   <section class="how" id="how">
     <div class="how-inner">
-      <div class="how-head">
-        <span class="eyebrow section-eyebrow">How it works</span>
+      <div class="how-head" id="for-wallers">
+        <span class="eyebrow section-eyebrow">How it works &mdash; for wallers</span>
         <h2 class="section-title">Three steps. Roughly five minutes.</h2>
       </div>
       <div class="how-grid">
@@ -2838,7 +2895,7 @@ const LANDING_PAGE_HTML = `<!DOCTYPE html>
   <section class="pricing" id="pricing">
     <div class="pricing-inner">
       <div class="pricing-head">
-        <span class="eyebrow section-eyebrow">Pricing</span>
+        <span class="eyebrow section-eyebrow">Pricing for wallers</span>
         <h2 class="section-title">One plan. Built to grow your trade.</h2>
       </div>
       <div class="pricing-card">
@@ -8026,6 +8083,10 @@ const EVENT_NAME_ALLOWLIST = new Set([
   'landing_viewed',       // reserved
   'client_link_copied',   // reserved
   'step_entered',         // reserved
+  // Homeowner quotes (West Yorkshire lead pipe)
+  'homeowner_quote_requested', // public ask-a-waller success
+  'homeowner_waller_notified', // at least one waller email sent
+  'homeowner_outcome_set',     // admin set contacted/visit/won/lost
 ]);
 
 // Internal-user identification — Harry's decision 2026-06-29 was CSV
@@ -8144,8 +8205,23 @@ app.use((err, req, res, _next) => {
   res.status(500).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FastQuote</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;background:#1a1714;color:#f0ede8;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}.brand{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;color:#e8a838;letter-spacing:.05em;margin-bottom:24px}h1{font-size:20px;font-weight:500;margin-bottom:8px}p{color:#999;font-size:14px;margin-bottom:24px}a{color:#e8a838;text-decoration:none;font-size:14px;padding:10px 24px;border:1px solid #3a3630;border-radius:8px;transition:all .15s}a:hover{border-color:#e8a838}</style></head><body><div class="brand">FASTQUOTE</div><h1>Something went wrong</h1><p>Please try again in a moment.</p><a href="/">Go to Dashboard</a></body></html>`);
 });
 
+// --- Homeowner quotes (West Yorkshire) — before SPA fallback ---
+//
+// Public /quote + /e/:id HTML and /api/homeowner/* + /api/admin/enquiries.
+// Flag-gated inside the registrar. Must mount before the catch-all that
+// sends dist/index.html or /quote would load the waller SPA.
+registerHomeownerQuoteRoutes(app, {
+  pool,
+  requireAuth,
+  requireAdminPlan,
+  recordEvent,
+});
+
 // --- Static Files + SPA Fallback ---
 
+// Serve repo public/ so /homeowner/* and /landing/* work without a
+// fresh vite build (Vite also copies public/ → dist/ on build).
+app.use(express.static(join(__dirname, 'public')));
 app.use(express.static(join(__dirname, 'dist')));
 
 app.get('/{*path}', (req, res) => {
@@ -8172,11 +8248,15 @@ app.use((err, req, res, next) => {
 // --- Start Server ---
 
 const PORT = process.env.PORT || 3000;
+// Bind IPv4 explicitly. Node's default listen() is IPv6-only on this
+// host, which accepts 127.0.0.1 inside the VM but never shows up in
+// /proc/net/tcp, so Cursor does not forward the port to the browser.
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Start listening BEFORE DB init so healthcheck can respond immediately
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`FastQuote server running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`FastQuote server running on http://${HOST}:${PORT}`);
   });
 }
 
