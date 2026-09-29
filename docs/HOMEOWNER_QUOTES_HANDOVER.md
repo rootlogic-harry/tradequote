@@ -89,17 +89,21 @@ export DATABASE_URL=postgresql://fastquote:fastquote@127.0.0.1:5432/fastquote
 
 ---
 
-## Review checklist for the follow-on model
+## Review checklist (QA 2026-09-29, local server)
 
-- [ ] Confirm `homeowner_quotes` never writes `jobs`, `quote_diffs`, `agent_runs`, or waller quota.
-- [ ] Confirm non-admin cannot call `/api/admin/enquiries*`.
-- [ ] Confirm Skipton (`BD23`) cannot create a waller request.
-- [ ] Confirm notify list with only `mark` does not email Paul.
-- [ ] Confirm shared `/e/:id` is `noindex` and shows phone only after a successful ask.
-- [ ] Confirm landing CTAs do not imply homeowners pay £19.99.
-- [ ] Confirm `aiTextRemoval` / design law: Enquiries copy has no banned AI vocabulary for any basic-user surface (panel is admin-only).
-- [ ] Privacy copy signed off before prod flag flip.
-- [ ] `npm test` green; local smoke of both flows.
+Checked against a running server with `HOMEOWNER_QUOTES_ENABLED=true` and `HOMEOWNER_NOTIFY_USER_IDS=mark`.
+
+- [x] `homeowner_quotes` writes do not change `jobs`, `quote_diffs`, `agent_runs`, or `users.free_quotes_used` (all stayed 0).
+- [x] No session: `GET /api/admin/enquiries` is 401. Mark demoted to `basic`: API 403 and the side rail has no Enquiries item. Restored to `admin` after the check.
+- [x] Skipton `BD23`, Settle `BD24`, Tadcaster `LS24`, and York `YO1` still get a band and cannot create a request. Leeds, Bradford, Halifax, Huddersfield, Wakefield, and Ilkley can.
+- [x] With Paul present (`paul@localhost.dev`, plan basic), notified ids were `{mark}` only. Console email lines are `homeowner-enquiry:<id>:mark`.
+- [x] `/e/:id` HTML starts `noindex`. The JSON route sends `X-Robots-Tag: noindex, nofollow` and `Cache-Control: no-store`. Phone and photos appear only on a real ask. A name containing `<img onerror>` is shown as text, not executed.
+- [x] £19.99 is under the “Pricing for wallers” heading. The hero does not charge the homeowner.
+- [x] Enquiries copy has no “AI”. A basic user does not see the panel. The rail label “Agents” is the existing admin item, not this feature.
+- [ ] Privacy copy signed off before prod flag flip. Still the two-group notice (tradesperson + uploaded end clients). Do not flip the flag in production yet.
+- [x] Customer UI: height change updates the band, long-wall copy, unticked consent, consent error, Skipton hides the ask, daily cap keeps the band and says “That’s the limit for today”, mobile header shows both actions. Admin UI: Mark and Harry can list and set contacted / visit / won / lost. Bad outcome is 400. Flag off (`PORT=3001`, unset flag) returns 404 for `/quote` and `/api/homeowner/meta`.
+
+`npm test` was green before this QA pass (4564). This pass did not change product code.
 
 ---
 
