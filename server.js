@@ -8248,11 +8248,15 @@ app.use((err, req, res, next) => {
 // --- Start Server ---
 
 const PORT = process.env.PORT || 3000;
+// Bind IPv4 explicitly. Node's default listen() is IPv6-only on this
+// host, which accepts 127.0.0.1 inside the VM but never shows up in
+// /proc/net/tcp, so Cursor does not forward the port to the browser.
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Start listening BEFORE DB init so healthcheck can respond immediately
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`FastQuote server running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`FastQuote server running on http://${HOST}:${PORT}`);
   });
 }
 
