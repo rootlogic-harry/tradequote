@@ -185,6 +185,29 @@ const SANITISE_RULES = {
       return row;
     },
   },
+  homeowner_quotes: {
+    // Direct homeowner PII (West Yorkshire lead pipe). No user_id.
+    // Replace identity fields and drop photo data URLs.
+    columns: ['postcode', 'homeowner_name', 'homeowner_email', 'homeowner_phone', 'photos'],
+    transform(row, colIndex) {
+      if (row[colIndex.postcode] && row[colIndex.postcode] !== '\\N') {
+        row[colIndex.postcode] = 'LS1 1AA';
+      }
+      if (row[colIndex.homeowner_name] && row[colIndex.homeowner_name] !== '\\N') {
+        row[colIndex.homeowner_name] = pickFake(FAKE_CLIENT_NAMES, row[colIndex.homeowner_name]);
+      }
+      if (row[colIndex.homeowner_email] && row[colIndex.homeowner_email] !== '\\N') {
+        row[colIndex.homeowner_email] = pickFake(FAKE_USER_EMAILS, row[colIndex.homeowner_email]);
+      }
+      if (row[colIndex.homeowner_phone] && row[colIndex.homeowner_phone] !== '\\N') {
+        row[colIndex.homeowner_phone] = pickFake(FAKE_PHONES, row[colIndex.homeowner_phone]);
+      }
+      if (row[colIndex.photos] && row[colIndex.photos] !== '\\N') {
+        row[colIndex.photos] = '[]';
+      }
+      return row;
+    },
+  },
   sites: {
     // Address matches the same FAKE_SITE_ADDRESSES pool as jobs.site_address
     // so a site referenced from a job snapshot resolves to the same fake.

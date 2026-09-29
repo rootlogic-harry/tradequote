@@ -21,6 +21,7 @@ import StatusModal from './components/StatusModal.jsx';
 import LearningDashboard from './components/LearningDashboard.jsx';
 import AgentActivity from './components/AgentActivity.jsx';
 import Analytics from './components/Analytics.jsx';
+import Enquiries from './components/Enquiries.jsx';
 import SaveErrorBanner from './components/SaveErrorBanner.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import SubscriptionBanner from './components/SubscriptionBanner.jsx';
@@ -86,6 +87,9 @@ export default function App() {
   // Server-driven via /auth/me → features.clientsEnabled. When false
   // (default), the Sidebar hides the Clients tab and the routes 404.
   const [clientsEnabled, setClientsEnabled] = useState(false);
+  // Homeowner quotes / Enquiries panel (West Yorkshire lead pipe).
+  // Server-driven via /auth/me → features.homeownerQuotesEnabled.
+  const [homeownerQuotesEnabled, setHomeownerQuotesEnabled] = useState(false);
   // Client detail view — id of the currently-open client, or null.
   const [currentClientId, setCurrentClientId] = useState(null);
   // Quota state (2026-06-22) — populated from /auth/me's billing block.
@@ -124,6 +128,7 @@ export default function App() {
           setVideoAnalysisEnabled(!!data.features.videoAnalysisEnabled);
           setEmailIntegrationEnabled(!!data.features.emailIntegrationEnabled);
           setClientsEnabled(!!data.features.clientsEnabled);
+          setHomeownerQuotesEnabled(!!data.features.homeownerQuotesEnabled);
         }
         if (data?.billing) {
           setBilling(data.billing);
@@ -839,6 +844,11 @@ export default function App() {
   const isAdmin = checkAdminPlan(state.currentUser);
 
   const renderContent = () => {
+    // Enquiries panel (admin only, flag-gated)
+    if (currentView === 'enquiries' && isAdmin && homeownerQuotesEnabled) {
+      return <Enquiries />;
+    }
+
     // Analytics dashboard (admin only)
     if (currentView === 'analytics' && isAdmin) {
       return <Analytics />;
@@ -1056,6 +1066,8 @@ export default function App() {
         onGoToAnalytics={() => setCurrentView('analytics')}
         onGoToLearning={() => setCurrentView('learning')}
         onGoToAgents={() => setCurrentView('agents')}
+        onGoToEnquiries={() => setCurrentView('enquiries')}
+        homeownerQuotesEnabled={homeownerQuotesEnabled}
         theme={theme}
         toggleTheme={toggleTheme}
         currentUser={state.currentUser}

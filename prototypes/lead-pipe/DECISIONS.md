@@ -8,7 +8,9 @@ Use **Resend**. Volume is two recipients per enquiry. The API is a single send c
 
 Send from a FastQuote address on a subdomain once DNS is in place, for example `quotes@notify.fastquote.uk`. Do not send from `hello@fastquote.uk`. That mailbox does not exist. The working human inbox today is `fastquote@harrydoyle.uk`, and that stays the place people write back to, not the automated from-address.
 
-Look up Mark and Paul at send time from `users.email`. Do not hardcode inboxes in the page.
+Look up recipients at send time from `users.email`. Do not hardcode inboxes in the page.
+
+**Test window:** notify **Mark only** via `HOMEOWNER_NOTIFY_USER_IDS=mark`. Add Paul when Harry opens the list.
 
 SMS stays out.
 
