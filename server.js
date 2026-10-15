@@ -26,6 +26,7 @@ import {
   listCustomerInvoices,
   formatPurchaseDescription,
 } from './billing.js';
+import { isAdminPlan } from './src/utils/isAdminPlan.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
@@ -994,6 +995,15 @@ async function initDB() {
       WHERE id IN ('mark', 'harry');
     `);
 
+    // Mark Doyle's live Auth0 account. The legacy seed id 'mark' is not
+    // the account he signs in with. Stripe was cancelled (2026-10-15);
+    // admin plan is what keeps the quota gate open. Do NOT set
+    // auth_provider here — this row logs in through Auth0.
+    await client.query(`
+      UPDATE users SET plan = 'admin'
+      WHERE id = 'markdoyle' AND plan IS DISTINCT FROM 'admin';
+    `);
+
     console.log('Database schema initialised, default users bootstrapped.');
   } finally {
     client.release();
@@ -1709,7 +1719,7 @@ app.get('/auth/me', async (req, res) => {
     if (!userId) return null;
     try {
       const r = await pool.query(
-        `SELECT free_quotes_used, bonus_free_quotes, purchased_quotes,
+        `SELECT plan, free_quotes_used, bonus_free_quotes, purchased_quotes,
                 comp_until, subscription_status
          FROM users WHERE id = $1`,
         [userId]
@@ -4922,7 +4932,7 @@ app.post('/api/users/:id/jobs/:jobId/video',
       let quotaUser = null;
       try {
         const { rows } = await pool.query(
-          `SELECT free_quotes_used, bonus_free_quotes, purchased_quotes,
+          `SELECT plan, free_quotes_used, bonus_free_quotes, purchased_quotes,
                   comp_until, subscription_status
            FROM users WHERE id = $1`,
           [userId]
@@ -6478,11 +6488,16 @@ app.post('/api/billing/checkout', requireAuth, billingRateLimit, requireStripe, 
   try {
     const userId = req.user?.id;
     const { rows } = await pool.query(
-      `SELECT id, name, email, subscription_status FROM users WHERE id = $1`,
+      `SELECT id, name, email, plan, subscription_status FROM users WHERE id = $1`,
       [userId]
     );
     const user = rows[0];
     if (!user) return res.status(404).json({ error: 'user not found' });
+    // Admin accounts (Harry, Mark) are not billed. A cancelled Stripe
+    // subscription must not be restartable from the app.
+    if (isAdminPlan(user)) {
+      return res.status(409).json({ error: 'no payment required' });
+    }
     if (user.subscription_status === 'active') {
       return res.status(409).json({ error: 'already subscribed' });
     }
@@ -6554,11 +6569,15 @@ app.post(
     try {
       const userId = req.user?.id;
       const { rows } = await pool.query(
-        `SELECT id, email, subscription_status FROM users WHERE id = $1`,
+        `SELECT id, email, plan, subscription_status FROM users WHERE id = $1`,
         [userId]
       );
       const user = rows[0];
       if (!user) return res.status(404).json({ error: 'user not found' });
+      // Admin accounts are not billed. Don't open a pack checkout.
+      if (isAdminPlan(user)) {
+        return res.status(409).json({ error: 'no payment required' });
+      }
       // Subscribed users don't need a pack. Block to avoid taking money
       // for something that gives the user no benefit.
       if (user.subscription_status === 'active') {
@@ -7401,7 +7420,7 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, re
   let quotaUser = null;
   try {
     const { rows } = await pool.query(
-      `SELECT id, free_quotes_used, bonus_free_quotes, purchased_quotes,
+      `SELECT id, plan, free_quotes_used, bonus_free_quotes, purchased_quotes,
               comp_until, subscription_status, trial_ends_at
        FROM users WHERE id = $1`,
       [userIdParam]

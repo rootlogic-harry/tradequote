@@ -396,6 +396,8 @@ describe('TRQ-150 — server.js wiring', () => {
     const block = serverJs.slice(idx, end);
     expect(block).toMatch(/subscription_status === 'active'/);
     expect(block).toMatch(/res\.status\(409\)\.json\(\{\s*error:\s*'already subscribed'/);
+    expect(block).toMatch(/isAdminPlan\(user\)/);
+    expect(block).toMatch(/no payment required/);
   });
 
   test('portal returns 409 if no Stripe customer yet (must check out first)', () => {

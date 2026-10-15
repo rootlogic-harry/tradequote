@@ -404,6 +404,11 @@ describe('server.js — POST /api/billing/buy-quote-pack', () => {
     expect(routeBlock).toMatch(/res\.status\(409\)/);
   });
 
+  test('returns 409 for admin plans (no pack checkout after a cancelled sub)', () => {
+    expect(routeBlock).toMatch(/isAdminPlan\(user\)/);
+    expect(routeBlock).toMatch(/no payment required/);
+  });
+
   test('calls createQuotePackCheckoutSession with the correct redirect URLs', () => {
     expect(routeBlock).toMatch(/createQuotePackCheckoutSession\(\{/);
     expect(routeBlock).toMatch(/pack_purchased=1/);

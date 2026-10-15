@@ -85,6 +85,25 @@ describe('pickBannerVariant — quota states resolve to "none" (handled by Quota
     ).toBe('past-due');
   });
 
+  test('admin quotaState hides Stripe canceled and past-due banners', () => {
+    // Mark's subscription was cancelled. Admin access stays; the
+    // resubscribe / update-card strips must not render.
+    expect(
+      pickBannerVariant({
+        configured: true,
+        state: 'canceled',
+        quotaState: 'admin',
+      })
+    ).toBe('none');
+    expect(
+      pickBannerVariant({
+        configured: true,
+        state: 'past_due',
+        quotaState: 'admin',
+      })
+    ).toBe('none');
+  });
+
   test('Stripe canceled still wins over quota state (Resubscribe is urgent)', () => {
     expect(
       pickBannerVariant({

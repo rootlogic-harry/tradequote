@@ -195,7 +195,7 @@ export default function Sidebar({
 function RailQuotaChip({ billing }) {
   if (!billing) return null;
   const { quotaState, freeQuotesUsed, freeQuotesLimit, purchasedQuotesRemaining } = billing;
-  if (quotaState === 'subscribed' || quotaState === 'comped') return null;
+  if (quotaState === 'subscribed' || quotaState === 'comped' || quotaState === 'admin') return null;
 
   const freeRemaining = Math.max(0, (freeQuotesLimit || 0) - (freeQuotesUsed || 0));
   const remaining = freeRemaining + (purchasedQuotesRemaining || 0);
