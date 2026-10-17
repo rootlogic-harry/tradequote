@@ -28,6 +28,9 @@
  *      any billing UI. The plan gate does NOT stop Stripe from
  *      charging a card that already exists — cancelling the customer's
  *      subscription in Stripe is a separate concern.)
+ *      Callers MUST select `users.plan`. A row without `plan` reads
+ *      as a basic user and a cancelled subscription locks them out
+ *      (Mark, 2026-10-15).
  *   1. Active Stripe subscription → ALLOW (paid customer; never read
  *      the comp clock or the free-quote counter).
  *   2. Active comp (comp_until > now) → ALLOW (trusted users — Paul

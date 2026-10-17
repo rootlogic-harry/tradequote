@@ -79,18 +79,25 @@ export function freeQuotesCopy(used, limit) {
  * Order of evaluation:
  *
  *   1. Not configured → none
- *   2. Stripe past_due / canceled → those banners (account recovery
+ *   2. quotaState === 'admin' → none. Admin access does not depend
+ *      on Stripe. A cancelled subscription must not ask them to
+ *      resubscribe (Mark, 2026-10-15).
+ *   3. Stripe past_due / canceled → those banners (account recovery
  *      is more urgent than quota copy)
- *   3. quotaState === 'subscribed' | 'comped' | 'free-remaining' |
+ *   4. quotaState === 'subscribed' | 'comped' | 'free-remaining' |
  *      'exhausted' | 'purchased-remaining' → none (QuotaCounter
  *      handles all of these now)
- *   4. Legacy state mapping (trialing/expired/active/unknown) for
+ *   5. Legacy state mapping (trialing/expired/active/unknown) for
  *      backwards-compat with older client builds before the quota
  *      model existed.
  */
 export function pickBannerVariant(status) {
   if (!status) return 'none';
   if (!status.configured) return 'none';
+
+  // Operators (plan=admin) keep working after a Stripe cancellation.
+  // The canceled / past-due strips would tell them to pay again.
+  if (status.quotaState === 'admin') return 'none';
 
   // Stripe-side problems beat quota state — paying customer with a
   // failed card must see Update Card, not free-quote copy.

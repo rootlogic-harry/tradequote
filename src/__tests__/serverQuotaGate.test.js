@@ -62,6 +62,14 @@ describe('/analyse route — gate before doing any Anthropic work', () => {
     );
   });
 
+  test('quota SELECT includes plan so a cancelled subscription does not lock admins', () => {
+    // isAdminPlan reads user.plan. Omitting it made markdoyle look
+    // like a basic user the moment Stripe status left 'active'.
+    expect(analyseBlock).toMatch(
+      /SELECT id, plan, free_quotes_used, bonus_free_quotes, purchased_quotes/
+    );
+  });
+
   test('determines hasActiveSubscription from subscription_status', () => {
     expect(analyseBlock).toMatch(/subscription_status === ['"]active['"]/);
   });
@@ -152,6 +160,16 @@ describe('/analyse route — quota accounting on success', () => {
   });
 });
 
+describe('markdoyle admin bootstrap', () => {
+  test('startup sets plan=admin for the live Auth0 id without touching auth_provider', () => {
+    const idx = serverSrc.indexOf("WHERE id = 'markdoyle'");
+    expect(idx).toBeGreaterThan(-1);
+    const sql = serverSrc.slice(Math.max(0, idx - 120), idx + 80);
+    expect(sql).toMatch(/UPDATE users SET plan = 'admin'/);
+    expect(sql).not.toMatch(/auth_provider/);
+  });
+});
+
 describe('/auth/me extension', () => {
   // Scope to the /auth/me route block.
   const meStart = serverSrc.indexOf("app.get('/auth/me'");
@@ -164,6 +182,12 @@ describe('/auth/me extension', () => {
 
   test('calls resolveQuotaState to build the billing block', () => {
     expect(meBlock).toMatch(/resolveQuotaState\(/);
+  });
+
+  test('loadBilling SELECT includes plan (admin quotaState)', () => {
+    expect(meBlock).toMatch(
+      /SELECT plan, free_quotes_used, bonus_free_quotes, purchased_quotes/
+    );
   });
 
   test('legacy switcher session also returns a billing field', () => {
@@ -198,6 +222,12 @@ describe('Video route also gates on quota (consistent with photo path)', () => {
 
   test('calls quotaGate before any ffmpeg / Whisper work', () => {
     expect(videoBlock).toMatch(/quotaGate\(/);
+  });
+
+  test('video quota SELECT includes plan', () => {
+    expect(videoBlock).toMatch(
+      /SELECT plan, free_quotes_used, bonus_free_quotes, purchased_quotes/
+    );
   });
 
   test('returns 402 quota_exhausted on denial', () => {

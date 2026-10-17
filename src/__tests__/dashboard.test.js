@@ -326,9 +326,10 @@ describe('Sidebar terminology lockdown + rail-quota chip', () => {
     expect(sidebarSrc).toMatch(/RailQuotaChip/);
   });
 
-  it('RailQuotaChip hides itself when subscribed or comped', () => {
+  it('RailQuotaChip hides itself when subscribed, comped, or admin', () => {
     expect(sidebarSrc).toMatch(/quotaState === ['"]subscribed['"]/);
     expect(sidebarSrc).toMatch(/quotaState === ['"]comped['"]/);
+    expect(sidebarSrc).toMatch(/quotaState === ['"]admin['"]/);
   });
 
   it('RailQuotaChip applies `.low` styling when remaining quota ≤ 2', () => {
