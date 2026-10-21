@@ -296,10 +296,13 @@ const CURRENT_VIOLATIONS = [
   // Line numbers shifted by +6 (2026-07-07 — added PeopleIcon function
   // for the Clients nav entry, plus the two extra params on the
   // component signature). Same buttons, same underlying rationale.
-  { file: "src/components/Sidebar.jsx", line: 81, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 138, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 147, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
-  { file: "src/components/Sidebar.jsx", line: 171, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  // Shifted again 2026-09-29 for the Enquiries nav entry (InboxIcon +
+  // onGoToEnquiries). Help link now has minHeight 44 so it dropped
+  // off the list. Same desktop-only buttons.
+  { file: "src/components/Sidebar.jsx", line: 88, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 145, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 154, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
+  { file: "src/components/Sidebar.jsx", line: 178, pr: "PR-future-polish", why: "Desktop-only sidebar nav (hidden <900px so 44px not load-bearing)" },
   // -- src/components/UserSelector.jsx --
   { file: "src/components/UserSelector.jsx", line: 18, pr: "PR-future-polish", why: "Legacy user-selector list (admin/dev)" },
   // -- src/components/UserSwitcher.jsx --

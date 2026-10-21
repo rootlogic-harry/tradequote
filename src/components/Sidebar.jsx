@@ -18,6 +18,7 @@ export default function Sidebar({
   onGoToLearning,
   onGoToAgents,
   onGoToAnalytics,
+  onGoToEnquiries,
   theme,
   toggleTheme,
   currentUser,
@@ -27,6 +28,7 @@ export default function Sidebar({
   onLogout,
   isAdminPlan = false,
   clientsEnabled = false,
+  homeownerQuotesEnabled = false,
   billing = null,
   className = '',
 }) {
@@ -37,6 +39,10 @@ export default function Sidebar({
     // Clients tab — flag-gated (CLIENTS_ENABLED env var → /auth/me
     // features.clientsEnabled → the prop below). See docs/CLIENTS_SPEC_v3.md.
     ...(clientsEnabled && onGoToClients ? [{ key: 'clients', label: 'Clients', icon: PeopleIcon, action: onGoToClients }] : []),
+    // Enquiries — West Yorkshire homeowner asks. Admin-only + flag.
+    ...(isAdminPlan && homeownerQuotesEnabled && onGoToEnquiries
+      ? [{ key: 'enquiries', label: 'Enquiries', icon: InboxIcon, action: onGoToEnquiries }]
+      : []),
     ...(isAdminPlan && onGoToAnalytics ? [{ key: 'analytics', label: 'Analytics', icon: TrendIcon, action: onGoToAnalytics }] : []),
     ...(isAdminPlan && onGoToLearning ? [{ key: 'learning', label: 'Learning', icon: ChartIcon, action: onGoToLearning }] : []),
     ...(isAdminPlan && onGoToAgents ? [{ key: 'agents', label: 'Agents', icon: CpuIcon, action: onGoToAgents }] : []),
@@ -47,6 +53,7 @@ export default function Sidebar({
     (key === 'saved' && currentView === 'saved') ||
     (key === 'new' && currentView === 'editor') ||
     (key === 'clients' && (currentView === 'clients' || currentView === 'clientDetail')) ||
+    (key === 'enquiries' && currentView === 'enquiries') ||
     (key === 'analytics' && currentView === 'analytics') ||
     (key === 'learning' && currentView === 'learning') ||
     (key === 'agents' && currentView === 'agents');
@@ -280,6 +287,14 @@ function CpuIcon({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+    </svg>
+  );
+}
+function InboxIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>
   );
 }

@@ -123,19 +123,19 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
     expect(html).toMatch(/<header class="nav">/);
     expect(html).toMatch(/class="brand"[^>]*>[\s\S]*?FASTQUOTE/);
     expect(html).toMatch(/<nav class="nav-links"/);
-    expect(html).toMatch(/href="\/login"[^>]*class="nav-login">Log in</);
-    expect(html).toMatch(/href="\/signup"[\s\S]{0,200}?Get started/);
+    expect(html).toMatch(/href="\/quote"[\s\S]{0,160}?Get a quote/);
+    expect(html).toMatch(/href="\/login"[^>]*class="nav-login">Waller sign in</);
   });
 
   test('hero section with eyebrow + two-line headline + sub + facts', () => {
     expect(html).toMatch(/<section class="hero">/);
-    expect(html).toMatch(/<span class="eyebrow">For UK wallers &mdash; dry stone and mortared<\/span>/);
-    expect(html).toMatch(/From quote to customer\./);
-    expect(html).toMatch(/<span class="hero-title-amber">Ready in 5 minutes\.<\/span>/);
-    expect(html).toMatch(/Spend less time on paperwork/);
-    expect(html).toMatch(/No card needed to try/);
+    expect(html).toMatch(/Quotes for customers/);
+    expect(html).toMatch(/Quotes for wallers/);
+    expect(html).toMatch(/A guide price\./);
+    expect(html).toMatch(/<span class="hero-title-amber">Then a real quote\.<\/span>/);
+    expect(html).toMatch(/Free for homeowners/);
+    expect(html).toMatch(/West Yorkshire only/i);
     expect(html).toMatch(/cancel anytime/);
-    expect(html).toMatch(/Built with West Yorkshire wallers/);
   });
 
   test('hero sub-copy stays photos-only (honesty guardrail)', () => {
@@ -146,7 +146,7 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
     expect(sub).not.toBeNull();
     expect(sub[1]).not.toMatch(/video/i);
     expect(sub[1]).not.toMatch(/film/i);
-    expect(sub[1]).toMatch(/few\s+photos/i);
+    expect(sub[1]).toMatch(/photos/i);
   });
 
   test('live demo strip carries the three stages + replay + progress bar', () => {
