@@ -151,6 +151,7 @@ describe('renderClientPortal — structure', () => {
   test('Save as PDF downloads the quote file and prints the page only if that fails', () => {
     expect(html).toMatch(/class="cp-btn cp-btn-ghost"[^>]*>[\s\S]*?Save as PDF/i);
     expect(html).toMatch(new RegExp(`/q/${TOKEN}/pdf`));
+    expect(html).toMatch(/navigator\.share/);
     expect(html).toMatch(/window\.print\s*\(\s*\)/);
   });
 });

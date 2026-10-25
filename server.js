@@ -3659,14 +3659,26 @@ app.get('/api/users/:id/jobs/:jobId', async (req, res) => {
 });
 
 app.delete('/api/users/:id/jobs/:jobId', async (req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query('BEGIN');
+    await client.query(
       'DELETE FROM jobs WHERE id = $1 AND user_id = $2',
       [req.params.jobId, req.params.id]
     );
+    // The frozen client-link photo copy is not a live slot. Drop it
+    // with the job so it does not sit in the account forever.
+    await client.query(
+      'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
+      [req.params.id, `portal:${req.params.jobId}`]
+    );
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* already aborting */ }
     safeError(res, err, `${req.method} ${req.path}`);
+  } finally {
+    client.release();
   }
 });
 
@@ -4487,6 +4499,7 @@ app.put('/api/users/:id/photos/:context/:slot', async (req, res) => {
       `SELECT COALESCE(SUM(octet_length(data)), 0)::bigint AS bytes
          FROM user_photos
         WHERE user_id = $1
+          AND context NOT LIKE 'portal:%'
           AND NOT (context = $2 AND slot = $3)`,
       [req.params.id, req.params.context, req.params.slot]
     );
@@ -7803,7 +7816,9 @@ function setClientPortalSecurityHeaders(res) {
 // Cream page behind the quote, matching the on-screen quote Mark prints.
 // The tradesman's own /pdf route keeps the existing white print sheet.
 const CLIENT_QUOTE_SURFACE_CSS = `
-  html, body, .print-root { background: #f5f1eb !important; }
+  html, body,
+  html:not(.app-chrome) .print-root,
+  .print-root,
   #quote-document { background: #fbf8f2 !important; }
 `;
 
@@ -7820,17 +7835,27 @@ function loadQuotePdfRender() {
 
 async function freezePortalPhotos(userId, jobId) {
   const context = `portal:${jobId}`;
-  await pool.query(
-    'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
-    [userId, context],
-  );
-  await pool.query(
-    `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
-     SELECT user_id, $3, slot, data, label, name, NOW()
-       FROM user_photos
-      WHERE user_id = $1 AND context = $2`,
-    [userId, String(jobId), context],
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
+      [userId, context],
+    );
+    await client.query(
+      `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
+       SELECT user_id, $3, slot, data, label, name, NOW()
+         FROM user_photos
+        WHERE user_id = $1 AND context = $2`,
+      [userId, String(jobId), context],
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* already aborting */ }
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function loadPortalPhotoRows(userId, jobId) {

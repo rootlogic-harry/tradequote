@@ -6,6 +6,7 @@ import { documentTerm } from '../utils/documentType.js';
 import { aspectBand } from '../utils/photoLayout.js';
 import { descriptionParagraphs } from '../utils/damageDescription.js';
 import { buildDiff } from '../utils/diffTracking.js';
+import { isCommittableMeasurement } from '../utils/syncMeasurementNarrative.js';
 
 // Inline-editable text — switches between a static element and an auto-growing
 // textarea (or input) based on `editable`. When not editable the markup is
@@ -210,6 +211,12 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
                     onBlur={(e) => {
                       const next = e.target.value;
                       if (next === (m.value || '')) return;
+                      // A half-typed figure snaps back. Committing it would
+                      // store a stub the schedule can no longer match.
+                      if (!isCommittableMeasurement(next)) {
+                        e.target.value = m.value || '';
+                        return;
+                      }
                       dispatch({
                         type: 'CONFIRM_MEASUREMENT',
                         id: m.id,

@@ -17,6 +17,30 @@ describe('replaceMeasurementFigure', () => {
     const text = '2 workers for 8 days, through stones at 600mm.';
     expect(replaceMeasurementFigure(text, '8', '12')).toBe(text);
   });
+
+  test('does not rewrite a longer length that merely contains the digits', () => {
+    const text = 'An 11,200mm wall and 1,200mm coping.';
+    expect(replaceMeasurementFigure(text, '1200', '1400')).toBe(
+      'An 11,200mm wall and 1,400mm coping.',
+    );
+  });
+
+  test('does not cascade the replacement into the new figure', () => {
+    expect(replaceMeasurementFigure('45000mm of wall', '4500', '5200')).toBe('45000mm of wall');
+    expect(replaceMeasurementFigure('a 500mm course', '500', '1500')).toBe('a 1500mm course');
+  });
+
+  test('leaves through-stone spacing and prices alone', () => {
+    const text = 'Through stones at approximately 600mm height intervals. A 600mm thick wall. Allow £1,200.';
+    expect(replaceMeasurementFigure(text, '600', '550')).toBe(
+      'Through stones at approximately 600mm height intervals. A 550mm thick wall. Allow £1,200.',
+    );
+    expect(replaceMeasurementFigure(text, '1200', '1400')).toBe(text);
+  });
+
+  test('a half-typed figure does not touch the narrative', () => {
+    expect(replaceMeasurementFigure('the 4,500mm breach', '4500', '4,')).toBe('the 4,500mm breach');
+  });
 });
 
 describe('syncMeasurementNarrative', () => {
