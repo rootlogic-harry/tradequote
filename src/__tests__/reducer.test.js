@@ -789,6 +789,23 @@ describe('reducer', () => {
       expect(m.value).toBe('1400');
     });
 
+    test('rewrites that figure in the schedule and the damage description', () => {
+      const state = makeReviewState({
+        reviewData: {
+          ...makeReviewState().reviewData,
+          damageDescription: 'Standing height is 1,200mm.',
+          scheduleOfWorks: [
+            { id: 's1', title: 'Rebuild', description: 'Rebuild the 1200mm high section.' },
+          ],
+        },
+      });
+      const diff = buildDiff('measurement', 'Wall height', '1200', '1400');
+      const result = reducer(state, { type: 'CONFIRM_MEASUREMENT', id: 'm1', value: '1400', diff });
+      expect(result.reviewData.damageDescription).toBe('Standing height is 1,400mm.');
+      expect(result.reviewData.scheduleOfWorks[0].description).toBe('Rebuild the 1400mm high section.');
+      expect(result.reviewData.measurements.find(m => m.id === 'm1').aiValue).toBe('1200');
+    });
+
     test('adds diff to diffs array', () => {
       const state = makeReviewState();
       const diff = buildDiff('measurement', 'Wall height', '1200', '1400');

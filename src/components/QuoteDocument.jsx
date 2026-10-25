@@ -5,6 +5,7 @@ import { DEFAULT_NOTES } from '../utils/defaultNotes.js';
 import { documentTerm } from '../utils/documentType.js';
 import { aspectBand } from '../utils/photoLayout.js';
 import { descriptionParagraphs } from '../utils/damageDescription.js';
+import { buildDiff } from '../utils/diffTracking.js';
 
 // Inline-editable text — switches between a static element and an auto-growing
 // textarea (or input) based on `editable`. When not editable the markup is
@@ -201,7 +202,27 @@ export default function QuoteDocument({ state, showPhotos = true, selectedPhotos
             <li key={m.id} className="text-lg">
               <span className="text-gray-700">{m.item}:</span>{' '}
               <span className="font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                {m.confirmed ? m.value : <em className="text-amber-500">(unconfirmed)</em>}
+                {canEdit && m.id ? (
+                  <input
+                    key={`${m.id}:${m.value}`}
+                    defaultValue={m.value || ''}
+                    aria-label={m.item}
+                    onBlur={(e) => {
+                      const next = e.target.value;
+                      if (next === (m.value || '')) return;
+                      dispatch({
+                        type: 'CONFIRM_MEASUREMENT',
+                        id: m.id,
+                        value: next,
+                        diff: buildDiff('measurement', m.item, m.aiValue, next),
+                      });
+                    }}
+                    className="font-medium bg-transparent border-b border-transparent hover:border-amber-300 focus:border-amber-400 outline-none min-h-[44px]"
+                    style={{ fontFamily: "'JetBrains Mono', monospace", width: '8em', minHeight: 44 }}
+                  />
+                ) : (
+                  m.confirmed ? m.value : <em className="text-amber-500">(unconfirmed)</em>
+                )}
               </span>
             </li>
           ))}

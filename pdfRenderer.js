@@ -219,7 +219,7 @@ async function getBrowser() {
  *   margin on every page.
  * @returns {Promise<Buffer>} the PDF as a binary buffer
  */
-export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, footerHtml }) {
+export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, footerHtml, surfaceCss = '' }) {
   if (typeof quoteHtml !== 'string' || quoteHtml.length === 0) {
     throw new Error('renderQuotePdf: quoteHtml is required');
   }
@@ -236,6 +236,7 @@ export async function renderQuotePdf({ quoteHtml, title = 'Quote', headerHtml, f
   <link href="${FONTS_HREF}" rel="stylesheet" />
   <style>${TAILWIND_CSS}</style>
   <style>${PRINT_CSS}</style>
+  ${surfaceCss ? `<style>${surfaceCss}</style>` : ''}
 </head>
 <body>
   <div class="print-root">${safeQuoteHtml}</div>

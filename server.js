@@ -61,6 +61,7 @@ import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
 import { computeFieldBiasFromRows } from './src/utils/computeFieldBias.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf, sanitiseQuoteHtml } from './pdfRenderer.js';
+import { buildPortalQuoteState } from './src/utils/portalQuoteState.js';
 import { buildQuickbooksCSV } from './src/utils/quickbooksExport.js';
 import { fileTypeFromFile } from 'file-type';
 import {
@@ -3852,6 +3853,15 @@ app.post('/api/users/:id/jobs/:jobId/client-token', async (req, res) => {
     // Regenerating the token (e.g. resending a quote) counts as a
     // new "sent" event, which is the right granularity for the
     // funnel — we want to see retries / resends as their own signal.
+    // Copy the job's photos under a portal context so a later edit to
+    // the live quote does not change the pictures on a link already
+    // sent. Failure here must not fail the link itself — the PDF route
+    // falls back to the live job photos.
+    try {
+      await freezePortalPhotos(userId, jobId);
+    } catch (photoErr) {
+      console.warn('[client-token] photo freeze failed:', photoErr?.message || photoErr);
+    }
     recordEvent('quote_sent', userId, { jobId }).catch(() => {});
     res.json({
       token,
@@ -7790,6 +7800,54 @@ function setClientPortalSecurityHeaders(res) {
   });
 }
 
+// Cream page behind the quote, matching the on-screen quote Mark prints.
+// The tradesman's own /pdf route keeps the existing white print sheet.
+const CLIENT_QUOTE_SURFACE_CSS = `
+  html, body, .print-root { background: #f5f1eb !important; }
+  #quote-document { background: #fbf8f2 !important; }
+`;
+
+let quotePdfRenderPromise = null;
+function loadQuotePdfRender() {
+  if (!quotePdfRenderPromise) {
+    quotePdfRenderPromise = import('./server-dist/quotePdfRender.js').catch((err) => {
+      quotePdfRenderPromise = null;
+      throw err;
+    });
+  }
+  return quotePdfRenderPromise;
+}
+
+async function freezePortalPhotos(userId, jobId) {
+  const context = `portal:${jobId}`;
+  await pool.query(
+    'DELETE FROM user_photos WHERE user_id = $1 AND context = $2',
+    [userId, context],
+  );
+  await pool.query(
+    `INSERT INTO user_photos (user_id, context, slot, data, label, name, updated_at)
+     SELECT user_id, $3, slot, data, label, name, NOW()
+       FROM user_photos
+      WHERE user_id = $1 AND context = $2`,
+    [userId, String(jobId), context],
+  );
+}
+
+async function loadPortalPhotoRows(userId, jobId) {
+  const frozen = await pool.query(
+    `SELECT slot, data, label, name FROM user_photos
+      WHERE user_id = $1 AND context = $2`,
+    [userId, `portal:${jobId}`],
+  );
+  if (frozen.rows.length > 0) return frozen.rows;
+  const live = await pool.query(
+    `SELECT slot, data, label, name FROM user_photos
+      WHERE user_id = $1 AND context = $2`,
+    [userId, String(jobId)],
+  );
+  return live.rows;
+}
+
 app.get('/q/:token', async (req, res) => {
   const { token } = req.params;
   try {
@@ -7836,6 +7894,60 @@ app.get('/q/:token', async (req, res) => {
     // Fall through to safeError for genuine server bugs (JSON is fine
     // there — only developers / our logs see it in practice).
     safeError(res, err, `${req.method} ${req.path}`);
+  }
+});
+
+app.get('/q/:token/pdf', async (req, res) => {
+  const { token } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, user_id, client_token_expires_at,
+              client_snapshot, client_snapshot_profile
+         FROM jobs
+        WHERE client_token = $1`,
+      [token],
+    );
+    if (rows.length === 0) {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+    const job = rows[0];
+    if (isClientTokenExpired(job.client_token_expires_at)) {
+      return res.status(410).type('text/plain').send('This link has expired');
+    }
+
+    const photoRows = await loadPortalPhotoRows(job.user_id, job.id);
+    let liveLogo = null;
+    const frozenLogo = job.client_snapshot_profile?.logo;
+    if (!frozenLogo || frozenLogo === '[photo-stripped]') {
+      const prof = await pool.query(
+        'SELECT data FROM profiles WHERE user_id = $1',
+        [job.user_id],
+      );
+      liveLogo = prof.rows[0]?.data?.logo || null;
+    }
+    const state = buildPortalQuoteState({
+      snapshot: job.client_snapshot,
+      profile: job.client_snapshot_profile,
+      photoRows,
+      liveLogo,
+    });
+    const { renderFrozenQuoteHtml } = await loadQuotePdfRender();
+    const rendered = renderFrozenQuoteHtml(state);
+    const pdf = await renderQuotePdf({
+      quoteHtml: rendered.quoteHtml,
+      title: rendered.title,
+      footerHtml: rendered.footerHtml ? sanitiseQuoteHtml(rendered.footerHtml) : undefined,
+      surfaceCss: CLIENT_QUOTE_SURFACE_CSS,
+    });
+    const safeFilename = String(rendered.title || 'Quote').replace(/[^a-zA-Z0-9._ -]/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.send(pdf);
+  } catch (err) {
+    console.error('[GET /q/:token/pdf]', err?.message || err);
+    safeError(res, err, 'GET /q/:token/pdf');
   }
 });
 
