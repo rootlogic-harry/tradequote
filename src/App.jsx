@@ -553,6 +553,19 @@ export default function App() {
     setCurrentView('editor');
   };
 
+  const handleDiscardDraft = async () => {
+    if (!state.currentUserId) return;
+    try {
+      await clearDraft(state.currentUserId);
+      deletePhotos(state.currentUserId, 'draft').catch(() => {});
+      setPendingDraft(null);
+      dispatch({ type: 'DISCARD_DRAFT' });
+      showToast('Draft deleted', 'success');
+    } catch {
+      showToast('Failed to delete draft', 'error');
+    }
+  };
+
   const handleResumeDraft = async () => {
     if (pendingDraft) {
       dispatch({ type: 'RESTORE_DRAFT', draft: pendingDraft });
@@ -885,6 +898,7 @@ export default function App() {
                 : null)
           }
           onResumeDraft={pendingDraft ? handleResumeDraft : () => setCurrentView('editor')}
+          onDiscardDraft={handleDiscardDraft}
           onResumeJob={handleResumeJob}
           onMarkRamsNotRequired={handleMarkRamsNotRequired}
           onCreateRamsFromSaved={handleCreateRamsFromSaved}
