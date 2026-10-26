@@ -64,10 +64,10 @@ test.describe('Landing page', () => {
 });
 
 test.describe('Referral share-URL preservation', () => {
-  test('/signup 302s to /closed', async ({ request }) => {
+  test('/signup?ref=PAULJULY 302s to /login?ref=PAULJULY (then /auth/login)', async ({ request }) => {
     const res = await request.get('/signup?ref=PAULJULY', { maxRedirects: 0 });
     expect(res.status()).toBe(302);
-    expect(res.headers().location).toBe('/closed');
+    expect(res.headers().location).toBe('/login?ref=PAULJULY');
   });
 
   test('/login?ref=PAULJULY 302s to /auth/login?ref=PAULJULY', async ({ request }) => {

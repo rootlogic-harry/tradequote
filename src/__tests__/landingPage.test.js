@@ -339,9 +339,9 @@ describe('LANDING_PAGE_HTML — structure (one page, 6 sections + footer)', () =
 });
 
 describe('/signup route', () => {
-  test('server registers a GET /signup that 302s to /closed', () => {
+  test('server registers a GET /signup that 302s to /login (preserving ?ref=)', () => {
     expect(serverSrc).toMatch(
-      /app\.get\(\s*['"]\/signup['"][\s\S]{0,400}?res\.redirect\(\s*302\s*,\s*['"]\/closed['"]\s*\)/
+      /app\.get\(\s*['"]\/signup['"][\s\S]{0,900}?res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`\s*\)/
     );
   });
 });

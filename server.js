@@ -2995,9 +2995,20 @@ app.get('/', (req, res, next) => {
 // signup and login are the same flow. 302 redirect preserves the URL the
 // user landed on for analytics + lets us swap the destination later
 // without changing the landing copy.
-app.get('/signup', (_req, res) => {
-  // Closed to new accounts (2026-10-26). Mark signs in via /login.
-  res.redirect(302, '/closed');
+app.get('/signup', (req, res) => {
+  // Referrals Phase 1 (2026-06-30 fix): preserve `?ref=` across the
+  // /signup → /login → /auth/login redirect chain. Without this the
+  // share-URL flow (landing → "Get started" → /signup) silently drops
+  // the ref before /auth/login's session-stash sees it. Normalised
+  // here so a malformed value never reaches downstream routes.
+  const ref = normaliseReferralCode(req.query.ref);
+  // Ad attribution (2026-08-04): stash UTMs here too so an ad URL of
+  // fastquote.uk/signup?utm_source=meta lands the attribution on the
+  // session even though the redirect chain drops the query string.
+  // First-write-wins — safe to call at every entry point.
+  stashPendingUtm(req);
+  const qs = ref ? `?ref=${encodeURIComponent(ref)}` : '';
+  res.redirect(302, `/login${qs}`);
 });
 
 app.get('/closed', (_req, res) => {

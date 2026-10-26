@@ -110,11 +110,12 @@ describe('Capture points — four entry points call stashPendingUtm', () => {
     expect(landing[0]).toMatch(/stashPendingUtm\(req\)/);
   });
 
-  test('GET /signup is closed and does not continue into login', () => {
+  test('GET /signup stashes before redirecting to /login', () => {
     const signup = src.match(
-      /app\.get\('\/signup',[\s\S]*?res\.redirect\(302,\s*'\/closed'\)/,
+      /app\.get\('\/signup',[\s\S]*?res\.redirect\(302,\s*`\/login/,
     );
     expect(signup).not.toBeNull();
+    expect(signup[0]).toMatch(/stashPendingUtm\(req\)/);
   });
 
   test('GET /login stashes before redirecting to /auth/login', () => {

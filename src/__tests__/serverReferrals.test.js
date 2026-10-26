@@ -241,11 +241,19 @@ describe('/auth/redeem-referral has a rate limiter', () => {
 // /signup route was a bare `res.redirect(302, '/login')` that dropped
 // the query string, severing the chain before /auth/login's
 // session-stash could see it.
-describe('/signup is closed to new accounts', () => {
-  test('redirects to /closed and does not start login', () => {
+describe('/signup route preserves ?ref= across the redirect', () => {
+  test('reads req.query.ref and forwards it normalised', () => {
     const start = serverSrc.indexOf("app.get('/signup',");
     expect(start).toBeGreaterThan(-1);
-    const block = serverSrc.slice(start, start + 400);
-    expect(block).toMatch(/res\.redirect\(\s*302\s*,\s*['"]\/closed['"]\s*\)/);
+    const block = serverSrc.slice(start, start + 900);
+    expect(block).toMatch(/normaliseReferralCode\(\s*req\.query\.ref\s*\)/);
+    expect(block).toMatch(/res\.redirect\(\s*302\s*,\s*`\/login\$\{qs\}`/);
+    expect(block).toMatch(/ref=\$\{encodeURIComponent\(ref\)\}/);
+  });
+
+  test('falls back to bare /login when no ref present (no breaking change)', () => {
+    const start = serverSrc.indexOf("app.get('/signup',");
+    const block = serverSrc.slice(start, start + 900);
+    expect(block).toMatch(/const qs = ref \? `\?ref=/);
   });
 });
