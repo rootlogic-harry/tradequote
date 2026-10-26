@@ -6,9 +6,10 @@
  *
  *   1. Existing Client — always visible if the user has ≥1 client.
  *      Selecting fills clientName + clientPhone via onPickClient.
- *   2. Site — appears once a client is picked, pre-selects the
- *      "standard" (most-recent-job's site or first) and fills
- *      siteAddress via onPickSite. User can change to another site.
+ *   2. Site — appears once a client is picked. It starts on
+ *      "New site address" and does not fill the address. Saved
+ *      addresses are listed underneath. Picking one copies it into
+ *      the address box, which stays editable.
  *
  * This suite pins the source shape so a future refactor can't silently:
  *   - render the picker unconditionally (leaking new UI to users on the
@@ -19,9 +20,8 @@
  *   - break the "typing wins" contract (picker is a shortcut, not a
  *     replacement — the Client Name / Site Address inputs must stay
  *     rendered under the picker),
- *   - lose the "standard site" auto-select (Harry's 2026-07-07 UAT
- *     ask: "if I select a client, the site should populate by default
- *     as the standard, with the option to change").
+ *   - auto-fill the previous site when a client is picked (Mark,
+ *     2026-10-26: a repeat client usually has a new wall).
  */
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
@@ -138,13 +138,11 @@ describe('JobDetails client picker — insertion contract', () => {
     expect(picker).toMatch(/<select[\s\S]{0,400}data-testid=["']jobdetails-picker-site["']/);
   });
 
-  test('standard site is pre-selected from timeline (most recent job)', () => {
-    // "if I select a client, the site should populate by default as
-    // the standard" — Harry, 2026-07-07 UAT.
-    // The picker reads timeline[0].site_id and falls back to the first
-    // site in the list.
-    expect(picker).toMatch(/timeline\[0\]\?\.site_id/);
-    expect(picker).toMatch(/siteList\[0\]/);
+  test('picking a client starts on New site address and does not fill a saved site', () => {
+    expect(picker).toMatch(/New site address/);
+    expect(picker).not.toMatch(/timeline\[0\]\?\.site_id/);
+    expect(picker).not.toMatch(/onPickSite\?\.\(standard\)/);
+    expect(picker).toMatch(/onPickSite\?\.\(null\)/);
   });
 
   test('touch targets on picker rows respect the 44px min-height contract', () => {
@@ -162,15 +160,11 @@ describe('JobDetails client picker — insertion contract', () => {
     expect(picker).not.toMatch(/clients\.length < 3/);
   });
 
-  test('Site Address textarea hides when a site is picked', () => {
-    // Harry's 2026-07-07 UAT: "if you select the site - you shouldn't
-    // be able to amend the site address". The picker already fully
-    // identifies the site; a free-text Site Address input would let
-    // the user silently diverge from the client record.
-    expect(jobDetailsSrc).toMatch(/existingSitePicked/);
-    expect(jobDetailsSrc).toMatch(/!existingSitePicked\s*&&\s*\(/);
-    // Toggle wiring: picker's onPickSite → true, unpick → false.
-    expect(jobDetailsSrc).toMatch(/setExistingSitePicked\(true\)/);
-    expect(jobDetailsSrc).toMatch(/setExistingSitePicked\(false\)/);
+  test('Site Address stays visible after a client or site is picked', () => {
+    // Mark, 2026-10-26: the address is usually different. The box
+    // stays so he can type a new one or adjust a saved one. Saving a
+    // different address creates another site; it does not overwrite.
+    expect(jobDetailsSrc).not.toMatch(/existingSitePicked/);
+    expect(jobDetailsSrc).toMatch(/inputClass\(['"]siteAddress['"]\)/);
   });
 });

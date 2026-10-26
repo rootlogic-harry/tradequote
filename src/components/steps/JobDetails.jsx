@@ -109,13 +109,6 @@ export default function JobDetails({
   // fields, they're already stored on the client record; show per-job
   // Site Contact Name / Site Contact Phone instead.
   const [existingClientPicked, setExistingClientPicked] = useState(false);
-  // True once the picker has auto-filled a site (either the "standard"
-  // pick on client select or a manual site swap via the Site dropdown).
-  // When true, the Site Address textarea hides — the site is fully
-  // identified by the dropdown selection and editing the address here
-  // would silently diverge from the client record. To change the
-  // address of an existing site, edit it on the Client detail page.
-  const [existingSitePicked, setExistingSitePicked] = useState(false);
 
   const { jobDetails, photos, extraPhotos, profile, captureMode } = state;
   const term = documentTerm(profile);
@@ -387,27 +380,30 @@ export default function JobDetails({
               // typed values — they might be re-entering a fresh
               // client and want to keep what they've typed so far.
               setExistingClientPicked(false);
-              setExistingSitePicked(false);
               return;
             }
             setExistingClientPicked(true);
             updateJob('clientName', client.name || '');
             if (client.phone) updateJob('clientPhone', client.phone);
+            // A repeat client usually has a new wall. Start blank so
+            // the previous site is not written onto this quote.
+            updateJob('siteAddress', '');
+            updateJob('siteContactName', '');
+            updateJob('siteContactPhone', '');
           }}
           onPickSite={(site) => {
+            if (!site) {
+              updateJob('siteAddress', '');
+              updateJob('siteContactName', '');
+              updateJob('siteContactPhone', '');
+              return;
+            }
+            // Copy the saved address into the box. The box stays
+            // editable. Saving a different address creates another
+            // site for this client; it does not overwrite the old one.
             updateJob('siteAddress', site.address || '');
-            // 2026-07-07: auto-fill per-quote site contact from the
-            // site row's persistent contact. User can override for
-            // this quote — override goes to jobDetails only, never
-            // mutates the site row here (edit the site directly on
-            // the Client detail page for a persistent change).
             updateJob('siteContactName', site.siteContactName || '');
             updateJob('siteContactPhone', site.siteContactPhone || '');
-            // Site is fully identified by the picker — hide the Site
-            // Address textarea below so the user can't silently type
-            // over the picked address (which would create a mismatch
-            // between the quote and the client record).
-            setExistingSitePicked(true);
           }}
         />
       )}
@@ -512,7 +508,6 @@ export default function JobDetails({
           />
         </div>
 
-        {!existingSitePicked && (
           <div className="fq:col-span-2">
             <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
               Site Address *
@@ -538,7 +533,6 @@ export default function JobDetails({
             />
             {errors.siteAddress && <p className="text-tq-error text-xs mt-1">{errors.siteAddress}</p>}
           </div>
-        )}
 
         <div>
           <label className="block text-xs text-tq-muted mb-1 font-heading uppercase tracking-wide">
@@ -1196,18 +1190,10 @@ function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
     setLoadingSites(true);
     try {
       const detail = await getClient(currentUserId, id);
-      const siteList = detail?.sites || [];
-      setSites(siteList);
-      if (siteList.length === 0) return;
-      // "Standard" site = site attached to the most recent job for this
-      // client, else the first site returned. Timeline is already sorted
-      // newest-first server-side (clientsRoutes.js).
-      const timeline = detail?.timeline || [];
-      const mostRecentSiteId = timeline[0]?.site_id;
-      const standard =
-        siteList.find((s) => s.id === mostRecentSiteId) || siteList[0];
-      setSelectedSiteId(standard.id);
-      onPickSite?.(standard);
+      setSites(detail?.sites || []);
+      // Leave the site dropdown on "New site address". A repeat client
+      // usually has a different wall, so the previous address must not
+      // land on this quote until he picks it.
     } catch {
       /* ignore — user can still type the address below */
     } finally {
@@ -1218,6 +1204,10 @@ function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
   const handleSiteChange = (e) => {
     const id = e.target.value;
     setSelectedSiteId(id);
+    if (!id) {
+      onPickSite?.(null);
+      return;
+    }
     const site = sites.find((s) => s.id === id);
     if (site) onPickSite?.(site);
   };
@@ -1272,10 +1262,8 @@ function ClientSitePicker({ currentUserId, onPickClient, onPickSite }) {
             data-testid="jobdetails-picker-site"
             disabled={loadingSites || sites.length === 0}
           >
-            {loadingSites && <option value="">Loading sites…</option>}
-            {!loadingSites && sites.length === 0 && (
-              <option value="">No sites yet — type below</option>
-            )}
+            <option value="">New site address</option>
+            {loadingSites && <option value="__loading" disabled>Loading saved addresses…</option>}
             {!loadingSites && sites.map((s) => (
               <option key={s.id} value={s.id}>{s.address}</option>
             ))}
