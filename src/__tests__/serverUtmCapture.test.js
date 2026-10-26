@@ -110,15 +110,11 @@ describe('Capture points — four entry points call stashPendingUtm', () => {
     expect(landing[0]).toMatch(/stashPendingUtm\(req\)/);
   });
 
-  test('GET /signup stashes before redirecting to /login', () => {
-    // Direct-to-signup ads (fastquote.uk/signup?utm_source=meta) land
-    // here. The /login redirect drops the query string so we MUST
-    // stash before the redirect fires.
+  test('GET /signup is closed and does not continue into login', () => {
     const signup = src.match(
-      /app\.get\('\/signup',[\s\S]*?res\.redirect\(302,\s*`\/login/,
+      /app\.get\('\/signup',[\s\S]*?res\.redirect\(302,\s*'\/closed'\)/,
     );
     expect(signup).not.toBeNull();
-    expect(signup[0]).toMatch(/stashPendingUtm\(req\)/);
   });
 
   test('GET /login stashes before redirecting to /auth/login', () => {

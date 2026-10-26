@@ -292,10 +292,9 @@ describe('verify callback — account linking by lower(email)', () => {
     expect(block).toMatch(/legacy-google fallback matched/i);
   });
 
-  test('logs a warning line whenever provisioning a NEW user (Paul-shape trace)', () => {
-    // Not blocking — genuine signups still get through — but the log
-    // line makes duplicate-provision incidents visible after the fact.
-    expect(block).toMatch(/provisioning NEW user/i);
+  test('logs a warning and refuses a brand-new account (signups are closed)', () => {
+    expect(block).toMatch(/signup closed, refusing new account/i);
+    expect(block).toMatch(/_accessDenied:\s*true/);
   });
 });
 

@@ -27,6 +27,7 @@ import {
   formatPurchaseDescription,
 } from './billing.js';
 import { isAdminPlan } from './src/utils/isAdminPlan.js';
+import { isAppAccessAllowed } from './src/utils/appAccess.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
@@ -1108,6 +1109,10 @@ async (_accessToken, _refreshToken, _extraParams, profile, done) => {
       );
       if (byEmail.rows.length > 0) {
         const u = byEmail.rows[0];
+        if (!isAppAccessAllowed(u.id)) {
+          console.warn(`[Auth0] refusing closed login id=${u.id}`);
+          return done(null, { id: '', _accessDenied: true });
+        }
         await pool.query(
           `UPDATE users
               SET last_login_at = NOW(),
@@ -1135,6 +1140,10 @@ async (_accessToken, _refreshToken, _extraParams, profile, done) => {
     );
     if (bySub.rows.length > 0) {
       const u = bySub.rows[0];
+      if (!isAppAccessAllowed(u.id)) {
+        console.warn(`[Auth0] refusing closed login id=${u.id}`);
+        return done(null, { id: '', _accessDenied: true });
+      }
       await pool.query(
         'UPDATE users SET last_login_at = NOW(), avatar_url = COALESCE($1, avatar_url), email = COALESCE(email, $2) WHERE id = $3',
         [avatar, email, u.id]
@@ -1169,6 +1178,10 @@ async (_accessToken, _refreshToken, _extraParams, profile, done) => {
         );
         if (byLegacy.rows.length > 0) {
           const u = byLegacy.rows[0];
+          if (!isAppAccessAllowed(u.id)) {
+            console.warn(`[Auth0] refusing closed login id=${u.id}`);
+            return done(null, { id: '', _accessDenied: true });
+          }
           await pool.query(
             `UPDATE users
                 SET last_login_at    = NOW(),
@@ -1190,13 +1203,15 @@ async (_accessToken, _refreshToken, _extraParams, profile, done) => {
       }
     }
 
-    // 3. New user — provision account with unique, URL-safe ID.
-    //    Belt-and-braces logging (2026-07-09): every new-user provision
-    //    logs the incoming email + auth-provider prefix so a suspicious
-    //    duplicate (e.g. Paul-shape: legacy Google user re-materialising
-    //    on Auth0 login) is at least visible in the deploy logs. The
-    //    provision itself is not blocked — that would break genuinely
-    //    new signups.
+    // Signups are closed (2026-10-26). Only Mark's existing account
+    // may use the app. The INSERT below stays in source for the
+    // column contract; this return means a new account is not created.
+    console.warn(
+      `[Auth0] signup closed, refusing new account email=${email || '<none>'} ` +
+      `subPrefix=${(sub || '').split('|')[0] || '<unknown>'}`
+    );
+    return done(null, { id: '', _accessDenied: true });
+
     console.log(
       `[Auth0] provisioning NEW user email=${email || '<none>'} ` +
       `subPrefix=${(sub || '').split('|')[0] || '<unknown>'} name=${name || '<none>'}`,
@@ -1253,7 +1268,14 @@ passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    done(null, result.rows[0] ?? false);
+    const row = result.rows[0];
+    // Production lock: an existing session for anyone other than Mark
+    // is treated as logged out on the next request.
+    if (!row || !isAppAccessAllowed(row.id)) {
+      done(null, false);
+      return;
+    }
+    done(null, row);
   } catch (err) {
     done(err, null);
   }
@@ -1339,6 +1361,16 @@ app.get('/auth/callback',
   // have a stable user.id) but before redirect.
   (req, res, next) => {
     const user = req.user;
+    if (!user || user._accessDenied || !isAppAccessAllowed(user.id)) {
+      const sendClosed = () => res.redirect('/closed');
+      const destroy = () => {
+        if (req.session?.destroy) req.session.destroy(() => sendClosed());
+        else sendClosed();
+      };
+      if (typeof req.logout === 'function') req.logout(() => destroy());
+      else destroy();
+      return;
+    }
     const pendingRef = req.session?.pendingReferralCode || null;
     const rememberDevice = !!req.session?.rememberDevice;
     // Ad attribution (2026-08-04): lift alongside pendingRef BEFORE
@@ -2963,20 +2995,36 @@ app.get('/', (req, res, next) => {
 // signup and login are the same flow. 302 redirect preserves the URL the
 // user landed on for analytics + lets us swap the destination later
 // without changing the landing copy.
-app.get('/signup', (req, res) => {
-  // Referrals Phase 1 (2026-06-30 fix): preserve `?ref=` across the
-  // /signup → /login → /auth/login redirect chain. Without this the
-  // share-URL flow (landing → "Get started" → /signup) silently drops
-  // the ref before /auth/login's session-stash sees it. Normalised
-  // here so a malformed value never reaches downstream routes.
-  const ref = normaliseReferralCode(req.query.ref);
-  // Ad attribution (2026-08-04): stash UTMs here too so an ad URL of
-  // fastquote.uk/signup?utm_source=meta lands the attribution on the
-  // session even though the redirect chain drops the query string.
-  // First-write-wins — safe to call at every entry point.
-  stashPendingUtm(req);
-  const qs = ref ? `?ref=${encodeURIComponent(ref)}` : '';
-  res.redirect(302, `/login${qs}`);
+app.get('/signup', (_req, res) => {
+  // Closed to new accounts (2026-10-26). Mark signs in via /login.
+  res.redirect(302, '/closed');
+});
+
+app.get('/closed', (_req, res) => {
+  res.status(200).type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>FastQuote is closed</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f4eee2; color: #211a10; font-family: Inter, system-ui, sans-serif; }
+  main { max-width: 28rem; padding: 2rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  p { line-height: 1.5; }
+  a { color: #bd5e09; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FastQuote is not taking new accounts.</h1>
+  <p>If your tradesman sent you a quote, open that link. It still works.</p>
+  <p><a href="/login">Sign in</a></p>
+</main>
+</body>
+</html>`);
 });
 
 // --- Auth Middleware ---
@@ -3000,13 +3048,13 @@ function requireAuth(req, res, next) {
     return next();
   }
   // Google OAuth session
-  if (req.isAuthenticated && req.isAuthenticated()) {
+  if (req.isAuthenticated && req.isAuthenticated() && isAppAccessAllowed(req.user?.id)) {
     return next();
   }
   // Legacy switcher session — sec-audit L-3: read the actual plan from
   // the DB rather than synthesising 'admin'. Defence in depth in case
-  // C-1's gate is ever weakened.
-  if (req.session?.legacyUserId) {
+  // C-1's gate is ever weakened. The production allowlist still applies.
+  if (req.session?.legacyUserId && isAppAccessAllowed(req.session.legacyUserId)) {
     pool
       .query('SELECT plan FROM users WHERE id = $1', [req.session.legacyUserId])
       .then(({ rows }) => {
