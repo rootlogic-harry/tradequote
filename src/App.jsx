@@ -869,7 +869,7 @@ export default function App() {
           <SavedQuoteViewer
             quote={viewingQuote}
             onBack={() => setViewingQuote(null)}
-            onEditQuote={handleEditQuote}
+            onEditQuote={canCreateQuotes ? handleEditQuote : null}
             currentUserId={state.currentUserId}
             liveProfile={state.profile}
             showToast={showToast}
@@ -942,7 +942,7 @@ export default function App() {
           <SavedQuoteViewer
             quote={viewingQuote}
             onBack={() => setViewingQuote(null)}
-            onEditQuote={handleEditQuote}
+            onEditQuote={canCreateQuotes ? handleEditQuote : null}
             currentUserId={state.currentUserId}
             liveProfile={state.profile}
             showToast={showToast}

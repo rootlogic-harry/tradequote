@@ -645,7 +645,7 @@ export default function Dashboard({
       {/* Current draft banner — preserved from the previous dashboard.
           When a draft is in progress, surface it above the recent jobs
           list so the user has a one-click resume path. */}
-      {currentDraft && (
+      {canCreateQuotes && currentDraft && (
         <div
           className="flex items-center justify-between gap-4 p-4 mb-6"
           style={{ backgroundColor: 'var(--tq-accent-bg)', border: '1.5px solid var(--tq-accent-bd)', borderRadius: 2 }}
