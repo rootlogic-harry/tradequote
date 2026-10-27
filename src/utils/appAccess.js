@@ -3,8 +3,8 @@
  * (2026-10-27).
  *
  * FastQuote is closed to new signups. Mark's live Auth0 id can use
- * the app with no time limit. Paul Clough can sign in until 6pm UK
- * time on Sunday 1 November 2026 so he can download quotes he
+ * the app with no time limit. Paul Clough can sign in until 11:59pm
+ * UK time on Sunday 8 November 2026 so he can download quotes he
  * already has. He cannot create new ones. Client quote links
  * (/q/:token) and the public site are not gated here.
  *
@@ -18,8 +18,8 @@ export const PAUL_USER_ID = 'paulclough';
 // It is not a customer. Without it, every pull request's smoke check
 // fails while the lock is on.
 export const SMOKE_USER_ID = 'tq_agent_smoke';
-// 6pm UK time. The UK is on GMT that day, so this is 18:00 UTC.
-export const PAUL_ACCESS_UNTIL = '2026-11-01T18:00:00.000Z';
+// 11:59pm UK time on Sunday 8 November 2026. The UK is on GMT, so this is UTC.
+export const PAUL_ACCESS_UNTIL = '2026-11-08T23:59:59.000Z';
 
 export function isAppAccessAllowed(userId, env = process.env.NODE_ENV, now = new Date()) {
   if (env !== 'production') return true;
