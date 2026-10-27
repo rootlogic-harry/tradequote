@@ -37,6 +37,11 @@ describe('canCreateQuotes', () => {
     expect(canCreateQuotes(MARK_USER_ID, 'production')).toBe(true);
   });
 
+  test('the production smoke account can sign in and create quotes', () => {
+    expect(isAppAccessAllowed('tq_agent_smoke', 'production')).toBe(true);
+    expect(canCreateQuotes('tq_agent_smoke', 'production')).toBe(true);
+  });
+
   test('non-production can create quotes', () => {
     expect(canCreateQuotes(PAUL_USER_ID, 'test')).toBe(true);
   });
