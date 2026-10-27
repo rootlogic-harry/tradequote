@@ -1,6 +1,7 @@
 import { DEFAULT_DAY_RATE } from './constants.js';
 import { buildQuotePayload } from './utils/quoteBuilder.js';
 import { buildDiff, enrichDiffWithContext } from './utils/diffTracking.js';
+import { syncMeasurementNarrative } from './utils/syncMeasurementNarrative.js';
 import { calculateRiskRating, generateRamsId } from './utils/ramsBuilder.js';
 import { COMPANY_DEFAULTS, COMMON_PPE, DEFAULT_RISK_ASSESSMENTS } from './data/ramsDefaults.js';
 import { WORK_STAGES_TEMPLATES } from './data/ramsTemplates.js';
@@ -335,6 +336,7 @@ function reducerCore(state, action) {
 
     case 'CONFIRM_MEASUREMENT': {
       if (!state.reviewData) return state;
+      const previous = state.reviewData.measurements.find(m => m.id === action.id);
       const measurements = state.reviewData.measurements.map(m =>
         m.id === action.id
           ? { ...m, value: action.value, confirmed: true }
@@ -345,9 +347,13 @@ function reducerCore(state, action) {
         d => !(d.fieldType === action.diff.fieldType && d.fieldLabel === action.diff.fieldLabel)
       );
       const enrichedDiff = enrichDiffWithContext(action.diff, buildDiffContext(state.reviewData));
+      const reviewData = syncMeasurementNarrative(
+        { ...state.reviewData, measurements },
+        { previousValue: previous?.value, nextValue: action.value },
+      );
       return {
         ...state,
-        reviewData: { ...state.reviewData, measurements },
+        reviewData,
         diffs: [...filteredDiffs, enrichedDiff],
       };
     }
