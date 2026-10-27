@@ -1066,6 +1066,42 @@ describe('reducer', () => {
     });
   });
 
+  describe('DISCARD_DRAFT', () => {
+    test('clears the in-progress quote and returns to step 1 without burning the next reference', () => {
+      const state = {
+        ...initialState,
+        currentUserId: 'mark',
+        step: 4,
+        quoteSequence: 7,
+        profile: { ...initialState.profile, companyName: 'Doyle Stone' },
+        jobDetails: {
+          ...initialState.jobDetails,
+          clientName: 'Artemis',
+          siteAddress: 'Scow Hall Farm',
+        },
+        photos: { ...initialState.photos, overview: { data: 'data:img', name: 'a.jpg' } },
+        extraPhotos: [{ data: 'x', name: 'e.jpg' }],
+        reviewData: { measurements: [] },
+        quotePayload: { total: 100 },
+        savedJobId: 'job-1',
+        recentJobs: [{ id: 'job-1' }],
+      };
+      const result = reducer(state, { type: 'DISCARD_DRAFT' });
+      expect(result.step).toBe(1);
+      expect(result.jobDetails.clientName).toBe('');
+      expect(result.jobDetails.siteAddress).toBe('');
+      expect(result.photos.overview).toBeNull();
+      expect(result.extraPhotos).toEqual([]);
+      expect(result.reviewData).toBeNull();
+      expect(result.quotePayload).toBeNull();
+      expect(result.savedJobId).toBeNull();
+      expect(result.quoteSequence).toBe(7);
+      expect(result.profile.companyName).toBe('Doyle Stone');
+      expect(result.recentJobs).toEqual([{ id: 'job-1' }]);
+      expect(result.currentUserId).toBe('mark');
+    });
+  });
+
   describe('NEW_QUOTE extended', () => {
     test('increments quoteSequence', () => {
       const state = { ...initialState, quoteSequence: 3 };

@@ -496,6 +496,53 @@ function reducerCore(state, action) {
       };
     }
 
+    case 'DISCARD_DRAFT': {
+      // Drop the in-progress quote without starting a new one. quoteSequence
+      // stays put so deleting a draft does not burn the next reference.
+      return {
+        ...state,
+        captureMode: null,
+        videoProgress: null,
+        uploadProgress: null,
+        quoteMode: 'standard',
+        step: 1,
+        jobDetails: {
+          clientName: '',
+          siteAddress: '',
+          clientPhone: '',
+          siteContactName: '',
+          siteContactPhone: '',
+          quoteReference: '',
+          quoteDate: '',
+          briefNotes: '',
+          scaleReferences: '',
+        },
+        photos: {
+          overview: null,
+          closeup: null,
+          sideProfile: null,
+          referenceCard: null,
+          access: null,
+        },
+        extraPhotos: [],
+        isAnalysing: false,
+        analysisError: null,
+        aiRawResponse: null,
+        reviewData: null,
+        diffs: [],
+        quotePayload: null,
+        quoteToken: newQuoteToken(),
+        savedJobId: null,
+        quoteSaveError: null,
+        critiqueNotes: null,
+        transcript: null,
+        quoteSaveErrorKey: 0,
+        retryCount: 0,
+        rams: null,
+        autosave: { status: 'idle', lastSavedAt: null, error: null },
+      };
+    }
+
     case 'NEW_QUOTE': {
       const nextSeq = state.quoteSequence + 1;
       const year = new Date().getFullYear();

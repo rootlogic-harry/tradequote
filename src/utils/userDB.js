@@ -435,7 +435,12 @@ export async function loadDraft(userId) {
 }
 
 export async function clearDraft(userId) {
-  await fetch(`/api/users/${userId}/drafts`, { method: 'DELETE' });
+  const res = await fetch(`/api/users/${userId}/drafts`, { method: 'DELETE' });
+  if (!res.ok) {
+    let msg = `Draft delete failed (${res.status})`;
+    try { const data = await res.json(); msg = data.error || msg; } catch {}
+    throw new Error(msg);
+  }
 }
 
 // --- Photos ---

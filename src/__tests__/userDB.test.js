@@ -292,6 +292,11 @@ describe('drafts', () => {
       method: 'DELETE',
     }));
   });
+
+  test('clearDraft throws when the server refuses the delete', async () => {
+    fetchMock.mockReturnValue(mockResponse({ error: 'Not authenticated' }, false, 401));
+    await expect(clearDraft('mark')).rejects.toThrow('Not authenticated');
+  });
 });
 
 // --- GDPR ---
