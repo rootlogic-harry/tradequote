@@ -28,11 +28,12 @@ export default function Sidebar({
   isAdminPlan = false,
   clientsEnabled = false,
   billing = null,
+  canCreateQuotes = true,
   className = '',
 }) {
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon, action: onGoToDashboard },
-    { key: 'new', label: 'New quote', icon: PlusIcon, action: onStartNewQuote },
+    ...(canCreateQuotes ? [{ key: 'new', label: 'New quote', icon: PlusIcon, action: onStartNewQuote }] : []),
     { key: 'saved', label: 'My quotes', icon: FolderIcon, action: onGoToSaved },
     // Clients tab — flag-gated (CLIENTS_ENABLED env var → /auth/me
     // features.clientsEnabled → the prop below). See docs/CLIENTS_SPEC_v3.md.

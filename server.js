@@ -27,7 +27,7 @@ import {
   formatPurchaseDescription,
 } from './billing.js';
 import { isAdminPlan } from './src/utils/isAdminPlan.js';
-import { isAppAccessAllowed } from './src/utils/appAccess.js';
+import { isAppAccessAllowed, canCreateQuotes } from './src/utils/appAccess.js';
 import { classifyAnalysisError } from './src/utils/friendlyError.js';
 import { isTransientInfrastructureError } from './src/utils/transientError.js';
 import { pickAllowedKeys } from './serverSaveAllowlist.js';
@@ -1739,6 +1739,10 @@ app.get('/auth/me', async (req, res) => {
     // SPA renders the Clients nav entry + list + detail views.
     // When false (default), the routes 404 and the SPA hides the tab.
     clientsEnabled: isClientsEnabledFromProcessEnv(),
+    // Paul (2026-10-27) can sign in to download existing quotes but
+    // must not start a new one. Everyone else in production who is
+    // allowed (Mark) keeps this true. Logged-out responses stay false.
+    canCreateQuotes: false,
   };
 
   // Quota state (2026-06-22). The SubscriptionBanner reads this to
@@ -1798,6 +1802,7 @@ app.get('/auth/me', async (req, res) => {
 
   // Google OAuth session
   if (req.user) {
+    features.canCreateQuotes = canCreateQuotes(req.user.id);
     const billing = await loadBilling(req.user.id);
     return res.json({
       user: {
@@ -1824,6 +1829,7 @@ app.get('/auth/me', async (req, res) => {
       // matters — if a basic user ever ends up on the legacy switcher
       // they should still see the welcome banner.
       const billing = await loadBilling(u.id);
+      features.canCreateQuotes = canCreateQuotes(u.id);
       return res.json({
         user: {
           id: u.id,
@@ -3099,6 +3105,11 @@ function requireAdminPlan(req, res, next) {
   next();
 }
 
+function requireCanCreateQuotes(req, res, next) {
+  if (canCreateQuotes(req.user?.id)) return next();
+  return res.status(403).json({ error: 'Creating quotes is not available on this account.' });
+}
+
 // Compute the current prompt version (SYSTEM_PROMPT + approved
 // calibration notes) from the live calibration_notes table. Used at
 // /analyse time AND at job-save time so every `jobs.prompt_version`
@@ -3440,7 +3451,7 @@ app.get('/api/users/:id/jobs', async (req, res) => {
   }
 });
 
-app.post('/api/users/:id/jobs', async (req, res) => {
+app.post('/api/users/:id/jobs', requireCanCreateQuotes, async (req, res) => {
   try {
     const allowed = pickAllowedKeys(req.body);
     const { jobDetails, quotePayload } = allowed;
@@ -4910,6 +4921,7 @@ function requireVideoAnalysisEnabled(req, res, next) {
 
 app.post('/api/users/:id/jobs/:jobId/video',
   requireAuth,
+  requireCanCreateQuotes,
   requireVideoAnalysisEnabled,
   videoRateLimit,
   videoUpload.fields([
@@ -7458,7 +7470,7 @@ import { enqueueRetry, processRetryQueue } from './agents/retryQueue.js';
 // have been skipped silently. It only adds wall-clock when the critique is slow.
 const SELF_CRITIQUE_TIMEOUT_MS = 45_000;
 
-app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, async (req, res) => {
+app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, requireCanCreateQuotes, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });

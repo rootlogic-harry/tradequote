@@ -8,11 +8,12 @@ export default function BottomNav({
   onSettingsClick,
   isAdminPlan = false,
   isQuotaExhausted = false,
+  canCreateQuotes = true,
   className = '',
 }) {
   const items = [
     { key: 'dashboard', label: 'Home', icon: HomeIcon, action: onGoToDashboard },
-    { key: 'new', label: 'New', icon: PlusIcon, action: onStartNewQuote },
+    ...(canCreateQuotes ? [{ key: 'new', label: 'New', icon: PlusIcon, action: onStartNewQuote }] : []),
     { key: 'saved', label: 'Quotes', icon: FolderIcon, action: onGoToSaved },
     { key: 'profile', label: 'Profile', icon: UserIcon, action: onSettingsClick },
   ];
