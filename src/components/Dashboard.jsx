@@ -313,6 +313,7 @@ export default function Dashboard({
   profile, // intentionally NOT used for document-term lockdown (see header)
   onStartNewQuote,
   onStartQuickQuote,
+  canCreateQuotes = true,
   onViewJobs,
   currentDraft,
   onResumeDraft,
@@ -522,17 +523,21 @@ export default function Dashboard({
           >
             View all quotes
           </button>
-          <button
-            onClick={onStartQuickQuote}
-            className="btn-ghost hidden fq:inline-flex"
-            title="Skip the review step"
-            type="button"
-          >
-            QUICK QUOTE
-          </button>
-          <button onClick={onStartNewQuote} className="btn-primary" type="button">
-            + NEW QUOTE
-          </button>
+          {canCreateQuotes && (
+            <button
+              onClick={onStartQuickQuote}
+              className="btn-ghost hidden fq:inline-flex"
+              title="Skip the review step"
+              type="button"
+            >
+              QUICK QUOTE
+            </button>
+          )}
+          {canCreateQuotes && (
+            <button onClick={onStartNewQuote} className="btn-primary" type="button">
+              + NEW QUOTE
+            </button>
+          )}
         </div>
       </div>
 
@@ -759,7 +764,7 @@ export default function Dashboard({
               >
                 Clear search
               </button>
-            ) : filter === 'all' && (
+            ) : filter === 'all' && canCreateQuotes && (
               <button onClick={onStartNewQuote} className="btn-primary" type="button">
                 + New quote
               </button>

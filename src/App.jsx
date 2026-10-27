@@ -86,6 +86,9 @@ export default function App() {
   // Server-driven via /auth/me → features.clientsEnabled. When false
   // (default), the Sidebar hides the Clients tab and the routes 404.
   const [clientsEnabled, setClientsEnabled] = useState(false);
+  // Paul can download existing quotes but must not start a new one.
+  // Defaults to true so Mark is not blocked if the flag is missing.
+  const [canCreateQuotes, setCanCreateQuotes] = useState(true);
   // Client detail view — id of the currently-open client, or null.
   const [currentClientId, setCurrentClientId] = useState(null);
   // Quota state (2026-06-22) — populated from /auth/me's billing block.
@@ -124,6 +127,9 @@ export default function App() {
           setVideoAnalysisEnabled(!!data.features.videoAnalysisEnabled);
           setEmailIntegrationEnabled(!!data.features.emailIntegrationEnabled);
           setClientsEnabled(!!data.features.clientsEnabled);
+          if (typeof data.features.canCreateQuotes === 'boolean') {
+            setCanCreateQuotes(data.features.canCreateQuotes);
+          }
         }
         if (data?.billing) {
           setBilling(data.billing);
@@ -505,6 +511,7 @@ export default function App() {
   const isQuotaExhausted = billing?.quotaState === 'exhausted';
 
   const handleStartNewQuote = () => {
+    if (!canCreateQuotes) return;
     if (isQuotaExhausted) {
       const freeLimit = billing?.freeQuotesLimit ?? 3;
       dispatch({
@@ -531,6 +538,7 @@ export default function App() {
   };
 
   const handleStartQuickQuote = () => {
+    if (!canCreateQuotes) return;
     if (isQuotaExhausted) {
       const freeLimit = billing?.freeQuotesLimit ?? 3;
       dispatch({
@@ -875,6 +883,7 @@ export default function App() {
           profile={state.profile}
           onStartNewQuote={handleStartNewQuote}
           onStartQuickQuote={handleStartQuickQuote}
+          canCreateQuotes={canCreateQuotes}
           onViewJobs={() => setCurrentView('saved')}
           incompleteJobs={incompleteJobs}
           currentDraft={
@@ -1053,6 +1062,7 @@ export default function App() {
         onGoToSaved={handleGoToSaved}
         onGoToClients={handleGoToClients}
         clientsEnabled={clientsEnabled}
+        canCreateQuotes={canCreateQuotes}
         onGoToAnalytics={() => setCurrentView('analytics')}
         onGoToLearning={() => setCurrentView('learning')}
         onGoToAgents={() => setCurrentView('agents')}
@@ -1126,6 +1136,7 @@ export default function App() {
         onGoToSaved={handleGoToSaved}
         onGoToClients={handleGoToClients}
         clientsEnabled={clientsEnabled}
+        canCreateQuotes={canCreateQuotes}
         onSettingsClick={() => setShowProfileModal(true)}
         isAdminPlan={isAdmin}
         isQuotaExhausted={isQuotaExhausted}
