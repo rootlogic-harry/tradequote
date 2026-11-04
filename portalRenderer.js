@@ -363,7 +363,51 @@ function respondScript(tokenSafe) {
       var reason = textarea ? (textarea.value || '').slice(0, 300) : null;
       submit({ response: 'declined', declineReason: reason });
     } else if (action === 'pdf') {
-      window.print();
+      // The on-screen portal stays a short letter. Save as PDF downloads
+      // the same quote document the tradesman prints (photos, measurements,
+      // cream page), and only falls back to printing this page if that
+      // file cannot be built.
+      t.disabled = true;
+      fetch('/q/${tokenSafe}/pdf', { credentials: 'same-origin' })
+        .then(function(r) {
+          if (!r.ok) throw new Error('pdf');
+          var name = 'Quote.pdf';
+          var disp = r.headers.get('Content-Disposition') || '';
+          var match = /filename="([^"]+)"/.exec(disp);
+          if (match && match[1]) name = match[1];
+          return r.blob().then(function(blob) { return { blob: blob, name: name }; });
+        })
+        .then(function(file) {
+          // iPhone and iPad ignore <a download> on a blob URL, so the
+          // tap looks like it did nothing. Offer the share sheet there.
+          // Cancelling the sheet is not a failure. Any other failure
+          // falls through to printing this page.
+          var ua = navigator.userAgent || '';
+          var touch = navigator.maxTouchPoints || 0;
+          var ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && touch > 1);
+          var android = /Android/.test(ua);
+          if ((ios || android) && typeof navigator.canShare === 'function') {
+            try {
+              var shared = new File([file.blob], file.name, { type: 'application/pdf' });
+              if (navigator.canShare({ files: [shared] })) {
+                return navigator.share({ files: [shared], title: file.name }).catch(function(err) {
+                  if (err && err.name === 'AbortError') return;
+                  throw err;
+                });
+              }
+            } catch (err) { /* fall through to the anchor */ }
+          }
+          var url = URL.createObjectURL(file.blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function() { URL.revokeObjectURL(url); }, 1500);
+        })
+        .catch(function() { window.print(); })
+        .then(function() { t.disabled = false; });
     }
   });
 })();

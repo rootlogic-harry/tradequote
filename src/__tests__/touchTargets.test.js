@@ -287,8 +287,8 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/QuoteDocument.jsx --
   // Renumbered 28→29 and 39→40 (2026-09-20): the SAME two elements moved down one line when
   // QuoteDocument gained the shared damageDescription import. No new violations.
-  { file: "src/components/QuoteDocument.jsx", line: 29, pr: "PR-future-polish", why: "Quote-document inline editor (em-based, by design)" },
-  { file: "src/components/QuoteDocument.jsx", line: 40, pr: "PR-future-polish", why: "Quote-document inline editor (em-based, by design)" },
+  { file: "src/components/QuoteDocument.jsx", line: 31, pr: "PR-future-polish", why: "Quote-document inline editor (em-based, by design)" },
+  { file: "src/components/QuoteDocument.jsx", line: 42, pr: "PR-future-polish", why: "Quote-document inline editor (em-based, by design)" },
   // -- src/components/Sidebar.jsx --
   // Lines shifted by the HelpModal entry-point block (launch
   // checklist 2026-06-30) — added the onHelpClick prop and the

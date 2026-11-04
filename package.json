@@ -7,8 +7,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:pdf-css && vite build",
+    "build": "npm run build:pdf-css && npm run build:quote-pdf && vite build",
     "build:pdf-css": "node scripts/build-pdf-css.js",
+    "build:quote-pdf": "node scripts/build-quote-pdf-render.js",
     "preview": "vite preview",
     "start": "node server.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --runInBand --testPathIgnorePatterns='(api|securityAudit)\\.test\\.js'",
