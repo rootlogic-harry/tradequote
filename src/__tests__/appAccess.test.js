@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { isAppAccessAllowed, canCreateQuotes, MARK_USER_ID, PAUL_USER_ID, PAUL_ACCESS_UNTIL } from '../utils/appAccess.js';
+import { isAppAccessAllowed, canCreateQuotes, MARK_USER_ID, PAUL_USER_ID } from '../utils/appAccess.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const serverSrc = readFileSync(join(repoRoot, 'server.js'), 'utf8');
@@ -13,13 +13,9 @@ describe('isAppAccessAllowed', () => {
     expect(isAppAccessAllowed(MARK_USER_ID, 'production', new Date('2026-12-01T00:00:00Z'))).toBe(true);
   });
 
-  test('production allows Paul only until the end of Sunday 8 November 2026 UK', () => {
-    const before = new Date('2026-11-08T12:00:00.000Z');
-    const atExpiry = new Date(PAUL_ACCESS_UNTIL);
-    const after = new Date('2026-11-09T00:00:00.000Z');
-    expect(isAppAccessAllowed(PAUL_USER_ID, 'production', before)).toBe(true);
-    expect(isAppAccessAllowed(PAUL_USER_ID, 'production', atExpiry)).toBe(false);
-    expect(isAppAccessAllowed('paulclough', 'production', after)).toBe(false);
+  test('production allows Paul with no time limit', () => {
+    expect(isAppAccessAllowed(PAUL_USER_ID, 'production', new Date('2026-11-09T00:00:00Z'))).toBe(true);
+    expect(isAppAccessAllowed('paulclough', 'production', new Date('2027-06-01T00:00:00Z'))).toBe(true);
   });
 
   test('production refuses everyone else', () => {
@@ -36,10 +32,10 @@ describe('isAppAccessAllowed', () => {
 });
 
 describe('canCreateQuotes', () => {
-  test('Paul can sign in but cannot create quotes', () => {
-    const during = new Date('2026-10-28T12:00:00Z');
-    expect(isAppAccessAllowed(PAUL_USER_ID, 'production', during)).toBe(true);
-    expect(canCreateQuotes(PAUL_USER_ID, 'production', during)).toBe(false);
+  test('Paul can sign in and create quotes', () => {
+    const later = new Date('2026-12-01T12:00:00Z');
+    expect(isAppAccessAllowed(PAUL_USER_ID, 'production', later)).toBe(true);
+    expect(canCreateQuotes(PAUL_USER_ID, 'production', later)).toBe(true);
   });
 
   test('Mark can create quotes', () => {
@@ -69,8 +65,20 @@ describe('PDF download stays available when creating quotes is blocked', () => {
     expect(serverSrc).toMatch(/app\.post\('\/api\/users\/:id\/jobs\/:jobId\/video',\s*\n\s*requireAuth,\s*\n\s*requireCanCreateQuotes/);
   });
 
-  test('opening a saved quote still offers Download PDF and hides re-analyse', () => {
+  test('opening a saved quote still offers Download PDF and hides re-analyse when quoting is off', () => {
     expect(appSrc).toMatch(/onEditQuote=\{canCreateQuotes \? handleEditQuote : null\}/);
     expect(dashboardSrc).toMatch(/canCreateQuotes && currentDraft/);
+  });
+
+  test('startup comps Paul without changing his plan or Stripe fields', () => {
+    const idx = serverSrc.indexOf("WHERE id = 'paulclough'");
+    expect(idx).toBeGreaterThan(-1);
+    const start = serverSrc.lastIndexOf('await client.query', idx);
+    const sql = serverSrc.slice(start, idx + 160);
+    expect(sql).toMatch(/SET comp_until = TIMESTAMPTZ '2027-12-31 23:59:59\+00'/);
+    expect(sql).toMatch(/comp_until IS NULL OR comp_until < TIMESTAMPTZ '2027-12-31 23:59:59\+00'/);
+    expect(sql).not.toMatch(/plan/);
+    expect(sql).not.toMatch(/subscription_/);
+    expect(sql).not.toMatch(/auth_provider/);
   });
 });

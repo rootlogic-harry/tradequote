@@ -133,6 +133,12 @@ describe('compedMonthCopy — derives "Free during/through {month}" from comp_un
     expect(compedMonthCopy(compUntil, now)).toBe('Free through December');
   });
 
+  test('a comp ending in a later year includes the year', () => {
+    const now = new Date('2026-11-04T12:00:00Z');
+    const compUntil = '2027-12-31T23:59:59Z';
+    expect(compedMonthCopy(compUntil, now)).toBe('Free through December 2027');
+  });
+
   test('month name uses en-GB long form (no "Jul" abbreviation)', () => {
     const now = new Date('2026-07-01T12:00:00Z');
     expect(compedMonthCopy('2026-07-20T00:00:00Z', now)).toMatch(/July/);
