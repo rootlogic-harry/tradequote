@@ -317,6 +317,7 @@ export default function Dashboard({
   onViewJobs,
   currentDraft,
   onResumeDraft,
+  onDiscardDraft,
   onMarkRamsNotRequired, // kept for legacy callers
   onCreateRamsFromSaved,
   savedJobs = [],
@@ -347,6 +348,12 @@ export default function Dashboard({
   // case-insensitive substring. Runs BEFORE the pill filter + preview
   // cap so the pill counts + "N more" footer both reflect the search.
   const [searchTerm, setSearchTerm] = useState('');
+  // Two-tap confirm for the in-progress draft, same pattern as the
+  // row kebab's Delete item. Closing the banner (draft gone) resets it.
+  const [draftDeleteArmed, setDraftDeleteArmed] = useState(false);
+  useEffect(() => {
+    setDraftDeleteArmed(false);
+  }, [currentDraft?.jobDetails?.clientName, currentDraft?.jobDetails?.siteAddress]);
   const currentYear = new Date().getFullYear();
 
   // Apply search first — every downstream memo consumes the searched
@@ -662,9 +669,28 @@ export default function Dashboard({
               {currentDraft.step ? ` — Step ${currentDraft.step}` : ''}
             </p>
           </div>
-          <button onClick={onResumeDraft} className="btn-primary whitespace-nowrap" type="button">
-            Resume
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onDiscardDraft && (
+              <button
+                type="button"
+                className="touch-44 whitespace-nowrap"
+                style={{ minHeight: 44, padding: '0 14px', background: 'transparent', border: '1px solid var(--tq-border)', color: 'var(--tq-text)', borderRadius: 2 }}
+                onClick={() => {
+                  if (!draftDeleteArmed) {
+                    setDraftDeleteArmed(true);
+                    return;
+                  }
+                  setDraftDeleteArmed(false);
+                  onDiscardDraft();
+                }}
+              >
+                {draftDeleteArmed ? 'Tap again to confirm' : 'Delete'}
+              </button>
+            )}
+            <button onClick={onResumeDraft} className="btn-primary whitespace-nowrap" type="button">
+              Resume
+            </button>
+          </div>
         </div>
       )}
 

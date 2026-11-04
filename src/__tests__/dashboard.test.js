@@ -489,6 +489,14 @@ describe('App.jsx wires Resend/Delete kebab callbacks', () => {
     expect(appSrc).toMatch(/await deleteJob\(state\.currentUserId,/);
   });
 
+  it('Dashboard draft banner can discard the in-progress draft', () => {
+    expect(dashboardSrc).toMatch(/onDiscardDraft/);
+    expect(dashboardSrc).toMatch(/Tap again to confirm/);
+    expect(appSrc).toMatch(/onDiscardDraft=\{handleDiscardDraft\}/);
+    expect(appSrc).toMatch(/type: 'DISCARD_DRAFT'/);
+    expect(appSrc).toMatch(/await clearDraft\(state\.currentUserId\)/);
+  });
+
   it('Dashboard is passed onResendLink, onDeleteJob, showToast', () => {
     const dashStart = appSrc.indexOf('<Dashboard');
     const dashEnd = appSrc.indexOf('/>', dashStart);
