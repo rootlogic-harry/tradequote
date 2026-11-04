@@ -1005,6 +1005,18 @@ async function initDB() {
       WHERE id = 'markdoyle' AND plan IS DISTINCT FROM 'admin';
     `);
 
+    // Paul Clough is back on, free of charge (2026-11-04). His Stripe
+    // subscription was already cancelled at period end, so this does
+    // not start a new charge. Comp keeps quoting open after that
+    // period ends. Only extends the date — never shortens it, and
+    // does not touch plan, Stripe ids, or auth_provider.
+    await client.query(`
+      UPDATE users
+      SET comp_until = TIMESTAMPTZ '2027-12-31 23:59:59+00'
+      WHERE id = 'paulclough'
+        AND (comp_until IS NULL OR comp_until < TIMESTAMPTZ '2027-12-31 23:59:59+00');
+    `);
+
     console.log('Database schema initialised, default users bootstrapped.');
   } finally {
     client.release();

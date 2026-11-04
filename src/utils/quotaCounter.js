@@ -108,10 +108,13 @@ export function compedMonthCopy(compUntil, now = new Date()) {
   }).format(end);
 
   // Same calendar month → "during"; later month → "through".
+  // A later year names the year, otherwise "Free through December"
+  // in November reads as this December.
   if (endYear === nowYear && endMonth === nowMonth) {
     return `Free during ${monthName}`;
   }
-  return `Free through ${monthName}`;
+  const yearSuffix = endYear === nowYear ? '' : ` ${endYear}`;
+  return `Free through ${monthName}${yearSuffix}`;
 }
 
 /**
