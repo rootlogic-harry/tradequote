@@ -1017,6 +1017,14 @@ async function initDB() {
         AND (comp_until IS NULL OR comp_until < TIMESTAMPTZ '2027-12-31 23:59:59+00');
     `);
 
+    // Paul stays on the basic plan. Signing in and creating quotes
+    // must not grant Learning, Agents, Analytics, or any other admin
+    // route. If a plan was ever set to admin, put it back.
+    await client.query(`
+      UPDATE users SET plan = 'basic'
+      WHERE id = 'paulclough' AND plan IS DISTINCT FROM 'basic';
+    `);
+
     console.log('Database schema initialised, default users bootstrapped.');
   } finally {
     client.release();

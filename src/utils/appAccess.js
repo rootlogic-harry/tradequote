@@ -2,9 +2,9 @@
  * Production access lock (2026-10-26).
  *
  * FastQuote is closed to new signups. Mark's live Auth0 id and Paul
- * Clough can use the app with no time limit. Paul is back on as a
- * full user (2026-11-04), free of charge. The download-only window
- * is gone. Client quote links
+ * Clough can use the app with no time limit. Paul is back on his
+ * basic account (2026-11-04), free of charge. He is not an admin.
+ * The download-only window is gone. Client quote links
  * (/q/:token) and the public site are not gated here.
  *
  * Outside production the lock is off so tests and local development

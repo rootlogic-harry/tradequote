@@ -70,11 +70,22 @@ describe('PDF download stays available when creating quotes is blocked', () => {
     expect(dashboardSrc).toMatch(/canCreateQuotes && currentDraft/);
   });
 
+  test('startup keeps Paul on the basic plan', () => {
+    const idx = serverSrc.indexOf("WHERE id = 'paulclough' AND plan IS DISTINCT FROM 'basic'");
+    expect(idx).toBeGreaterThan(-1);
+    const start = serverSrc.lastIndexOf('await client.query', idx);
+    const sql = serverSrc.slice(start, idx + 80);
+    expect(sql).toMatch(/UPDATE users SET plan = 'basic'/);
+    expect(sql).not.toMatch(/auth_provider/);
+    expect(sql).not.toMatch(/subscription_/);
+  });
+
   test('startup comps Paul without changing his plan or Stripe fields', () => {
     const idx = serverSrc.indexOf("WHERE id = 'paulclough'");
     expect(idx).toBeGreaterThan(-1);
     const start = serverSrc.lastIndexOf('await client.query', idx);
-    const sql = serverSrc.slice(start, idx + 160);
+    const end = serverSrc.indexOf('`);', idx);
+    const sql = serverSrc.slice(start, end);
     expect(sql).toMatch(/SET comp_until = TIMESTAMPTZ '2027-12-31 23:59:59\+00'/);
     expect(sql).toMatch(/comp_until IS NULL OR comp_until < TIMESTAMPTZ '2027-12-31 23:59:59\+00'/);
     expect(sql).not.toMatch(/plan/);
