@@ -127,6 +127,26 @@ describe('Print CSS in public/print.css', () => {
   // index.html must reference the stylesheet so the browser loads it for
   // window.print(); the server-side Puppeteer path reads the file directly.
   it('index.html links the print stylesheet', () => {
-    expect(indexHtml).toMatch(/<link[^>]+href="\/print\.css"/);
+    expect(indexHtml).toMatch(/<link[^>]+href="\/print\.css(?:\?[^"]*)?"/);
+  });
+
+  // Mark, 15 Nov 2026: the PDF body is Tailwind text-lg (1.125rem = 18px /
+  // 13.5pt). #quote-document { font-size: 11pt } never reached it, because
+  // rem is the root size, not the parent. Shrinking in the print dialog
+  // scales the photo appendix too (those heights are mm) and clips it.
+  // The print sheet must shrink rem-based type and spacing, and lock the
+  // body to a pt size, without touching the mm photo caps.
+  it('shrinks printed rem type from the root so 100% print is the default', () => {
+    expect(printCss).toMatch(/@media print[\s\S]*?\bhtml,\s*body\s*\{[^}]*font-size:\s*12px/);
+  });
+
+  it('locks quote body copy below the 13.5pt text-lg default', () => {
+    const rule = printCss.match(/#quote-document\s+\.text-lg\s*\{[^}]*\}/);
+    expect(rule).not.toBeNull();
+    const size = rule[0].match(/font-size:\s*([\d.]+)pt/);
+    expect(size).not.toBeNull();
+    expect(Number(size[1])).toBeLessThanOrEqual(11);
+    expect(Number(size[1])).toBeGreaterThanOrEqual(9);
+    expect(rule[0]).toMatch(/line-height:\s*1\.45/);
   });
 });
