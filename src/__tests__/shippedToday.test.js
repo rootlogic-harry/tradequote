@@ -305,7 +305,7 @@ describe('TRQ-119/120/121: PDF reliability', () => {
     expect(files.printCss).toMatch(/@page\s*\{[^}]*size:\s*A4/);
   });
   it('index.html links /print.css and tags <html class="app-chrome">', () => {
-    expect(files.indexHtml).toMatch(/<link[^>]+href="\/print\.css"/);
+    expect(files.indexHtml).toMatch(/<link[^>]+href="\/print\.css(?:\?[^"]*)?"/);
     expect(files.indexHtml).toMatch(/<html[^>]+class="[^"]*app-chrome/);
   });
   it('print.css scopes visibility hiding to html.app-chrome (Puppeteer path safe)', () => {

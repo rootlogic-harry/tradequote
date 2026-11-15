@@ -1,18 +1,24 @@
 /* ============================================================
-   FASTQUOTE CLIENT PORTAL — quote-letter visual language
-   Warm paper, restrained serif headings, tradesman accent as trim
+   FASTQUOTE CLIENT PORTAL
+   Same paper and heading face as the downloaded PDF (white page,
+   Barlow Condensed headings, Inter body). Tradesman accent is trim.
    Mobile-first. Desktop and print refinements layered on top.
    ============================================================ */
 
+html, body {
+  margin: 0;
+  background: #f3f4f6;
+}
+
 .cp {
-  --paper: #fbf8f2;
-  --paper-edge: #f4ede0;
-  --ink: #1a1612;
-  --ink-2: #3d342a;
-  --ink-3: #6b5d4c;
-  --ink-4: #9a8b75;
-  --rule: #e6dcc8;
-  --rule-2: #d9cdb3;
+  --paper: #ffffff;
+  --paper-edge: #f3f4f6;
+  --ink: #111827;
+  --ink-2: #374151;
+  --ink-3: #4b5563;
+  --ink-4: #6b7280;
+  --rule: #e5e7eb;
+  --rule-2: #e5e7eb;
   --brand: #c4610a;       /* default amber — overridden by data-accent */
   --brand-soft: #fef2e0;
   --brand-ink: #7a3a04;
@@ -23,7 +29,7 @@
   --danger: #8a2420;
   --danger-soft: #f5dbd6;
 
-  --serif: "Fraunces", "Libre Caslon Text", Georgia, serif;
+  --serif: "Barlow Condensed", "Arial Narrow", sans-serif;
   --sans:  "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   --mono:  "JetBrains Mono", ui-monospace, Menlo, monospace;
 
@@ -50,7 +56,7 @@
   background: var(--paper);
   min-height: 100vh;
   position: relative;
-  box-shadow: 0 0 0 1px var(--paper-edge), 0 12px 40px -8px rgba(60, 44, 20, 0.08);
+  box-shadow: 0 0 0 1px #e5e7eb, 0 12px 40px -8px rgba(17, 24, 39, 0.06);
 }
 
 /* ─── Expiry ribbon ─── */
@@ -102,8 +108,8 @@
 .cp-header-text { min-width: 0; flex: 1; }
 .cp-tradesman {
   font-family: var(--serif);
-  font-weight: 500;
-  font-size: 19px;
+  font-weight: 700;
+  font-size: 20px;
   line-height: 1.2;
   color: var(--ink);
   letter-spacing: -0.01em;
@@ -135,10 +141,10 @@
 }
 .cp-ref {
   font-family: var(--serif);
-  font-size: 32px;
-  font-weight: 400;
-  letter-spacing: -0.015em;
-  line-height: 1.05;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
   color: var(--ink);
   margin: 0 0 4px;
   font-variant-numeric: tabular-nums;
@@ -174,11 +180,12 @@
 .cp-section:first-of-type { border-top: 0; }
 .cp-section-title {
   font-family: var(--serif);
-  font-size: 19px;
-  font-weight: 500;
-  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-2);
   margin: 0 0 14px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -896,17 +903,17 @@
     margin-bottom: 18pt;
   }
   .cp-logo { background: #000 !important; color: #fff !important; width: 40pt; height: 40pt; font-size: 17pt; }
-  .cp-tradesman { font-size: 15pt; color: #000; }
+  .cp-tradesman { font-size: 14pt; color: #000; }
   .cp-phone { color: #333; font-size: 10pt; }
 
   .cp-quote-head { padding: 0 0 18pt; }
   .cp-eyebrow { color: #000; font-size: 8pt; }
-  .cp-ref { font-size: 24pt; color: #000; }
+  .cp-ref { font-size: 16pt; color: #000; }
   .cp-prepared { color: #555; }
   .cp-meta { border-top-color: #000; padding-top: 12pt; font-size: 10pt; }
 
   .cp-section { padding: 16pt 0; border-top: 0.5pt solid #000; }
-  .cp-section-title { font-size: 14pt; color: #000; page-break-after: avoid; }
+  .cp-section-title { font-size: 12pt; color: #000; page-break-after: avoid; }
 
   .cp-prose { color: #000; font-size: 10.5pt; }
   .cp-schedule li { border-top: 0.3pt solid #aaa; page-break-inside: avoid; color: #000; font-size: 10.5pt; }
@@ -964,5 +971,5 @@
   .cp-footer { padding: 28px 48px 40px; }
   .cp-ribbon { padding: 12px 48px; }
   .cp-respond-stack { max-width: 420px; margin: 0 auto; }
-  .cp-ref { font-size: 38px; }
+  .cp-ref { font-size: 28px; }
 }

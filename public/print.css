@@ -27,6 +27,17 @@
     print-color-adjust: exact !important;
   }
 
+  /* Mark, 15 Nov 2026: the quote body is Tailwind `text-lg` (1.125rem).
+     That resolves against the root font-size, so `#quote-document {
+     font-size: 11pt }` never reached it and the PDF set at 13.5pt.
+     Scaling down in the print dialog also scales the photo appendix
+     (those heights are millimetres) and clips the images. Shrink the
+     rem root so type and spacing come down together. Photo caps stay
+     in mm and are not scaled. 12px is 75% of the 16px browser default. */
+  html, body {
+    font-size: 12px;
+  }
+
   /* Force page chrome to white. The app's body uses a cream --tq-bg
      (#f5f1eb) which bleeds through on any page where .print-root
      content doesn't fill the sheet — producing a "beige box" below
@@ -75,7 +86,41 @@
     padding: 0 !important;
     background: white !important;
     color: #111 !important;
-    font-size: 11pt;
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  /* Lock the type scale in pt. Tailwind utilities set font-size in rem
+     and would otherwise ignore the 10.5pt above. Body (text-lg) was
+     13.5pt; 10.5pt matches a normal printed quote and the Word export
+     (which is already 11pt). Headings step down with it. */
+  #quote-document .text-lg {
+    font-size: 10.5pt !important;
+    line-height: 1.45 !important;
+  }
+  #quote-document .text-base {
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+  }
+  #quote-document .text-sm,
+  #quote-document .text-xs {
+    font-size: 9pt !important;
+    line-height: 1.35 !important;
+  }
+  #quote-document .text-xl {
+    font-size: 12pt !important;
+    line-height: 1.3 !important;
+  }
+  #quote-document .text-2xl {
+    font-size: 13pt !important;
+    line-height: 1.25 !important;
+  }
+  #quote-document .text-3xl {
+    font-size: 16pt !important;
+    line-height: 1.15 !important;
+  }
+  #quote-document .leading-relaxed {
+    line-height: 1.45 !important;
   }
 
   /* TRQ-178: sections FLOW across pages. The previous rule pinned

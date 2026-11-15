@@ -16,11 +16,19 @@
  *     (design law)
  *   - no banned vocabulary (AI / Claude / agent / confidence / …)
  */
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import {
   renderClientPortal,
   renderTokenNotFound,
   renderTokenExpired,
 } from '../../portalRenderer.js';
+
+const portalCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../../public/client-portal.css'),
+  'utf8',
+);
 
 const TOKEN = 'a3f7c091-2e84-4b1a-9f23-8d05e7b61c3a';
 
@@ -88,7 +96,25 @@ describe('renderClientPortal — structure', () => {
   });
 
   test('links /client-portal.css from same origin (CSP-friendly)', () => {
-    expect(html).toMatch(/<link\s+rel="stylesheet"\s+href="\/client-portal\.css"/);
+    expect(html).toMatch(/<link\s+rel="stylesheet"\s+href="\/client-portal\.css(?:\?[^"]*)?"/);
+  });
+
+  test('uses the same heading face as the PDF (Barlow Condensed, not a display serif)', () => {
+    expect(html).toMatch(/family=Barlow\+Condensed/);
+    expect(html).not.toMatch(/Fraunces/);
+  });
+
+  test('on-screen portal is white paper, matching the PDF', () => {
+    // Mark, 15 Nov 2026: the client link opened on a cream sheet
+    // (#fbf8f2 paper on #f4ede0) while the downloaded PDF is white.
+    // The PDF is the document he sends. The link must use the same paper.
+    const root = portalCss.match(/\.cp\s*\{([\s\S]*?)\n\}/);
+    expect(root).not.toBeNull();
+    expect(root[1]).toMatch(/--paper:\s*#ffffff/i);
+    expect(root[1]).toMatch(/--paper-edge:\s*#f3f4f6/i);
+    expect(root[1]).not.toMatch(/#fbf8f2/i);
+    expect(root[1]).not.toMatch(/#f4ede0/i);
+    expect(root[1]).toMatch(/Barlow Condensed/);
   });
 
   test('root element carries the .cp class and a data-accent attribute', () => {
@@ -490,7 +516,7 @@ describe('renderClientPortal — design law', () => {
 describe('renderTokenNotFound / renderTokenExpired — styled, XSS-safe', () => {
   test('404 page links the branded stylesheet', () => {
     const html = renderTokenNotFound();
-    expect(html).toMatch(/<link\s+rel="stylesheet"\s+href="\/client-portal\.css"/);
+    expect(html).toMatch(/<link\s+rel="stylesheet"\s+href="\/client-portal\.css(?:\?[^"]*)?"/);
     expect(html.toLowerCase()).toContain('not found');
   });
 
