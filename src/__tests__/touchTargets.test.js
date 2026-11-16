@@ -316,7 +316,7 @@ const CURRENT_VIOLATIONS = [
   // -- src/components/review/LabourSection.jsx --
   { file: "src/components/review/LabourSection.jsx", line: 12, pr: "PR-future-polish", why: "Labour input (covered by 3-col flex sized by parent, audit notes OK)" },
   // -- src/components/review/MeasurementRow.jsx --
-  { file: "src/components/review/MeasurementRow.jsx", line: 166, pr: "PR-future-polish", why: "Numeric edit input inside measurement row" },
+  { file: "src/components/review/MeasurementRow.jsx", line: 192, pr: "PR-future-polish", why: "Numeric edit input inside measurement row" },
   // -- src/components/steps/JobDetails.jsx --
   // Refreshed 2026-07-07 for the per-quote Site Contact + conditional
   // Client Name/Phone rewrite (Harry's UAT: "per quote it should be

@@ -90,7 +90,7 @@ describe('TRQ-176: POST /api/users/:id/jobs stamps prompt_chars', () => {
   const routeBody = serverSource.slice(routeStart, routeEnd);
 
   test('POST handler calls computeCurrentPromptChars()', () => {
-    expect(routeBody).toContain('computeCurrentPromptChars()');
+    expect(routeBody).toContain('computeCurrentPromptChars(req.params.id)');
   });
 
   test('INSERT statement references prompt_chars as a column', () => {

@@ -59,6 +59,7 @@ import {
   applyMeasurementPlausibilityBounds,
 } from './src/utils/aiParser.js';
 import { SYSTEM_PROMPT, computePromptVersion } from './prompts/systemPrompt.js';
+import { appendRemovedMeasurementSection } from './src/utils/removedMeasurements.js';
 import { computeFieldBiasFromRows } from './src/utils/computeFieldBias.js';
 import { VideoProgressEmitter } from './src/utils/videoProgress.js';
 import { renderQuotePdf, sanitiseQuoteHtml } from './pdfRenderer.js';
@@ -3130,18 +3131,37 @@ function requireCanCreateQuotes(req, res, next) {
   return res.status(403).json({ error: 'Creating quotes is not available on this account.' });
 }
 
+// Labels this tradesman has deleted from earlier quotes. Per user, so
+// one waller's rejected "m²" figure is not forced on another. Newest
+// first, capped. Failure is the caller's problem — analyse catches it.
+async function loadRemovedMeasurementLabels(userId) {
+  if (!userId) return [];
+  const { rows } = await pool.query(
+    `SELECT field_label
+       FROM quote_diffs
+      WHERE user_id = $1
+        AND field_type = 'measurement_removed'
+      GROUP BY field_label
+      ORDER BY MAX(created_at) DESC
+      LIMIT 20`,
+    [userId]
+  );
+  return rows.map((r) => r.field_label);
+}
+
 // Compute the current prompt version (SYSTEM_PROMPT + approved
-// calibration notes) from the live calibration_notes table. Used at
-// /analyse time AND at job-save time so every `jobs.prompt_version`
-// row is non-NULL — otherwise calibration's effect on accuracy is
-// unmeasurable per the 2026-06-22 calibration investigation.
+// calibration notes + this tradesman's removed measurements) from the
+// live tables. Used at /analyse time AND at job-save time so every
+// `jobs.prompt_version` row is non-NULL — otherwise calibration's
+// effect on accuracy is unmeasurable per the 2026-06-22 calibration
+// investigation.
 //
 // The format here MUST match the photo-path /analyse augmentation
 // (server.js: see the `/api/users/:id/analyse` route) so analyse-time
 // and save-time hashes line up. Returns null on DB failure so save
 // continues — promptVersion is observability data, not load-bearing
 // for the user's quote.
-async function computeCurrentPromptVersion() {
+async function computeCurrentPromptVersion(userId = null) {
   try {
     const { rows: calNotes } = await pool.query(
       `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
@@ -3152,6 +3172,14 @@ async function computeCurrentPromptVersion() {
         `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
       ).join('\n');
       augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES (auto-generated from completed job data):\n${dynamicSection}`;
+    }
+    try {
+      augmentedPrompt = appendRemovedMeasurementSection(
+        augmentedPrompt,
+        await loadRemovedMeasurementLabels(userId),
+      );
+    } catch (err) {
+      console.warn(`[PromptVersion] Failed to load removed measurements: ${err.message}`);
     }
     return computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
   } catch (err) {
@@ -3170,7 +3198,7 @@ async function computeCurrentPromptVersion() {
 // The format here MUST match the photo-path /analyse augmentation
 // (server.js: /api/users/:id/analyse route) so save-time char count
 // reflects what's actually sent to Sonnet at analyse time.
-async function computeCurrentPromptChars() {
+async function computeCurrentPromptChars(userId = null) {
   try {
     const { rows: calNotes } = await pool.query(
       `SELECT field_type, field_label, note FROM calibration_notes WHERE status = 'approved' ORDER BY approved_at ASC`
@@ -3181,6 +3209,14 @@ async function computeCurrentPromptChars() {
         `${i + 1}. [${n.field_type}/${n.field_label}] ${n.note}`
       ).join('\n');
       augmentedPrompt += `\n\nDYNAMIC CALIBRATION NOTES (auto-generated from completed job data):\n${dynamicSection}`;
+    }
+    try {
+      augmentedPrompt = appendRemovedMeasurementSection(
+        augmentedPrompt,
+        await loadRemovedMeasurementLabels(userId),
+      );
+    } catch (err) {
+      console.warn(`[PromptChars] Failed to load removed measurements: ${err.message}`);
     }
     return augmentedPrompt.length;
   } catch (err) {
@@ -3535,7 +3571,7 @@ app.post('/api/users/:id/jobs', requireCanCreateQuotes, async (req, res) => {
     // client value if present (forward-compat); otherwise recompute
     // from the live calibration_notes table so the column is never NULL.
     const promptVersion = req.body.promptVersion
-      || await computeCurrentPromptVersion();
+      || await computeCurrentPromptVersion(req.params.id);
 
     // TRQ-176: prompt-length budget telemetry. Stamp the raw char count
     // of the augmented prompt alongside prompt_version. The /analyse
@@ -3543,7 +3579,7 @@ app.post('/api/users/:id/jobs', requireCanCreateQuotes, async (req, res) => {
     // visibility into the growing size, an over-stuffed prompt could
     // degrade Sonnet's accuracy without anyone noticing. Best-effort —
     // null on failure (jobs.prompt_chars is observability-only).
-    const promptChars = await computeCurrentPromptChars();
+    const promptChars = await computeCurrentPromptChars(req.params.id);
 
     // Placeholder-on-save (CLIENTS_SPEC_v3, 2026-07-07). When the
     // Clients feature is on, every job save either attaches to an
@@ -5198,6 +5234,15 @@ app.post('/api/users/:id/jobs/:jobId/video',
         }
       } catch (err) {
         console.warn('[Video] Failed to load calibration notes:', err.message);
+      }
+
+      try {
+        augmentedPrompt = appendRemovedMeasurementSection(
+          augmentedPrompt,
+          await loadRemovedMeasurementLabels(req.params.id),
+        );
+      } catch (err) {
+        console.warn('[Video] Failed to load removed measurements:', err.message);
       }
 
       const promptVersion = computePromptVersion(SYSTEM_PROMPT, augmentedPrompt.slice(SYSTEM_PROMPT.length));
@@ -7596,6 +7641,15 @@ app.post('/api/users/:id/analyse', aiRateLimitPerIp, aiRateLimit, requireCanCrea
       }
     } catch (err) {
       console.warn('[Analyse] Failed to load calibration notes:', err.message);
+    }
+
+    try {
+      augmentedPrompt = appendRemovedMeasurementSection(
+        augmentedPrompt,
+        await loadRemovedMeasurementLabels(req.params.id),
+      );
+    } catch (err) {
+      console.warn('[Analyse] Failed to load removed measurements:', err.message);
     }
 
     // Compute prompt version hash
