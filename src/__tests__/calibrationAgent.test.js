@@ -146,6 +146,32 @@ describe('runCalibrationAgent', () => {
     expect(userContent).toContain('Do NOT re-propose');
   });
 
+  test('includes measurements tradesmen deleted so the note says do not emit them', async () => {
+    const pool = mockPool([
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 0 },
+      { rows: [], rowCount: 0 },
+      {
+        rows: [
+          { field_label: 'A4 card width', total: '4', users: '2' },
+        ],
+        rowCount: 1,
+      },
+    ]);
+    mockRunAgent.mockResolvedValue({
+      runId: 'run-cal-1',
+      output: { proposed: [], summary: 'OK' },
+    });
+
+    await runCalibrationAgent({ pool, userId: 'admin1' });
+
+    expect(pool._calls[3].sql).toContain("field_type = 'measurement_removed'");
+    const userContent = mockRunAgent.mock.calls[0][0].messages[0].content;
+    expect(userContent).toContain('A4 card width');
+    expect(userContent).toContain('removed 4 times');
+    expect(userContent).toContain('do not emit these again');
+  });
+
   test('includes input summary with counts', async () => {
     const pool = mockPool([
       { rows: [{ a: 1 }, { a: 2 }], rowCount: 2 }, // 2 fields above threshold
@@ -187,10 +213,11 @@ describe('runCalibrationAgent', () => {
 
     const result = await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    // 3 initial queries + 2 inserts + 1 enrichment UPDATE
-    expect(pool._calls.length).toBe(6);
+    // 4 initial queries (bias, feedback, approved notes, removed
+    // measurements) + 2 inserts + 1 enrichment UPDATE
+    expect(pool._calls.length).toBe(7);
 
-    const insert1 = pool._calls[3];
+    const insert1 = pool._calls[4];
     expect(insert1.sql).toContain('INSERT INTO calibration_notes');
     expect(insert1.params[0]).toBe('measurement');
     expect(insert1.params[1]).toBe('Wall height');
@@ -198,11 +225,11 @@ describe('runCalibrationAgent', () => {
     expect(insert1.params[3]).toBe('run-cal-1');
     expect(JSON.parse(insert1.params[4])).toEqual({ sampleSize: 12, avgBias: 15.2, editRate: 58.3, direction: 'under' });
 
-    const insert2 = pool._calls[4];
+    const insert2 = pool._calls[5];
     expect(insert2.params[0]).toBe('labour_days');
 
-    // The 6th call is the enrichment UPDATE stamping lessons count.
-    const updateCall = pool._calls[5];
+    // The last call is the enrichment UPDATE stamping lessons count.
+    const updateCall = pool._calls[6];
     expect(updateCall.sql).toContain('UPDATE agent_runs');
 
     expect(result.proposals.summary).toBe('Two adjustments recommended');
@@ -236,9 +263,9 @@ describe('runCalibrationAgent', () => {
 
     await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    // 3 initial queries + 1 enrichment UPDATE (no proposal inserts).
-    expect(pool._calls.length).toBe(4);
-    expect(pool._calls[3].sql).toContain('UPDATE agent_runs');
+    // 4 initial queries + 1 enrichment UPDATE (no proposal inserts).
+    expect(pool._calls.length).toBe(5);
+    expect(pool._calls[4].sql).toContain('UPDATE agent_runs');
   });
 
   test('defaults fieldType and fieldLabel when proposal omits them', async () => {
@@ -258,7 +285,7 @@ describe('runCalibrationAgent', () => {
 
     await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    const insertCall = pool._calls[3];
+    const insertCall = pool._calls[4];
     expect(insertCall.params[0]).toBe('general');
     expect(insertCall.params[1]).toBe('General');
   });
@@ -311,8 +338,8 @@ describe('runCalibrationAgent', () => {
 
     const result = await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    // The 4th call is the enrichment UPDATE
-    const updateCall = pool._calls[3];
+    // The 5th call is the enrichment UPDATE (4th is removed measurements).
+    const updateCall = pool._calls[4];
     expect(updateCall.sql).toContain('UPDATE agent_runs');
     expect(updateCall.sql).toContain('output_summary');
     // JSONB merge keeps the AI output AND adds the lessons counters
@@ -339,7 +366,7 @@ describe('runCalibrationAgent', () => {
 
     const result = await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    const updateCall = pool._calls[3];
+    const updateCall = pool._calls[4];
     const stamped = JSON.parse(updateCall.params[0]);
     expect(stamped.lessons).toBe(0);
     expect(stamped.fieldsAboveThreshold).toBe(0);
@@ -364,7 +391,7 @@ describe('runCalibrationAgent', () => {
 
     await runCalibrationAgent({ pool, userId: 'admin1' });
 
-    const updateCall = pool._calls[3];
+    const updateCall = pool._calls[4];
     const stamped = JSON.parse(updateCall.params[0]);
     expect(stamped.lessons).toBe(1);
     expect(stamped.fieldsAboveThreshold).toBe(3);

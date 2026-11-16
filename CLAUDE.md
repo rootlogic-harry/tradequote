@@ -483,6 +483,8 @@ Agent orchestration lives in `agents/agentUtils.js`: creates run records, calls 
 
 **Auto-calibration:** After the feedback agent completes, `shouldAutoCalibrate()` (from `autoCalibration.js`) checks if >= 5 jobs have been completed since the last calibration run. If so, `runCalibrationAgent` fires async — the approval step stays manual.
 
+**Deleted measurements (2026-11-16).** Review can remove a measurement row. The removal is a `quote_diffs` row with `field_type = 'measurement_removed'` and `confirmed_value = '[removed]'`. `aiValue` is copied onto that diff and is not overwritten. The row is not numeric, so it does not move the accuracy score. The next photo or video analysis for that tradesman appends a `REMOVED MEASUREMENTS` section listing their deleted labels, so the same suggestion (an A4-card measurement, a spare m² figure) is not emitted again. Labels removed at least twice across quotes are also handed to the calibration agent as "do not emit", separate from numeric bias.
+
 **Retry queue:** Failed feedback agent runs are enqueued to `agent_retry_queue` with exponential backoff (2^n * 60s, max 3 attempts). Queue is swept on server startup via `processRetryQueue()` from `agents/retryQueue.js`.
 
 **System prompt:** Single source of truth in `prompts/systemPrompt.js` (server-side). The client no longer sends a system prompt. `computePromptVersion()` produces an 8-char MD5 hash for tracking which prompt version generated each quote.

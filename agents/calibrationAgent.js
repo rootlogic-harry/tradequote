@@ -12,12 +12,13 @@ Each note should be:
 - Based on evidence from the data provided
 - Focused on a single field or category
 - Written as an instruction to the quoting system
+- A deleted measurement means "do not emit this measurement again", not "change the number". Say so plainly. Do not turn a deletion into a percentage bias.
 
 Return ONLY valid JSON. No preamble, no markdown fences. Schema:
 {
   "proposed": [
     {
-      "fieldType": "string — measurement | material_unit_cost | labour_days | general",
+      "fieldType": "string — measurement | measurement_removed | material_unit_cost | labour_days | general",
       "fieldLabel": "string — specific field name",
       "note": "string — the calibration instruction to add to the system prompt",
       "evidence": {
@@ -77,6 +78,30 @@ async function runCalibrationAgent({ pool, userId }) {
     ORDER BY approved_at ASC
   `);
 
+  // 4. Measurements tradesmen deleted. edit_magnitude is null on these
+  // rows, so the bias query above never sees them. A repeated deletion
+  // is "stop suggesting this", which is a different instruction from
+  // "nudge the number". Threshold is 2 so one mis-tap does not become
+  // a global note; the per-user prompt already suppresses a single
+  // deletion for that tradesman on their next analysis.
+  let removedMeasurements = [];
+  try {
+    const removed = await pool.query(`
+      SELECT field_label,
+        COUNT(*) AS total,
+        COUNT(DISTINCT user_id) AS users
+      FROM quote_diffs
+      WHERE field_type = 'measurement_removed'
+      GROUP BY field_label
+      HAVING COUNT(*) >= 2
+      ORDER BY COUNT(*) DESC
+      LIMIT 30
+    `);
+    removedMeasurements = removed.rows;
+  } catch (err) {
+    console.warn('[CalibrationAgent] Failed to load removed measurements:', err.message);
+  }
+
   const userContent = `Here is the current calibration data:
 
 ## Fields with high edit rates (>30%, sample size >= 5):
@@ -93,6 +118,13 @@ ${feedbackRuns.length > 0
         return `- ${output?.overallAssessment || 'No assessment'} (severity: ${output?.severity || 'unknown'})`;
       }).join('\n')
     : 'No feedback lessons yet.'}
+
+## Measurements tradesmen deleted (at least twice — do not emit these again):
+${removedMeasurements.length > 0
+    ? removedMeasurements.map(r =>
+        `- ${r.field_label}: removed ${r.total} times by ${r.users} tradesman${Number(r.users) === 1 ? '' : 's'}`
+      ).join('\n')
+    : 'No measurement has been deleted often enough to act on.'}
 
 ## Currently approved calibration notes:
 ${approvedNotes.length > 0
@@ -117,6 +149,7 @@ Do NOT re-propose notes that are already approved (listed above).`;
       fieldsAboveThreshold: fieldBias.length,
       feedbackLessonsCount: feedbackRuns.length,
       approvedNotesCount: approvedNotes.length,
+      removedMeasurementsCount: removedMeasurements.length,
     },
   });
 
@@ -160,6 +193,7 @@ Do NOT re-propose notes that are already approved (listed above).`;
     lessons: feedbackRuns.length,
     fieldsAboveThreshold: fieldBias.length,
     approvedNotesCount: approvedNotes.length,
+    removedMeasurementsCount: removedMeasurements.length,
   };
   try {
     await pool.query(

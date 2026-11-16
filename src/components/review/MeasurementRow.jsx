@@ -23,6 +23,31 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
     dispatch({ type: 'EDIT_MEASUREMENT', id });
   };
 
+  const handleRemove = () => {
+    dispatch({ type: 'REMOVE_MEASUREMENT', id });
+  };
+
+  const removeButton = (
+    <button
+      type="button"
+      onClick={handleRemove}
+      aria-label="Remove measurement"
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: 13,
+        color: 'var(--tq-muted, #7a6f5e)',
+        textDecoration: 'underline',
+        flexShrink: 0,
+        padding: '10px 4px',
+        minHeight: 44,
+      }}
+    >
+      Remove
+    </button>
+  );
+
   // ─── Confirmed: collapses to a single clean line ─────────────────────────
   if (confirmed) {
     return (
@@ -78,6 +103,7 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
           >
             Edit
           </button>
+          {removeButton}
         </div>
       </div>
     );
@@ -244,6 +270,8 @@ export default function MeasurementRow({ measurement, dispatch, variant = 'row' 
             <span style={{ color: palette.text, fontWeight: 500 }}>{aiValue}</span>
           </div>
         )}
+
+        {removeButton}
 
       </div>
     </div>

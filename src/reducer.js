@@ -1,6 +1,7 @@
 import { DEFAULT_DAY_RATE } from './constants.js';
 import { buildQuotePayload } from './utils/quoteBuilder.js';
 import { buildDiff, enrichDiffWithContext } from './utils/diffTracking.js';
+import { MEASUREMENT_REMOVED, buildMeasurementRemovalDiff } from './utils/removedMeasurements.js';
 import { calculateRiskRating, generateRamsId } from './utils/ramsBuilder.js';
 import { COMPANY_DEFAULTS, COMMON_PPE, DEFAULT_RISK_ASSESSMENTS } from './data/ramsDefaults.js';
 import { WORK_STAGES_TEMPLATES } from './data/ramsTemplates.js';
@@ -383,6 +384,27 @@ function reducerCore(state, action) {
       return {
         ...state,
         reviewData: { ...state.reviewData, measurements },
+      };
+    }
+
+    case 'REMOVE_MEASUREMENT': {
+      if (!state.reviewData) return state;
+      const target = (state.reviewData.measurements || []).find(m => m.id === action.id);
+      if (!target) return state;
+      const measurements = state.reviewData.measurements.filter(m => m.id !== action.id);
+      const diff = enrichDiffWithContext(
+        buildMeasurementRemovalDiff(target.item, target.aiValue),
+        buildDiffContext(state.reviewData),
+      );
+      // A confirm-diff for the same label is replaced. The removal is
+      // the learning signal, and the row's aiValue is only read here.
+      const filteredDiffs = (state.diffs || []).filter(
+        d => !(d.fieldLabel === diff.fieldLabel && (d.fieldType === 'measurement' || d.fieldType === MEASUREMENT_REMOVED)),
+      );
+      return {
+        ...state,
+        reviewData: { ...state.reviewData, measurements },
+        diffs: [...filteredDiffs, diff],
       };
     }
 

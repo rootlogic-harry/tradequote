@@ -71,7 +71,7 @@ describe('prompt_version persistence on job save', () => {
     const routeBody = serverSource.slice(routeStart, routeEnd);
 
     expect(routeBody).toContain('prompt_version');
-    expect(routeBody).toContain('computeCurrentPromptVersion()');
+    expect(routeBody).toContain('computeCurrentPromptVersion(req.params.id)');
   });
 
   test('POST /api/users/:id/jobs still accepts client-supplied promptVersion for forward-compat', () => {

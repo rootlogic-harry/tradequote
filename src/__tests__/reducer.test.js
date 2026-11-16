@@ -840,6 +840,40 @@ describe('reducer', () => {
     });
   });
 
+  describe('REMOVE_MEASUREMENT', () => {
+    test('drops the row and records the original suggestion as removed', () => {
+      const state = makeReviewState();
+      const before = state.reviewData.measurements.map(m => ({ ...m }));
+      const result = reducer(state, { type: 'REMOVE_MEASUREMENT', id: 'm1' });
+      expect(result.reviewData.measurements.map(m => m.id)).toEqual(['m2', 'm3']);
+      expect(result.diffs).toHaveLength(1);
+      expect(result.diffs[0].fieldType).toBe('measurement_removed');
+      expect(result.diffs[0].fieldLabel).toBe('Wall height');
+      expect(result.diffs[0].aiValue).toBe('1200');
+      expect(result.diffs[0].confirmedValue).toBe('[removed]');
+      // The source row's aiValue is never rewritten.
+      expect(before.find(m => m.id === 'm1').aiValue).toBe('1200');
+      expect(result.reviewData.measurements.every(m => m.aiValue === before.find(b => b.id === m.id).aiValue)).toBe(true);
+    });
+
+    test('replaces a confirm-diff for the same label', () => {
+      const state = makeReviewState({
+        diffs: [buildDiff('measurement', 'Wall height', '1200', '1400')],
+      });
+      const result = reducer(state, { type: 'REMOVE_MEASUREMENT', id: 'm1' });
+      expect(result.diffs).toHaveLength(1);
+      expect(result.diffs[0].fieldType).toBe('measurement_removed');
+      expect(result.diffs[0].confirmedValue).toBe('[removed]');
+    });
+
+    test('leaves state unchanged when the id is unknown or there is no review', () => {
+      const state = makeReviewState();
+      expect(reducer(state, { type: 'REMOVE_MEASUREMENT', id: 'missing' })).toBe(state);
+      const empty = { ...state, reviewData: null };
+      expect(reducer(empty, { type: 'REMOVE_MEASUREMENT', id: 'm1' })).toBe(empty);
+    });
+  });
+
   describe('EDIT_MEASUREMENT', () => {
     test('sets confirmed to false for the specified measurement', () => {
       const state = makeReviewState();
